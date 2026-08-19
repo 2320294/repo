@@ -184,10 +184,10 @@ def sistema_principal():
             opcoes_dict = {f"{ob['nome_obra']} - {ob['pavimento']}": ob for ob in obras_usuario}
             obra_escolhida = st.selectbox("Selecione o pavimento para trabalhar:", ["Nenhum"] + list(opcoes_dict.keys()))
             
-            if obra_escolhida != "Nenhum":
+if obra_escolhida != "Nenhum":
                 obra_selecionada = opcoes_dict[obra_escolhida]
                 # Se a obra mudou, atualiza a sessão
-                if "obra_atual" not in st.session_state or st.session_state.obra_atual['id'] != obra_selecionada['id']:
+                if "obra_atual" not in st.session_state or st.session_state.obra_atual is None or st.session_state.obra_atual['id'] != obra_selecionada['id']:
                     st.session_state.obra_atual = obra_selecionada
                     st.session_state.dados_extraidos = obra_selecionada.get("dados_json", [])
                     st.rerun()
