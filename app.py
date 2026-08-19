@@ -12,6 +12,7 @@ import unicodedata
 # ==========================================
 st.set_page_config(page_title="AutoElétrica NBR 5410", layout="wide")
 
+
 @st.cache_resource
 def iniciar_conexao():
     try:
@@ -127,8 +128,10 @@ def processar_dxf(caminho_arquivo):
     for polilinha in polilinhas:
         xs = [p[0] for p in polilinha]
         ys = [p[1] for p in polilinha]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
+        min_x = min(xs)
+        max_x = max(xs)
+        min_y = min(ys)
+        max_y = max(ys)
         
         largura = max_x - min_x
         comprimento = max_y - min_y
@@ -188,7 +191,6 @@ def tela_login():
     with col2:
         tab_login, tab_cadastro = st.tabs(["Fazer Login", "Criar Nova Conta"])
         
-        # ABA DE LOGIN
         with tab_login:
             with st.form("form_login"):
                 email = st.text_input("E-mail")
@@ -200,13 +202,12 @@ def tela_login():
                         response = supabase.auth.sign_in_with_password({"email": email, "password": senha})
                         st.session_state.usuario_autenticado = True
                         st.session_state.user_email = email
-                        st.session_state.user_id = response.user.id # CAPTURA O ID DO ENGENHEIRO LOGADO
+                        st.session_state.user_id = response.user.id
                         st.success("Login realizado com sucesso! Carregando plataforma...")
                         st.rerun()
                     except Exception as erro:
                         st.error("Credenciais inválidas. Verifique seu e-mail e senha.")
 
-        # ABA DE CADASTRO
         with tab_cadastro:
             with st.form("form_cadastro"):
                 novo_email = st.text_input("Seu E-mail")
@@ -227,7 +228,6 @@ def tela_login():
 # 3. SISTEMA PRINCIPAL (O SaaS)
 # ==========================================
 def sistema_principal():
-    # --- BARRA LATERAL (GERENCIADOR DE OBRAS) ---
     with st.sidebar:
         st.write(f"👤 Logado como: **{st.session_state.user_email}**")
         if st.button("Sair / Logout", use_container_width=True):
@@ -242,7 +242,6 @@ def sistema_principal():
         resposta_db = supabase.table("obras").select("*").eq("user_id", st.session_state.user_id).execute()
         obras_usuario = resposta_db.data
 
-        # Criar nova obra
         with st.expander("➕ Novo Projeto / Pavimento"):
             nome_nova_obra = st.text_input("Nome do Empreendimento", placeholder="Ex: Edifício Alpha")
             nome_novo_pav = st.text_input("Pavimento", placeholder="Ex: Térreo")
@@ -257,7 +256,6 @@ def sistema_principal():
                     st.success("Pavimento criado!")
                     st.rerun()
 
-        # Selecionar obra existente (Com a correção de BUG aplicada)
         if obras_usuario:
             st.write("📖 **Projetos Salvos:**")
             opcoes_dict = {f"{ob['nome_obra']} - {ob['pavimento']}": ob for ob in obras_usuario}
@@ -265,7 +263,6 @@ def sistema_principal():
             
             if obra_escolhida != "Nenhum":
                 obra_selecionada = opcoes_dict[obra_escolhida]
-                # Verifica se a obra mudou ou se não tinha nenhuma selecionada antes
                 if "obra_atual" not in st.session_state or st.session_state.obra_atual is None or st.session_state.obra_atual['id'] != obra_selecionada['id']:
                     st.session_state.obra_atual = obra_selecionada
                     st.session_state.dados_extraidos = obra_selecionada.get("dados_json", [])
@@ -277,7 +274,6 @@ def sistema_principal():
             st.info("Você ainda não tem obras cadastradas.")
             st.session_state.obra_atual = None
 
-    # --- TELA PRINCIPAL (ÁREA DE TRABALHO) ---
     st.title("⚡ Gerador de Projeto Elétrico Automatizado")
     
     if "obra_atual" not in st.session_state or st.session_state.obra_atual is None:
@@ -287,7 +283,6 @@ def sistema_principal():
     st.subheader(f"🏢 Empreendimento: {st.session_state.obra_atual['nome_obra']} | 📍 Pavimento: {st.session_state.obra_atual['pavimento']}")
     st.divider()
 
-    # Se a obra estiver vazia no banco de dados, pede o arquivo DXF
     if not st.session_state.dados_extraidos:
         st.write("### 1. Importação da Planta Baixa (DXF)")
         arquivo_dxf = st.file_uploader("Faça o upload do arquivo (.dxf)", type=["dxf"])
@@ -303,7 +298,6 @@ def sistema_principal():
                         try:
                             resultados = processar_dxf(tmp_path)
                             if len(resultados) > 0:
-                                # Salva o resultado no banco de dados automaticamente
                                 supabase.table("obras").update({"dados_json": resultados}).eq("id", st.session_state.obra_atual['id']).execute()
                                 st.session_state.dados_extraidos = resultados
                                 st.rerun() 
@@ -314,7 +308,6 @@ def sistema_principal():
                         finally:
                             os.remove(tmp_path)
     
-    # Se já houver dados extraídos (lidos do banco ou recém processados)
     else:
         st.success("✅ Planta carregada do banco de dados! Ajuste os parâmetros abaixo.")
         st.divider()
@@ -388,7 +381,6 @@ def sistema_principal():
                     df_editado.at[index, 'Carga TUE (VA)'] = int(nova_qtd_tue * nova_pot_tue)
                     st.divider()
 
-            # --- BOTÃO PARA SALVAR NA NUVEM ---
             if st.button("💾 Salvar Alterações na Nuvem", type="primary"):
                 dados_atualizados = df_editado.to_dict(orient='records')
                 supabase.table("obras").update({"dados_json": dados_atualizados}).eq("id", st.session_state.obra_atual['id']).execute()
@@ -460,7 +452,6 @@ def sistema_principal():
             cabo_tue_final = round(total_cabo_tue * 1.15)
             eletroduto_final = round(total_eletroduto * 1.10)
             
-            # --- DIVISÃO POR CORES NBR 5410 ---
             ilum_fase = math.ceil(cabo_ilum_final / 3)
             ilum_neutro = math.ceil(cabo_ilum_final / 3)
             ilum_retorno = math.ceil(cabo_ilum_final / 3)
