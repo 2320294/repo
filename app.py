@@ -12,7 +12,6 @@ import unicodedata
 # ==========================================
 st.set_page_config(page_title="AutoElétrica NBR 5410", layout="wide")
 
-# Conecta ao Supabase usando os Secrets do Streamlit Cloud
 @st.cache_resource
 def iniciar_conexao():
     try:
@@ -24,7 +23,6 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
-# Controle de estado do login
 if 'usuario_autenticado' not in st.session_state:
     st.session_state.usuario_autenticado = False
 
@@ -177,38 +175,58 @@ def processar_dxf(caminho_arquivo):
     return resultados, len(polilinhas), len(textos), debug_layers
 
 # ==========================================
-# 2. TELA DE LOGIN
+# 2. TELA DE LOGIN E CADASTRO
 # ==========================================
 def tela_login():
-    st.title("🔐 Login - AutoElétrica SaaS")
-    st.subheader("Acesso restrito à plataforma de projetos")
+    st.title("🔐 Acesso - AutoElétrica SaaS")
+    st.subheader("Bem-vindo à plataforma de projetos elétricos")
     
     if supabase is None:
-        st.error("Erro Crítico: Não foi possível conectar ao banco de dados. Verifique se configurou os Segredos (Secrets) do Streamlit Cloud.")
+        st.error("Erro Crítico: Não foi possível conectar ao banco de dados. Verifique os Secrets do Streamlit Cloud.")
         st.stop()
         
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("form_login"):
-            email = st.text_input("E-mail")
-            senha = st.text_input("Senha", type="password")
-            submit = st.form_submit_button("Entrar no Sistema")
-            
-            if submit:
-                try:
-                    response = supabase.auth.sign_in_with_password({"email": email, "password": senha})
-                    st.session_state.usuario_autenticado = True
-                    st.session_state.user_email = email
-                    st.success("Login realizado com sucesso! Carregando plataforma...")
-                    st.rerun()
-                except Exception as erro:
-                    st.error("Credenciais inválidas. Verifique seu e-mail e senha.")
+        tab_login, tab_cadastro = st.tabs(["Fazer Login", "Criar Nova Conta"])
+        
+        # ABA DE LOGIN
+        with tab_login:
+            with st.form("form_login"):
+                email = st.text_input("E-mail")
+                senha = st.text_input("Senha", type="password")
+                submit_login = st.form_submit_button("Entrar no Sistema")
+                
+                if submit_login:
+                    try:
+                        response = supabase.auth.sign_in_with_password({"email": email, "password": senha})
+                        st.session_state.usuario_autenticado = True
+                        st.session_state.user_email = email
+                        st.success("Login realizado com sucesso! Carregando plataforma...")
+                        st.rerun()
+                    except Exception as erro:
+                        st.error("Credenciais inválidas. Verifique seu e-mail e senha ou crie uma conta.")
+
+        # ABA DE CADASTRO
+        with tab_cadastro:
+            with st.form("form_cadastro"):
+                novo_email = st.text_input("Seu E-mail")
+                nova_senha = st.text_input("Crie uma Senha (mín. 6 caracteres)", type="password")
+                submit_cadastro = st.form_submit_button("Criar Minha Conta")
+                
+                if submit_cadastro:
+                    if len(nova_senha) < 6:
+                        st.warning("A senha deve ter pelo menos 6 caracteres.")
+                    else:
+                        try:
+                            response = supabase.auth.sign_up({"email": novo_email, "password": nova_senha})
+                            st.success("✅ Conta criada com sucesso! Você já pode voltar para a aba de Login e entrar no sistema.")
+                        except Exception as erro:
+                            st.error(f"Erro ao criar conta. O e-mail pode já estar em uso ou ser inválido. Detalhes: {erro}")
 
 # ==========================================
 # 3. SISTEMA PRINCIPAL (O SaaS)
 # ==========================================
 def sistema_principal():
-    # BARRA LATERAL
     with st.sidebar:
         st.write(f"👤 Logado como: **{st.session_state.user_email}**")
         if st.button("Sair / Logout", use_container_width=True):
