@@ -190,7 +190,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        # Verifica se os layers já existem antes de criar (Evita o erro "already exists")
         if "PROJ_ELETRICA_LUZ" not in doc.layers:
             doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2)
         if "PROJ_ELETRICA_QDC" not in doc.layers:
@@ -207,21 +206,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if hasattr(entity.dxf, 'layer'):
                 layer = str(entity.dxf.layer).upper().strip()
                 
-                # Coletando Ambientes
                 if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
                     try:
                         pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
                         if pontos: polilinhas.append(pontos)
                     except: pass
                 
-                # Coletando Textos
                 elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
                     try:
                         texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
                         if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
                     except: pass
                 
-                # Coletando Portas 
                 elif layer == 'IA_PORTAS':
                     try:
                         if tipo == 'LINE':
@@ -267,22 +263,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # 1. PONTO DE LUZ (Sempre no Centro do Teto)
+                # 1. PONTO DE LUZ
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
-                # 2. QUADRO DE DISTRIBUIÇÃO (Alinhamento Magnético Rotacionado)
+                # 2. QUADRO DE DISTRIBUIÇÃO (Magnético e Centralizado por dentro)
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
                     
                     porta_ambiente = None
                     for p in portas:
-                        # Varredura com tolerância de 0.5m para encontrar portas vinculadas a este ambiente
                         if (min_x - 0.5) <= p['x'] <= (max_x + 0.5) and (min_y - 0.5) <= p['y'] <= (max_y + 0.5):
                             porta_ambiente = p
                             break
+                    
+                    qdc_w, qdc_d = 0.4, 0.15
+                    afastamento = 0.8
                     
                     if porta_ambiente:
                         px, py = porta_ambiente['x'], porta_ambiente['y']
@@ -294,38 +292,43 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                         menor_dist = min(dist_esq, dist_dir, dist_baixo, dist_cima)
                         
-                        # Dimensões do QDC: 40cm de largura (w) por 15cm de profundidade (d)
-                        qdc_w, qdc_d = 0.4, 0.15
-                        # Afastamento de 80cm do centro da porta (garante não cair no vão)
-                        afastamento = 0.8
-                        
-                        if menor_dist == dist_cima: # Parede Superior
+                        if menor_dist == dist_cima: 
                             start_x = px + afastamento if (px + afastamento + qdc_w) <= max_x else px - afastamento - qdc_w
                             pts = [(start_x, max_y), (start_x + qdc_w, max_y), (start_x + qdc_w, max_y - qdc_d), (start_x, max_y - qdc_d)]
-                            txt_pos = (start_x, max_y - qdc_d - 0.25)
+                            cx, cy = start_x + (qdc_w / 2), max_y - (qdc_d / 2)
+                            txt_pos = (cx - 0.08, cy - 0.035)
+                            rot = 0
                             
-                        elif menor_dist == dist_baixo: # Parede Inferior
+                        elif menor_dist == dist_baixo: 
                             start_x = px + afastamento if (px + afastamento + qdc_w) <= max_x else px - afastamento - qdc_w
                             pts = [(start_x, min_y), (start_x + qdc_w, min_y), (start_x + qdc_w, min_y + qdc_d), (start_x, min_y + qdc_d)]
-                            txt_pos = (start_x, min_y + qdc_d + 0.1)
+                            cx, cy = start_x + (qdc_w / 2), min_y + (qdc_d / 2)
+                            txt_pos = (cx - 0.08, cy - 0.035)
+                            rot = 0
                             
-                        elif menor_dist == dist_esq: # Parede Esquerda
+                        elif menor_dist == dist_esq: 
                             start_y = py + afastamento if (py + afastamento + qdc_w) <= max_y else py - afastamento - qdc_w
                             pts = [(min_x, start_y), (min_x + qdc_d, start_y), (min_x + qdc_d, start_y + qdc_w), (min_x, start_y + qdc_w)]
-                            txt_pos = (min_x + qdc_d + 0.1, start_y + 0.1)
+                            cx, cy = min_x + (qdc_d / 2), start_y + (qdc_w / 2)
+                            txt_pos = (cx + 0.035, cy - 0.08)
+                            rot = 90
                             
                         else: # Parede Direita
                             start_y = py + afastamento if (py + afastamento + qdc_w) <= max_y else py - afastamento - qdc_w
                             pts = [(max_x, start_y), (max_x - qdc_d, start_y), (max_x - qdc_d, start_y + qdc_w), (max_x, start_y + qdc_w)]
-                            txt_pos = (max_x - qdc_d - 0.5, start_y + 0.1)
+                            cx, cy = max_x - (qdc_d / 2), start_y + (qdc_w / 2)
+                            txt_pos = (cx + 0.035, cy - 0.08)
+                            rot = 90
                     else:
-                        # Plano B (Caso não ache a porta): Centraliza na parede superior com tamanho correto
+                        # Plano B: Parede de cima
                         start_x = centro_x - 0.2
-                        pts = [(start_x, max_y), (start_x + 0.4, max_y), (start_x + 0.4, max_y - 0.15), (start_x, max_y - 0.15)]
-                        txt_pos = (start_x, max_y - 0.35)
+                        pts = [(start_x, max_y), (start_x + qdc_w, max_y), (start_x + qdc_w, max_y - qdc_d), (start_x, max_y - qdc_d)]
+                        cx, cy = start_x + (qdc_w / 2), max_y - (qdc_d / 2)
+                        txt_pos = (cx - 0.08, cy - 0.035)
+                        rot = 0
                     
                     msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': txt_pos})
+                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
         
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
