@@ -190,26 +190,50 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2)
-        doc.layers.add(name="PROJ_ELETRICA_QDC", color=1)
-        doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
+        # Verifica se os layers já existem antes de criar (Evita o erro "already exists")
+        if "PROJ_ELETRICA_LUZ" not in doc.layers:
+            doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2)
+        if "PROJ_ELETRICA_QDC" not in doc.layers:
+            doc.layers.add(name="PROJ_ELETRICA_QDC", color=1)
+        if "PROJ_ELETRICA_TEXTO" not in doc.layers:
+            doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         
         polilinhas = []
         textos = []
+        portas = [] 
         
         for entity in msp:
             tipo = entity.dxftype()
             if hasattr(entity.dxf, 'layer'):
                 layer = str(entity.dxf.layer).upper().strip()
+                
+                # Coletando Ambientes
                 if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
                     try:
                         pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
                         if pontos: polilinhas.append(pontos)
                     except: pass
+                
+                # Coletando Textos
                 elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
                     try:
                         texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
                         if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+                    except: pass
+                
+                # Coletando Portas 
+                elif layer == 'IA_PORTAS':
+                    try:
+                        if tipo == 'LINE':
+                            px = (entity.dxf.start.x + entity.dxf.end.x) / 2
+                            py = (entity.dxf.start.y + entity.dxf.end.y) / 2
+                            portas.append({'x': px, 'y': py})
+                        elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                            pontos_p = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+                            if pontos_p:
+                                px = sum([p[0] for p in pontos_p]) / len(pontos_p)
+                                py = sum([p[1] for p in pontos_p]) / len(pontos_p)
+                                portas.append({'x': px, 'y': py})
                     except: pass
                     
         ambientes_processados = {}
@@ -243,18 +267,35 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # 1. PONTO DE LUZ
+                # 1. PONTO DE LUZ 
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
-                # 2. QUADRO DE DISTRIBUIÇÃO
+                # 2. QUADRO DE DISTRIBUIÇÃO 
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
-                    # Fixando o QDC na parede superior (max_y) e centralizando horizontalmente
-                    qdc_x = centro_x - 0.3
-                    qdc_y = max_y 
+                    
+                    porta_ambiente = None
+                    for p in portas:
+                        if (min_x - 0.5) <= p['x'] <= (max_x + 0.5) and (min_y - 0.5) <= p['y'] <= (max_y + 0.5):
+                            porta_ambiente = p
+                            break
+                    
+                    if porta_ambiente:
+                        dist_x = abs(porta_ambiente['x'] - centro_x)
+                        dist_y = abs(porta_ambiente['y'] - centro_y)
+                        
+                        if dist_x > dist_y: 
+                            qdc_x = porta_ambiente['x']
+                            qdc_y = porta_ambiente['y'] + 0.3 
+                        else:
+                            qdc_x = porta_ambiente['x'] + 0.3 
+                            qdc_y = porta_ambiente['y']
+                    else:
+                        qdc_x = centro_x - 0.3
+                        qdc_y = max_y 
                     
                     msp.add_lwpolyline([(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                     msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': (qdc_x + 0.1, qdc_y - 0.15)})
@@ -528,7 +569,6 @@ def sistema_principal():
                 st.session_state.obra_atual['pe_direito'] = float(pe_direito)
                 st.success("✅ Projeto atualizado e salvo na nuvem com sucesso!")
             
-            # --- NOVA TABELA CONSOLIDADA ---
             st.write("### 📊 Quadro de Previsão de Cargas Consolidado")
             linha_total = pd.DataFrame([{
                 "Ambiente": "TOTAL", 
@@ -545,13 +585,11 @@ def sistema_principal():
             
             df_final = pd.concat([df_editado, linha_total], ignore_index=True)
             
-            # Renomeando as colunas das TUEs para ficarem no padrão visual
             df_final = df_final.rename(columns={
                 "Qtd TUE": "TUEs (Qtd)",
                 "Carga TUE (VA)": "Carga TUEs (VA)"
             })
             
-            # Aplicando a nova ordem exata solicitada
             ordem_colunas = [
                 "Ambiente", 
                 "Área (m²)", 
@@ -567,12 +605,10 @@ def sistema_principal():
             
             df_final = df_final[ordem_colunas]
             
-            # Preparando para exibição na tela (formatando vírgulas)
             df_final_exibir = df_final.copy()
             df_final_exibir["Área (m²)"] = df_final_exibir["Área (m²)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
             df_final_exibir["Perímetro (m)"] = df_final_exibir["Perímetro (m)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
             st.table(df_final_exibir) 
-            # -------------------------------
 
             st.divider()
             st.write("### 📦 Tabela Quantitativa de Materiais")
