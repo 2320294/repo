@@ -325,7 +325,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                     msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
 
-                # 3. TOMADAS ORTOGONAIS (MOTOR INFALÍVEL POR DISTÂNCIA)
+                # ===============================================
+                # 3. TOMADAS ORTOGONAIS (ANTI-COLISÃO E AFASTAMENTO DE CANTOS)
+                # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
                 total_tomadas = qtd_tugs + qtd_tues
@@ -344,77 +346,89 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if dist > 0:
                             segmentos.append((p1, p2, dist))
                             comp_total += dist
-                            
-                    passo = comp_total / total_tomadas
-                    dist_atual = passo / 2 
                     
-                    idx_seg = 0
-                    comp_acumulado = 0
-                    tomadas_pos = 0
-                    
-                    while tomadas_pos < total_tomadas and idx_seg < len(segmentos):
-                        p1, p2, dist = segmentos[idx_seg]
-                        if comp_acumulado + dist >= dist_atual:
-                            ratio = (dist_atual - comp_acumulado) / dist
-                            px = p1[0] + (p2[0] - p1[0]) * ratio
-                            py = p1[1] + (p2[1] - p1[1]) * ratio
+                    if comp_total > 0:
+                        passo = comp_total / total_tomadas
+                        dist_atual = passo / 2 
+                        
+                        # Função de Fita Métrica Virtual (Desliza sobre as paredes)
+                        def get_ponto_perimetro(d, segs):
+                            acumulado = 0
+                            for pt1, pt2, dst in segs:
+                                if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
+                                    ratio = (d - acumulado) / dst
+                                    
+                                    # MÁGICA 1: Nunca deixa a tomada ficar a menos de 30cm do canto
+                                    margin = 0.3
+                                    if dst > margin * 2:
+                                        if ratio * dst < margin:
+                                            ratio = margin / dst
+                                        elif (1 - ratio) * dst < margin:
+                                            ratio = (dst - margin) / dst
+                                    else:
+                                        ratio = 0.5 # Parede pequena (ex: boneca), crava no meio
+                                    
+                                    p_x = pt1[0] + (pt2[0] - pt1[0]) * ratio
+                                    p_y = pt1[1] + (pt2[1] - pt1[1]) * ratio
+                                    return p_x, p_y, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+                                acumulado += dst
                             
-                            dx_parede = p2[0] - p1[0]
-                            dy_parede = p2[1] - p1[1]
-                            mag_parede = math.hypot(dx_parede, dy_parede)
+                            pt1, pt2, dst = segs[-1]
+                            return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+
+                        tomadas_pos = 0
+                        tentativas = 0
+                        
+                        while tomadas_pos < total_tomadas and tentativas < total_tomadas * 5:
+                            tentativas += 1
+                            d_check = dist_atual % comp_total
                             
-                            if mag_parede > 0:
-                                ux_w = dx_parede / mag_parede
-                                uy_w = dy_parede / mag_parede
+                            px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos)
+                            
+                            # MÁGICA 2: Detector de Portas
+                            perto_porta = False
+                            for p in portas:
+                                if math.hypot(px - p['x'], py - p['y']) < 0.65:
+                                    perto_porta = True
+                                    break
+                            
+                            if perto_porta:
+                                # Se bater na porta, desliza 50cm ao longo da fita métrica!
+                                dist_atual += 0.5 
+                                continue
+                            
+                            # Calcula Vetores Perpendiculares Perfeitos (+90 e -90 graus)
+                            n1x, n1y = -uy_w, ux_w
+                            n2x, n2y = uy_w, -ux_w
+                            
+                            base_half = 0.15
+                            height = 0.25
+                            
+                            ponta1 = (px + n1x * height, py + n1y * height)
+                            ponta2 = (px + n2x * height, py + n2y * height)
+                            
+                            # MÁGICA 3: O lado certo é SEMPRE o que aponta para a luz (centro da sala)
+                            if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]):
+                                ux_n, uy_n = n1x, n1y
+                                pt_ponta = ponta1
+                            else:
+                                ux_n, uy_n = n2x, n2y
+                                pt_ponta = ponta2
                                 
-                                perto_porta = False
-                                for p in portas:
-                                    if math.hypot(px - p['x'], py - p['y']) < 0.6:
-                                        perto_porta = True
-                                        break
-                                
-                                if perto_porta:
-                                    px = px + (ux_w * 0.6)
-                                    py = py + (uy_w * 0.6)
-                                
-                                # Cria as duas perpendiculares possíveis (+90 e -90 graus)
-                                n1x, n1y = -uy_w, ux_w
-                                n2x, n2y = uy_w, -ux_w
-                                
-                                base_half = 0.15
-                                height = 0.25
-                                
-                                # Simula as duas pontas possíveis
-                                ponta1 = (px + n1x * height, py + n1y * height)
-                                ponta2 = (px + n2x * height, py + n2y * height)
-                                
-                                # A ponta certa é a que estiver MAIS PERTO do Ponto de Luz (centro)
-                                dist_ponta1_centro = math.hypot(centro_x - ponta1[0], centro_y - ponta1[1])
-                                dist_ponta2_centro = math.hypot(centro_x - ponta2[0], centro_y - ponta2[1])
-                                
-                                if dist_ponta1_centro < dist_ponta2_centro:
-                                    ux_n, uy_n = n1x, n1y
-                                    pt_ponta = ponta1
-                                else:
-                                    ux_n, uy_n = n2x, n2y
-                                    pt_ponta = ponta2
-                                
-                                pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
-                                pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
-                                
-                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                                
-                                if tomadas_pos >= qtd_tugs:
-                                    txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
-                                    txt_px = px + ux_n * (height + 0.1)
-                                    txt_py = py + uy_n * (height + 0.1)
-                                    msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
+                            pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
+                            pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
+                            
+                            msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                            
+                            # Desenha o Nome da TUE um pouco mais afastado
+                            if tomadas_pos >= qtd_tugs:
+                                txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
+                                txt_px = px + ux_n * (height + 0.15)
+                                txt_py = py + uy_n * (height + 0.15)
+                                msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                             
                             dist_atual += passo
                             tomadas_pos += 1
-                        else:
-                            comp_acumulado += dist
-                            idx_seg += 1
 
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
