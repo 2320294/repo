@@ -2,3 +2,5 @@ streamlit
 ezdxf
 pandas
 supabase
+openpyxl
+fpdf
