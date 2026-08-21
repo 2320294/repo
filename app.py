@@ -181,6 +181,20 @@ def processar_dxf(caminho_arquivo):
         
     return resultados
 
+def dist_point_to_segments(px, py, segs):
+    min_d = float('inf')
+    for pt1, pt2, _ in segs:
+        l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+        if l2 == 0:
+            d = math.hypot(px - pt1[0], py - pt1[1])
+        else:
+            t = max(0, min(1, ((px - pt1[0]) * (pt2[0] - pt1[0]) + (py - pt1[1]) * (pt2[1] - pt1[1])) / l2))
+            proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+            proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+            d = math.hypot(px - proj_x, py - proj_y)
+        if d < min_d: min_d = d
+    return min_d
+
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
@@ -201,7 +215,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         portas = [] 
         soleiras = []
         
-        # Leitura Inteligente do DXF
         for entity in msp:
             tipo = entity.dxftype()
             if hasattr(entity.dxf, 'layer'):
@@ -235,7 +248,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             portas.append({'tipo': 'LINE', 'x': px, 'y': py, 'r': 0.4})
                     except: pass
                     
-                # NOVO: Leitura da IA_SOLEIRA
                 elif layer == 'IA_SOLEIRA':
                     try:
                         if tipo == 'LINE':
@@ -248,7 +260,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados = {}
         dict_dados = {row['Ambiente']: row for row in dados_editados}
-        global_max_y = 0 # Para a marca d'agua
+        global_max_y = 0 
         
         for polilinha in polilinhas:
             xs = [p[0] for p in polilinha]
@@ -290,88 +302,69 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         comp_total += dist
 
             # ===============================================
-            # BÚSSOLA DA SOLEIRA + MAÇANETA (MOTOR 7.0)
+            # BÚSSOLA ABSOLUTA DA MAÇANETA (MOTOR 8.0)
             # ===============================================
             porta_ambiente = None
-            soleira_ambiente = None
-            min_dist_sol = float('inf')
+            min_dist_to_center = float('inf')
             
-            # 1. Acha a Soleira mais próxima do ambiente
-            for sol in soleiras:
-                mx = (sol['p1'][0] + sol['p2'][0]) / 2
-                my = (sol['p1'][1] + sol['p2'][1]) / 2
-                if (min_x - 1.0) <= mx <= (max_x + 1.0) and (min_y - 1.0) <= my <= (max_y + 1.0):
-                    d = math.hypot(mx - centro_x, my - centro_y)
-                    if d < min_dist_sol:
-                        min_dist_sol = d
-                        soleira_ambiente = sol
-                        
-            # 2. Acha o Arco associado a essa Soleira
-            if soleira_ambiente:
-                min_dist_arc = float('inf')
-                mx = (soleira_ambiente['p1'][0] + soleira_ambiente['p2'][0]) / 2
-                my = (soleira_ambiente['p1'][1] + soleira_ambiente['p2'][1]) / 2
-                for p in portas:
-                    if p['tipo'] == 'ARC':
-                        d = math.hypot(p['x'] - mx, p['y'] - my)
-                        if d < min_dist_arc and d < 1.5:
-                            min_dist_arc = d
+            # Garante que a porta pertence a esta sala especifica (Hinge na parede)
+            for p in portas:
+                if p['tipo'] == 'ARC':
+                    d_wall = dist_point_to_segments(p['x'], p['y'], segmentos)
+                    if d_wall < 0.5: 
+                        d_center = math.hypot(p['x'] - centro_x, p['y'] - centro_y)
+                        if d_center < min_dist_to_center:
+                            min_dist_to_center = d_center
                             porta_ambiente = p
             
-            # Fallback se não tiver soleira desenhada (busca a porta direto)
-            if not porta_ambiente:
-                min_dist_porta = float('inf')
-                for p in portas:
-                    d = math.hypot(p['x'] - centro_x, p['y'] - centro_y)
-                    if d < min_dist_porta and (min_x - 1.0) <= p['x'] <= (max_x + 1.0) and (min_y - 1.0) <= p['y'] <= (max_y + 1.0):
-                        min_dist_porta = d
-                        porta_ambiente = p
-
-            # 3. Calcula a Maçaneta e o Vetor da Parede
             lx, ly = min_x, min_y
-            vx_wall, vy_wall = 1, 0
-            nx_wall, ny_wall = 0, 1
+            vx, vy = 1, 0
+            nx, ny = 0, 1
             tem_macaneta = False
             
-            if porta_ambiente and porta_ambiente['tipo'] == 'ARC':
-                cx_p, cy_p = porta_ambiente['x'], porta_ambiente['y'] # Dobradiça
+            if porta_ambiente:
+                cx, cy = porta_ambiente['x'], porta_ambiente['y']
                 
-                if soleira_ambiente:
-                    # Se tem soleira, a dobradiça tá numa ponta e a maçaneta tá na outra!
-                    d1 = math.hypot(cx_p - soleira_ambiente['p1'][0], cy_p - soleira_ambiente['p1'][1])
-                    d2 = math.hypot(cx_p - soleira_ambiente['p2'][0], cy_p - soleira_ambiente['p2'][1])
+                # Procura a Soleira colada nesta dobradiça
+                latch_found = False
+                for sol in soleiras:
+                    d1 = math.hypot(cx - sol['p1'][0], cy - sol['p1'][1])
+                    d2 = math.hypot(cx - sol['p2'][0], cy - sol['p2'][1])
+                    if d1 < 0.15: 
+                        lx, ly = sol['p2'][0], sol['p2'][1] # Maçaneta = P2
+                        latch_found = True
+                        break
+                    elif d2 < 0.15: 
+                        lx, ly = sol['p1'][0], sol['p1'][1] # Maçaneta = P1
+                        latch_found = True
+                        break
+                        
+                # Se não tem soleira desenhada, tenta adivinhar pelas pontas do arco
+                if not latch_found:
+                    d1 = dist_point_to_segments(porta_ambiente['p1x'], porta_ambiente['p1y'], segmentos)
+                    d2 = dist_point_to_segments(porta_ambiente['p2x'], porta_ambiente['p2y'], segmentos)
                     if d1 < d2:
-                        lx, ly = soleira_ambiente['p2'][0], soleira_ambiente['p2'][1] # Maçaneta é a P2
+                        lx, ly = porta_ambiente['p1x'], porta_ambiente['p1y']
                     else:
-                        lx, ly = soleira_ambiente['p1'][0], soleira_ambiente['p1'][1] # Maçaneta é a P1
+                        lx, ly = porta_ambiente['p2x'], porta_ambiente['p2y']
+                        
+                # Vetor de Direção: Da Dobradiça para a Maçaneta (Avança livre pela parede)
+                vx = lx - cx
+                vy = ly - cy
+                mag = math.hypot(vx, vy)
+                if mag > 0:
+                    vx, vy = vx/mag, vy/mag
                 else:
-                    # Sem soleira, deduz pela proximidade da parede
-                    p1x, p1y = porta_ambiente['p1x'], porta_ambiente['p1y']
-                    p2x, p2y = porta_ambiente['p2x'], porta_ambiente['p2y']
+                    vx, vy = 1, 0
                     
-                    def dist_to_segs(px, py):
-                        md = float('inf')
-                        for pt1, pt2, _ in segmentos:
-                            d = math.hypot(px - (pt1[0]+pt2[0])/2, py - (pt1[1]+pt2[1])/2)
-                            if d < md: md = d
-                        return md
-                    
-                    if dist_to_segs(p1x, p1y) < dist_to_segs(p2x, p2y): lx, ly = p1x, p1y
-                    else: lx, ly = p2x, p2y
-
-                # Vetor da Parede (Saindo da Maçaneta pra longe da porta)
-                vx_wall, vy_wall = lx - cx_p, ly - cy_p
-                mag = math.hypot(vx_wall, vy_wall)
-                if mag > 0: vx_wall, vy_wall = vx_wall/mag, vy_wall/mag
-                else: vx_wall, vy_wall = 1, 0
+                # Vetor Normal (O que aponta pra dentro da sala)
+                n1x, n1y = -vy, vx
+                n2x, n2y = vy, -vx
                 
-                # Normal para dentro da sala
-                n1x, n1y = -vy_wall, vx_wall
-                n2x, n2y = vy_wall, -vx_wall
                 if math.hypot(centro_x - (lx + n1x), centro_y - (ly + n1y)) < math.hypot(centro_x - (lx + n2x), centro_y - (ly + n2y)):
-                    nx_wall, ny_wall = n1x, n1y
+                    nx, ny = n1x, n1y
                 else:
-                    nx_wall, ny_wall = n2x, n2y
+                    nx, ny = n2x, n2y
                     
                 tem_macaneta = True
 
@@ -379,7 +372,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 dados_amb = dict_dados[nome_ambiente]
                 
                 # ===============================================
-                # 1. PONTO DE LUZ E INTERRUPTOR NA MAÇANETA
+                # 1. ILUMINAÇÃO E INTERRUPTOR 
                 # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
@@ -388,56 +381,53 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                     
                     if tem_macaneta:
-                        # 15cm a partir da maçaneta
-                        sw_x = lx + vx_wall * 0.15 + nx_wall * 0.05
-                        sw_y = ly + vy_wall * 0.15 + ny_wall * 0.05
-                        txt_pos_sw = (sw_x + nx_wall * 0.20, sw_y + ny_wall * 0.20)
+                        # CRAVADO 15cm a partir da Maçaneta + offset para embutir na parede
+                        p_wall_x = lx + vx * 0.15
+                        p_wall_y = ly + vy * 0.15
+                        sw_x = p_wall_x + nx * 0.12
+                        sw_y = p_wall_y + ny * 0.12
+                        txt_pos_sw = (sw_x + nx * 0.20, sw_y + ny * 0.20)
                     else:
-                        # Fallback seguro pro meio da parede inferior
-                        sw_x, sw_y = centro_x, min_y + 0.10
-                        txt_pos_sw = (sw_x + 0.2, sw_y + 0.15)
+                        sw_x, sw_y = centro_x, min_y + 0.12
+                        txt_pos_sw = (sw_x, sw_y + 0.15)
                         
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (QDC)
+                # 2. QUADRO DE DISTRIBUIÇÃO (QDC) 
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
                     qdc_w, qdc_d = 0.4, 0.15
                     
                     if tem_macaneta:
-                        # 60cm a partir da maçaneta pra deixar espaço pro interruptor
-                        cx_qdc = lx + vx_wall * 0.60 + nx_wall * (qdc_d/2)
-                        cy_qdc = ly + vy_wall * 0.60 + ny_wall * (qdc_d/2)
+                        # CRAVADO 60cm a partir da Maçaneta
+                        p_wall_x = lx + vx * 0.60
+                        p_wall_y = ly + vy * 0.60
                         
-                        if abs(nx_wall) < abs(ny_wall): # Parede Horizontal
-                            dy = qdc_d if ny_wall > 0 else -qdc_d
-                            pts = [(cx_qdc - qdc_w/2, cy_qdc - dy/2), (cx_qdc + qdc_w/2, cy_qdc - dy/2), 
-                                   (cx_qdc + qdc_w/2, cy_qdc + dy/2), (cx_qdc - qdc_w/2, cy_qdc + dy/2)]
-                            rot = 0
-                            txt_pos = (cx_qdc - 0.08, cy_qdc + dy/2 + (0.05 if ny_wall > 0 else -0.15))
-                        else: # Parede Vertical
-                            dx = qdc_d if nx_wall > 0 else -qdc_d
-                            pts = [(cx_qdc - dx/2, cy_qdc - qdc_w/2), (cx_qdc + dx/2, cy_qdc - qdc_w/2), 
-                                   (cx_qdc + dx/2, cy_qdc + qdc_w/2), (cx_qdc - dx/2, cy_qdc + qdc_w/2)]
-                            rot = 90
-                            txt_pos = (cx_qdc + dx/2 + (0.05 if nx_wall > 0 else -0.15), cy_qdc - 0.08)
+                        # Constrói o Retângulo preenchido para dentro da sala
+                        p1 = (p_wall_x - vx * qdc_w/2, p_wall_y - vy * qdc_w/2)
+                        p2 = (p_wall_x + vx * qdc_w/2, p_wall_y + vy * qdc_w/2)
+                        p3 = (p2[0] + nx * qdc_d, p2[1] + ny * qdc_d)
+                        p4 = (p1[0] + nx * qdc_d, p1[1] + ny * qdc_d)
+                        pts = [p1, p2, p3, p4]
+                        
+                        rot = 0 if abs(vx) > abs(vy) else 90
+                        txt_pos = (p_wall_x + nx * (qdc_d + 0.15), p_wall_y + ny * (qdc_d + 0.15))
                     else:
                         cx_qdc = centro_x - 0.2
-                        cy_qdc = max_y - (qdc_d/2)
-                        pts = [(cx_qdc, cy_qdc - qdc_d/2), (cx_qdc + qdc_w, cy_qdc - qdc_d/2), 
-                               (cx_qdc + qdc_w, cy_qdc + qdc_d/2), (cx_qdc, cy_qdc + qdc_d/2)]
+                        cy_qdc = max_y
+                        pts = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc - qdc_d), (cx_qdc, cy_qdc - qdc_d)]
                         rot = 0
                         txt_pos = (cx_qdc + 0.02, cy_qdc - 0.12)
                     
-                    msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                    msp.add_lwpolyline([pts[0], pts[1], pts[2], pts[3], pts[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                    msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) # Hachura NBR
                     msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
 
                 # ===============================================
-                # 3. TOMADAS ORTOGONAIS (PROTEÇÃO TOTAL)
+                # 3. TOMADAS ORTOGONAIS (PROTEÇÃO DA PORTA)
                 # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
@@ -473,26 +463,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                         px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos)
                         
-                        # ANTI-COLISÃO DA SOLEIRA E PORTAS
+                        # Se entrar no raio da porta, escorrega pra frente
                         perto_porta = False
-                        for sol in soleiras:
-                            mx = (sol['p1'][0] + sol['p2'][0]) / 2
-                            my = (sol['p1'][1] + sol['p2'][1]) / 2
-                            ds = math.hypot(sol['p1'][0] - sol['p2'][0], sol['p1'][1] - sol['p2'][1])
-                            if math.hypot(px - mx, py - my) < ds + 0.4: # Protege a soleira + 40cm pro interruptor
-                                perto_porta = True
-                                break
-                                
-                        if not perto_porta:
-                            for p in portas:
-                                if p['tipo'] == 'ARC':
-                                    if math.hypot(px - p['x'], py - p['y']) <= p['r'] + 0.45:
-                                        perto_porta = True
-                                        break
-                                else:
-                                    if math.hypot(px - p['x'], py - p['y']) <= 0.65:
-                                        perto_porta = True
-                                        break
+                        for p in portas:
+                            if p['tipo'] == 'ARC':
+                                if math.hypot(px - p['x'], py - p['y']) <= p['r'] + 0.45:
+                                    perto_porta = True
+                                    break
+                            else:
+                                if math.hypot(px - p['x'], py - p['y']) <= 0.65:
+                                    perto_porta = True
+                                    break
                         
                         if perto_porta:
                             dist_atual += 0.4 
@@ -530,9 +511,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         tomadas_pos += 1
 
         # ===============================================
-        # MARCA D'ÁGUA DE ATUALIZAÇÃO (A PROVA DO CLOUD)
+        # MARCA D'ÁGUA DE ATUALIZAÇÃO ABSOLUTA
         # ===============================================
-        msp.add_text(">>> MOTOR 7.0 (SOLEIRAS) ATIVO <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 8.0 (CALIBRAÇÃO ABSOLUTA) ATIVO <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1044,12 +1025,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 7.0 Ativo: Inclui versão com IA_SOLEIRA e marca d'água no DXF!")
+                st.success("✅ Motor 8.0 Ativo: Calibração Absoluta por Maçanetas!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 7.0 - Soleiras)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 8.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
