@@ -30,7 +30,6 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
-# Inicializa o controle de autenticação sempre que a página carrega
 if 'usuario_autenticado' not in st.session_state:
     st.session_state.usuario_autenticado = False
 
@@ -181,6 +180,95 @@ def processar_dxf(caminho_arquivo):
         })
         
     return resultados
+
+def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
+        tmp_in.write(dxf_bytes)
+        tmp_in_path = tmp_in.name
+        
+    try:
+        doc = ezdxf.readfile(tmp_in_path)
+        msp = doc.modelspace()
+        
+        # Criando Layers NBR 5410
+        doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2) # Amarelo
+        doc.layers.add(name="PROJ_ELETRICA_QDC", color=1) # Vermelho
+        doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3) # Verde
+        
+        polilinhas = []
+        textos = []
+        
+        for entity in msp:
+            tipo = entity.dxftype()
+            if hasattr(entity.dxf, 'layer'):
+                layer = str(entity.dxf.layer).upper().strip()
+                if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
+                    try:
+                        pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+                        if pontos: polilinhas.append(pontos)
+                    except: pass
+                elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
+                    try:
+                        texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
+                        if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+                    except: pass
+                    
+        ambientes_processados = {}
+        dict_dados = {row['Ambiente']: row for row in dados_editados}
+        
+        for polilinha in polilinhas:
+            xs = [p[0] for p in polilinha]
+            ys = [p[1] for p in polilinha]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            
+            if (max_x - min_x) * (max_y - min_y) < 0.5: continue
+            
+            nome_ambiente = None
+            for t in textos:
+                if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5):
+                    nome_ambiente = t['nome']
+                    break
+                    
+            if not nome_ambiente: continue
+            
+            if nome_ambiente in ambientes_processados:
+                ambientes_processados[nome_ambiente] += 1
+                nome_ambiente = f"{nome_ambiente} {ambientes_processados[nome_ambiente]}"
+            else:
+                ambientes_processados[nome_ambiente] = 1
+            
+            # Localiza o centro da sala
+            centro_x = (min_x + max_x) / 2
+            centro_y = (min_y + max_y) / 2
+            
+            if nome_ambiente in dict_dados:
+                dados_amb = dict_dados[nome_ambiente]
+                
+                # 1. PONTO DE LUZ
+                if dados_amb['Qtd Ilum.'] > 0:
+                    msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
+                    potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
+                    msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
+                    
+                # 2. QUADRO DE DISTRIBUIÇÃO
+                qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
+                if nome_ambiente == qdc_formatado:
+                    qdc_x, qdc_y = centro_x - 0.5, centro_y + 0.5
+                    msp.add_lwpolyline([(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': (qdc_x + 0.05, qdc_y - 0.15)})
+        
+        tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
+        doc.saveas(tmp_out_path)
+        
+        with open(tmp_out_path, "rb") as f:
+            out_bytes = f.read()
+            
+        os.remove(tmp_out_path)
+        return out_bytes
+        
+    finally:
+        os.remove(tmp_in_path)
 
 # ==========================================
 # 2. TELA DE LOGIN E CADASTRO
@@ -366,7 +454,6 @@ def sistema_principal():
             st.write("### ⚙️ Parâmetros Globais da Instalação")
             colA, colB, colC = st.columns([1, 1, 2])
             
-            # --- RECUPERANDO PARÂMETROS SALVOS ---
             with colA:
                 tensao_salva = st.session_state.obra_atual.get('tensao_projeto')
                 tensao_salva = int(tensao_salva) if tensao_salva is not None else 220
@@ -384,7 +471,6 @@ def sistema_principal():
                 if qdc_salvo and qdc_salvo in opcoes_qdc:
                     index_qdc = opcoes_qdc.index(qdc_salvo)
                 local_qdc_selecionado = st.selectbox("Locação do QDC:", options=opcoes_qdc, index=index_qdc)
-            # -------------------------------------
 
             if local_qdc_selecionado == "Selecione o ambiente...":
                 texto_local_qdc = "local a ser definido"
@@ -428,7 +514,6 @@ def sistema_principal():
 
             if st.button("💾 Salvar Alterações na Nuvem", type="primary"):
                 dados_atualizados = df_editado.to_dict(orient='records')
-                # --- GRAVANDO OS PARÂMETROS GLOBAIS NO BANCO ---
                 supabase.table("obras").update({
                     "dados_json": dados_atualizados,
                     "local_qdc": local_qdc_selecionado,
@@ -440,7 +525,6 @@ def sistema_principal():
                 st.session_state.obra_atual['local_qdc'] = local_qdc_selecionado
                 st.session_state.obra_atual['tensao_projeto'] = int(tensao_projeto)
                 st.session_state.obra_atual['pe_direito'] = float(pe_direito)
-                # -----------------------------------------------
                 st.success("✅ Projeto atualizado e salvo na nuvem com sucesso!")
             
             st.write("### 📊 Quadro de Previsão de Cargas Consolidado")
@@ -587,9 +671,12 @@ def sistema_principal():
             df_materiais_final = pd.DataFrame(materiais)
             st.table(df_materiais_final)
             
+            # ==========================================
+            # 🚀 SESSÃO DE EXPORTAÇÃO E DESENHO CAD
+            # ==========================================
             st.divider()
             st.write("### 🖨️ Exportação e Relatórios")
-            col_exp1, col_exp2 = st.columns(2)
+            col_exp1, col_exp2, col_exp3 = st.columns(3)
             
             with col_exp1:
                 buffer_excel = io.BytesIO()
@@ -598,7 +685,7 @@ def sistema_principal():
                     df_materiais_final.to_excel(writer, index=False, sheet_name='Lista de Materiais')
                 
                 st.download_button(
-                    label="📊 Baixar Planilha de Orçamento (Excel)",
+                    label="📊 Baixar Planilha (Excel)",
                     data=buffer_excel.getvalue(),
                     file_name=f"Orcamento_{st.session_state.obra_atual['nome_obra']}_{st.session_state.obra_atual['pavimento']}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -645,7 +732,7 @@ def sistema_principal():
                     try:
                         pdf_bytes = pdf.output(dest='S').encode('latin1')
                         st.download_button(
-                            label="📄 Baixar Memorial Descritivo (PDF)",
+                            label="📄 Baixar Memorial (PDF)",
                             data=pdf_bytes,
                             file_name=f"Memorial_{st.session_state.obra_atual['nome_obra']}.pdf",
                             mime="application/pdf",
@@ -654,8 +741,31 @@ def sistema_principal():
                     except Exception as e:
                         st.error(f"Erro ao gerar PDF: {e}")
                 else:
-                    st.warning("⚠️ Você precisa adicionar 'fpdf' no seu arquivo requirements.txt para habilitar o Relatório PDF.")
-            
+                    st.warning("⚠️ Adicione 'fpdf' no requirements.txt")
+
+            with col_exp3:
+                st.write("**Projeto Unifilar (DXF)**")
+                arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
+                
+                if arquivo_base is not None:
+                    dados_dxf_atualizados = df_editado.to_dict(orient='records')
+                    if st.button("🎨 Gerar CAD (Fase 1)", type="primary", use_container_width=True):
+                        with st.spinner("Desenhando projeto no CAD..."):
+                            try:
+                                dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
+                                st.download_button(
+                                    label="⬇️ Baixar DXF Desenhado",
+                                    data=dxf_desenhado,
+                                    file_name=f"Proj_Eletrico_{st.session_state.obra_atual['nome_obra']}.dxf",
+                                    mime="application/dxf",
+                                    use_container_width=True
+                                )
+                                st.success("Desenho gerado com sucesso!")
+                            except Exception as e:
+                                st.error(f"Erro ao desenhar DXF: {e}")
+                else:
+                    st.info("Para desenhar os pontos na planta, anexe o .dxf acima.")
+
         except Exception as erro_visual:
             st.error(f"Erro interno de renderização: {erro_visual}")
 
