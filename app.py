@@ -190,7 +190,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        # Verifica se os layers já existem antes de criar (Evita o erro "already exists")
         if "PROJ_ELETRICA_LUZ" not in doc.layers:
             doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2)
         if "PROJ_ELETRICA_QDC" not in doc.layers:
@@ -207,21 +206,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if hasattr(entity.dxf, 'layer'):
                 layer = str(entity.dxf.layer).upper().strip()
                 
-                # Coletando Ambientes
                 if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
                     try:
                         pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
                         if pontos: polilinhas.append(pontos)
                     except: pass
                 
-                # Coletando Textos
                 elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
                     try:
                         texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
                         if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
                     except: pass
                 
-                # Coletando Portas 
                 elif layer == 'IA_PORTAS':
                     try:
                         if tipo == 'LINE':
@@ -267,13 +263,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # 1. PONTO DE LUZ 
+                # 1. PONTO DE LUZ
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
-                # 2. QUADRO DE DISTRIBUIÇÃO 
+                # 2. QUADRO DE DISTRIBUIÇÃO (Alinhamento Magnético com Portas)
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
                     
@@ -284,21 +280,48 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             break
                     
                     if porta_ambiente:
-                        dist_x = abs(porta_ambiente['x'] - centro_x)
-                        dist_y = abs(porta_ambiente['y'] - centro_y)
+                        px, py = porta_ambiente['x'], porta_ambiente['y']
                         
-                        if dist_x > dist_y: 
-                            qdc_x = porta_ambiente['x']
-                            qdc_y = porta_ambiente['y'] + 0.3 
-                        else:
-                            qdc_x = porta_ambiente['x'] + 0.3 
-                            qdc_y = porta_ambiente['y']
+                        # Descobrir qual a parede mais próxima da porta
+                        dist_esq = abs(px - min_x)
+                        dist_dir = abs(px - max_x)
+                        dist_baixo = abs(py - min_y)
+                        dist_cima = abs(py - max_y)
+                        
+                        menor_dist = min(dist_esq, dist_dir, dist_baixo, dist_cima)
+                        
+                        if menor_dist == dist_cima: # Parede Superior
+                            qdc_x = px + 0.3 if (px + 0.9) <= max_x else px - 0.9
+                            qdc_y = max_y
+                            pts = [(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)]
+                            txt_pos = (qdc_x + 0.05, qdc_y - 0.35)
+                            
+                        elif menor_dist == dist_baixo: # Parede Inferior
+                            qdc_x = px + 0.3 if (px + 0.9) <= max_x else px - 0.9
+                            qdc_y = min_y + 0.2
+                            pts = [(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)]
+                            txt_pos = (qdc_x + 0.05, qdc_y + 0.15)
+                            
+                        elif menor_dist == dist_esq: # Parede Esquerda
+                            qdc_x = min_x
+                            qdc_y = py + 0.9 if (py + 0.9) <= max_y else py - 0.3
+                            pts = [(qdc_x, qdc_y), (qdc_x+0.2, qdc_y), (qdc_x+0.2, qdc_y-0.6), (qdc_x, qdc_y-0.6)]
+                            txt_pos = (qdc_x + 0.3, qdc_y - 0.35)
+                            
+                        else: # Parede Direita
+                            qdc_x = max_x - 0.2
+                            qdc_y = py + 0.9 if (py + 0.9) <= max_y else py - 0.3
+                            pts = [(qdc_x, qdc_y), (qdc_x+0.2, qdc_y), (qdc_x+0.2, qdc_y-0.6), (qdc_x, qdc_y-0.6)]
+                            txt_pos = (qdc_x - 0.5, qdc_y - 0.35)
                     else:
+                        # Plano B (Caso não tenha porta): Centraliza na parede superior
                         qdc_x = centro_x - 0.3
                         qdc_y = max_y 
+                        pts = [(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)]
+                        txt_pos = (qdc_x + 0.05, qdc_y - 0.35)
                     
-                    msp.add_lwpolyline([(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': (qdc_x + 0.1, qdc_y - 0.15)})
+                    msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': txt_pos})
         
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
