@@ -189,6 +189,20 @@ def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     if d1 < d2: return n1x, n1y
     else: return n2x, n2y
 
+def point_seg_dist(px, py, pt1, pt2):
+    l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+    if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
+    t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+    proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+    proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+    return math.hypot(px - proj_x, py - proj_y)
+
+def dist_to_line(px, py, pt1, pt2):
+    den = math.hypot(pt2[0]-pt1[0], pt2[1]-pt1[1])
+    if den == 0: return math.hypot(px-pt1[0], py-pt1[1])
+    num = abs((pt2[0]-pt1[0])*(pt1[1]-py) - (pt1[0]-px)*(pt2[1]-pt1[1]))
+    return num / den
+
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
@@ -282,7 +296,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             centro_x = (min_x + max_x) / 2
             centro_y = (min_y + max_y) / 2
 
-            segmentos = []
+            # ===============================================
+            # CRIAÇÃO DAS PAREDES LÓGICAS (ANTI-FRAGMENTAÇÃO)
+            # ===============================================
+            segmentos_crus = []
             comp_total = 0
             if len(polilinha) >= 3:
                 poly_fechada = list(polilinha)
@@ -292,14 +309,44 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pt2 = poly_fechada[i+1]
                     dist = math.hypot(pt2[0] - pt1[0], pt2[1] - pt1[1])
                     if dist > 0:
-                        segmentos.append((pt1, pt2, dist))
+                        segmentos_crus.append((pt1, pt2, dist))
                         comp_total += dist
+
+            logical_walls = []
+            for pt1, pt2, dist in segmentos_crus:
+                if dist < 0.1: continue
+                mx, my = (pt1[0]+pt2[0])/2, (pt1[1]+pt2[1])/2
+                vx = (pt2[0] - pt1[0]) / dist
+                vy = (pt2[1] - pt1[1]) / dist
+                
+                merged = False
+                for lw in logical_walls:
+                    dot = abs(lw['vx']*vx + lw['vy']*vy)
+                    if dot > 0.98: # Paralelas
+                        if dist_to_line(mx, my, lw['p1'], lw['p2']) < 0.2: # Colineares (Mesma parede física)
+                            pts = [lw['p1'], lw['p2'], pt1, pt2]
+                            max_d = 0
+                            best_p1, best_p2 = lw['p1'], lw['p2']
+                            for i in range(4):
+                                for j in range(i+1, 4):
+                                    d = math.hypot(pts[i][0]-pts[j][0], pts[i][1]-pts[j][1])
+                                    if d > max_d:
+                                        max_d = d
+                                        best_p1, best_p2 = pts[i], pts[j]
+                            lw['p1'], lw['p2'] = best_p1, best_p2
+                            lw['length'] = max_d
+                            lw['vx'] = (best_p2[0]-best_p1[0])/max_d
+                            lw['vy'] = (best_p2[1]-best_p1[1])/max_d
+                            merged = True
+                            break
+                if not merged:
+                    logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dist, 'vx': vx, 'vy': vy})
 
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
                 # ===============================================
-                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (P/ Interruptor)
+                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA
                 # ===============================================
                 hinge = None
                 latch = None
@@ -324,7 +371,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if hinge: break
 
                 # ===============================================
-                # 1. ILUMINAÇÃO E INTERRUPTOR
+                # 1. ILUMINAÇÃO E INTERRUPTOR ALINHADO
                 # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
@@ -332,53 +379,74 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                     
-                    if hinge and latch:
-                        vx = latch[0] - hinge[0]
-                        vy = latch[1] - hinge[1]
-                        mag = math.hypot(vx, vy)
-                        if mag > 0: vx, vy = vx/mag, vy/mag
-                        
-                        sw_start_x = latch[0] + vx * 0.15
-                        sw_start_y = latch[1] + vy * 0.15
-                        nx, ny = get_inside_normal(vx, vy, sw_start_x, sw_start_y, centro_x, centro_y)
-                        
-                        sw_x = sw_start_x + nx * 0.12 
-                        sw_y = sw_start_y + ny * 0.12
-                        txt_pos_sw = (sw_x + nx * 0.20, sw_y + ny * 0.20)
-                    else:
+                    sw_placed = False
+                    if hinge and latch and logical_walls:
+                        best_lw = None
+                        min_d = float('inf')
+                        # Descobre em qual parede a maçaneta está
+                        for lw in logical_walls:
+                            d = point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2'])
+                            if d < min_d:
+                                min_d = d
+                                best_lw = lw
+                                
+                        if best_lw and min_d < 0.5:
+                            vx, vy = best_lw['vx'], best_lw['vy']
+                            
+                            # O interruptor deve se afastar da dobradiça
+                            dir_x, dir_y = latch[0] - hinge[0], latch[1] - hinge[1]
+                            dot = dir_x * vx + dir_y * vy
+                            if dot < 0:
+                                vx, vy = -vx, -vy
+                                
+                            # Caminha 15cm pela trilha da parede
+                            sw_base_x = latch[0] + vx * 0.15
+                            sw_base_y = latch[1] + vy * 0.15
+                            
+                            # Trava magnética na linha exata da parede
+                            l2 = (best_lw['p1'][0] - best_lw['p2'][0])**2 + (best_lw['p1'][1] - best_lw['p2'][1])**2
+                            if l2 > 0:
+                                t = ((sw_base_x - best_lw['p1'][0])*(best_lw['p2'][0] - best_lw['p1'][0]) + (sw_base_y - best_lw['p1'][1])*(best_lw['p2'][1] - best_lw['p1'][1])) / l2
+                                sw_base_x = best_lw['p1'][0] + t * (best_lw['p2'][0] - best_lw['p1'][0])
+                                sw_base_y = best_lw['p1'][1] + t * (best_lw['p2'][1] - best_lw['p1'][1])
+                            
+                            nx, ny = get_inside_normal(vx, vy, sw_base_x, sw_base_y, centro_x, centro_y)
+                            
+                            sw_x = sw_base_x + nx * 0.12
+                            sw_y = sw_base_y + ny * 0.12
+                            txt_pos_sw = (sw_x + nx * 0.20, sw_y + ny * 0.20)
+                            
+                            msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
+                            msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
+                            sw_placed = True
+                            
+                    if not sw_placed:
                         sw_x, sw_y = centro_x, min_y + 0.12
                         txt_pos_sw = (sw_x + 0.2, sw_y + 0.15)
-                        
-                    msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
+                        msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
+                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 17.0 - A MAIOR PAREDE LIVRE)
+                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 18.0)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 
-                # Trava de Segurança NBR 5410: Impede QDC em áreas úmidas
+                # Trava NBR 5410
                 ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
                 is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
                 
                 if nome_ambiente == qdc_formatado and not is_area_umida:
                     qdc_w, qdc_d = 0.4, 0.15
                     
-                    if segmentos:
-                        def point_seg_dist(px, py, pt1, pt2):
-                            l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
-                            if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
-                            t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
-                            proj_x = pt1[0] + t * (pt2[0] - pt1[0])
-                            proj_y = pt1[1] + t * (pt2[1] - pt1[1])
-                            return math.hypot(px - proj_x, py - proj_y)
-
-                        best_segment = None
-                        max_score = -float('inf')
+                    if logical_walls:
+                        best_wall = None
+                        min_soleiras = float('inf')
+                        max_len = -1
                         
-                        for seg in segmentos:
-                            pt1, pt2, dist = seg
-                            if dist < 0.5: continue # Ignora paredinhas menores que 50cm
+                        # Analisa todas as paredes Lógicas do ambiente
+                        for lw in logical_walls:
+                            pt1, pt2, dist = lw['p1'], lw['p2'], lw['length']
+                            if dist < 0.5: continue # Ignora bonecas de parede
                             
                             soleiras_on_wall = 0
                             for sol in soleiras:
@@ -391,23 +459,23 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 if min(d_mid, d_p1, d_p2) < 0.4: 
                                     soleiras_on_wall += 1
                             
-                            # O SCORE MÁGICO: Comprimento total da parede MENOS 1 metro por cada porta.
-                            # Assim, a parede com maior "espaço livre de alvenaria" ganha!
-                            espaco_livre = dist - (soleiras_on_wall * 1.0)
-                            
-                            if espaco_livre > max_score:
-                                max_score = espaco_livre
-                                best_segment = seg
-                                
-                        # Fallback de segurança se não sobrar parede grande o suficiente
-                        if not best_segment:
-                            best_segment = max(segmentos, key=lambda s: s[2])
+                            # A mágica do Motor 18.0: Menos portas ganha. Se empatar, a maior parede ganha!
+                            if soleiras_on_wall < min_soleiras:
+                                min_soleiras = soleiras_on_wall
+                                max_len = dist
+                                best_wall = lw
+                            elif soleiras_on_wall == min_soleiras:
+                                if dist > max_len:
+                                    max_len = dist
+                                    best_wall = lw
                                     
-                        pt1, pt2, dist = best_segment
+                        if not best_wall:
+                            best_wall = max(logical_walls, key=lambda w: w['length'])
+                                    
+                        pt1, pt2, dist = best_wall['p1'], best_wall['p2'], best_wall['length']
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                         
-                        vx = (pt2[0] - pt1[0]) / dist
-                        vy = (pt2[1] - pt1[1]) / dist
+                        vx, vy = best_wall['vx'], best_wall['vy']
                         nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                         
                         p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
@@ -458,7 +526,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         tentativas += 1
                         d_check = dist_atual % comp_total
                         
-                        px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos)
+                        px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos_crus)
                         
                         perto_porta = False
                         if hinge and latch:
@@ -474,9 +542,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                     perto_porta = True
                                     break
                         
-                        # Protege o QDC para nao nascer tomada embaixo dele
-                        if nome_ambiente == qdc_formatado and not is_area_umida and not perto_porta and segmentos:
-                            pt1_b, pt2_b, _ = best_segment
+                        # Evita encavalar tomada em cima do QDC Central
+                        if nome_ambiente == qdc_formatado and not is_area_umida and not perto_porta and logical_walls:
+                            pt1_b, pt2_b = best_wall['p1'], best_wall['p2']
                             mx_b, my_b = (pt1_b[0] + pt2_b[0]) / 2, (pt1_b[1] + pt2_b[1]) / 2
                             if math.hypot(px - mx_b, py - my_b) < 0.5:
                                 perto_porta = True
@@ -519,7 +587,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 17.0 (QDC NA MAIOR PAREDE LIVRE) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 18.0 (QDC NA MAIOR C/ MENOS SOLEIRAS + INTERRUPTOR SNAP) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1031,12 +1099,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 17.0 Ativo: QDC na Maior Parede Livre (Espaço Útil)!")
+                st.success("✅ Motor 18.0 Ativo: Lógica Definitiva de Paredes e Soleiras!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 17.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 18.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
