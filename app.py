@@ -190,10 +190,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        # Criando Layers NBR 5410
-        doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2) # Amarelo
-        doc.layers.add(name="PROJ_ELETRICA_QDC", color=1) # Vermelho
-        doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3) # Verde
+        doc.layers.add(name="PROJ_ELETRICA_LUZ", color=2)
+        doc.layers.add(name="PROJ_ELETRICA_QDC", color=1)
+        doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         
         polilinhas = []
         textos = []
@@ -238,7 +237,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             else:
                 ambientes_processados[nome_ambiente] = 1
             
-            # Localiza o centro da sala
             centro_x = (min_x + max_x) / 2
             centro_y = (min_y + max_y) / 2
             
@@ -254,9 +252,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 # 2. QUADRO DE DISTRIBUIÇÃO
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
-                    qdc_x, qdc_y = centro_x - 0.5, centro_y + 0.5
+                    # Fixando o QDC na parede superior (max_y) e centralizando horizontalmente
+                    qdc_x = centro_x - 0.3
+                    qdc_y = max_y 
+                    
                     msp.add_lwpolyline([(qdc_x, qdc_y), (qdc_x+0.6, qdc_y), (qdc_x+0.6, qdc_y-0.2), (qdc_x, qdc_y-0.2)], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': (qdc_x + 0.05, qdc_y - 0.15)})
+                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 1, 'insert': (qdc_x + 0.1, qdc_y - 0.15)})
         
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
@@ -527,6 +528,7 @@ def sistema_principal():
                 st.session_state.obra_atual['pe_direito'] = float(pe_direito)
                 st.success("✅ Projeto atualizado e salvo na nuvem com sucesso!")
             
+            # --- NOVA TABELA CONSOLIDADA ---
             st.write("### 📊 Quadro de Previsão de Cargas Consolidado")
             linha_total = pd.DataFrame([{
                 "Ambiente": "TOTAL", 
@@ -542,10 +544,35 @@ def sistema_principal():
             }])
             
             df_final = pd.concat([df_editado, linha_total], ignore_index=True)
-            df_final_exibir = df_final.drop(columns=["Pot. Unit. Ilum (VA)", "Pot. Unit. TUG (VA)", "Pot. Unit. TUE (VA)"])
+            
+            # Renomeando as colunas das TUEs para ficarem no padrão visual
+            df_final = df_final.rename(columns={
+                "Qtd TUE": "TUEs (Qtd)",
+                "Carga TUE (VA)": "Carga TUEs (VA)"
+            })
+            
+            # Aplicando a nova ordem exata solicitada
+            ordem_colunas = [
+                "Ambiente", 
+                "Área (m²)", 
+                "Perímetro (m)", 
+                "Qtd Ilum.", 
+                "Carga Ilum. (VA)", 
+                "TUGs (Qtd)", 
+                "Carga TUGs (VA)", 
+                "TUEs (Qtd)", 
+                "Carga TUEs (VA)", 
+                "Equipamento TUE"
+            ]
+            
+            df_final = df_final[ordem_colunas]
+            
+            # Preparando para exibição na tela (formatando vírgulas)
+            df_final_exibir = df_final.copy()
             df_final_exibir["Área (m²)"] = df_final_exibir["Área (m²)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
             df_final_exibir["Perímetro (m)"] = df_final_exibir["Perímetro (m)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
             st.table(df_final_exibir) 
+            # -------------------------------
 
             st.divider()
             st.write("### 📦 Tabela Quantitativa de Materiais")
@@ -671,9 +698,6 @@ def sistema_principal():
             df_materiais_final = pd.DataFrame(materiais)
             st.table(df_materiais_final)
             
-            # ==========================================
-            # 🚀 SESSÃO DE EXPORTAÇÃO E DESENHO CAD
-            # ==========================================
             st.divider()
             st.write("### 🖨️ Exportação e Relatórios")
             col_exp1, col_exp2, col_exp3 = st.columns(3)
