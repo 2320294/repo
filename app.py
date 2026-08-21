@@ -182,6 +182,38 @@ def processar_dxf(caminho_arquivo):
     return resultados
 
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
+    
+    # Função para achar a distância (d) de um ponto no perímetro
+    def get_d_on_perimeter(px, py, segs):
+        acumulado = 0
+        min_d = float('inf')
+        best_d = 0
+        for pt1, pt2, dst in segs:
+            l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+            if l2 == 0: continue
+            t = max(0, min(1, ((px - pt1[0]) * (pt2[0] - pt1[0]) + (py - pt1[1]) * (pt2[1] - pt1[1])) / l2))
+            proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+            proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+            d = math.hypot(px - proj_x, py - proj_y)
+            if d < min_d:
+                min_d = d
+                best_d = acumulado + (t * dst)
+            acumulado += dst
+        return best_d
+
+    # Função para extrair um Ponto (x, y) e o vetor da parede a partir de uma distância (d)
+    def get_ponto_perimetro_livre(d, segs):
+        acumulado = 0
+        for pt1, pt2, dst in segs:
+            if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
+                ratio = (d - acumulado) / dst
+                p_x = pt1[0] + (pt2[0] - pt1[0]) * ratio
+                p_y = pt1[1] + (pt2[1] - pt1[1]) * ratio
+                return p_x, p_y, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+            acumulado += dst
+        pt1, pt2, dst = segs[-1]
+        return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
         tmp_in_path = tmp_in.name
@@ -274,46 +306,50 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             centro_x = (min_x + max_x) / 2
             centro_y = (min_y + max_y) / 2
 
+            segmentos = []
+            comp_total = 0
+            if len(polilinha) >= 3:
+                poly_fechada = list(polilinha)
+                if poly_fechada[0] != poly_fechada[-1]: poly_fechada.append(poly_fechada[0])
+                for i in range(len(poly_fechada)-1):
+                    pt1 = poly_fechada[i]
+                    pt2 = poly_fechada[i+1]
+                    dist = math.hypot(pt2[0] - pt1[0], pt2[1] - pt1[1])
+                    if dist > 0:
+                        segmentos.append((pt1, pt2, dist))
+                        comp_total += dist
+
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
                 # ===============================================
-                # MOTOR 10.0: O ENCONTRO DA SOLEIRA E DA PORTA
+                # LÓGICA DE DETECÇÃO DE MAÇANETA (MOTOR 11.0)
                 # ===============================================
                 latch = None
                 hinge = None
-                vx_wall, vy_wall = 1, 0
                 
-                # Procura a Soleira do Ambiente
+                # Busca a Soleira e a Porta para encontrar a Maçaneta e a Dobradiça
                 for sol in soleiras:
                     mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                    # Se a soleira esta no ambiente
                     if (min_x - 0.5) <= mx <= (max_x + 0.5) and (min_y - 0.5) <= my <= (max_y + 0.5):
-                        # Verifica qual ponta da Porta toca a Soleira (a Dobradiça)
                         for p in portas:
-                            d_p1_s1 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
-                            d_p1_s2 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
-                            d_p2_s1 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
-                            d_p2_s2 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
-                            
-                            min_d = min(d_p1_s1, d_p1_s2, d_p2_s1, d_p2_s2)
-                            if min_d < 0.2: # O toque perfeito!
-                                if min_d in (d_p1_s1, d_p2_s1):
-                                    hinge = sol['p1']  # Ponta 1 é a Dobradiça
-                                    latch = sol['p2']  # Ponta 2 é a Maçaneta
-                                else:
-                                    hinge = sol['p2']  # Ponta 2 é a Dobradiça
-                                    latch = sol['p1']  # Ponta 1 é a Maçaneta
+                            if p['tipo'] == 'LINE':
+                                d_p1_s1 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
+                                d_p1_s2 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
+                                d_p2_s1 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
+                                d_p2_s2 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
                                 
-                                # Vetor da soleira: sai da dobradiça para a maçaneta (segue a parede)
-                                vx_wall, vy_wall = latch[0] - hinge[0], latch[1] - hinge[1]
-                                mag = math.hypot(vx_wall, vy_wall)
-                                if mag > 0: vx_wall, vy_wall = vx_wall/mag, vy_wall/mag
-                                break
-                        if latch: break # Achou e mapeou! Sai do loop.
+                                min_d = min(d_p1_s1, d_p1_s2, d_p2_s1, d_p2_s2)
+                                if min_d < 0.2: # Intersecção (A Dobradiça)
+                                    if min_d == d_p1_s1: hinge, latch = sol['p1'], sol['p2']
+                                    elif min_d == d_p1_s2: hinge, latch = sol['p2'], sol['p1']
+                                    elif min_d == d_p2_s1: hinge, latch = sol['p1'], sol['p2']
+                                    elif min_d == d_p2_s2: hinge, latch = sol['p2'], sol['p1']
+                                    break
+                        if latch: break
 
                 # ===============================================
-                # 1. ILUMINAÇÃO E INTERRUPTOR 
+                # 1. LUZ E INTERRUPTOR NA PAREDE 
                 # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
@@ -321,138 +357,90 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                     
-                    if latch:
-                        # 15cm a partir da Maçaneta na mesma direção da parede
-                        sw_xRaw = latch[0] + vx_wall * 0.15
-                        sw_yRaw = latch[1] + vy_wall * 0.15
+                    if latch and hinge and comp_total > 0:
+                        d_latch = get_d_on_perimeter(latch[0], latch[1], segmentos)
+                        # Gera as duas possibilidades (ida e volta no perimetro)
+                        p_plus = get_ponto_perimetro_livre((d_latch + 0.15) % comp_total, segmentos)
+                        p_minus = get_ponto_perimetro_livre((d_latch - 0.15 + comp_total) % comp_total, segmentos)
                         
-                        # Normaliza pro centro da sala para embutir ligeiramente o interruptor
-                        nx, ny = centro_x - sw_xRaw, centro_y - sw_yRaw
-                        n_mag = math.hypot(nx, ny)
-                        if n_mag > 0: nx, ny = nx/n_mag, ny/n_mag
-                        
-                        sw_x = sw_xRaw + nx * 0.05
-                        sw_y = sw_yRaw + ny * 0.05
-                        txt_pos_sw = (sw_x + nx * 0.20, sw_y + ny * 0.20)
-                    else:
-                        # Fallback Estável Motor 9.0
-                        porta_ambiente_int = None
-                        for p in portas:
-                            if (min_x - 0.5) <= p['x'] <= (max_x + 0.5) and (min_y - 0.5) <= p['y'] <= (max_y + 0.5):
-                                porta_ambiente_int = p
-                                break
-                        if porta_ambiente_int:
-                            px, py = porta_ambiente_int['x'], porta_ambiente_int['y']
-                            dist_esq, dist_dir = abs(px - min_x), abs(px - max_x)
-                            dist_baixo, dist_cima = abs(py - min_y), abs(py - max_y)
-                            menor_dist = min(dist_esq, dist_dir, dist_baixo, dist_cima)
-                            if menor_dist == dist_cima: 
-                                sw_x = px + 0.5 if (px + 0.5) <= max_x else px - 0.5
-                                sw_y = max_y - 0.12
-                                txt_pos_sw = (sw_x - 0.05, sw_y - 0.20)
-                            elif menor_dist == dist_baixo: 
-                                sw_x = px + 0.5 if (px + 0.5) <= max_x else px - 0.5
-                                sw_y = min_y + 0.12
-                                txt_pos_sw = (sw_x - 0.05, sw_y + 0.15)
-                            elif menor_dist == dist_esq: 
-                                sw_x = min_x + 0.12
-                                sw_y = py + 0.5 if (py + 0.5) <= max_y else py - 0.5
-                                txt_pos_sw = (sw_x + 0.15, sw_y - 0.05)
-                            else: 
-                                sw_x = max_x - 0.12
-                                sw_y = py + 0.5 if (py + 0.5) <= max_y else py - 0.5
-                                txt_pos_sw = (sw_x - 0.30, sw_y - 0.05)
+                        # Escolhe o ponto que se AFASTA da dobradiça (Parede sólida)
+                        if math.hypot(p_plus[0] - hinge[0], p_plus[1] - hinge[1]) > math.hypot(p_minus[0] - hinge[0], p_minus[1] - hinge[1]):
+                            sw_wall_x, sw_wall_y, ux_w, uy_w = p_plus
                         else:
-                            sw_x, sw_y = centro_x, min_y + 0.12
-                            txt_pos_sw = (sw_x + 0.15, sw_y + 0.05)
+                            sw_wall_x, sw_wall_y, ux_w, uy_w = p_minus
+                            
+                        # Determina Normal
+                        n1x, n1y = -uy_w, ux_w
+                        n2x, n2y = uy_w, -ux_w
+                        if math.hypot(centro_x - (sw_wall_x + n1x), centro_y - (sw_wall_y + n1y)) < math.hypot(centro_x - (sw_wall_x + n2x), centro_y - (sw_wall_y + n2y)):
+                            nx, ny = n1x, n1y
+                        else:
+                            nx, ny = n2x, n2y
+                            
+                        # Interruptor com centro rente à parede para ficar perfeitamente alinhado
+                        sw_x = sw_wall_x + nx * 0.12
+                        sw_y = sw_wall_y + ny * 0.12
+                        txt_pos_sw = (sw_x + nx * 0.20, sw_y + ny * 0.20)
+                        
+                    else:
+                        # Fallback (Centro da parede inferior)
+                        sw_x, sw_y = centro_x, min_y + 0.12
+                        txt_pos_sw = (sw_x + 0.2, sw_y + 0.15)
                         
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (Lógica Estável QDC)
+                # 2. QUADRO DE DISTRIBUIÇÃO (SEM TEXTO E COM TRIANGULO)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
-                    
-                    porta_ambiente = None
-                    for p in portas:
-                        if (min_x - 0.5) <= p['x'] <= (max_x + 0.5) and (min_y - 0.5) <= p['y'] <= (max_y + 0.5):
-                            porta_ambiente = p
-                            break
-                    
                     qdc_w, qdc_d = 0.4, 0.15
-                    afastamento = 0.8
                     
-                    if porta_ambiente:
-                        px, py = porta_ambiente['x'], porta_ambiente['y']
+                    if latch and hinge and comp_total > 0:
+                        d_latch = get_d_on_perimeter(latch[0], latch[1], segmentos)
+                        # Afasta 70cm para garantir espaço de sobra do interruptor
+                        p_plus = get_ponto_perimetro_livre((d_latch + 0.70) % comp_total, segmentos)
+                        p_minus = get_ponto_perimetro_livre((d_latch - 0.70 + comp_total) % comp_total, segmentos)
                         
-                        dist_esq = abs(px - min_x)
-                        dist_dir = abs(px - max_x)
-                        dist_baixo = abs(py - min_y)
-                        dist_cima = abs(py - max_y)
-                        
-                        menor_dist = min(dist_esq, dist_dir, dist_baixo, dist_cima)
-                        
-                        if menor_dist == dist_cima: 
-                            start_x = px + afastamento if (px + afastamento + qdc_w) <= max_x else px - afastamento - qdc_w
-                            pts = [(start_x, max_y), (start_x + qdc_w, max_y), (start_x + qdc_w, max_y - qdc_d), (start_x, max_y - qdc_d)]
-                            cx, cy = start_x + (qdc_w / 2), max_y - (qdc_d / 2)
-                            txt_pos = (cx - 0.08, cy - 0.035)
-                            rot = 0
-                        elif menor_dist == dist_baixo: 
-                            start_x = px + afastamento if (px + afastamento + qdc_w) <= max_x else px - afastamento - qdc_w
-                            pts = [(start_x, min_y), (start_x + qdc_w, min_y), (start_x + qdc_w, min_y + qdc_d), (start_x, min_y + qdc_d)]
-                            cx, cy = start_x + (qdc_w / 2), min_y + (qdc_d / 2)
-                            txt_pos = (cx - 0.08, cy - 0.035)
-                            rot = 0
-                        elif menor_dist == dist_esq: 
-                            start_y = py + afastamento if (py + afastamento + qdc_w) <= max_y else py - afastamento - qdc_w
-                            pts = [(min_x, start_y), (min_x + qdc_d, start_y), (min_x + qdc_d, start_y + qdc_w), (min_x, start_y + qdc_w)]
-                            cx, cy = min_x + (qdc_d / 2), start_y + (qdc_w / 2)
-                            txt_pos = (cx + 0.035, cy - 0.08)
-                            rot = 90
-                        else: # Parede Direita
-                            start_y = py + afastamento if (py + afastamento + qdc_w) <= max_y else py - afastamento - qdc_w
-                            pts = [(max_x, start_y), (max_x - qdc_d, start_y), (max_x - qdc_d, start_y + qdc_w), (max_x, start_y + qdc_w)]
-                            cx, cy = max_x - (qdc_d / 2), start_y + (qdc_w / 2)
-                            txt_pos = (cx + 0.035, cy - 0.08)
-                            rot = 90
+                        if math.hypot(p_plus[0] - hinge[0], p_plus[1] - hinge[1]) > math.hypot(p_minus[0] - hinge[0], p_minus[1] - hinge[1]):
+                            qdc_wall_x, qdc_wall_y, ux_w, uy_w = p_plus
+                        else:
+                            qdc_wall_x, qdc_wall_y, ux_w, uy_w = p_minus
+                            
+                        n1x, n1y = -uy_w, ux_w
+                        n2x, n2y = uy_w, -ux_w
+                        if math.hypot(centro_x - (qdc_wall_x + n1x), centro_y - (qdc_wall_y + n1y)) < math.hypot(centro_x - (qdc_wall_x + n2x), centro_y - (qdc_wall_y + n2y)):
+                            nx, ny = n1x, n1y
+                        else:
+                            nx, ny = n2x, n2y
+                            
+                        # Desenha o Retângulo e o Triângulo (Sólido)
+                        p1 = (qdc_wall_x - ux_w * qdc_w/2, qdc_wall_y - uy_w * qdc_w/2)
+                        p2 = (qdc_wall_x + ux_w * qdc_w/2, qdc_wall_y + uy_w * qdc_w/2)
+                        p3 = (p2[0] + nx * qdc_d, p2[1] + ny * qdc_d)
+                        p4 = (p1[0] + nx * qdc_d, p1[1] + ny * qdc_d)
+                        pts = [p1, p2, p3, p4]
                     else:
-                        start_x = centro_x - 0.2
-                        pts = [(start_x, max_y), (start_x + qdc_w, max_y), (start_x + qdc_w, max_y - qdc_d), (start_x, max_y - qdc_d)]
-                        cx, cy = start_x + (qdc_w / 2), max_y - (qdc_d / 2)
-                        txt_pos = (cx - 0.08, cy - 0.035)
-                        rot = 0
+                        cx_qdc = centro_x - 0.2
+                        cy_qdc = max_y
+                        pts = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc - qdc_d), (cx_qdc, cy_qdc - qdc_d)]
                     
-                    msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
+                    msp.add_lwpolyline([pts[0], pts[1], pts[2], pts[3], pts[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                    msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) # Triângulo Sólido
 
                 # ===============================================
-                # 3. TOMADAS ORTOGONAIS (COM PROTEÇÃO)
+                # 3. TOMADAS ORTOGONAIS 
                 # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
                 total_tomadas = qtd_tugs + qtd_tues
                 
-                segmentos_tomada = []
-                comp_total_tomada = 0
-                if len(polilinha) >= 3:
-                    poly_fechada = list(polilinha)
-                    if poly_fechada[0] != poly_fechada[-1]: poly_fechada.append(poly_fechada[0])
-                    for i in range(len(poly_fechada)-1):
-                        pt1 = poly_fechada[i]
-                        pt2 = poly_fechada[i+1]
-                        dist = math.hypot(pt2[0] - pt1[0], pt2[1] - pt1[1])
-                        if dist > 0:
-                            segmentos_tomada.append((pt1, pt2, dist))
-                            comp_total_tomada += dist
-                            
-                if total_tomadas > 0 and comp_total_tomada > 0:
-                    passo = comp_total_tomada / total_tomadas
+                if total_tomadas > 0 and comp_total > 0:
+                    passo = comp_total / total_tomadas
                     dist_atual = passo / 2 
                     
-                    def get_ponto_perimetro(d, segs):
+                    def get_ponto_tomada(d, segs):
                         acumulado = 0
                         for pt1, pt2, dst in segs:
                             if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
@@ -474,15 +462,23 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     while tomadas_pos < total_tomadas and tentativas < total_tomadas * 5:
                         tentativas += 1
-                        d_check = dist_atual % comp_total_tomada
+                        d_check = dist_atual % comp_total
                         
-                        px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos_tomada)
+                        px, py, ux_w, uy_w = get_ponto_tomada(d_check, segmentos)
                         
                         perto_porta = False
+                        # Evita tomadas próximas de QUALQUER soleira ou porta para garantir isolamento
                         for p in portas:
-                            if math.hypot(px - p['x'], py - p['y']) <= 0.65:
-                                perto_porta = True
-                                break
+                            if p['tipo'] == 'LINE':
+                                if math.hypot(px - p['x'], py - p['y']) <= 0.65:
+                                    perto_porta = True
+                                    break
+                        if not perto_porta:
+                            for sol in soleiras:
+                                mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
+                                if math.hypot(px - mx, py - my) <= 0.65:
+                                    perto_porta = True
+                                    break
                         
                         if perto_porta:
                             dist_atual += 0.4 
@@ -508,8 +504,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
                         
                         if tomadas_pos >= qtd_tugs: 
-                            msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                            # Revertendo o sólido temporariamente para manter estabilidade do dxf
+                            msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                             txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
                             txt_px = px + ux_n * (height + 0.15)
                             txt_py = py + uy_n * (height + 0.15)
@@ -521,9 +516,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         tomadas_pos += 1
 
         # ===============================================
-        # MARCA D'ÁGUA PARA VOCÊ CONFIRMAR A VERSÃO (NUVEM)
+        # MARCA D'ÁGUA PARA VOCÊ CONFIRMAR A VERSÃO 
         # ===============================================
-        msp.add_text(">>> MOTOR 10.0 (ESTRATEGIA RETA - SOLEIRA + PORTA) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 11.0 (ALINHAMENTO ABSOLUTO DE PAREDES) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1035,12 +1030,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 10.0 Ativo: Estratégia de Soleiras + Marca d'Água!")
+                st.success("✅ Motor 11.0 Ativo: Alinhamento Absoluto de Paredes!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 10.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 11.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
