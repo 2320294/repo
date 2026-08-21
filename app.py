@@ -299,7 +299,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 dados_amb = dict_dados[nome_ambiente]
                 
                 # ===============================================
-                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA
+                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (P/ Interruptor)
                 # ===============================================
                 hinge = None
                 latch = None
@@ -353,11 +353,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (QDC BLINDADO NBR 5410)
+                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 17.0 - A MAIOR PAREDE LIVRE)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 
-                # Trava de Segurança NBR 5410: Impede QDC em áreas úmidas (mesmo se forçado por erro)
+                # Trava de Segurança NBR 5410: Impede QDC em áreas úmidas
                 ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
                 is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
                 
@@ -374,13 +374,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             return math.hypot(px - proj_x, py - proj_y)
 
                         best_segment = None
-                        min_soleiras = float('inf')
-                        max_len = -1
+                        max_score = -float('inf')
                         
                         for seg in segmentos:
                             pt1, pt2, dist = seg
-                            soleiras_on_wall = 0
+                            if dist < 0.5: continue # Ignora paredinhas menores que 50cm
                             
+                            soleiras_on_wall = 0
                             for sol in soleiras:
                                 m_x = (sol['p1'][0] + sol['p2'][0]) / 2
                                 m_y = (sol['p1'][1] + sol['p2'][1]) / 2
@@ -391,14 +391,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 if min(d_mid, d_p1, d_p2) < 0.4: 
                                     soleiras_on_wall += 1
                             
-                            if soleiras_on_wall < min_soleiras:
-                                min_soleiras = soleiras_on_wall
-                                max_len = dist
+                            # O SCORE MÁGICO: Comprimento total da parede MENOS 1 metro por cada porta.
+                            # Assim, a parede com maior "espaço livre de alvenaria" ganha!
+                            espaco_livre = dist - (soleiras_on_wall * 1.0)
+                            
+                            if espaco_livre > max_score:
+                                max_score = espaco_livre
                                 best_segment = seg
-                            elif soleiras_on_wall == min_soleiras:
-                                if dist > max_len:
-                                    max_len = dist
-                                    best_segment = seg
+                                
+                        # Fallback de segurança se não sobrar parede grande o suficiente
+                        if not best_segment:
+                            best_segment = max(segmentos, key=lambda s: s[2])
                                     
                         pt1, pt2, dist = best_segment
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
@@ -471,6 +474,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                     perto_porta = True
                                     break
                         
+                        # Protege o QDC para nao nascer tomada embaixo dele
                         if nome_ambiente == qdc_formatado and not is_area_umida and not perto_porta and segmentos:
                             pt1_b, pt2_b, _ = best_segment
                             mx_b, my_b = (pt1_b[0] + pt2_b[0]) / 2, (pt1_b[1] + pt2_b[1]) / 2
@@ -515,7 +519,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 16.0 (QDC BLINDADO NBR 5410 - AREAS SECAS) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 17.0 (QDC NA MAIOR PAREDE LIVRE) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1027,12 +1031,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 16.0 Ativo: QDC Blindado p/ Áreas Secas!")
+                st.success("✅ Motor 17.0 Ativo: QDC na Maior Parede Livre (Espaço Útil)!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 16.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 17.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
