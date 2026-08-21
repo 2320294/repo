@@ -179,7 +179,7 @@ def processar_dxf(caminho_arquivo):
 # 2. TELA DE LOGIN E CADASTRO
 # ==========================================
 def tela_login():
-    st.title("🔐 Acesso - AutoElétrica SaaS")
+    st.title("🔐 Acesso - AutoElétrica")
     st.subheader("Bem-vindo à plataforma de projetos elétricos")
     
     if supabase is None:
@@ -224,7 +224,7 @@ def tela_login():
                             st.error(f"Erro ao criar conta. O e-mail pode já estar em uso ou ser inválido. Detalhes: {erro}")
 
 # ==========================================
-# 3. SISTEMA PRINCIPAL (O SaaS)
+# 3. SISTEMA PRINCIPAL
 # ==========================================
 def sistema_principal():
     with st.sidebar:
