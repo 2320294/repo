@@ -12,7 +12,6 @@ import unicodedata
 # ==========================================
 st.set_page_config(page_title="AutoElétrica NBR 5410", layout="wide")
 
-
 @st.cache_resource
 def iniciar_conexao():
     try:
@@ -267,6 +266,35 @@ def sistema_principal():
                     st.session_state.obra_atual = obra_selecionada
                     st.session_state.dados_extraidos = obra_selecionada.get("dados_json", [])
                     st.rerun()
+                
+                # --- NOVA SESSÃO DE GESTÃO DA OBRA SELECIONADA ---
+                st.divider()
+                with st.expander("⚙️ Opções do Pavimento Atual"):
+                    novo_nome_obra = st.text_input("Editar Empreendimento", value=st.session_state.obra_atual['nome_obra'])
+                    novo_nome_pav = st.text_input("Editar Pavimento", value=st.session_state.obra_atual['pavimento'])
+                    
+                    if st.button("✏️ Salvar Novos Nomes", use_container_width=True):
+                        if novo_nome_obra and novo_nome_pav:
+                            supabase.table("obras").update({
+                                "nome_obra": novo_nome_obra,
+                                "pavimento": novo_nome_pav
+                            }).eq("id", st.session_state.obra_atual['id']).execute()
+                            st.session_state.obra_atual['nome_obra'] = novo_nome_obra
+                            st.session_state.obra_atual['pavimento'] = novo_nome_pav
+                            st.success("Nomes atualizados com sucesso!")
+                            st.rerun()
+                            
+                    st.write("---")
+                    st.write("**Área de Perigo**")
+                    confirmar_exclusao = st.checkbox("Liberar exclusão do projeto")
+                    if st.button("🗑️ Excluir Pavimento", type="primary", disabled=not confirmar_exclusao, use_container_width=True):
+                        supabase.table("obras").delete().eq("id", st.session_state.obra_atual['id']).execute()
+                        st.session_state.obra_atual = None
+                        st.session_state.dados_extraidos = None
+                        st.success("Pavimento excluído com sucesso!")
+                        st.rerun()
+                # -------------------------------------------------
+
             else:
                 st.session_state.obra_atual = None
                 st.session_state.dados_extraidos = None
