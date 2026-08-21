@@ -198,6 +198,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         if "PROJ_ELETRICA_TOMADA" not in doc.layers:
             doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4)
+        if "PROJ_ELETRICA_INTERRUPTOR" not in doc.layers:
+            doc.layers.add(name="PROJ_ELETRICA_INTERRUPTOR", color=5) # Ciano/Azul para Interruptores
         
         polilinhas = []
         textos = []
@@ -265,13 +267,64 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # 1. PONTO DE LUZ
+                # ===============================================
+                # 1. PONTO DE LUZ E INTERRUPTOR
+                # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
+                    # Desenha a Lâmpada
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
-                # 2. QUADRO DE DISTRIBUIÇÃO
+                    # Desenha a letra do retorno na Lâmpada ("a")
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
+                    
+                    # Desenha o Interruptor
+                    porta_ambiente_int = None
+                    for p in portas:
+                        if (min_x - 0.5) <= p['x'] <= (max_x + 0.5) and (min_y - 0.5) <= p['y'] <= (max_y + 0.5):
+                            porta_ambiente_int = p
+                            break
+                    
+                    afastamento_int = 0.5 # 40cm metade da porta + 10cm boneca
+                    
+                    if porta_ambiente_int:
+                        px, py = porta_ambiente_int['x'], porta_ambiente_int['y']
+                        dist_esq = abs(px - min_x)
+                        dist_dir = abs(px - max_x)
+                        dist_baixo = abs(py - min_y)
+                        dist_cima = abs(py - max_y)
+                        menor_dist = min(dist_esq, dist_dir, dist_baixo, dist_cima)
+                        
+                        if menor_dist == dist_cima: 
+                            sw_x = px + afastamento_int if (px + afastamento_int) <= max_x else px - afastamento_int
+                            sw_y = max_y
+                            txt_pos_sw = (sw_x, sw_y - 0.30)
+                        elif menor_dist == dist_baixo: 
+                            sw_x = px + afastamento_int if (px + afastamento_int) <= max_x else px - afastamento_int
+                            sw_y = min_y
+                            txt_pos_sw = (sw_x, sw_y + 0.20)
+                        elif menor_dist == dist_esq: 
+                            sw_x = min_x
+                            sw_y = py + afastamento_int if (py + afastamento_int) <= max_y else py - afastamento_int
+                            txt_pos_sw = (sw_x + 0.20, sw_y - 0.05)
+                        else: 
+                            sw_x = max_x
+                            sw_y = py + afastamento_int if (py + afastamento_int) <= max_y else py - afastamento_int
+                            txt_pos_sw = (sw_x - 0.35, sw_y - 0.05)
+                    else:
+                        sw_x = centro_x
+                        sw_y = min_y
+                        txt_pos_sw = (sw_x + 0.2, sw_y + 0.15)
+                        
+                    # Círculo pequeno (Interruptor Simples)
+                    msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
+                    # Letra do retorno ao lado do interruptor
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
+
+                # ===============================================
+                # 2. QUADRO DE DISTRIBUIÇÃO (QDC)
+                # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
                     porta_ambiente = None
@@ -351,14 +404,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         passo = comp_total / total_tomadas
                         dist_atual = passo / 2 
                         
-                        # Função de Fita Métrica Virtual (Desliza sobre as paredes)
                         def get_ponto_perimetro(d, segs):
                             acumulado = 0
                             for pt1, pt2, dst in segs:
                                 if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
                                     ratio = (d - acumulado) / dst
                                     
-                                    # MÁGICA 1: Nunca deixa a tomada ficar a menos de 30cm do canto
                                     margin = 0.3
                                     if dst > margin * 2:
                                         if ratio * dst < margin:
@@ -366,7 +417,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                         elif (1 - ratio) * dst < margin:
                                             ratio = (dst - margin) / dst
                                     else:
-                                        ratio = 0.5 # Parede pequena (ex: boneca), crava no meio
+                                        ratio = 0.5 
                                     
                                     p_x = pt1[0] + (pt2[0] - pt1[0]) * ratio
                                     p_y = pt1[1] + (pt2[1] - pt1[1]) * ratio
@@ -385,7 +436,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             
                             px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos)
                             
-                            # MÁGICA 2: Detector de Portas
                             perto_porta = False
                             for p in portas:
                                 if math.hypot(px - p['x'], py - p['y']) < 0.65:
@@ -393,11 +443,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                     break
                             
                             if perto_porta:
-                                # Se bater na porta, desliza 50cm ao longo da fita métrica!
                                 dist_atual += 0.5 
                                 continue
                             
-                            # Calcula Vetores Perpendiculares Perfeitos (+90 e -90 graus)
                             n1x, n1y = -uy_w, ux_w
                             n2x, n2y = uy_w, -ux_w
                             
@@ -407,7 +455,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             ponta1 = (px + n1x * height, py + n1y * height)
                             ponta2 = (px + n2x * height, py + n2y * height)
                             
-                            # MÁGICA 3: O lado certo é SEMPRE o que aponta para a luz (centro da sala)
                             if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]):
                                 ux_n, uy_n = n1x, n1y
                                 pt_ponta = ponta1
@@ -420,7 +467,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             
                             msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                             
-                            # Desenha o Nome da TUE um pouco mais afastado
                             if tomadas_pos >= qtd_tugs:
                                 txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
                                 txt_px = px + ux_n * (height + 0.15)
