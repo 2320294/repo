@@ -209,7 +209,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         portas = [] 
         soleiras = []
         
-        # Leitura Direta de Entidades
         for entity in msp:
             tipo = entity.dxftype()
             if hasattr(entity.dxf, 'layer'):
@@ -232,11 +231,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if tipo == 'LINE':
                             p1 = (entity.dxf.start.x, entity.dxf.start.y)
                             p2 = (entity.dxf.end.x, entity.dxf.end.y)
-                            portas.append({'tipo': 'LINE', 'p1': p1, 'p2': p2})
+                            px, py = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
+                            portas.append({'tipo': 'LINE', 'x': px, 'y': py, 'p1': p1, 'p2': p2})
                         elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                             pts = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
                             if len(pts) >= 2:
-                                portas.append({'tipo': 'LINE', 'p1': pts[0], 'p2': pts[-1]})
+                                p1, p2 = pts[0], pts[-1]
+                                px, py = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
+                                portas.append({'tipo': 'LINE', 'x': px, 'y': py, 'p1': p1, 'p2': p2})
                     except: pass
                     
                 elif layer == 'IA_SOLEIRA':
@@ -297,15 +299,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 dados_amb = dict_dados[nome_ambiente]
                 
                 # ===============================================
-                # MOTOR 12.0: ENCONTRO DE SOLEIRA E PORTA (BÚSSOLA)
+                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA
                 # ===============================================
                 hinge = None
                 latch = None
                 
-                # Varre para achar qual ponta se encontra com a outra
                 for sol in soleiras:
                     mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                    # Se a soleira esta na borda deste ambiente
                     if (min_x - 0.5) <= mx <= (max_x + 0.5) and (min_y - 0.5) <= my <= (max_y + 0.5):
                         for p in portas:
                             d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
@@ -314,7 +314,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
                             
                             min_d = min(d11, d12, d21, d22)
-                            if min_d < 0.2: # Intersecção Encontrada! A Dobradiça
+                            if min_d < 0.2: 
                                 if min_d == d11: hinge, latch = sol['p1'], sol['p2']
                                 elif min_d == d12: hinge, latch = sol['p2'], sol['p1']
                                 elif min_d == d21: hinge, latch = sol['p1'], sol['p2']
@@ -331,21 +331,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                     
-                    # 1.1 INTERRUPTOR (Na Maçaneta)
+                    # INTERRUPTOR (Mantido inalterado)
                     if hinge and latch:
-                        # Vetor que sai da dobradiça em direção à maçaneta (Foge da abertura da porta)
                         vx = latch[0] - hinge[0]
                         vy = latch[1] - hinge[1]
                         mag = math.hypot(vx, vy)
                         if mag > 0: vx, vy = vx/mag, vy/mag
                         
-                        # 15cm a partir da maçaneta
                         sw_start_x = latch[0] + vx * 0.15
                         sw_start_y = latch[1] + vy * 0.15
-                        
                         nx, ny = get_inside_normal(vx, vy, sw_start_x, sw_start_y, centro_x, centro_y)
                         
-                        sw_x = sw_start_x + nx * 0.12 # Embutido na parede
+                        sw_x = sw_start_x + nx * 0.12 
                         sw_y = sw_start_y + ny * 0.12
                         txt_pos_sw = (sw_x + nx * 0.20, sw_y + ny * 0.20)
                     else:
@@ -356,37 +353,43 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (QDC na Dobradiça)
+                # 2. QUADRO DE DISTRIBUIÇÃO (NO MEIO DA MAIOR PAREDE)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
                     qdc_w, qdc_d = 0.4, 0.15
                     
-                    if hinge and latch:
-                        # Vetor que sai da maçaneta em direção à dobradiça (A parede oposta à porta livre)
-                        vx = hinge[0] - latch[0]
-                        vy = hinge[1] - latch[1]
-                        mag = math.hypot(vx, vy)
-                        if mag > 0: vx, vy = vx/mag, vy/mag
+                    if segmentos:
+                        # 1. Encontra a maior parede
+                        maior_parede = max(segmentos, key=lambda s: s[2])
+                        pt1, pt2, dist = maior_parede
                         
-                        # 30cm a partir da Dobradiça
-                        qdc_start_x = hinge[0] + vx * 0.30
-                        qdc_start_y = hinge[1] + vy * 0.30
+                        # 2. Acha o centro absoluto da maior parede
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                         
-                        nx, ny = get_inside_normal(vx, vy, qdc_start_x, qdc_start_y, centro_x, centro_y)
+                        # 3. Calcula a direção da parede
+                        vx = (pt2[0] - pt1[0]) / dist
+                        vy = (pt2[1] - pt1[1]) / dist
                         
-                        p1 = (qdc_start_x, qdc_start_y)
-                        p2 = (qdc_start_x + vx * qdc_w, qdc_start_y + vy * qdc_w)
-                        p3 = (p2[0] + nx * qdc_d, p2[1] + ny * qdc_d)
-                        p4 = (p1[0] + nx * qdc_d, p1[1] + ny * qdc_d)
-                        pts = [p1, p2, p3, p4]
+                        # 4. Acha o vetor normal (que aponta pro meio da sala)
+                        nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                        
+                        # 5. Desenha o QDC
+                        p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
+                        p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                        p3_qdc = (p2_qdc[0] + nx * qdc_d, p2_qdc[1] + ny * qdc_d)
+                        p4_qdc = (p1_qdc[0] + nx * qdc_d, p1_qdc[1] + ny * qdc_d)
+                        pts = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
                     else:
+                        # Fallback extremo
                         cx_qdc = centro_x - 0.2
                         cy_qdc = max_y
                         pts = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc - qdc_d), (cx_qdc, cy_qdc - qdc_d)]
                     
+                    # Desenha o contorno do QDC
                     msp.add_lwpolyline([pts[0], pts[1], pts[2], pts[3], pts[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) # Triângulo Sólido Sem Texto
+                    # Desenha o preenchimento (Triângulo NBR 5410)
+                    msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) 
 
                 # ===============================================
                 # 3. TOMADAS ORTOGONAIS COM CAMPO DE FORÇA
@@ -425,15 +428,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                         px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos)
                         
-                        # Campo de Força: Distância segura de Hinge e Latch
+                        # Campo de Força: Distância segura da porta
                         perto_porta = False
                         if hinge and latch:
-                            if math.hypot(px - hinge[0], py - hinge[1]) < 0.8: # Protege o QDC e a porta
+                            if math.hypot(px - hinge[0], py - hinge[1]) < 0.8: 
                                 perto_porta = True
-                            if math.hypot(px - latch[0], py - latch[1]) < 0.5: # Protege o Interruptor
+                            if math.hypot(px - latch[0], py - latch[1]) < 0.5: 
                                 perto_porta = True
                                 
-                        # Fallback se a porta for lida de forma incompleta
                         if not perto_porta:
                             for sol in soleiras:
                                 mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
@@ -479,7 +481,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 12.0 (QDC 30cm DA DOBRADICA) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 13.0 (QDC NA MAIOR PAREDE) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -991,12 +993,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 12.0 Ativo: QDC Posicionado 30cm Após a Dobradiça!")
+                st.success("✅ Motor 13.0 Ativo: QDC na Maior Parede!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 12.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 13.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
