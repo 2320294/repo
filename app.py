@@ -196,6 +196,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             doc.layers.add(name="PROJ_ELETRICA_QDC", color=1)
         if "PROJ_ELETRICA_TEXTO" not in doc.layers:
             doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
+        if "PROJ_ELETRICA_TOMADA" not in doc.layers:
+            doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4) # Ciano para tomadas
         
         polilinhas = []
         textos = []
@@ -263,16 +265,19 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
+                # ===============================================
                 # 1. PONTO DE LUZ
+                # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
-                # 2. QUADRO DE DISTRIBUIÇÃO (Magnético e Centralizado por dentro)
+                # ===============================================
+                # 2. QUADRO DE DISTRIBUIÇÃO (QDC)
+                # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
-                    
                     porta_ambiente = None
                     for p in portas:
                         if (min_x - 0.5) <= p['x'] <= (max_x + 0.5) and (min_y - 0.5) <= p['y'] <= (max_y + 0.5):
@@ -284,12 +289,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     if porta_ambiente:
                         px, py = porta_ambiente['x'], porta_ambiente['y']
-                        
                         dist_esq = abs(px - min_x)
                         dist_dir = abs(px - max_x)
                         dist_baixo = abs(py - min_y)
                         dist_cima = abs(py - max_y)
-                        
                         menor_dist = min(dist_esq, dist_dir, dist_baixo, dist_cima)
                         
                         if menor_dist == dist_cima: 
@@ -320,7 +323,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             txt_pos = (cx + 0.035, cy - 0.08)
                             rot = 90
                     else:
-                        # Plano B: Parede de cima
                         start_x = centro_x - 0.2
                         pts = [(start_x, max_y), (start_x + qdc_w, max_y), (start_x + qdc_w, max_y - qdc_d), (start_x, max_y - qdc_d)]
                         cx, cy = start_x + (qdc_w / 2), max_y - (qdc_d / 2)
@@ -329,7 +331,71 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                     msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
-        
+
+                # ===============================================
+                # 3. TOMADAS (TUGs e TUEs) - Perímetro
+                # ===============================================
+                qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
+                qtd_tues = int(dados_amb.get('Qtd TUE', 0))
+                total_tomadas = qtd_tugs + qtd_tues
+                
+                if total_tomadas > 0 and len(polilinha) >= 3:
+                    poly_fechada = list(polilinha)
+                    if poly_fechada[0] != poly_fechada[-1]:
+                        poly_fechada.append(poly_fechada[0])
+                        
+                    segmentos = []
+                    comp_total = 0
+                    for i in range(len(poly_fechada)-1):
+                        p1 = poly_fechada[i]
+                        p2 = poly_fechada[i+1]
+                        dist = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+                        if dist > 0:
+                            segmentos.append((p1, p2, dist))
+                            comp_total += dist
+                            
+                    passo = comp_total / total_tomadas
+                    dist_atual = passo / 2 # Começa na metade para não colar nos cantos da parede
+                    
+                    idx_seg = 0
+                    comp_acumulado = 0
+                    tomadas_pos = 0
+                    
+                    while tomadas_pos < total_tomadas and idx_seg < len(segmentos):
+                        p1, p2, dist = segmentos[idx_seg]
+                        if comp_acumulado + dist >= dist_atual:
+                            ratio = (dist_atual - comp_acumulado) / dist
+                            px = p1[0] + (p2[0] - p1[0]) * ratio
+                            py = p1[1] + (p2[1] - p1[1]) * ratio
+                            
+                            # Calcula vetor para apontar o triângulo para o centro
+                            vx, vy = centro_x - px, centro_y - py
+                            mag = math.hypot(vx, vy)
+                            if mag > 0:
+                                ux, uy = vx/mag, vy/mag
+                                nx, ny = -uy, ux # Perpendicular para a base na parede
+                                
+                                base_half = 0.15
+                                height = 0.25
+                                
+                                pt_base1 = (px + nx * base_half, py + ny * base_half)
+                                pt_base2 = (px - nx * base_half, py - ny * base_half)
+                                pt_ponta = (px + ux * height, py + uy * height)
+                                
+                                # Desenha o Triângulo
+                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                                
+                                # Etiqueta TUE
+                                if tomadas_pos >= qtd_tugs:
+                                    txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
+                                    msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (px + ux * (height + 0.05), py + uy * (height + 0.05))})
+                            
+                            dist_atual += passo
+                            tomadas_pos += 1
+                        else:
+                            comp_acumulado += dist
+                            idx_seg += 1
+
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
         
@@ -839,7 +905,7 @@ def sistema_principal():
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Fase 1)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Fase 1 e 2)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
