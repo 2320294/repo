@@ -197,7 +197,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         if "PROJ_ELETRICA_TEXTO" not in doc.layers:
             doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         if "PROJ_ELETRICA_TOMADA" not in doc.layers:
-            doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4) # Ciano para tomadas
+            doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4)
         
         polilinhas = []
         textos = []
@@ -265,17 +265,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # ===============================================
                 # 1. PONTO DE LUZ
-                # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
-                # ===============================================
                 # 2. QUADRO DE DISTRIBUIÇÃO
-                # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
                     porta_ambiente = None
@@ -329,9 +325,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_lwpolyline(pts, close=True, dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                     msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
 
-                # ===============================================
-                # 3. TOMADAS ORTOGONAIS COM ANTI-COLISÃO
-                # ===============================================
+                # 3. TOMADAS ORTOGONAIS (MOTOR INFALÍVEL POR DISTÂNCIA)
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
                 total_tomadas = qtd_tugs + qtd_tues
@@ -365,7 +359,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             px = p1[0] + (p2[0] - p1[0]) * ratio
                             py = p1[1] + (p2[1] - p1[1]) * ratio
                             
-                            # Calcula Vetor da Parede para alinhamento ortogonal
                             dx_parede = p2[0] - p1[0]
                             dy_parede = p2[1] - p1[1]
                             mag_parede = math.hypot(dx_parede, dy_parede)
@@ -374,40 +367,43 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 ux_w = dx_parede / mag_parede
                                 uy_w = dy_parede / mag_parede
                                 
-                                # Verifica Zona de Exclusão das Portas (Anti-colisão)
                                 perto_porta = False
                                 for p in portas:
-                                    if math.hypot(px - p['x'], py - p['y']) < 0.6: # 60cm de margem
+                                    if math.hypot(px - p['x'], py - p['y']) < 0.6:
                                         perto_porta = True
                                         break
                                 
                                 if perto_porta:
-                                    # Se cair na porta, "escorrega" a tomada 60cm pela parede
                                     px = px + (ux_w * 0.6)
                                     py = py + (uy_w * 0.6)
                                 
-                                # Define vetor Normal (Perpendicular à parede)
+                                # Cria as duas perpendiculares possíveis (+90 e -90 graus)
                                 n1x, n1y = -uy_w, ux_w
                                 n2x, n2y = uy_w, -ux_w
-                                
-                                # Usa a normal que aponta para o centro da sala
-                                vx, vy = centro_x - px, centro_y - py
-                                if (n1x * vx + n1y * vy) > 0:
-                                    ux_n, uy_n = n1x, n1y
-                                else:
-                                    ux_n, uy_n = n2x, n2y
                                 
                                 base_half = 0.15
                                 height = 0.25
                                 
-                                # A base fica 100% paralela à parede, e a ponta perfeitamente a 90º
+                                # Simula as duas pontas possíveis
+                                ponta1 = (px + n1x * height, py + n1y * height)
+                                ponta2 = (px + n2x * height, py + n2y * height)
+                                
+                                # A ponta certa é a que estiver MAIS PERTO do Ponto de Luz (centro)
+                                dist_ponta1_centro = math.hypot(centro_x - ponta1[0], centro_y - ponta1[1])
+                                dist_ponta2_centro = math.hypot(centro_x - ponta2[0], centro_y - ponta2[1])
+                                
+                                if dist_ponta1_centro < dist_ponta2_centro:
+                                    ux_n, uy_n = n1x, n1y
+                                    pt_ponta = ponta1
+                                else:
+                                    ux_n, uy_n = n2x, n2y
+                                    pt_ponta = ponta2
+                                
                                 pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
                                 pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
-                                pt_ponta = (px + ux_n * height, py + uy_n * height)
                                 
                                 msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                                 
-                                # Etiqueta TUE
                                 if tomadas_pos >= qtd_tugs:
                                     txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
                                     txt_px = px + ux_n * (height + 0.1)
