@@ -308,22 +308,23 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
                     if (min_x - 0.5) <= mx <= (max_x + 0.5) and (min_y - 0.5) <= my <= (max_y + 0.5):
                         for p in portas:
-                            d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
-                            d12 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
-                            d21 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
-                            d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
-                            
-                            min_d = min(d11, d12, d21, d22)
-                            if min_d < 0.2: 
-                                if min_d == d11: hinge, latch = sol['p1'], sol['p2']
-                                elif min_d == d12: hinge, latch = sol['p2'], sol['p1']
-                                elif min_d == d21: hinge, latch = sol['p1'], sol['p2']
-                                elif min_d == d22: hinge, latch = sol['p2'], sol['p1']
-                                break
+                            if p['tipo'] == 'LINE':
+                                d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
+                                d12 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
+                                d21 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
+                                d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
+                                
+                                min_d = min(d11, d12, d21, d22)
+                                if min_d < 0.2: 
+                                    if min_d == d11: hinge, latch = sol['p1'], sol['p2']
+                                    elif min_d == d12: hinge, latch = sol['p2'], sol['p1']
+                                    elif min_d == d21: hinge, latch = sol['p1'], sol['p2']
+                                    elif min_d == d22: hinge, latch = sol['p2'], sol['p1']
+                                    break
                         if hinge: break
 
                 # ===============================================
-                # 1. ILUMINAÇÃO
+                # 1. ILUMINAÇÃO E INTERRUPTOR
                 # ===============================================
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
@@ -331,7 +332,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                     
-                    # INTERRUPTOR (Mantido inalterado)
                     if hinge and latch:
                         vx = latch[0] - hinge[0]
                         vy = latch[1] - hinge[1]
@@ -353,42 +353,71 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (NO MEIO DA MAIOR PAREDE)
+                # 2. QUADRO DE DISTRIBUIÇÃO (QDC BLINDADO NBR 5410)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
-                if nome_ambiente == qdc_formatado:
+                
+                # Trava de Segurança NBR 5410: Impede QDC em áreas úmidas (mesmo se forçado por erro)
+                ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
+                is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
+                
+                if nome_ambiente == qdc_formatado and not is_area_umida:
                     qdc_w, qdc_d = 0.4, 0.15
                     
                     if segmentos:
-                        # 1. Encontra a maior parede
-                        maior_parede = max(segmentos, key=lambda s: s[2])
-                        pt1, pt2, dist = maior_parede
+                        def point_seg_dist(px, py, pt1, pt2):
+                            l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+                            if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
+                            t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+                            proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+                            proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+                            return math.hypot(px - proj_x, py - proj_y)
+
+                        best_segment = None
+                        min_soleiras = float('inf')
+                        max_len = -1
                         
-                        # 2. Acha o centro absoluto da maior parede
+                        for seg in segmentos:
+                            pt1, pt2, dist = seg
+                            soleiras_on_wall = 0
+                            
+                            for sol in soleiras:
+                                m_x = (sol['p1'][0] + sol['p2'][0]) / 2
+                                m_y = (sol['p1'][1] + sol['p2'][1]) / 2
+                                d_mid = point_seg_dist(m_x, m_y, pt1, pt2)
+                                d_p1 = point_seg_dist(sol['p1'][0], sol['p1'][1], pt1, pt2)
+                                d_p2 = point_seg_dist(sol['p2'][0], sol['p2'][1], pt1, pt2)
+                                
+                                if min(d_mid, d_p1, d_p2) < 0.4: 
+                                    soleiras_on_wall += 1
+                            
+                            if soleiras_on_wall < min_soleiras:
+                                min_soleiras = soleiras_on_wall
+                                max_len = dist
+                                best_segment = seg
+                            elif soleiras_on_wall == min_soleiras:
+                                if dist > max_len:
+                                    max_len = dist
+                                    best_segment = seg
+                                    
+                        pt1, pt2, dist = best_segment
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                         
-                        # 3. Calcula a direção da parede
                         vx = (pt2[0] - pt1[0]) / dist
                         vy = (pt2[1] - pt1[1]) / dist
-                        
-                        # 4. Acha o vetor normal (que aponta pro meio da sala)
                         nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                         
-                        # 5. Desenha o QDC
                         p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
                         p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
                         p3_qdc = (p2_qdc[0] + nx * qdc_d, p2_qdc[1] + ny * qdc_d)
                         p4_qdc = (p1_qdc[0] + nx * qdc_d, p1_qdc[1] + ny * qdc_d)
                         pts = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
                     else:
-                        # Fallback extremo
                         cx_qdc = centro_x - 0.2
                         cy_qdc = max_y
                         pts = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc - qdc_d), (cx_qdc, cy_qdc - qdc_d)]
                     
-                    # Desenha o contorno do QDC
                     msp.add_lwpolyline([pts[0], pts[1], pts[2], pts[3], pts[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    # Desenha o preenchimento (Triângulo NBR 5410)
                     msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) 
 
                 # ===============================================
@@ -428,7 +457,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                         px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos)
                         
-                        # Campo de Força: Distância segura da porta
                         perto_porta = False
                         if hinge and latch:
                             if math.hypot(px - hinge[0], py - hinge[1]) < 0.8: 
@@ -442,6 +470,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 if math.hypot(px - mx, py - my) < 0.6:
                                     perto_porta = True
                                     break
+                        
+                        if nome_ambiente == qdc_formatado and not is_area_umida and not perto_porta and segmentos:
+                            pt1_b, pt2_b, _ = best_segment
+                            mx_b, my_b = (pt1_b[0] + pt2_b[0]) / 2, (pt1_b[1] + pt2_b[1]) / 2
+                            if math.hypot(px - mx_b, py - my_b) < 0.5:
+                                perto_porta = True
                         
                         if perto_porta:
                             dist_atual += 0.4 
@@ -481,7 +515,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 13.0 (QDC NA MAIOR PAREDE) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 16.0 (QDC BLINDADO NBR 5410 - AREAS SECAS) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -993,12 +1027,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 13.0 Ativo: QDC na Maior Parede!")
+                st.success("✅ Motor 16.0 Ativo: QDC Blindado p/ Áreas Secas!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 13.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 16.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
