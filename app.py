@@ -30,6 +30,7 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
+# Inicializa o controle de autenticação sempre que a página carrega
 if 'usuario_autenticado' not in st.session_state:
     st.session_state.usuario_autenticado = False
 
@@ -364,13 +365,27 @@ def sistema_principal():
             
             st.write("### ⚙️ Parâmetros Globais da Instalação")
             colA, colB, colC = st.columns([1, 1, 2])
+            
+            # --- RECUPERANDO PARÂMETROS SALVOS ---
             with colA:
-                tensao_projeto = st.radio("Tensão do Projeto (V):", [127, 220], index=1, horizontal=True)
-            with colB:
-                pe_direito = st.number_input("Pé Direito (m):", value=2.80, step=0.10)
-            with colC:
-                local_qdc_selecionado = st.selectbox("Locação do QDC:", options=opcoes_qdc)
+                tensao_salva = st.session_state.obra_atual.get('tensao_projeto')
+                tensao_salva = int(tensao_salva) if tensao_salva is not None else 220
+                index_tensao = 0 if tensao_salva == 127 else 1
+                tensao_projeto = st.radio("Tensão do Projeto (V):", [127, 220], index=index_tensao, horizontal=True)
                 
+            with colB:
+                pe_direito_salvo = st.session_state.obra_atual.get('pe_direito')
+                pe_direito_salvo = float(pe_direito_salvo) if pe_direito_salvo is not None else 2.80
+                pe_direito = st.number_input("Pé Direito (m):", value=pe_direito_salvo, step=0.10)
+                
+            with colC:
+                qdc_salvo = st.session_state.obra_atual.get('local_qdc')
+                index_qdc = 0
+                if qdc_salvo and qdc_salvo in opcoes_qdc:
+                    index_qdc = opcoes_qdc.index(qdc_salvo)
+                local_qdc_selecionado = st.selectbox("Locação do QDC:", options=opcoes_qdc, index=index_qdc)
+            # -------------------------------------
+
             if local_qdc_selecionado == "Selecione o ambiente...":
                 texto_local_qdc = "local a ser definido"
             else:
@@ -413,8 +428,19 @@ def sistema_principal():
 
             if st.button("💾 Salvar Alterações na Nuvem", type="primary"):
                 dados_atualizados = df_editado.to_dict(orient='records')
-                supabase.table("obras").update({"dados_json": dados_atualizados}).eq("id", st.session_state.obra_atual['id']).execute()
+                # --- GRAVANDO OS PARÂMETROS GLOBAIS NO BANCO ---
+                supabase.table("obras").update({
+                    "dados_json": dados_atualizados,
+                    "local_qdc": local_qdc_selecionado,
+                    "tensao_projeto": int(tensao_projeto),
+                    "pe_direito": float(pe_direito)
+                }).eq("id", st.session_state.obra_atual['id']).execute()
+                
                 st.session_state.dados_extraidos = dados_atualizados
+                st.session_state.obra_atual['local_qdc'] = local_qdc_selecionado
+                st.session_state.obra_atual['tensao_projeto'] = int(tensao_projeto)
+                st.session_state.obra_atual['pe_direito'] = float(pe_direito)
+                # -----------------------------------------------
                 st.success("✅ Projeto atualizado e salvo na nuvem com sucesso!")
             
             st.write("### 📊 Quadro de Previsão de Cargas Consolidado")
@@ -561,14 +587,10 @@ def sistema_principal():
             df_materiais_final = pd.DataFrame(materiais)
             st.table(df_materiais_final)
             
-            # ==========================================
-            # 🚀 NOVA SESSÃO: EXPORTAÇÃO E RELATÓRIOS
-            # ==========================================
             st.divider()
             st.write("### 🖨️ Exportação e Relatórios")
             col_exp1, col_exp2 = st.columns(2)
             
-            # --- EXPORTAÇÃO EXCEL ---
             with col_exp1:
                 buffer_excel = io.BytesIO()
                 with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
@@ -583,7 +605,6 @@ def sistema_principal():
                     use_container_width=True
                 )
                 
-            # --- EXPORTAÇÃO PDF ---
             with col_exp2:
                 if FPDF is not None:
                     pdf = FPDF()
@@ -591,7 +612,6 @@ def sistema_principal():
                     pdf.set_font("Arial", 'B', 16)
                     
                     def formatar_txt(texto):
-                        # Evita que acentos quebrem a geração do PDF
                         return unicodedata.normalize('NFKD', str(texto)).encode('ASCII', 'ignore').decode('utf-8')
                         
                     pdf.cell(0, 10, formatar_txt(f"Memorial Descritivo: {st.session_state.obra_atual['nome_obra']}"), ln=True, align='C')
@@ -611,6 +631,7 @@ def sistema_principal():
                     pdf.cell(0, 10, "2. Diretrizes de Execucao (NBR 5410):", ln=True)
                     pdf.set_font("Arial", '', 10)
                     pdf.cell(0, 8, formatar_txt(f"Tensao adotada: {tensao_projeto}V"), ln=True)
+                    pdf.cell(0, 8, formatar_txt(f"Pe Direito adotado: {pe_direito}m"), ln=True)
                     pdf.cell(0, 8, formatar_txt(f"Local sugerido para o QDC: {texto_local_qdc}"), ln=True)
                     pdf.ln(5)
 
