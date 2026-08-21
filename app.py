@@ -274,7 +274,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (QDC)
+                # 2. QUADRO DE DISTRIBUIÇÃO
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 if nome_ambiente == qdc_formatado:
@@ -301,22 +301,19 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             cx, cy = start_x + (qdc_w / 2), max_y - (qdc_d / 2)
                             txt_pos = (cx - 0.08, cy - 0.035)
                             rot = 0
-                            
                         elif menor_dist == dist_baixo: 
                             start_x = px + afastamento if (px + afastamento + qdc_w) <= max_x else px - afastamento - qdc_w
                             pts = [(start_x, min_y), (start_x + qdc_w, min_y), (start_x + qdc_w, min_y + qdc_d), (start_x, min_y + qdc_d)]
                             cx, cy = start_x + (qdc_w / 2), min_y + (qdc_d / 2)
                             txt_pos = (cx - 0.08, cy - 0.035)
                             rot = 0
-                            
                         elif menor_dist == dist_esq: 
                             start_y = py + afastamento if (py + afastamento + qdc_w) <= max_y else py - afastamento - qdc_w
                             pts = [(min_x, start_y), (min_x + qdc_d, start_y), (min_x + qdc_d, start_y + qdc_w), (min_x, start_y + qdc_w)]
                             cx, cy = min_x + (qdc_d / 2), start_y + (qdc_w / 2)
                             txt_pos = (cx + 0.035, cy - 0.08)
                             rot = 90
-                            
-                        else: # Parede Direita
+                        else: 
                             start_y = py + afastamento if (py + afastamento + qdc_w) <= max_y else py - afastamento - qdc_w
                             pts = [(max_x, start_y), (max_x - qdc_d, start_y), (max_x - qdc_d, start_y + qdc_w), (max_x, start_y + qdc_w)]
                             cx, cy = max_x - (qdc_d / 2), start_y + (qdc_w / 2)
@@ -333,7 +330,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text("QDC", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.07, 'color': 1, 'rotation': rot, 'insert': txt_pos})
 
                 # ===============================================
-                # 3. TOMADAS (TUGs e TUEs) - Perímetro
+                # 3. TOMADAS ORTOGONAIS COM ANTI-COLISÃO
                 # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
@@ -355,7 +352,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             comp_total += dist
                             
                     passo = comp_total / total_tomadas
-                    dist_atual = passo / 2 # Começa na metade para não colar nos cantos da parede
+                    dist_atual = passo / 2 
                     
                     idx_seg = 0
                     comp_acumulado = 0
@@ -368,27 +365,54 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             px = p1[0] + (p2[0] - p1[0]) * ratio
                             py = p1[1] + (p2[1] - p1[1]) * ratio
                             
-                            # Calcula vetor para apontar o triângulo para o centro
-                            vx, vy = centro_x - px, centro_y - py
-                            mag = math.hypot(vx, vy)
-                            if mag > 0:
-                                ux, uy = vx/mag, vy/mag
-                                nx, ny = -uy, ux # Perpendicular para a base na parede
+                            # Calcula Vetor da Parede para alinhamento ortogonal
+                            dx_parede = p2[0] - p1[0]
+                            dy_parede = p2[1] - p1[1]
+                            mag_parede = math.hypot(dx_parede, dy_parede)
+                            
+                            if mag_parede > 0:
+                                ux_w = dx_parede / mag_parede
+                                uy_w = dy_parede / mag_parede
+                                
+                                # Verifica Zona de Exclusão das Portas (Anti-colisão)
+                                perto_porta = False
+                                for p in portas:
+                                    if math.hypot(px - p['x'], py - p['y']) < 0.6: # 60cm de margem
+                                        perto_porta = True
+                                        break
+                                
+                                if perto_porta:
+                                    # Se cair na porta, "escorrega" a tomada 60cm pela parede
+                                    px = px + (ux_w * 0.6)
+                                    py = py + (uy_w * 0.6)
+                                
+                                # Define vetor Normal (Perpendicular à parede)
+                                n1x, n1y = -uy_w, ux_w
+                                n2x, n2y = uy_w, -ux_w
+                                
+                                # Usa a normal que aponta para o centro da sala
+                                vx, vy = centro_x - px, centro_y - py
+                                if (n1x * vx + n1y * vy) > 0:
+                                    ux_n, uy_n = n1x, n1y
+                                else:
+                                    ux_n, uy_n = n2x, n2y
                                 
                                 base_half = 0.15
                                 height = 0.25
                                 
-                                pt_base1 = (px + nx * base_half, py + ny * base_half)
-                                pt_base2 = (px - nx * base_half, py - ny * base_half)
-                                pt_ponta = (px + ux * height, py + uy * height)
+                                # A base fica 100% paralela à parede, e a ponta perfeitamente a 90º
+                                pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
+                                pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
+                                pt_ponta = (px + ux_n * height, py + uy_n * height)
                                 
-                                # Desenha o Triângulo
-                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                                 
                                 # Etiqueta TUE
                                 if tomadas_pos >= qtd_tugs:
                                     txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
-                                    msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (px + ux * (height + 0.05), py + uy * (height + 0.05))})
+                                    txt_px = px + ux_n * (height + 0.1)
+                                    txt_py = py + uy_n * (height + 0.1)
+                                    msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                             
                             dist_atual += passo
                             tomadas_pos += 1
