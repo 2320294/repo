@@ -6,6 +6,13 @@ import tempfile
 import os
 import pandas as pd
 import unicodedata
+import io
+from datetime import datetime
+
+try:
+    from fpdf import FPDF
+except ImportError:
+    FPDF = None
 
 # ==========================================
 # 0. CONFIGURAÇÃO DE SESSÃO E BANCO DE DADOS
@@ -23,7 +30,6 @@ def iniciar_conexao():
 
 supabase = iniciar_conexao()
 
-# Inicializa o controle de autenticação sempre que a página carrega
 if 'usuario_autenticado' not in st.session_state:
     st.session_state.usuario_autenticado = False
 
@@ -183,7 +189,7 @@ def tela_login():
     st.subheader("Bem-vindo à plataforma de projetos elétricos")
     
     if supabase is None:
-        st.error("Erro Crítico: Não foi possível conectar ao banco de dados. Verifique os Secrets do Streamlit Cloud.")
+        st.error("Erro Crítico: Não foi possível conectar ao banco de dados.")
         st.stop()
         
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -219,9 +225,9 @@ def tela_login():
                     else:
                         try:
                             response = supabase.auth.sign_up({"email": novo_email, "password": nova_senha})
-                            st.success("✅ Conta criada com sucesso! Enviamos um link de confirmação para o seu e-mail. Por favor, verifique sua caixa de entrada (e a pasta de spam) e valide seu cadastro antes de fazer o login.")
+                            st.success("✅ Conta criada com sucesso! Verifique sua caixa de entrada.")
                         except Exception as erro:
-                            st.error(f"Erro ao criar conta. O e-mail pode já estar em uso ou ser inválido. Detalhes: {erro}")
+                            st.error(f"Erro ao criar conta. Detalhes: {erro}")
 
 # ==========================================
 # 3. SISTEMA PRINCIPAL
@@ -237,7 +243,6 @@ def sistema_principal():
         st.divider()
         st.write("📂 **Gerenciador de Obras**")
         
-        # Buscar obras do usuário logado
         resposta_db = supabase.table("obras").select("*").eq("user_id", st.session_state.user_id).execute()
         obras_usuario = resposta_db.data
 
@@ -267,7 +272,6 @@ def sistema_principal():
                     st.session_state.dados_extraidos = obra_selecionada.get("dados_json", [])
                     st.rerun()
                 
-                # --- NOVA SESSÃO DE GESTÃO DA OBRA SELECIONADA ---
                 st.divider()
                 with st.expander("⚙️ Opções do Pavimento Atual"):
                     novo_nome_obra = st.text_input("Editar Empreendimento", value=st.session_state.obra_atual['nome_obra'])
@@ -293,8 +297,6 @@ def sistema_principal():
                         st.session_state.dados_extraidos = None
                         st.success("Pavimento excluído com sucesso!")
                         st.rerun()
-                # -------------------------------------------------
-
             else:
                 st.session_state.obra_atual = None
                 st.session_state.dados_extraidos = None
@@ -430,10 +432,10 @@ def sistema_principal():
             }])
             
             df_final = pd.concat([df_editado, linha_total], ignore_index=True)
-            df_final = df_final.drop(columns=["Pot. Unit. Ilum (VA)", "Pot. Unit. TUG (VA)", "Pot. Unit. TUE (VA)"])
-            df_final["Área (m²)"] = df_final["Área (m²)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
-            df_final["Perímetro (m)"] = df_final["Perímetro (m)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
-            st.table(df_final) 
+            df_final_exibir = df_final.drop(columns=["Pot. Unit. Ilum (VA)", "Pot. Unit. TUG (VA)", "Pot. Unit. TUE (VA)"])
+            df_final_exibir["Área (m²)"] = df_final_exibir["Área (m²)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
+            df_final_exibir["Perímetro (m)"] = df_final_exibir["Perímetro (m)"].apply(lambda x: f"{x:.2f}".replace(".", ","))
+            st.table(df_final_exibir) 
 
             st.divider()
             st.write("### 📦 Tabela Quantitativa de Materiais")
@@ -556,7 +558,82 @@ def sistema_principal():
                 {"Material": "Eletroduto Corrugado Flexível Reforçado 3/4\"", "Unidade": "m", "Quantidade": eletroduto_final}
             ])
             
-            st.table(pd.DataFrame(materiais))
+            df_materiais_final = pd.DataFrame(materiais)
+            st.table(df_materiais_final)
+            
+            # ==========================================
+            # 🚀 NOVA SESSÃO: EXPORTAÇÃO E RELATÓRIOS
+            # ==========================================
+            st.divider()
+            st.write("### 🖨️ Exportação e Relatórios")
+            col_exp1, col_exp2 = st.columns(2)
+            
+            # --- EXPORTAÇÃO EXCEL ---
+            with col_exp1:
+                buffer_excel = io.BytesIO()
+                with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                    df_final.to_excel(writer, index=False, sheet_name='Quadro de Cargas')
+                    df_materiais_final.to_excel(writer, index=False, sheet_name='Lista de Materiais')
+                
+                st.download_button(
+                    label="📊 Baixar Planilha de Orçamento (Excel)",
+                    data=buffer_excel.getvalue(),
+                    file_name=f"Orcamento_{st.session_state.obra_atual['nome_obra']}_{st.session_state.obra_atual['pavimento']}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+                
+            # --- EXPORTAÇÃO PDF ---
+            with col_exp2:
+                if FPDF is not None:
+                    pdf = FPDF()
+                    pdf.add_page()
+                    pdf.set_font("Arial", 'B', 16)
+                    
+                    def formatar_txt(texto):
+                        # Evita que acentos quebrem a geração do PDF
+                        return unicodedata.normalize('NFKD', str(texto)).encode('ASCII', 'ignore').decode('utf-8')
+                        
+                    pdf.cell(0, 10, formatar_txt(f"Memorial Descritivo: {st.session_state.obra_atual['nome_obra']}"), ln=True, align='C')
+                    pdf.set_font("Arial", 'I', 12)
+                    pdf.cell(0, 10, formatar_txt(f"Pavimento: {st.session_state.obra_atual['pavimento']} | Data: {datetime.now().strftime('%d/%m/%Y')}"), ln=True, align='C')
+                    pdf.ln(10)
+                    
+                    pdf.set_font("Arial", 'B', 12)
+                    pdf.cell(0, 10, "1. Resumo de Cargas:", ln=True)
+                    pdf.set_font("Arial", '', 10)
+                    pdf.cell(0, 8, formatar_txt(f"Carga Total de Iluminacao: {df_editado['Carga Ilum. (VA)'].sum()} VA"), ln=True)
+                    pdf.cell(0, 8, formatar_txt(f"Carga Total de TUGs: {df_editado['Carga TUGs (VA)'].sum()} VA"), ln=True)
+                    pdf.cell(0, 8, formatar_txt(f"Carga Total de TUEs: {df_editado['Carga TUE (VA)'].sum()} VA"), ln=True)
+                    pdf.ln(5)
+                    
+                    pdf.set_font("Arial", 'B', 12)
+                    pdf.cell(0, 10, "2. Diretrizes de Execucao (NBR 5410):", ln=True)
+                    pdf.set_font("Arial", '', 10)
+                    pdf.cell(0, 8, formatar_txt(f"Tensao adotada: {tensao_projeto}V"), ln=True)
+                    pdf.cell(0, 8, formatar_txt(f"Local sugerido para o QDC: {texto_local_qdc}"), ln=True)
+                    pdf.ln(5)
+
+                    pdf.set_font("Arial", 'B', 12)
+                    pdf.cell(0, 10, "3. Lista Quantitativa de Materiais:", ln=True)
+                    pdf.set_font("Arial", '', 10)
+                    for idx, row_mat in df_materiais_final.iterrows():
+                        texto_mat = f"- {row_mat['Quantidade']} {row_mat['Unidade']} : {row_mat['Material']}"
+                        pdf.cell(0, 6, formatar_txt(texto_mat), ln=True)
+                    
+                    try:
+                        pdf_bytes = pdf.output(dest='S').encode('latin1')
+                        st.download_button(
+                            label="📄 Baixar Memorial Descritivo (PDF)",
+                            data=pdf_bytes,
+                            file_name=f"Memorial_{st.session_state.obra_atual['nome_obra']}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error(f"Erro ao gerar PDF: {e}")
+                else:
+                    st.warning("⚠️ Você precisa adicionar 'fpdf' no seu arquivo requirements.txt para habilitar o Relatório PDF.")
             
         except Exception as erro_visual:
             st.error(f"Erro interno de renderização: {erro_visual}")
