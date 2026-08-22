@@ -196,7 +196,7 @@ def get_ponto_perimetro(d, segs):
 
 def tracar_eletroduto(msp, pt_origem, pt_destino, layer="PROJ_ELETRICA_ELETRODUTO"):
     if layer not in msp.doc.layers:
-        msp.doc.layers.add(name=layer, color=3) # Verde para eletroduto
+        msp.doc.layers.add(name=layer, color=3)
     msp.add_lwpolyline([pt_origem, pt_destino], dxfattribs={'layer': layer})
 
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
@@ -208,13 +208,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        # Criação de camadas com cores diferenciadas padrão DXF
         camadas = {
             "PROJ_ELETRICA_LUZ": 2,          # Amarelo
             "PROJ_ELETRICA_QDC": 1,          # Vermelho
             "PROJ_ELETRICA_TEXTO": 7,        # Branco / Cinza claro
-            "PROJ_ELETRICA_TOMADA": 4,       # ciano
-            "PROJ_ELETRICA_INTERRUPTOR": 5,  # azul
+            "PROJ_ELETRICA_TOMADA": 6,       # Magenta
+            "PROJ_ELETRICA_INTERRUPTOR": 4,  # Ciano
             "PROJ_ELETRICA_ELETRODUTO": 3    # Verde
         }
         for nome_l, cor_l in camadas.items():
@@ -259,8 +258,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados = {}
         dict_dados = {row['Ambiente']: row for row in dados_editados}
-        
-        # Mapeamento prévio de geometrias para encontrar o QDC perfeitamente
         geometrias_ambientes = {}
         
         for polilinha in polilinhas:
@@ -313,10 +310,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 'min_x': min_x, 'max_x': max_x, 'min_y': min_y, 'max_y': max_y,
                 'centro_x': centro_x, 'centro_y': centro_y,
                 'segmentos_crus': segmentos_crus, 'comp_total': comp_total,
-                'logical_walls': logical_walls, 'polilinha': polilinha
+                'logical_walls': logical_walls
             }
 
-        # Processamento de cada ambiente para desenho
         for nome_ambiente, geom in geometrias_ambientes.items():
             if nome_ambiente not in dict_dados: continue
             dados_amb = dict_dados[nome_ambiente]
@@ -347,7 +343,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if min_d < 0.2:
                             hinge, latch = (sol['p1'], sol['p2']) if min_d in [d11, d21] else (sol['p2'], sol['p1'])
                             break
-                if hinge: break
+                    if hinge: break
 
             sw_base_x, sw_base_y, sw_placed = centro_x, min_y, False
             if dados_amb['Qtd Ilum.'] > 0:
@@ -373,9 +369,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (sw_x + 0.2, sw_y + 0.15)})
                     tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
-            # ===============================================
-            # QDC POSICIONADO NA MELHOR PAREDE DO AMBIENTE
-            # ===============================================
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome_ambiente == qdc_formatado and not is_area_umida:
                 qdc_w, qdc_d = 0.4, 0.15
@@ -404,37 +397,54 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # ===============================================
-            # TOMADAS E TUES (COM RECUO DE 15CM E ALTURA NBR 5410)
-            # ===============================================
-            qtd_tugs, qtd_tues = int(dados_amb.get('TUGs (Qtd)', 0)), int(dados_amb.get('Qtd TUE', 0))
-            eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
-            total_tomadas = qtd_tugs + qtd_tues
+            # Tratamento de TUGs e TUEs Específicas
+            qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
+            qtd_tue = int(dados_amb.get('Qtd TUE', 0))
+            eq_tue_nome = str(dados_amb.get('Equipamento TUE', '-'))
+            pot_tue_val = int(dados_amb.get('Pot. Unit. TUE (VA)', 0))
+            eq_lower = eq_tue_nome.lower()
             
-            if total_tomadas > 0 and comp_total > 0:
-                passo = comp_total / total_tomadas
+            is_ac = "ar" in eq_lower or "condicionado" in eq_lower
+            
+            # Se for Ar-Condicionado, posiciona especificamente no centro da menor parede
+            if is_ac and qtd_tue > 0 and logical_walls:
+                menor_parede = min(logical_walls, key=lambda w: w['length'])
+                pt1, pt2 = menor_parede['p1'], menor_parede['p2']
+                px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                vx, vy = menor_parede['vx'], menor_parede['vy']
+                nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
+                
+                # Deslocamento para dentro da parede
+                px_ac, py_ac = px + nx * 0.15, py + ny * 0.15
+                
+                ponto_base1 = (px_ac - vx * 0.15, py_ac - vy * 0.15)
+                ponto_base2 = (px_ac + vx * 0.15, py_ac + vy * 0.15)
+                ponto_ponta = (px_ac + nx * 0.25, py_ac + ny * 0.25)
+                
+                msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                
+                # Escreve a potência em Watts ao lado da TUE do ar-condicionado
+                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
+                tracar_eletroduto(msp, (px_ac, py_ac), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
+
+            # Demais TUGs distribuídas no perímetro com recuo de 10cm
+            total_tomadas_geral = qtd_tugs + (qtd_tue if not is_ac else 0)
+            if total_tomadas_geral > 0 and comp_total > 0:
+                passo = comp_total / total_tomadas_geral
                 d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
-                dist_atual = d_sw + 0.15 # Recuo exato de 15cm aplicado
+                dist_atual = d_sw + 0.10
                 
                 tomadas_pos = 0
-                while tomadas_pos < total_tomadas:
+                while tomadas_pos < total_tomadas_geral:
                     px, py, ux_w, uy_w = get_ponto_perimetro((dist_atual + comp_total) % comp_total, segmentos_crus)
                     n1x, n1y, n2x, n2y = -uy_w, ux_w, uy_w, -ux_w
                     ponta1, ponta2 = (px + n1x * 0.25, py + n1y * 0.25), (px + n2x * 0.25, py + n2y * 0.25)
                     pt_ponta = ponta1 if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]) else ponta2
                     pt_base1, pt_base2 = (px + ux_w * 0.15, py + uy_w * 0.15), (px - ux_w * 0.15, py - uy_w * 0.15)
                     
-                    is_tue = tomadas_pos >= qtd_tugs
-                    fill_mode = "empty"
-                    if is_tue:
-                        if "chuveiro" in eq_nome_limpo or "ar" in eq_nome_limpo: fill_mode = "full"
-                        elif is_area_umida: fill_mode = "half"
-                    else:
-                        if is_area_umida: fill_mode = "half"
-
-                    if fill_mode == "full":
-                        msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    elif fill_mode == "half":
+                    fill_mode = "half" if is_area_umida else "empty"
+                    if fill_mode == "half":
                         msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
                     msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
@@ -442,6 +452,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     dist_atual += passo
                     tomadas_pos += 1
+
+            # Outras TUEs (como chuveiro, etc.) se houverem que não sejam AC
+            if not is_ac and qtd_tue > 0 and eq_tue_nome != "-":
+                px_tue, py_tue = centro_x, max_y - 0.2
+                ponto_base1 = (px_tue - 0.15, py_tue)
+                ponto_base2 = (px_tue + 0.15, py_tue)
+                ponto_ponta = (px_tue, py_tue + 0.25)
+                
+                msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (px_tue + 0.2, py_tue + 0.1)})
+                tracar_eletroduto(msp, (px_tue, py_tue), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
         # Backbone ligando o QDC aos centros dos demais ambientes
         qdc_nome = local_qdc.replace(" (recomendado)", "")
