@@ -51,10 +51,19 @@ def dimensionar_cargas(nome, area, perimetro):
     nome_words = nome_lower.replace('-', ' ').split()
     
     is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
+    is_corredor = any(x in nome_lower for x in ["hall", "corredor", "circulação", "circulacao"])
     
+    # Motor 29.0: Regras Específicas de TUGs (Incluindo Corredores/Halls)
     if is_umida:
         qtd_tugs = math.ceil(perimetro / 3.5)
         carga_tugs = (qtd_tugs * 600) if qtd_tugs <= 3 else (3 * 600) + ((qtd_tugs - 3) * 100)
+    elif is_corredor:
+        comprimento_estimado = (perimetro / 2) - 1 # Desconta aprox 1m da largura
+        if comprimento_estimado <= 3:
+            qtd_tugs = 1
+        else:
+            qtd_tugs = max(1, math.ceil(comprimento_estimado / 3)) # 1 tomada a cada 3m de comprimento
+        carga_tugs = qtd_tugs * 100
     else:
         qtd_tugs = math.ceil(perimetro / 5)
         carga_tugs = qtd_tugs * 100
@@ -501,21 +510,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) 
 
                 # ===============================================
-                # 3. TOMADAS ORTOGONAIS E TUEs (MOTOR 28.0 - AR INDEPENDENTE)
+                # 3. TOMADAS ORTOGONAIS E TUEs
                 # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
                 
-                # MOTOR 28.0: Verifica se tem Ar Condicionado neste comodo
                 eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
                 is_ac = ("ar" in eq_nome_limpo and "cond" in eq_nome_limpo) and qtd_tues > 0
                 
                 ac_placed = False
                 mx_ac, my_ac = 0, 0
                 
-                # Se tiver Ar-Condicionado, saca ele da vala comum e joga na menor parede
                 if is_ac and logical_walls:
-                    # Pega as DUAS MENORES paredes do ambiente
                     sorted_walls_asc = sorted(logical_walls, key=lambda w: w['length'])
                     top_2_smallest = sorted_walls_asc[:2]
                     
@@ -529,7 +535,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                     best_ac_wall = top_2_smallest[0]
                     if len(top_2_smallest) == 2:
-                        # Escolhe a menor parede que tenha MENOS portas atrapalhando
                         if count_sols_for_wall(top_2_smallest[1]) < count_sols_for_wall(top_2_smallest[0]):
                             best_ac_wall = top_2_smallest[1]
                             
@@ -545,7 +550,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pt_base2_ac = (mx_ac - vx_ac * base_half, my_ac - vy_ac * base_half)
                     pt_ponta_ac = (mx_ac + nx_ac * height, my_ac + ny_ac * height)
                     
-                    # Desenha Tomada Alta (Totalmente Pintada) centralizada na parede pequena
                     msp.add_solid([pt_base1_ac, pt_base2_ac, pt_ponta_ac], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     msp.add_lwpolyline([pt_base1_ac, pt_base2_ac, pt_ponta_ac, pt_base1_ac], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     
@@ -557,7 +561,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                     
                     ac_placed = True
-                    qtd_tues -= 1 # Desconta o ar da contagem generica do perimetro
+                    qtd_tues -= 1 
                 
                 total_tomadas = qtd_tugs + qtd_tues
                 
@@ -611,7 +615,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             if math.hypot(px - mx_b, py - my_b) < 0.5:
                                 perto_porta = True
                                 
-                        # Campo de Força Magnético para evitar sobrepor TUG no Ar-Condicionado que foi pré-posicionado
                         if ac_placed and not perto_porta:
                             if math.hypot(px - mx_ac, py - my_ac) < 0.6:
                                 perto_porta = True
@@ -672,7 +675,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 28.0 (AR-CONDICIONADO NAS MENORES PAREDES) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 29.0 (NBR 5410: TUGS EM CORREDORES) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1184,12 +1187,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 28.0 Ativo: Ar-Condicionado Centralizado nas Menores Paredes!")
+                st.success("✅ Motor 29.0 Ativo: Regra NBR 5410 para Corredores Aplicada!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 28.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 29.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
