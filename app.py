@@ -616,7 +616,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         else:
                             dir_step = -1
                             
-                    dist_atual = d_sw + (0.05 * dir_step)
+                    dist_atual = d_sw + (0.02 * dir_step)
                     
                     tomadas_pos = 0
                     tentativas = 0
