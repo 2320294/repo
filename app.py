@@ -5,6 +5,7 @@ import unicodedata
 import io
 import tempfile
 import os
+import math
 from datetime import datetime
 
 # Importação dos nossos módulos separados
