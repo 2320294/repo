@@ -47,8 +47,13 @@ def dimensionar_cargas(nome, area, perimetro):
     qtd_ilum = 1 if area <= 10 else math.ceil(area / 10)
     carga_ilum = 100 if area <= 6 else 100 + (((area - 6) // 4) * 60)
     
-    nome_lower = nome.lower()
-    if any(x in nome_lower for x in ["coz", "serv", "banh", "lav"]):
+    nome_lower = nome.lower().strip()
+    nome_words = nome_lower.replace('-', ' ').split()
+    
+    # Motor 25.0: Reconhecimento exato de palavras curtas (evita que "AS" ative na "SALA")
+    is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
+    
+    if is_umida:
         qtd_tugs = math.ceil(perimetro / 3.5)
         carga_tugs = (qtd_tugs * 600) if qtd_tugs <= 3 else (3 * 600) + ((qtd_tugs - 3) * 100)
     else:
@@ -59,7 +64,7 @@ def dimensionar_cargas(nome, area, perimetro):
     qtd_tue = 0
     carga_tue = 0
     
-    if any(x in nome_lower for x in ["banh", "wc", "bwc", "sanit"]):
+    if any(x in nome_lower for x in ["banh", "sanit"]) or any(w in nome_words for w in ["wc", "bwc"]):
         tue_nome = "Chuveiro Elétrico"
         qtd_tue = 1
         carga_tue = 5500
@@ -71,7 +76,7 @@ def dimensionar_cargas(nome, area, perimetro):
         tue_nome = "Ar-Condicionado"
         qtd_tue = 1
         carga_tue = 1200
-    elif any(x in nome_lower for x in ["serv", "lavand"]):
+    elif any(x in nome_lower for x in ["serv", "lavand"]) or "as" in nome_words:
         tue_nome = "Máquina de Lavar"
         qtd_tue = 1
         carga_tue = 1000
@@ -357,9 +362,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # Identifica se é área úmida para altura das tomadas
-                ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
-                is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
+                # Identifica se é área úmida para altura das tomadas com lógica estrita de palavras
+                nome_lower = nome_ambiente.lower().strip()
+                nome_words = nome_lower.replace('-', ' ').split()
+                is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
                 
                 # ===============================================
                 # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (P/ Interruptor)
@@ -481,7 +487,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         vx, vy = best_wall['vx'], best_wall['vy']
                         nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                         
-                        # QDC é embutido rente a alvenaria (apontando para fora da coordenada do comodo)
                         out_nx, out_ny = -nx, -ny
                         
                         p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
@@ -577,18 +582,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
                         pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
                         
-                        # Motor 24.0: Altura de Tomadas e TUEs sem texto
                         if tomadas_pos >= qtd_tugs: 
-                            # TUE = Tomada Alta (Totalmente preenchida)
                             msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                             msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         else: 
                             if is_area_umida:
-                                # TUG em Área Úmida = Tomada Média (Metade Preenchida)
                                 msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                                 msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                             else:
-                                # TUG Normal = Tomada Baixa (Totalmente vazada)
                                 msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
                         dist_atual += passo
@@ -597,7 +598,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 24.0 (TOMADAS MEDIAS E LIMPEZA VISUAL) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 25.0 (AS EXATA = TOMADAS MEDIAS ATIVAS) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1109,12 +1110,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 24.0 Ativo: Refinamento Visual de Tomadas Médias NBR 5410!")
+                st.success("✅ Motor 25.0 Ativo: AS Reconhecida para Tomadas Médias e Máquina de Lavar!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 24.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 25.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
