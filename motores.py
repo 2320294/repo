@@ -157,7 +157,7 @@ def get_ponto_perimetro(d, segs):
     return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
 
 def tracar_eletroduto(msp, pt_origem, pt_destino, layer="PROJ_ELETRICA_ELETRODUTO"):
-    if layer not in msp.doc.layers: msp.doc.layers.add(name=layer, color=3)
+    if layer not in msp.doc.layers: msp.doc.layers.add(name=layer, color=3) # Cor verde para eletrodutos
     msp.add_lwpolyline([pt_origem, pt_destino], dxfattribs={'layer': layer})
 
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
@@ -168,9 +168,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
+        # Cores idênticas à referência enviada (verde nas linhas/eletrodutos, vermelho no QDC, etc.)
         camadas = {
-            "PROJ_ELETRICA_LUZ": 2, "PROJ_ELETRICA_QDC": 1, "PROJ_ELETRICA_TEXTO": 7, 
-            "PROJ_ELETRICA_TOMADA": 6, "PROJ_ELETRICA_INTERRUPTOR": 4, "PROJ_ELETRICA_ELETRODUTO": 3
+            "PROJ_ELETRICA_LUZ": 2,          # Amarelo
+            "PROJ_ELETRICA_QDC": 1,          # Vermelho
+            "PROJ_ELETRICA_TEXTO": 2,        # Amarelo / Texto claro
+            "PROJ_ELETRICA_TOMADA": 3,       # Verde
+            "PROJ_ELETRICA_INTERRUPTOR": 3,  # Verde
+            "PROJ_ELETRICA_ELETRODUTO": 7    # Branco/Cinza neutro para conexões internas
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -213,7 +218,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
-            min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
             if (max_x - min_x) * (max_y - min_y) < 0.5: continue
             
             nome_ambiente = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
@@ -295,7 +301,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if dados_amb['Qtd Ilum.'] > 0:
                 msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                 msp.add_text(f"{dados_amb['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
-                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 7, 'insert': (centro_x + 0.3, centro_y + 0.15)})
+                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                 
                 if hinge and latch and logical_walls:
                     best_lw = min(logical_walls, key=lambda lw: point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2']))
@@ -306,22 +312,27 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         nx, ny = get_inside_normal(vx, vy, sw_base_x, sw_base_y, centro_x, centro_y)
                         sw_x, sw_y = sw_base_x + nx * 0.12, sw_base_y + ny * 0.12
                         msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
+                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
                         tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
                         sw_placed = True
                 if not sw_placed:
                     sw_x, sw_y = centro_x, min_y + 0.12
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (sw_x + 0.2, sw_y + 0.15)})
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + 0.2, sw_y + 0.15)})
                     tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
-            # Posicionamento Perfeito do QDC no Corredor / Circulação
+            # Restauração exata do QDC na posição original do corredor/circulação
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome_ambiente == qdc_formatado and not is_area_umida:
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    for lw in logical_walls: lw['score'] = lw['length']
-                    best_wall = max(logical_walls, key=lambda w: w['length'])
+                    for lw in logical_walls: lw['soleiras'] = 0
+                    for sol in unique_soleiras:
+                        mx_sol, my_sol = (sol['p1'][0] + sol['p2'][0]) / 2, (sol['p1'][1] + sol['p2'][1]) / 2
+                        closest_lw = min(logical_walls, key=lambda lw: point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']))
+                        if closest_lw and point_seg_dist(mx_sol, my_sol, closest_lw['p1'], closest_lw['p2']) < 0.6:
+                            closest_lw['soleiras'] += 1
+                    best_wall = min(logical_walls, key=lambda w: w['soleiras'])
                     pt1, pt2 = best_wall['p1'], best_wall['p2']
                     mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                     vx, vy = best_wall['vx'], best_wall['vy']
@@ -339,7 +350,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # Tratamento de TUEs e TUGs
+            # Posicionamento de TUEs e TUGs
             qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
             qtd_tue = int(dados_amb.get('Qtd TUE', 0))
             eq_tue_nome = str(dados_amb.get('Equipamento TUE', '-'))
@@ -361,7 +372,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
+                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
                 tracar_eletroduto(msp, (px_ac, py_ac), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
             total_tomadas_geral = qtd_tugs + (qtd_tue if not is_ac else 0)
@@ -395,7 +406,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (px_tue + 0.2, py_tue + 0.1)})
+                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_tue + 0.2, py_tue + 0.1)})
                 tracar_eletroduto(msp, (px_tue, py_tue), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
         qdc_nome = local_qdc.replace(" (recomendado)", "")
