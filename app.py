@@ -232,7 +232,6 @@ def get_dist_on_perimeter(px, py, segs):
         acumulado += dst
     return best_d
 
-# MOTOR 31.0: Funções promovidas ao escopo global
 def get_ponto_perimetro(d, segs):
     acumulado = 0
     for pt1, pt2, dst in segs:
@@ -293,7 +292,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             p1 = (entity.dxf.start.x, entity.dxf.start.y)
                             p2 = (entity.dxf.end.x, entity.dxf.end.y)
                             px, py = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
-                            portas.append({'tipo': 'LINE', 'x': px, 'y py, 'p1': p1, 'p2': p2})
+                            # Erro de sintaxe da versão 31.0 corrigido aqui:
+                            portas.append({'tipo': 'LINE', 'x': px, 'y': py, 'p1': p1, 'p2': p2})
                         elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                             pts = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
                             if len(pts) >= 2:
@@ -604,7 +604,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if total_tomadas > 0 and comp_total > 0:
                     passo = comp_total / total_tomadas
                     
-                    # Usa as funcoes do escopo global
+                    # Usa a função do escopo global
                     d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
                     
                     dir_step = 1
@@ -707,7 +707,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 31.0 (TOMADAS INICIANDO DO INTERRUPTOR - CORRIGIDO) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 32.0 (FLUXO CONTINUO + SINTAXE CORRIGIDA) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1219,12 +1219,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 31.0 Ativo: Lógica Corrigida!")
+                st.success("✅ Motor 32.0 Ativo: Sintaxe Corrigida!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 31.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 32.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
