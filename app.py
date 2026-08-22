@@ -217,7 +217,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         if "PROJ_ELETRICA_TEXTO" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         if "PROJ_ELETRICA_TOMADA" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4)
         if "PROJ_ELETRICA_INTERRUPTOR" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_INTERRUPTOR", color=5) 
-        if "PROJ_ELETRICA_DEBUG" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_DEBUG", color=6)
         
         polilinhas = []
         textos = []
@@ -340,17 +339,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if not merged:
                     logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dist, 'vx': vx, 'vy': vy})
 
-            # ===============================================
-            # LIMPEZA E DEDUPLICAÇÃO DE SOLEIRAS (O Filtro Mágico)
-            # ===============================================
             unique_soleiras = []
             for sol in soleiras:
                 mx = (sol['p1'][0] + sol['p2'][0]) / 2
                 my = (sol['p1'][1] + sol['p2'][1]) / 2
-                # Considera apenas soleiras dentro/perto deste ambiente
                 if (min_x - 0.5) <= mx <= (max_x + 0.5) and (min_y - 0.5) <= my <= (max_y + 0.5):
                     is_dup = False
-                    # Verifica se já registramos uma soleira no mesmo lugar (raio de 30cm)
                     for usol in unique_soleiras:
                         umx = (usol['p1'][0] + usol['p2'][0]) / 2
                         umy = (usol['p1'][1] + usol['p2'][1]) / 2
@@ -440,7 +434,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 22.0)
+                # 2. QUADRO DE DISTRIBUIÇÃO (EMBUTIDO NA PAREDE)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 
@@ -451,11 +445,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     qdc_w, qdc_d = 0.4, 0.15
                     
                     if logical_walls:
-                        # Zera a contagem de todas as paredes lógicas
                         for lw in logical_walls:
                             lw['soleiras'] = 0
 
-                        # Associa CADA soleira limpa à sua parede mais próxima (garante contagem exata)
                         for sol in unique_soleiras:
                             mx_sol = (sol['p1'][0] + sol['p2'][0]) / 2
                             my_sol = (sol['p1'][1] + sol['p2'][1]) / 2
@@ -468,33 +460,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                     min_d = d
                                     closest_lw = lw
                             
-                            # Se a parede mais próxima estiver perto o bastante, contabiliza a soleira nela
                             if closest_lw and min_d < 0.6:
                                 closest_lw['soleiras'] += 1
 
-                        # ==========================================
-                        # MODO RAIO-X: DESENHA O DIAGNÓSTICO NA TELA
-                        # ==========================================
-                        for i, lw in enumerate(logical_walls):
-                            mx_dbg, my_dbg = (lw['p1'][0] + lw['p2'][0]) / 2, (lw['p1'][1] + lw['p2'][1]) / 2
-                            debug_txt = f"L:{lw['length']:.2f}m|Sol:{lw['soleiras']}"
-                            msp.add_text(debug_txt, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'height': 0.15, 'color': 6, 'insert': (mx_dbg, my_dbg)})
-                            msp.add_line(lw['p1'], lw['p2'], dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
-                            msp.add_circle(center=(mx_dbg, my_dbg), radius=0.05, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
-                        # ==========================================
-
-                        # Ordena as paredes pelo tamanho (da maior para a menor)
                         sorted_walls = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
-                        
-                        # Pega as DUAS maiores paredes e descarta o resto
                         top_2_walls = sorted_walls[:2]
                         
-                        # A regra de ouro: Escolhe a parede (entre as duas maiores) que tiver o MENOR numero de soleiras
                         if len(top_2_walls) == 2:
                             if top_2_walls[1]['soleiras'] < top_2_walls[0]['soleiras']:
                                 best_wall = top_2_walls[1]
                             else:
-                                best_wall = top_2_walls[0] # Se empatar, a de índice 0 (que é mais comprida) vence
+                                best_wall = top_2_walls[0]
                         else:
                             best_wall = top_2_walls[0]
                                     
@@ -504,15 +480,19 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         vx, vy = best_wall['vx'], best_wall['vy']
                         nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                         
+                        # INVERTE A NORMAL PARA EMBUTIR NA PAREDE (Para Fora do Ambiente)
+                        out_nx, out_ny = -nx, -ny
+                        
+                        # Desenha projetando o QDC no osso da parede
                         p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
                         p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
-                        p3_qdc = (p2_qdc[0] + nx * qdc_d, p2_qdc[1] + ny * qdc_d)
-                        p4_qdc = (p1_qdc[0] + nx * qdc_d, p1_qdc[1] + ny * qdc_d)
+                        p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
+                        p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
                         pts = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
                     else:
                         cx_qdc = centro_x - 0.2
                         cy_qdc = max_y
-                        pts = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc - qdc_d), (cx_qdc, cy_qdc - qdc_d)]
+                        pts = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
                     
                     msp.add_lwpolyline([pts[0], pts[1], pts[2], pts[3], pts[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                     msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) 
@@ -562,14 +542,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 perto_porta = True
                                 
                         if not perto_porta:
-                            # Avalia usando apenas as soleiras únicas e limpas
                             for sol in unique_soleiras:
                                 mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
                                 if math.hypot(px - mx, py - my) < 0.6:
                                     perto_porta = True
                                     break
                         
-                        # Evita encavalar tomada em cima do QDC Central
                         if nome_ambiente == qdc_formatado and not is_area_umida and not perto_porta and logical_walls:
                             pt1_b, pt2_b = best_wall['p1'], best_wall['p2']
                             mx_b, my_b = (pt1_b[0] + pt2_b[0]) / 2, (pt1_b[1] + pt2_b[1]) / 2
@@ -614,7 +592,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 22.0 (RAIO-X: CONTAGEM ESTRITA DE SOLEIRAS) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 23.0 (QDC EMBUTIDO NA PAREDE) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1126,12 +1104,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 22.0 Ativo: Modo Raio-X com Contagem de Soleiras Pura e Exata!")
+                st.success("✅ Motor 23.0 Ativo: QDC Embutido e Sem Raio-X!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 22.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 23.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
