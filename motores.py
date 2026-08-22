@@ -196,7 +196,7 @@ def get_ponto_perimetro(d, segs):
 
 def tracar_eletroduto(msp, pt_origem, pt_destino, layer="PROJ_ELETRICA_ELETRODUTO"):
     if layer not in msp.doc.layers:
-        msp.doc.layers.add(name=layer, color=7)
+        msp.doc.layers.add(name=layer, color=3) # Verde para eletroduto
     msp.add_lwpolyline([pt_origem, pt_destino], dxfattribs={'layer': layer})
 
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
@@ -208,9 +208,20 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        for l in ["PROJ_ELETRICA_LUZ", "PROJ_ELETRICA_QDC", "PROJ_ELETRICA_TEXTO", 
-                  "PROJ_ELETRICA_TOMADA", "PROJ_ELETRICA_INTERRUPTOR", "PROJ_ELETRICA_ELETRODUTO"]:
-            if l not in doc.layers: doc.layers.add(name=l)
+        # Criação de camadas com cores diferenciadas padrão DXF
+        camadas = {
+            "PROJ_ELETRICA_LUZ": 2,          # Amarelo
+            "PROJ_ELETRICA_QDC": 1,          # Vermelho
+            "PROJ_ELETRICA_TEXTO": 7,        # Branco / Cinza claro
+            "PROJ_ELETRICA_TOMADA": 6,       # Magenta
+            "PROJ_ELETRICA_INTERRUPTOR": 4,  # Ciano
+            "PROJ_ELETRICA_ELETRODUTO": 3    # Verde
+        }
+        for nome_l, cor_l in camadas.items():
+            if nome_l not in doc.layers:
+                doc.layers.add(name=nome_l, color=cor_l)
+            else:
+                doc.layers.get(nome_l).color = cor_l
         
         polilinhas, textos, portas, soleiras = [], [], [], []
         
@@ -248,14 +259,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados = {}
         dict_dados = {row['Ambiente']: row for row in dados_editados}
-        global_max_y = 0 
+        
+        # Mapeamento prévio de geometrias para encontrar o QDC perfeitamente
+        geometrias_ambientes = {}
         
         for polilinha in polilinhas:
             xs = [p[0] for p in polilinha]
             ys = [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
             min_y, max_y = min(ys), max(ys)
-            if max_y > global_max_y: global_max_y = max_y
             if (max_x - min_x) * (max_y - min_y) < 0.5: continue
             
             nome_ambiente = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
@@ -265,8 +277,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 nome_ambiente = f"{nome_ambiente} {ambientes_processados[nome_ambiente]}"
             else:
                 ambientes_processados[nome_ambiente] = 1
-            
+                
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            
             segmentos_crus, comp_total = [], 0
             if len(polilinha) >= 3:
                 poly_fechada = list(polilinha)
@@ -296,6 +309,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         break
                 if not merged: logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dist, 'vx': vx, 'vy': vy})
 
+            geometrias_ambientes[nome_ambiente] = {
+                'min_x': min_x, 'max_x': max_x, 'min_y': min_y, 'max_y': max_y,
+                'centro_x': centro_x, 'centro_y': centro_y,
+                'segmentos_crus': segmentos_crus, 'comp_total': comp_total,
+                'logical_walls': logical_walls, 'polilinha': polilinha
+            }
+
+        # Processamento de cada ambiente para desenho
+        for nome_ambiente, geom in geometrias_ambientes.items():
+            if nome_ambiente not in dict_dados: continue
+            dados_amb = dict_dados[nome_ambiente]
+            centro_x, centro_y = geom['centro_x'], geom['centro_y']
+            min_x, max_x, min_y, max_y = geom['min_x'], geom['max_x'], geom['min_y'], geom['max_y']
+            segmentos_crus, comp_total = geom['segmentos_crus'], geom['comp_total']
+            logical_walls = geom['logical_walls']
+            
+            nome_lower = nome_ambiente.lower().strip()
+            is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"])
+            
             unique_soleiras = []
             for sol in soleiras:
                 mx, my = (sol['p1'][0] + sol['p2'][0]) / 2, (sol['p1'][1] + sol['p2'][1]) / 2
@@ -303,126 +335,121 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     if not any(math.hypot(mx - (usol['p1'][0]+usol['p2'][0])/2, my - (usol['p1'][1]+usol['p2'][1])/2) < 0.3 for usol in unique_soleiras):
                         unique_soleiras.append(sol)
 
-            if nome_ambiente in dict_dados:
-                dados_amb = dict_dados[nome_ambiente]
-                nome_lower = nome_ambiente.lower().strip()
-                is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"])
-                
-                hinge, latch = None, None
-                for sol in unique_soleiras:
-                    for p in portas:
-                        if p['tipo'] == 'LINE':
-                            d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
-                            d12 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
-                            d21 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
-                            d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
-                            min_d = min(d11, d12, d21, d22)
-                            if min_d < 0.2:
-                                hinge, latch = (sol['p1'], sol['p2']) if min_d in [d11, d21] else (sol['p2'], sol['p1'])
-                                break
-                    if hinge: break
+            hinge, latch = None, None
+            for sol in unique_soleiras:
+                for p in portas:
+                    if p['tipo'] == 'LINE':
+                        d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
+                        d12 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
+                        d21 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
+                        d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
+                        min_d = min(d11, d12, d21, d22)
+                        if min_d < 0.2:
+                            hinge, latch = (sol['p1'], sol['p2']) if min_d in [d11, d21] else (sol['p2'], sol['p1'])
+                            break
+                if hinge: break
 
-                sw_base_x, sw_base_y, sw_placed = centro_x, min_y, False
-                if dados_amb['Qtd Ilum.'] > 0:
-                    msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
-                    msp.add_text(f"{dados_amb['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
-                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
-                    
-                    if hinge and latch and logical_walls:
-                        best_lw = min(logical_walls, key=lambda lw: point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2']))
-                        if best_lw and point_seg_dist(latch[0], latch[1], best_lw['p1'], best_lw['p2']) < 0.5:
-                            vx, vy = best_lw['vx'], best_lw['vy']
-                            if ((latch[0] - hinge[0]) * vx + (latch[1] - hinge[1]) * vy) < 0: vx, vy = -vx, -vy
-                            sw_base_x, sw_base_y = latch[0] + vx * 0.15, latch[1] + vy * 0.15
-                            nx, ny = get_inside_normal(vx, vy, sw_base_x, sw_base_y, centro_x, centro_y)
-                            sw_x, sw_y = sw_base_x + nx * 0.12, sw_base_y + ny * 0.12
-                            msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                            msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
-                            tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y))
-                            sw_placed = True
-                    if not sw_placed:
-                        sw_x, sw_y = centro_x, min_y + 0.12
+            sw_base_x, sw_base_y, sw_placed = centro_x, min_y, False
+            if dados_amb['Qtd Ilum.'] > 0:
+                msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
+                msp.add_text(f"{dados_amb['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
+                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 7, 'insert': (centro_x + 0.3, centro_y + 0.15)})
+                
+                if hinge and latch and logical_walls:
+                    best_lw = min(logical_walls, key=lambda lw: point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2']))
+                    if best_lw and point_seg_dist(latch[0], latch[1], best_lw['p1'], best_lw['p2']) < 0.5:
+                        vx, vy = best_lw['vx'], best_lw['vy']
+                        if ((latch[0] - hinge[0]) * vx + (latch[1] - hinge[1]) * vy) < 0: vx, vy = -vx, -vy
+                        sw_base_x, sw_base_y = latch[0] + vx * 0.15, latch[1] + vy * 0.15
+                        nx, ny = get_inside_normal(vx, vy, sw_base_x, sw_base_y, centro_x, centro_y)
+                        sw_x, sw_y = sw_base_x + nx * 0.12, sw_base_y + ny * 0.12
                         msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.2, sw_y + 0.15)})
-                        tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y))
+                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
+                        tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
+                        sw_placed = True
+                if not sw_placed:
+                    sw_x, sw_y = centro_x, min_y + 0.12
+                    msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 7, 'insert': (sw_x + 0.2, sw_y + 0.15)})
+                    tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
-                # ===============================================
-                # DESENHO DO QDC (EMBUTIDO NA PAREDE)
-                # ===============================================
-                qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
-                if nome_ambiente == qdc_formatado and not is_area_umida:
-                    qdc_w, qdc_d = 0.4, 0.15
-                    if logical_walls:
-                        for lw in logical_walls: lw['soleiras'] = 0
-                        for sol in unique_soleiras:
-                            mx_sol, my_sol = (sol['p1'][0] + sol['p2'][0]) / 2, (sol['p1'][1] + sol['p2'][1]) / 2
-                            closest_lw = min(logical_walls, key=lambda lw: point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']))
-                            if closest_lw and point_seg_dist(mx_sol, my_sol, closest_lw['p1'], closest_lw['p2']) < 0.6:
-                                closest_lw['soleiras'] += 1
-                        best_wall = min(logical_walls, key=lambda w: w['soleiras'])
-                        pt1, pt2 = best_wall['p1'], best_wall['p2']
-                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                        vx, vy = best_wall['vx'], best_wall['vy']
-                        nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
-                        out_nx, out_ny = -nx, -ny
-                        p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
-                        p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
-                        p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
-                        p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
-                        pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
-                    else:
-                        cx_qdc, cy_qdc = centro_x - 0.2, max_y
-                        pts_qdc = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
-                    
-                    msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-                    msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
-
-                # ===============================================
-                # TOMADAS E TUES COM ALTURAS NBR 5410
-                # ===============================================
-                qtd_tugs, qtd_tues = int(dados_amb.get('TUGs (Qtd)', 0)), int(dados_amb.get('Qtd TUE', 0))
-                eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
-                total_tomadas = qtd_tugs + qtd_tues
+            # ===============================================
+            # QDC POSICIONADO NA MELHOR PAREDE DO AMBIENTE
+            # ===============================================
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
+            if nome_ambiente == qdc_formatado and not is_area_umida:
+                qdc_w, qdc_d = 0.4, 0.15
+                if logical_walls:
+                    for lw in logical_walls: lw['score_porta'] = 0
+                    for sol in unique_soleiras:
+                        mx_sol, my_sol = (sol['p1'][0] + sol['p2'][0]) / 2, (sol['p1'][1] + sol['p2'][1]) / 2
+                        closest_lw = min(logical_walls, key=lambda lw: point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']))
+                        if closest_lw and point_seg_dist(mx_sol, my_sol, closest_lw['p1'], closest_lw['p2']) < 0.6:
+                            closest_lw['score_porta'] += 1
+                    best_wall = min(logical_walls, key=lambda w: (w['score_porta'], -w['length']))
+                    pt1, pt2 = best_wall['p1'], best_wall['p2']
+                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    vx, vy = best_wall['vx'], best_wall['vy']
+                    nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                    out_nx, out_ny = -nx, -ny
+                    p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
+                    p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                    p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
+                    p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
+                    pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
+                else:
+                    cx_qdc, cy_qdc = centro_x - 0.2, max_y
+                    pts_qdc = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
                 
-                if total_tomadas > 0 and comp_total > 0:
-                    passo = comp_total / total_tomadas
-                    d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
-                    dist_atual = d_sw + (0.10 * 1) # Recuo de 10cm do interruptor
-                    
-                    tomadas_pos = 0
-                    while tomadas_pos < total_tomadas:
-                        px, py, ux_w, uy_w = get_ponto_perimetro((dist_atual + comp_total) % comp_total, segmentos_crus)
-                        n1x, n1y, n2x, n2y = -uy_w, ux_w, uy_w, -ux_w
-                        ponta1, ponta2 = (px + n1x * 0.25, py + n1y * 0.25), (px + n2x * 0.25, py + n2y * 0.25)
-                        pt_ponta = ponta1 if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]) else ponta2
-                        pt_base1, pt_base2 = (px + ux_w * 0.15, py + uy_w * 0.15), (px - ux_w * 0.15, py - uy_w * 0.15)
-                        
-                        is_tue = tomadas_pos >= qtd_tugs
-                        fill_mode = "empty"
-                        if is_tue:
-                            if "chuveiro" in eq_nome_limpo or "ar" in eq_nome_limpo: fill_mode = "full"
-                            elif is_area_umida: fill_mode = "half"
-                        else:
-                            if is_area_umida: fill_mode = "half"
+                msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-                        if fill_mode == "full":
-                            msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                        elif fill_mode == "half":
-                            msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                            
-                        msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                        tracar_eletroduto(msp, (px, py), (centro_x, centro_y))
+            # ===============================================
+            # TOMADAS E TUES (COM RECUO DE 10CM E ALTURA NBR 5410)
+            # ===============================================
+            qtd_tugs, qtd_tues = int(dados_amb.get('TUGs (Qtd)', 0)), int(dados_amb.get('Qtd TUE', 0))
+            eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
+            total_tomadas = qtd_tugs + qtd_tues
+            
+            if total_tomadas > 0 and comp_total > 0:
+                passo = comp_total / total_tomadas
+                d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
+                dist_atual = d_sw + 0.10 # Recuo exato de 10cm aplicado
+                
+                tomadas_pos = 0
+                while tomadas_pos < total_tomadas:
+                    px, py, ux_w, uy_w = get_ponto_perimetro((dist_atual + comp_total) % comp_total, segmentos_crus)
+                    n1x, n1y, n2x, n2y = -uy_w, ux_w, uy_w, -ux_w
+                    ponta1, ponta2 = (px + n1x * 0.25, py + n1y * 0.25), (px + n2x * 0.25, py + n2y * 0.25)
+                    pt_ponta = ponta1 if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]) else ponta2
+                    pt_base1, pt_base2 = (px + ux_w * 0.15, py + uy_w * 0.15), (px - ux_w * 0.15, py - uy_w * 0.15)
+                    
+                    is_tue = tomadas_pos >= qtd_tugs
+                    fill_mode = "empty"
+                    if is_tue:
+                        if "chuveiro" in eq_nome_limpo or "ar" in eq_nome_limpo: fill_mode = "full"
+                        elif is_area_umida: fill_mode = "half"
+                    else:
+                        if is_area_umida: fill_mode = "half"
+
+                    if fill_mode == "full":
+                        msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    elif fill_mode == "half":
+                        msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
-                        dist_atual += (passo * 1)
-                        tomadas_pos += 1
+                    msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    tracar_eletroduto(msp, (px, py), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
+                    
+                    dist_atual += passo
+                    tomadas_pos += 1
 
         # Backbone ligando o QDC aos centros dos demais ambientes
         qdc_nome = local_qdc.replace(" (recomendado)", "")
-        coords_qdc = next(((d['Centro_X'], d['Centro_Y']) for d in dados_editados if d['Ambiente'] == qdc_nome), None)
+        coords_qdc = next(((geom['centro_x'], geom['centro_y']) for nome, geom in geometrias_ambientes.items() if nome == qdc_nome), None)
         if coords_qdc:
-            for d in dados_editados:
-                if d['Ambiente'] != qdc_nome:
-                    tracar_eletroduto(msp, coords_qdc, (d['Centro_X'], d['Centro_Y']), layer="PROJ_ELETRICA_ELETRODUTO")
+            for nome, geom in geometrias_ambientes.items():
+                if nome != qdc_nome:
+                    tracar_eletroduto(msp, coords_qdc, (geom['centro_x'], geom['centro_y']), layer="PROJ_ELETRICA_ELETRODUTO")
 
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
