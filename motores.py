@@ -260,6 +260,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 'comp_total': comp_total, 'logical_walls': logical_walls
             }
 
+        # Registro de posições de interruptores para evitar sobreposição em paredes compartilhadas
+        posicoes_interruptores_registradas = []
+
         for nome_ambiente, geom in geometrias_ambientes.items():
             if nome_ambiente not in dict_dados: continue
             dados_amb = dict_dados[nome_ambiente]
@@ -305,12 +308,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if ((latch[0] - hinge[0]) * vx + (latch[1] - hinge[1]) * vy) < 0: vx, vy = -vx, -vy
                         sw_base_x, sw_base_y = latch[0] + vx * 0.15, latch[1] + vy * 0.15
                         nx, ny = get_inside_normal(vx, vy, sw_base_x, sw_base_y, centro_x, centro_y)
-                        sw_x, sw_y = sw_base_x + nx * 0.12, sw_base_y + ny * 0.12
+                        sw_x, sw_y = sw_base_x + nx * 0.0, sw_base_y + ny * 0.0  # Alinhado exatamente na parede
+                        
+                        # Evita sobreposição com outro interruptor próximo na mesma parede
+                        for p_reg in posicoes_interruptores_registradas:
+                            if math.hypot(sw_x - p_reg[0], sw_y - p_reg[1]) < 0.3:
+                                sw_y += 0.25
+                        posicoes_interruptores_registradas.append((sw_x, sw_y))
+
                         msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
                         sw_placed = True
                 if not sw_placed:
-                    sw_x, sw_y = centro_x, min_y + 0.12
+                    sw_x, sw_y = centro_x, min_y + 0.0
+                    for p_reg in posicoes_interruptores_registradas:
+                        if math.hypot(sw_x - p_reg[0], sw_y - p_reg[1]) < 0.3:
+                            sw_x += 0.25
+                    posicoes_interruptores_registradas.append((sw_x, sw_y))
+
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + 0.2, sw_y + 0.15)})
 
@@ -340,7 +355,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # Posicionamento rigoroso das TUEs e TUGs
+            # Posicionamento TUE de Ar-Condicionado (Alinhado exatamente encostado na menor parede)
             qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
             qtd_tue = int(dados_amb.get('Qtd TUE', 0))
             eq_tue_nome = str(dados_amb.get('Equipamento TUE', '-'))
@@ -350,7 +365,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             is_ac = "ar" in eq_lower or "condicionado" in eq_lower
             is_chuveiro = "chuveiro" in eq_lower
             
-            # TUE de Ar-Condicionado (Tomada alta, preenchida por completo)
             if is_ac and qtd_tue > 0 and logical_walls:
                 menor_parede = min(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = menor_parede['p1'], menor_parede['p2']
@@ -358,7 +372,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = menor_parede['vx'], menor_parede['vy']
                 nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                 
-                px_ac, py_ac = px + nx * 0.05, py + ny * 0.05
+                # Alinhamento direto na parede (sem offset interno excessivo)
+                px_ac, py_ac = px, py
                 ponto_base1, ponto_base2 = (px_ac - vx * 0.15, py_ac - vy * 0.15), (px_ac + vx * 0.15, py_ac + vy * 0.15)
                 ponto_ponta = (px_ac + nx * 0.25, py_ac + ny * 0.25)
                 
@@ -366,11 +381,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
 
-            # TUGs distribuídas no perímetro
             total_tomadas_geral = qtd_tugs + (qtd_tue if not is_ac else 0)
             if total_tomadas_geral > 0 and comp_total > 0:
                 passo = comp_total / total_tomadas_geral
-                dist_atual = 0.10
+                dist_atual = 0.0  # Alinhamento exato na linha de perímetro
                 
                 tomadas_pos = 0
                 while tomadas_pos < total_tomadas_geral:
@@ -380,9 +394,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pt_ponta = ponta1 if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]) else ponta2
                     pt_base1, pt_base2 = (px + ux_w * 0.15, py + uy_w * 0.15), (px - ux_w * 0.15, py - uy_w * 0.15)
                     
-                    # Áreas úmidas (WC, Cozinha, AS) recebem tomada média (meia-lua), exceto chuveiro
                     fill_mode = "half" if is_area_umida else "empty"
-                    
                     if fill_mode == "half":
                         msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
@@ -391,9 +403,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     dist_atual += passo
                     tomadas_pos += 1
 
-            # Outras TUEs (Ex: Chuveiro -> Tomada alta preenchida por completo com potência em Watts)
             if not is_ac and qtd_tue > 0 and eq_tue_nome != "-":
-                px_tue, py_tue = centro_x, max_y - 0.2
+                px_tue, py_tue = centro_x, max_y - 0.0
                 ponto_base1, ponto_base2 = (px_tue - 0.15, py_tue), (px_tue + 0.15, py_tue)
                 ponto_ponta = (px_tue, py_tue + 0.25)
                 
