@@ -296,9 +296,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             centro_x = (min_x + max_x) / 2
             centro_y = (min_y + max_y) / 2
 
-            # ===============================================
-            # CRIAÇÃO DAS PAREDES LÓGICAS (ANTI-FRAGMENTAÇÃO)
-            # ===============================================
             segmentos_crus = []
             comp_total = 0
             if len(polilinha) >= 3:
@@ -322,8 +319,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 merged = False
                 for lw in logical_walls:
                     dot = abs(lw['vx']*vx + lw['vy']*vy)
-                    if dot > 0.98: # Linhas Paralelas
-                        if dist_to_line(mx, my, lw['p1'], lw['p2']) < 0.2: # Mesma parede
+                    if dot > 0.98: 
+                        if dist_to_line(mx, my, lw['p1'], lw['p2']) < 0.2: 
                             pts = [lw['p1'], lw['p2'], pt1, pt2]
                             max_d = 0
                             best_p1, best_p2 = lw['p1'], lw['p2']
@@ -383,7 +380,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     if hinge and latch and logical_walls:
                         best_lw = None
                         min_d = float('inf')
-                        # Descobre em qual parede a maçaneta está
                         for lw in logical_walls:
                             d = point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2'])
                             if d < min_d:
@@ -393,17 +389,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if best_lw and min_d < 0.5:
                             vx, vy = best_lw['vx'], best_lw['vy']
                             
-                            # O interruptor deve se afastar da dobradiça
                             dir_x, dir_y = latch[0] - hinge[0], latch[1] - hinge[1]
                             dot = dir_x * vx + dir_y * vy
                             if dot < 0:
                                 vx, vy = -vx, -vy
                                 
-                            # Caminha 15cm pela trilha da parede
                             sw_base_x = latch[0] + vx * 0.15
                             sw_base_y = latch[1] + vy * 0.15
                             
-                            # Trava magnética na linha exata da parede
                             l2 = (best_lw['p1'][0] - best_lw['p2'][0])**2 + (best_lw['p1'][1] - best_lw['p2'][1])**2
                             if l2 > 0:
                                 t = ((sw_base_x - best_lw['p1'][0])*(best_lw['p2'][0] - best_lw['p1'][0]) + (sw_base_y - best_lw['p1'][1])*(best_lw['p2'][1] - best_lw['p1'][1])) / l2
@@ -427,7 +420,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 19.0 - PRIORIDADE MÁXIMA)
+                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 20.0 - AS DUAS MAIORES PAREDES)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 
@@ -438,12 +431,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     qdc_w, qdc_d = 0.4, 0.15
                     
                     if logical_walls:
-                        # Passo 1: Descarta as paredes pequenas e inúteis
-                        max_len_in_room = max(w['length'] for w in logical_walls)
-                        major_walls = [w for w in logical_walls if w['length'] >= max_len_in_room * 0.5]
+                        # Passo 1: Ordena as paredes pelo tamanho (da maior para a menor)
+                        sorted_walls = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
                         
-                        # Passo 2: Conta soleiras APENAS para as paredes principais
-                        for lw in major_walls:
+                        # Passo 2: Pega apenas as DUAS maiores paredes
+                        top_2_walls = sorted_walls[:2]
+                        
+                        # Passo 3: Conta as soleiras nessas duas paredes
+                        for lw in top_2_walls:
                             sol_count = 0
                             for sol in soleiras:
                                 mx_sol = (sol['p1'][0] + sol['p2'][0]) / 2
@@ -457,8 +452,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                     sol_count += 1
                             lw['soleiras'] = sol_count
                             
-                        # Passo 3: Escolhe a parede com MENOR NUMERO DE SOLEIRAS. Em caso de empate, A MAIOR.
-                        best_wall = sorted(major_walls, key=lambda w: (w['soleiras'], -w['length']))[0]
+                        # Passo 4: Compara as duas e escolhe a que tem MENOS soleiras.
+                        if len(top_2_walls) == 2:
+                            if top_2_walls[1]['soleiras'] < top_2_walls[0]['soleiras']:
+                                best_wall = top_2_walls[1]
+                            else:
+                                best_wall = top_2_walls[0]
+                        else:
+                            best_wall = top_2_walls[0]
                                     
                         pt1, pt2, dist = best_wall['p1'], best_wall['p2'], best_wall['length']
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
@@ -530,7 +531,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                     perto_porta = True
                                     break
                         
-                        # Evita encavalar tomada em cima do QDC Central
                         if nome_ambiente == qdc_formatado and not is_area_umida and not perto_porta and logical_walls:
                             pt1_b, pt2_b = best_wall['p1'], best_wall['p2']
                             mx_b, my_b = (pt1_b[0] + pt2_b[0]) / 2, (pt1_b[1] + pt2_b[1]) / 2
@@ -575,7 +575,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 19.0 (QDC NA MAIOR PAREDE PRIORITARIA) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 20.0 (AS DUAS MAIORES PAREDES) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1087,12 +1087,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 19.0 Ativo: Filtro de Paredes Principais!")
+                st.success("✅ Motor 20.0 Ativo: QDC nas Duas Maiores Paredes!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 19.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 20.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
