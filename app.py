@@ -232,6 +232,24 @@ def get_dist_on_perimeter(px, py, segs):
         acumulado += dst
     return best_d
 
+# MOTOR 31.0: Funções promovidas ao escopo global
+def get_ponto_perimetro(d, segs):
+    acumulado = 0
+    for pt1, pt2, dst in segs:
+        if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
+            ratio = (d - acumulado) / dst
+            margin = 0.3
+            if dst > margin * 2:
+                if ratio * dst < margin: ratio = margin / dst
+                elif (1 - ratio) * dst < margin: ratio = (dst - margin) / dst
+            else: ratio = 0.5 
+            p_x = pt1[0] + (pt2[0] - pt1[0]) * ratio
+            p_y = pt1[1] + (pt2[1] - pt1[1]) * ratio
+            return p_x, p_y, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+        acumulado += dst
+    pt1, pt2, dst = segs[-1]
+    return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
@@ -275,7 +293,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             p1 = (entity.dxf.start.x, entity.dxf.start.y)
                             p2 = (entity.dxf.end.x, entity.dxf.end.y)
                             px, py = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
-                            portas.append({'tipo': 'LINE', 'x': px, 'y': py, 'p1': p1, 'p2': p2})
+                            portas.append({'tipo': 'LINE', 'x': px, 'y py, 'p1': p1, 'p2': p2})
                         elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                             pts = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
                             if len(pts) >= 2:
@@ -586,39 +604,20 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if total_tomadas > 0 and comp_total > 0:
                     passo = comp_total / total_tomadas
                     
-                    # MOTOR 30.0: Iniciar fluxo contínuo a partir do interruptor
+                    # Usa as funcoes do escopo global
                     d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
                     
                     dir_step = 1
                     if hinge and latch:
                         px_p, py_p, _, _ = get_ponto_perimetro((d_sw + 0.15) % comp_total, segmentos_crus)
                         px_m, py_m, _, _ = get_ponto_perimetro((d_sw - 0.15 + comp_total) % comp_total, segmentos_crus)
-                        # Queremos fluir para o lado que se afasta da porta (latch)
                         if math.hypot(px_p - latch[0], py_p - latch[1]) > math.hypot(px_m - latch[0], py_m - latch[1]):
                             dir_step = 1
                         else:
                             dir_step = -1
                             
-                    # A primeira tomada fica exatamente a 15cm do interruptor
                     dist_atual = d_sw + (0.15 * dir_step)
                     
-                    def get_ponto_perimetro(d, segs):
-                        acumulado = 0
-                        for pt1, pt2, dst in segs:
-                            if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
-                                ratio = (d - acumulado) / dst
-                                margin = 0.3
-                                if dst > margin * 2:
-                                    if ratio * dst < margin: ratio = margin / dst
-                                    elif (1 - ratio) * dst < margin: ratio = (dst - margin) / dst
-                                else: ratio = 0.5 
-                                p_x = pt1[0] + (pt2[0] - pt1[0]) * ratio
-                                p_y = pt1[1] + (pt2[1] - pt1[1]) * ratio
-                                return p_x, p_y, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
-                            acumulado += dst
-                        pt1, pt2, dst = segs[-1]
-                        return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
-
                     tomadas_pos = 0
                     tentativas = 0
                     
@@ -652,7 +651,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             if math.hypot(px - mx_ac, py - my_ac) < 0.6:
                                 perto_porta = True
                         
-                        # Salta obstáculos com um campo de força direcional
                         if perto_porta:
                             dist_atual += (0.4 * dir_step)
                             continue
@@ -703,14 +701,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 txt_py = py + uy_n * (height + 0.15)
                                 msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                         
-                        # O salto do fluxo contínuo
                         dist_atual += (passo * dir_step)
                         tomadas_pos += 1
 
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 30.0 (TOMADAS INICIANDO DO INTERRUPTOR) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 31.0 (TOMADAS INICIANDO DO INTERRUPTOR - CORRIGIDO) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1222,12 +1219,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 30.0 Ativo: Distribuição Magnética saindo do Interruptor!")
+                st.success("✅ Motor 31.0 Ativo: Lógica Corrigida!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 30.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 31.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
