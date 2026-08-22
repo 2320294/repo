@@ -292,7 +292,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             p1 = (entity.dxf.start.x, entity.dxf.start.y)
                             p2 = (entity.dxf.end.x, entity.dxf.end.y)
                             px, py = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2
-                            # Erro de sintaxe da versão 31.0 corrigido aqui:
                             portas.append({'tipo': 'LINE', 'x': px, 'y': py, 'p1': p1, 'p2': p2})
                         elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                             pts = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
@@ -604,7 +603,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if total_tomadas > 0 and comp_total > 0:
                     passo = comp_total / total_tomadas
                     
-                    # Usa a função do escopo global
                     d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
                     
                     dir_step = 1
@@ -616,7 +614,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         else:
                             dir_step = -1
                             
-                    dist_atual = d_sw + (0.02 * dir_step)
+                    # --- Alteração aplicada aqui (linha 470) ---
+                    dist_atual = d_sw + (0.10 * dir_step)
                     
                     tomadas_pos = 0
                     tentativas = 0
