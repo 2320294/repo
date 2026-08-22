@@ -405,7 +405,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
             # ===============================================
-            # TOMADAS E TUES (COM RECUO DE 10CM E ALTURA NBR 5410)
+            # TOMADAS E TUES (COM RECUO DE 15CM E ALTURA NBR 5410)
             # ===============================================
             qtd_tugs, qtd_tues = int(dados_amb.get('TUGs (Qtd)', 0)), int(dados_amb.get('Qtd TUE', 0))
             eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
@@ -414,7 +414,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if total_tomadas > 0 and comp_total > 0:
                 passo = comp_total / total_tomadas
                 d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
-                dist_atual = d_sw + 0.10 # Recuo exato de 10cm aplicado
+                dist_atual = d_sw + 0.15 # Recuo exato de 15cm aplicado
                 
                 tomadas_pos = 0
                 while tomadas_pos < total_tomadas:
