@@ -357,6 +357,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
+                # Identifica se é área úmida para altura das tomadas
+                ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
+                is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
+                
                 # ===============================================
                 # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (P/ Interruptor)
                 # ===============================================
@@ -434,12 +438,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (EMBUTIDO NA PAREDE)
+                # 2. QUADRO DE DISTRIBUIÇÃO (QDC EMBUTIDO)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
-                
-                ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
-                is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
                 
                 if nome_ambiente == qdc_formatado and not is_area_umida:
                     qdc_w, qdc_d = 0.4, 0.15
@@ -480,10 +481,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         vx, vy = best_wall['vx'], best_wall['vy']
                         nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                         
-                        # INVERTE A NORMAL PARA EMBUTIR NA PAREDE (Para Fora do Ambiente)
+                        # QDC é embutido rente a alvenaria (apontando para fora da coordenada do comodo)
                         out_nx, out_ny = -nx, -ny
                         
-                        # Desenha projetando o QDC no osso da parede
                         p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
                         p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
                         p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
@@ -498,7 +498,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) 
 
                 # ===============================================
-                # 3. TOMADAS ORTOGONAIS COM CAMPO DE FORÇA
+                # 3. TOMADAS NBR 5410 (ALTURA E LIMPEZA)
                 # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
@@ -577,14 +577,19 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
                         pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
                         
+                        # Motor 24.0: Altura de Tomadas e TUEs sem texto
                         if tomadas_pos >= qtd_tugs: 
+                            # TUE = Tomada Alta (Totalmente preenchida)
                             msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                            txt_tue = str(dados_amb.get('Equipamento TUE', 'TUE'))
-                            txt_px = px + ux_n * (height + 0.15)
-                            txt_py = py + uy_n * (height + 0.15)
-                            msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
-                        else: 
                             msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        else: 
+                            if is_area_umida:
+                                # TUG em Área Úmida = Tomada Média (Metade Preenchida)
+                                msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                            else:
+                                # TUG Normal = Tomada Baixa (Totalmente vazada)
+                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
                         dist_atual += passo
                         tomadas_pos += 1
@@ -592,7 +597,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 23.0 (QDC EMBUTIDO NA PAREDE) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 24.0 (TOMADAS MEDIAS E LIMPEZA VISUAL) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1104,12 +1109,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 23.0 Ativo: QDC Embutido e Sem Raio-X!")
+                st.success("✅ Motor 24.0 Ativo: Refinamento Visual de Tomadas Médias NBR 5410!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 23.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 24.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
