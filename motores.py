@@ -157,10 +157,6 @@ def get_ponto_perimetro(d, segs):
     pt1, pt2, dst = segs[-1]
     return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
 
-def tracar_eletroduto(msp, pt_origem, pt_destino, layer="PROJ_ELETRICA_ELETRODUTO"):
-    if layer not in msp.doc.layers: msp.doc.layers.add(name=layer, color=8) # Cinza para eletrodutos
-    msp.add_lwpolyline([pt_origem, pt_destino], dxfattribs={'layer': layer})
-
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
@@ -169,14 +165,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        # Definição exata das cores solicitadas
         camadas = {
             "PROJ_ELETRICA_LUZ": 2,          # Amarelo
             "PROJ_ELETRICA_QDC": 1,          # Vermelho
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo / Texto claro
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
-            "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_ELETRODUTO": 8    # Cinza
+            "PROJ_ELETRICA_INTERRUPTOR": 5   # Azul
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -275,7 +269,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             logical_walls = geom['logical_walls']
             
             nome_lower = nome_ambiente.lower().strip()
-            is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"])
+            # Identificação rigorosa de áreas úmidas (banheiros/WC e área de serviço/AS)
+            is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area", "wc", "as"])
             
             unique_soleiras = []
             for sol in soleiras:
@@ -314,14 +309,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         sw_x, sw_y = sw_base_x + nx * 0.12, sw_base_y + ny * 0.12
                         msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
-                        tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
                         sw_placed = True
                 if not sw_placed:
                     sw_x, sw_y = centro_x, min_y + 0.12
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + 0.2, sw_y + 0.15)})
-                    tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
+            # Posição estável exata do QDC
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome_ambiente == qdc_formatado and not is_area_umida:
                 qdc_w, qdc_d = 0.4, 0.15
@@ -338,11 +332,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     vx, vy = best_wall['vx'], best_wall['vy']
                     nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                     out_nx, out_ny = -nx, -ny
-                    p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
-                    p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
-                    p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
-                    p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
-                    pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
+                    pts_qdc = [(mx - vx * qdc_w/2, my - vy * qdc_w/2), (mx + vx * qdc_w/2, my + vy * qdc_w/2),
+                               ((mx + vx * qdc_w/2) + out_nx * qdc_d, (my + vy * qdc_w/2) + out_ny * qdc_d),
+                               ((mx - vx * qdc_w/2) + out_nx * qdc_d, (my - vy * qdc_w/2) + out_ny * qdc_d)]
                 else:
                     cx_qdc, cy_qdc = centro_x - 0.2, max_y
                     pts_qdc = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
@@ -350,7 +342,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # Posicionamento exato alinhado diretamente sobre as paredes (lógica original preservada)
+            # Posicionamento das TUEs e TUGs sem eletrodutos desenhados
             qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
             qtd_tue = int(dados_amb.get('Qtd TUE', 0))
             eq_tue_nome = str(dados_amb.get('Equipamento TUE', '-'))
@@ -358,6 +350,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             eq_lower = eq_tue_nome.lower()
             
             is_ac = "ar" in eq_lower or "condicionado" in eq_lower
+            is_chuveiro = "chuveiro" in eq_lower
             
             if is_ac and qtd_tue > 0 and logical_walls:
                 menor_parede = min(logical_walls, key=lambda w: w['length'])
@@ -366,14 +359,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = menor_parede['vx'], menor_parede['vy']
                 nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                 
-                px_ac, py_ac = px + nx * 0.05, py + ny * 0.05
+                px_ac, py_ac = px + nx * 0.15, py + ny * 0.15
                 ponto_base1, ponto_base2 = (px_ac - vx * 0.15, py_ac - vy * 0.15), (px_ac + vx * 0.15, py_ac + vy * 0.15)
                 ponto_ponta = (px_ac + nx * 0.25, py_ac + ny * 0.25)
                 
                 msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
-                tracar_eletroduto(msp, (px_ac, py_ac), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
 
             total_tomadas_geral = qtd_tugs + (qtd_tue if not is_ac else 0)
             if total_tomadas_geral > 0 and comp_total > 0:
@@ -389,13 +381,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pt_ponta = ponta1 if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]) else ponta2
                     pt_base1, pt_base2 = (px + ux_w * 0.15, py + uy_w * 0.15), (px - ux_w * 0.15, py - uy_w * 0.15)
                     
-                    # Cozinha, banheiros e área de serviço forçam tomada média (meia-lua)
-                    fill_mode = "half" if is_area_umida else "empty"
+                    # Regra exata: Banheiros (WC) e Área de Serviço (AS) ficam com tomada média (meia-lua), exceto chuveiro
+                    fill_mode = "empty"
+                    if is_area_umida and not is_chuveiro:
+                        fill_mode = "half"
+                    
                     if fill_mode == "half":
                         msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
                     msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    tracar_eletroduto(msp, (px, py), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
                     
                     dist_atual += passo
                     tomadas_pos += 1
@@ -408,14 +402,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_tue + 0.2, py_tue + 0.1)})
-                tracar_eletroduto(msp, (px_tue, py_tue), (centro_x, centro_y), layer="PROJ_ELETRICA_ELETRODUTO")
-
-        qdc_nome = local_qdc.replace(" (recomendado)", "")
-        coords_qdc = next(((geom['centro_x'], geom['centro_y']) for nome, geom in geometrias_ambientes.items() if nome == qdc_nome), None)
-        if coords_qdc:
-            for nome, geom in geometrias_ambientes.items():
-                if nome != qdc_nome:
-                    tracar_eletroduto(msp, coords_qdc, (geom['centro_x'], geom['centro_y']), layer="PROJ_ELETRICA_ELETRODUTO")
 
         tmp_out_path = tmp_in_path.replace(".dxf", "_out.dxf")
         doc.saveas(tmp_out_path)
