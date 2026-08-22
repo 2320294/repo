@@ -260,9 +260,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 'comp_total': comp_total, 'logical_walls': logical_walls
             }
 
-        # Registro de posições de interruptores para evitar sobreposição em paredes compartilhadas
-        posicoes_interruptores_registradas = []
-
+        # Mapeamento exato de soleiras para o lado oposto à dobradiça
         for nome_ambiente, geom in geometrias_ambientes.items():
             if nome_ambiente not in dict_dados: continue
             dados_amb = dict_dados[nome_ambiente]
@@ -300,34 +298,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_text(f"{dados_amb['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                 
-                sw_placed = False
-                if hinge and latch and logical_walls:
-                    best_lw = min(logical_walls, key=lambda lw: point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2']))
-                    if best_lw and point_seg_dist(latch[0], latch[1], best_lw['p1'], best_lw['p2']) < 0.5:
-                        vx, vy = best_lw['vx'], best_lw['vy']
-                        if ((latch[0] - hinge[0]) * vx + (latch[1] - hinge[1]) * vy) < 0: vx, vy = -vx, -vy
-                        sw_base_x, sw_base_y = latch[0] + vx * 0.15, latch[1] + vy * 0.15
-                        nx, ny = get_inside_normal(vx, vy, sw_base_x, sw_base_y, centro_x, centro_y)
-                        sw_x, sw_y = sw_base_x + nx * 0.0, sw_base_y + ny * 0.0  # Alinhado exatamente na parede
-                        
-                        # Evita sobreposição com outro interruptor próximo na mesma parede
-                        for p_reg in posicoes_interruptores_registradas:
-                            if math.hypot(sw_x - p_reg[0], sw_y - p_reg[1]) < 0.3:
-                                sw_y += 0.25
-                        posicoes_interruptores_registradas.append((sw_x, sw_y))
-
-                        msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + nx * 0.20, sw_y + ny * 0.20)})
-                        sw_placed = True
-                if not sw_placed:
-                    sw_x, sw_y = centro_x, min_y + 0.0
-                    for p_reg in posicoes_interruptores_registradas:
-                        if math.hypot(sw_x - p_reg[0], sw_y - p_reg[1]) < 0.3:
-                            sw_x += 0.25
-                    posicoes_interruptores_registradas.append((sw_x, sw_y))
-
-                    msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + 0.2, sw_y + 0.15)})
+                sw_x, sw_y = centro_x, min_y + 0.0
+                if latch:
+                    sw_x, sw_y = latch[0], latch[1]
+                
+                msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
+                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome_ambiente == qdc_formatado and not is_area_umida:
@@ -355,7 +331,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # Posicionamento TUE de Ar-Condicionado (Alinhado exatamente encostado na menor parede)
+            # Alinhamento correto das TUEs com triângulo voltado para dentro do ambiente
             qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
             qtd_tue = int(dados_amb.get('Qtd TUE', 0))
             eq_tue_nome = str(dados_amb.get('Equipamento TUE', '-'))
@@ -372,19 +348,19 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = menor_parede['vx'], menor_parede['vy']
                 nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                 
-                # Alinhamento direto na parede (sem offset interno excessivo)
-                px_ac, py_ac = px, py
-                ponto_base1, ponto_base2 = (px_ac - vx * 0.15, py_ac - vy * 0.15), (px_ac + vx * 0.15, py_ac + vy * 0.15)
-                ponto_ponta = (px_ac + nx * 0.25, py_ac + ny * 0.25)
+                # Base encostada na parede e ponta apontando para dentro (seguindo a normal interna)
+                ponto_base1 = (px - vx * 0.15, py - vy * 0.15)
+                ponto_base2 = (px + vx * 0.15, py + vy * 0.15)
+                ponto_ponta = (px + nx * 0.25, py + ny * 0.25)
                 
                 msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
+                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
             total_tomadas_geral = qtd_tugs + (qtd_tue if not is_ac else 0)
             if total_tomadas_geral > 0 and comp_total > 0:
                 passo = comp_total / total_tomadas_geral
-                dist_atual = 0.0  # Alinhamento exato na linha de perímetro
+                dist_atual = 0.0
                 
                 tomadas_pos = 0
                 while tomadas_pos < total_tomadas_geral:
@@ -404,9 +380,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     tomadas_pos += 1
 
             if not is_ac and qtd_tue > 0 and eq_tue_nome != "-":
-                px_tue, py_tue = centro_x, max_y - 0.0
-                ponto_base1, ponto_base2 = (px_tue - 0.15, py_tue), (px_tue + 0.15, py_tue)
-                ponto_ponta = (px_tue, py_tue + 0.25)
+                px_tue, py_tue = centro_x, max_y
+                nx_tue, ny_tue = 0, -1
+                ponto_base1 = (px_tue - 0.15, py_tue)
+                ponto_base2 = (px_tue + 0.15, py_tue)
+                ponto_ponta = (px_tue + nx_tue * 0.25, py_tue + ny_tue * 0.25)
                 
                 if is_chuveiro:
                     msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
