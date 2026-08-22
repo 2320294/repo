@@ -269,7 +269,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             logical_walls = geom['logical_walls']
             
             nome_lower = nome_ambiente.lower().strip()
-            # Identificação rigorosa de áreas úmidas (banheiros/WC e área de serviço/AS)
             is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area", "wc", "as"])
             
             unique_soleiras = []
@@ -293,12 +292,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             break
                     if hinge: break
 
-            sw_base_x, sw_base_y, sw_placed = centro_x, min_y, False
             if dados_amb['Qtd Ilum.'] > 0:
                 msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                 msp.add_text(f"{dados_amb['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                 
+                sw_placed = False
                 if hinge and latch and logical_walls:
                     best_lw = min(logical_walls, key=lambda lw: point_seg_dist(latch[0], latch[1], lw['p1'], lw['p2']))
                     if best_lw and point_seg_dist(latch[0], latch[1], best_lw['p1'], best_lw['p2']) < 0.5:
@@ -315,7 +314,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (sw_x + 0.2, sw_y + 0.15)})
 
-            # Posição estável exata do QDC
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome_ambiente == qdc_formatado and not is_area_umida:
                 qdc_w, qdc_d = 0.4, 0.15
@@ -342,7 +340,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([pts_qdc[0], pts_qdc[1], pts_qdc[2], pts_qdc[3], pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid([pts_qdc[0], pts_qdc[1], pts_qdc[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # Posicionamento das TUEs e TUGs sem eletrodutos desenhados
+            # Posicionamento rigoroso das TUEs e TUGs
             qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
             qtd_tue = int(dados_amb.get('Qtd TUE', 0))
             eq_tue_nome = str(dados_amb.get('Equipamento TUE', '-'))
@@ -352,6 +350,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             is_ac = "ar" in eq_lower or "condicionado" in eq_lower
             is_chuveiro = "chuveiro" in eq_lower
             
+            # TUE de Ar-Condicionado (Tomada alta, preenchida por completo)
             if is_ac and qtd_tue > 0 and logical_walls:
                 menor_parede = min(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = menor_parede['p1'], menor_parede['p2']
@@ -359,7 +358,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = menor_parede['vx'], menor_parede['vy']
                 nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                 
-                px_ac, py_ac = px + nx * 0.15, py + ny * 0.15
+                px_ac, py_ac = px + nx * 0.05, py + ny * 0.05
                 ponto_base1, ponto_base2 = (px_ac - vx * 0.15, py_ac - vy * 0.15), (px_ac + vx * 0.15, py_ac + vy * 0.15)
                 ponto_ponta = (px_ac + nx * 0.25, py_ac + ny * 0.25)
                 
@@ -367,11 +366,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_ac + nx * 0.35, py_ac + ny * 0.35)})
 
+            # TUGs distribuídas no perímetro
             total_tomadas_geral = qtd_tugs + (qtd_tue if not is_ac else 0)
             if total_tomadas_geral > 0 and comp_total > 0:
                 passo = comp_total / total_tomadas_geral
-                d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
-                dist_atual = d_sw + 0.10
+                dist_atual = 0.10
                 
                 tomadas_pos = 0
                 while tomadas_pos < total_tomadas_geral:
@@ -381,10 +380,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pt_ponta = ponta1 if math.hypot(centro_x - ponta1[0], centro_y - ponta1[1]) < math.hypot(centro_x - ponta2[0], centro_y - ponta2[1]) else ponta2
                     pt_base1, pt_base2 = (px + ux_w * 0.15, py + uy_w * 0.15), (px - ux_w * 0.15, py - uy_w * 0.15)
                     
-                    # Regra exata: Banheiros (WC) e Área de Serviço (AS) ficam com tomada média (meia-lua), exceto chuveiro
-                    fill_mode = "empty"
-                    if is_area_umida and not is_chuveiro:
-                        fill_mode = "half"
+                    # Áreas úmidas (WC, Cozinha, AS) recebem tomada média (meia-lua), exceto chuveiro
+                    fill_mode = "half" if is_area_umida else "empty"
                     
                     if fill_mode == "half":
                         msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
@@ -394,12 +391,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     dist_atual += passo
                     tomadas_pos += 1
 
+            # Outras TUEs (Ex: Chuveiro -> Tomada alta preenchida por completo com potência em Watts)
             if not is_ac and qtd_tue > 0 and eq_tue_nome != "-":
                 px_tue, py_tue = centro_x, max_y - 0.2
                 ponto_base1, ponto_base2 = (px_tue - 0.15, py_tue), (px_tue + 0.15, py_tue)
                 ponto_ponta = (px_tue, py_tue + 0.25)
                 
-                msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                if is_chuveiro:
+                    msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    
                 msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px_tue + 0.2, py_tue + 0.1)})
 
