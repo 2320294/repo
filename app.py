@@ -53,16 +53,15 @@ def dimensionar_cargas(nome, area, perimetro):
     is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
     is_corredor = any(x in nome_lower for x in ["hall", "corredor", "circulação", "circulacao"])
     
-    # Motor 29.0: Regras Específicas de TUGs (Incluindo Corredores/Halls)
     if is_umida:
         qtd_tugs = math.ceil(perimetro / 3.5)
         carga_tugs = (qtd_tugs * 600) if qtd_tugs <= 3 else (3 * 600) + ((qtd_tugs - 3) * 100)
     elif is_corredor:
-        comprimento_estimado = (perimetro / 2) - 1 # Desconta aprox 1m da largura
+        comprimento_estimado = (perimetro / 2) - 1
         if comprimento_estimado <= 3:
             qtd_tugs = 1
         else:
-            qtd_tugs = max(1, math.ceil(comprimento_estimado / 3)) # 1 tomada a cada 3m de comprimento
+            qtd_tugs = max(1, math.ceil(comprimento_estimado / 3))
         carga_tugs = qtd_tugs * 100
     else:
         qtd_tugs = math.ceil(perimetro / 5)
@@ -215,6 +214,23 @@ def dist_to_line(px, py, pt1, pt2):
     if den == 0: return math.hypot(px-pt1[0], py-pt1[1])
     num = abs((pt2[0]-pt1[0])*(pt1[1]-py) - (pt1[0]-px)*(pt2[1]-pt1[1]))
     return num / den
+
+def get_dist_on_perimeter(px, py, segs):
+    acumulado = 0
+    min_d = float('inf')
+    best_d = 0
+    for pt1, pt2, dst in segs:
+        l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+        if l2 == 0: continue
+        t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+        proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+        proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+        d = math.hypot(px - proj_x, py - proj_y)
+        if d < min_d:
+            min_d = d
+            best_d = acumulado + (t * dst)
+        acumulado += dst
+    return best_d
 
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
@@ -401,13 +417,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 # ===============================================
                 # 1. ILUMINAÇÃO E INTERRUPTOR ALINHADO
                 # ===============================================
+                sw_base_x, sw_base_y = centro_x, min_y
+                sw_placed = False
+                
                 if dados_amb['Qtd Ilum.'] > 0:
                     msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     potencia_luz = f"{dados_amb['Pot. Unit. Ilum (VA)']}VA"
                     msp.add_text(potencia_luz, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                     
-                    sw_placed = False
                     if hinge and latch and logical_walls:
                         best_lw = None
                         min_d = float('inf')
@@ -567,7 +585,22 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 if total_tomadas > 0 and comp_total > 0:
                     passo = comp_total / total_tomadas
-                    dist_atual = passo / 2 
+                    
+                    # MOTOR 30.0: Iniciar fluxo contínuo a partir do interruptor
+                    d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
+                    
+                    dir_step = 1
+                    if hinge and latch:
+                        px_p, py_p, _, _ = get_ponto_perimetro((d_sw + 0.15) % comp_total, segmentos_crus)
+                        px_m, py_m, _, _ = get_ponto_perimetro((d_sw - 0.15 + comp_total) % comp_total, segmentos_crus)
+                        # Queremos fluir para o lado que se afasta da porta (latch)
+                        if math.hypot(px_p - latch[0], py_p - latch[1]) > math.hypot(px_m - latch[0], py_m - latch[1]):
+                            dir_step = 1
+                        else:
+                            dir_step = -1
+                            
+                    # A primeira tomada fica exatamente a 15cm do interruptor
+                    dist_atual = d_sw + (0.15 * dir_step)
                     
                     def get_ponto_perimetro(d, segs):
                         acumulado = 0
@@ -591,7 +624,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     while tomadas_pos < total_tomadas and tentativas < total_tomadas * 5:
                         tentativas += 1
-                        d_check = dist_atual % comp_total
+                        d_check = (dist_atual + comp_total) % comp_total
                         
                         px, py, ux_w, uy_w = get_ponto_perimetro(d_check, segmentos_crus)
                         
@@ -619,8 +652,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             if math.hypot(px - mx_ac, py - my_ac) < 0.6:
                                 perto_porta = True
                         
+                        # Salta obstáculos com um campo de força direcional
                         if perto_porta:
-                            dist_atual += 0.4 
+                            dist_atual += (0.4 * dir_step)
                             continue
                         
                         n1x, n1y = -uy_w, ux_w
@@ -669,13 +703,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 txt_py = py + uy_n * (height + 0.15)
                                 msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                         
-                        dist_atual += passo
+                        # O salto do fluxo contínuo
+                        dist_atual += (passo * dir_step)
                         tomadas_pos += 1
 
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 29.0 (NBR 5410: TUGS EM CORREDORES) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 30.0 (TOMADAS INICIANDO DO INTERRUPTOR) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1187,12 +1222,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 29.0 Ativo: Regra NBR 5410 para Corredores Aplicada!")
+                st.success("✅ Motor 30.0 Ativo: Distribuição Magnética saindo do Interruptor!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 29.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 30.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
