@@ -71,7 +71,6 @@ def dimensionar_cargas(nome, area, perimetro):
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
-    
     polilinhas = []
     textos = []
     
@@ -88,21 +87,15 @@ def processar_dxf(caminho_arquivo):
                     pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                 else:
                     pontos = [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
-                if pontos:
-                    polilinhas.append(pontos)
+                if pontos: polilinhas.append(pontos)
             except Exception:
                 continue
-                
         elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
             try:
                 texto_str = entity.text if tipo == 'MTEXT' else entity.dxf.text
                 texto_str = texto_str.strip()
                 if texto_str: 
-                    textos.append({
-                        'nome': texto_str,
-                        'x': entity.dxf.insert.x,
-                        'y': entity.dxf.insert.y
-                    })
+                    textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
             except Exception:
                 continue
             
@@ -120,8 +113,7 @@ def processar_dxf(caminho_arquivo):
         area = largura * comprimento
         perimetro = (largura * 2) + (comprimento * 2)
         
-        if area < 0.5:
-            continue
+        if area < 0.5: continue
         
         nome_ambiente = None
         for t in textos:
@@ -129,8 +121,7 @@ def processar_dxf(caminho_arquivo):
                 nome_ambiente = t['nome']
                 break
                 
-        if not nome_ambiente:
-            continue
+        if not nome_ambiente: continue
             
         if nome_ambiente in ambientes_processados:
             ambientes_processados[nome_ambiente] += 1
@@ -157,7 +148,6 @@ def processar_dxf(caminho_arquivo):
             "Pot. Unit. TUE (VA)": int(cargas["Pot. Unit. TUE (VA)"]),
             "Carga TUE (VA)": int(cargas["Carga TUE (VA)"])
         })
-        
     return resultados
 
 def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
@@ -165,37 +155,27 @@ def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     n2x, n2y = vy, -vx
     d1 = math.hypot(cx - (start_x + n1x), cy - (start_y + n1y))
     d2 = math.hypot(cx - (start_x + n2x), cy - (start_y + n2y))
-    if d1 < d2: return n1x, n1y
-    else: return n2x, n2y
+    return (n1x, n1y) if d1 < d2 else (n2x, n2y)
 
 def point_seg_dist(px, py, pt1, pt2):
     l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
     if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
     t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
-    proj_x = pt1[0] + t * (pt2[0] - pt1[0])
-    proj_y = pt1[1] + t * (pt2[1] - pt1[1])
-    return math.hypot(px - proj_x, py - proj_y)
+    return math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
 
 def dist_to_line(px, py, pt1, pt2):
     den = math.hypot(pt2[0]-pt1[0], pt2[1]-pt1[1])
     if den == 0: return math.hypot(px-pt1[0], py-pt1[1])
-    num = abs((pt2[0]-pt1[0])*(pt1[1]-py) - (pt1[0]-px)*(pt2[1]-pt1[1]))
-    return num / den
+    return abs((pt2[0]-pt1[0])*(pt1[1]-py) - (pt1[0]-px)*(pt2[1]-pt1[1])) / den
 
 def get_dist_on_perimeter(px, py, segs):
-    acumulado = 0
-    min_d = float('inf')
-    best_d = 0
+    acumulado, min_d, best_d = 0, float('inf'), 0
     for pt1, pt2, dst in segs:
         l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
         if l2 == 0: continue
         t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
-        proj_x = pt1[0] + t * (pt2[0] - pt1[0])
-        proj_y = pt1[1] + t * (pt2[1] - pt1[1])
-        d = math.hypot(px - proj_x, py - proj_y)
-        if d < min_d:
-            min_d = d
-            best_d = acumulado + (t * dst)
+        d = math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
+        if d < min_d: min_d, best_d = d, acumulado + (t * dst)
         acumulado += dst
     return best_d
 
@@ -209,9 +189,7 @@ def get_ponto_perimetro(d, segs):
                 if ratio * dst < margin: ratio = margin / dst
                 elif (1 - ratio) * dst < margin: ratio = (dst - margin) / dst
             else: ratio = 0.5 
-            p_x = pt1[0] + (pt2[0] - pt1[0]) * ratio
-            p_y = pt1[1] + (pt2[1] - pt1[1]) * ratio
-            return p_x, p_y, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+            return pt1[0] + (pt2[0] - pt1[0]) * ratio, pt1[1] + (pt2[1] - pt1[1]) * ratio, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
         acumulado += dst
     pt1, pt2, dst = segs[-1]
     return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
@@ -234,10 +212,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                   "PROJ_ELETRICA_TOMADA", "PROJ_ELETRICA_INTERRUPTOR", "PROJ_ELETRICA_ELETRODUTO"]:
             if l not in doc.layers: doc.layers.add(name=l)
         
-        polilinhas = []
-        textos = []
-        portas = [] 
-        soleiras = []
+        polilinhas, textos, portas, soleiras = [], [], [], []
         
         for entity in msp:
             tipo = entity.dxftype()
@@ -292,16 +267,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 ambientes_processados[nome_ambiente] = 1
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
-            segmentos_crus = []
-            comp_total = 0
+            segmentos_crus, comp_total = [], 0
             if len(polilinha) >= 3:
                 poly_fechada = list(polilinha)
                 if poly_fechada[0] != poly_fechada[-1]: poly_fechada.append(poly_fechada[0])
                 for i in range(len(poly_fechada)-1):
                     dist = math.hypot(poly_fechada[i+1][0] - poly_fechada[i][0], poly_fechada[i+1][1] - poly_fechada[i][1])
-                    if dist > 0:
-                        segmentos_crus.append((poly_fechada[i], poly_fechada[i+1], dist))
-                        comp_total += dist
+                    if dist > 0: segmentos_crus.append((poly_fechada[i], poly_fechada[i+1], dist)); comp_total += dist
 
             logical_walls = []
             for pt1, pt2, dist in segmentos_crus:
@@ -312,8 +284,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 for lw in logical_walls:
                     if abs(lw['vx']*vx + lw['vy']*vy) > 0.98 and dist_to_line(mx, my, lw['p1'], lw['p2']) < 0.2:
                         pts = [lw['p1'], lw['p2'], pt1, pt2]
-                        max_d = 0
-                        best_p1, best_p2 = lw['p1'], lw['p2']
+                        max_d, best_p1, best_p2 = 0, lw['p1'], lw['p2']
                         for i in range(4):
                             for j in range(i+1, 4):
                                 d = math.hypot(pts[i][0]-pts[j][0], pts[i][1]-pts[j][1])
@@ -334,10 +305,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
-                nome_lower = nome_ambiente.lower().strip()
-                nome_words = nome_lower.replace('-', ' ').split()
-                is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
-                
                 hinge, latch = None, None
                 for sol in unique_soleiras:
                     for p in portas:
@@ -381,8 +348,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if total_tomadas > 0 and comp_total > 0:
                     passo = comp_total / total_tomadas
                     d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
-                    dir_step = 1
-                    dist_atual = d_sw + (0.10 * dir_step) # <-- AQUI ESTÁ O RECUO DE 10CM SOLICITADO
+                    dist_atual = d_sw + (0.10 * 1) # Recuo de 10cm aplicado
                     
                     tomadas_pos = 0
                     while tomadas_pos < total_tomadas:
@@ -395,7 +361,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         tracar_eletroduto(msp, (px, py), (centro_x, centro_y))
                         
-                        dist_atual += (passo * dir_step)
+                        dist_atual += (passo * 1)
                         tomadas_pos += 1
 
         # Backbone ligando o QDC aos centros dos demais ambientes
