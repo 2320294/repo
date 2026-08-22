@@ -75,6 +75,17 @@ def get_ponto_perimetro(d, segs):
     pt1, pt2, dst = segs[-1]
     return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
 
+def get_dist_on_perimeter(px, py, segs):
+    acumulado, min_d, best_d = 0, float('inf'), 0
+    for pt1, pt2, dst in segs:
+        l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+        if l2 == 0: continue
+        t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+        d = math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
+        if d < min_d: min_d, best_d = d, acumulado + (t * dst)
+        acumulado += dst
+    return best_d
+
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
@@ -103,24 +114,41 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             geom = {'centro_x': (min_x+max_x)/2, 'centro_y': (min_y+max_y)/2, 'segs': [], 'walls': []}
             poly = list(polilinha); poly.append(poly[0])
+            comp_total = 0
             for i in range(len(poly)-1):
                 dst = math.hypot(poly[i+1][0]-poly[i][0], poly[i+1][1]-poly[i][1])
-                if dst > 0.1: geom['segs'].append((poly[i], poly[i+1], dst)); geom['walls'].append({'p1': poly[i], 'p2': poly[i+1], 'length': dst, 'vx': (poly[i+1][0]-poly[i][0])/dst, 'vy': (poly[i+1][1]-poly[i][1])/dst})
+                if dst > 0.1:
+                    geom['segs'].append((poly[i], poly[i+1], dst))
+                    geom['walls'].append({'p1': poly[i], 'p2': poly[i+1], 'length': dst})
+                    comp_total += dst
 
-            hinge, latch = None, None
+            sol_encontrada = None
             for sol in soleiras:
                 mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                if (min_x-0.5)<=mx<=(max_x+0.5) and (min_y-0.5)<=my<=(max_y+0.5): hinge, latch = sol['p1'], sol['p2']
-            
-            # Interruptor
+                if (min_x-0.5)<=mx<=(max_x+0.5) and (min_y-0.5)<=my<=(max_y+0.5):
+                    sol_encontrada = sol
+                    break
+
+            # Interruptor com recuo exato de 0,15m da soleira
+            sw_x, sw_y = geom['centro_x'], min_y + 0.15
             if dict_dados[nome]['Qtd Ilum.'] > 0:
                 msp.add_circle(center=(geom['centro_x'], geom['centro_y']), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                 msp.add_text(f"{dict_dados[nome]['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (geom['centro_x'] + 0.3, geom['centro_y'] - 0.07)})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (geom['centro_x'] + 0.3, geom['centro_y'] + 0.15)})
                 
-                sw_x, sw_y = (hinge[0]+latch[0])/2, (hinge[1]+latch[1])/2 if hinge else (geom['centro_x'], min_y+0.15)
-                for p in posicoes_sw:
-                    if math.hypot(sw_x - p[0], sw_y - p[1]) < 0.2: sw_y += 0.2
+                if sol_encontrada:
+                    p1, p2 = sol_encontrada['p1'], sol_encontrada['p2']
+                    # Direção e afastamento de 0.15m das pontas da soleira
+                    v_x, v_y = p2[0] - p1[0], p2[1] - p1[1]
+                    dist_sol = math.hypot(v_x, v_y)
+                    if dist_sol > 0:
+                        dir_x, dir_y = v_x / dist_sol, v_y / dist_sol
+                        sw_x, sw_y = p1[0] + dir_x * 0.15, p1[1] + dir_y * 0.15
+                        for p in posicoes_sw:
+                            if math.hypot(sw_x - p[0], sw_y - p[1]) < 0.2:
+                                sw_x = p2[0] - dir_x * 0.15
+                                sw_y = p2[1] - dir_y * 0.15
+                                break
                 posicoes_sw.append((sw_x, sw_y))
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x+0.15, sw_y+0.15)})
@@ -140,14 +168,22 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline([(px-0.1, py), (px+0.1, py), (px, py+0.25), (px-0.1, py)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                 msp.add_text(f"{dict_dados[nome]['Pot. Unit. TUE (VA)']}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'insert': (px+0.2, py+0.1)})
             
-            # TUGs perímetro
-            for i in range(qtd_tugs + (qtd_tue if not is_ac else 0)):
-                px, py, _, _ = get_ponto_perimetro((geom['comp_total']/(qtd_tugs+qtd_tue)) * i, geom['segs'])
-                is_umida = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
-                msp.add_lwpolyline([(px-0.1, py), (px+0.1, py), (px, py+0.2), (px-0.1, py)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                if is_umida: msp.add_solid([(px-0.1, py), (px+0.1, py), (px, py+0.2)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+            # TUGs distribuídas iniciando próximas ao interruptor
+            total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
+            if total_tugs > 0 and comp_total > 0:
+                passo = comp_total / total_tugs
+                # Inicia a distribuição logo após a posição do interruptor no perímetro
+                d_inicial = get_dist_on_perimeter(sw_x, sw_y, geom['segs']) if sw_x else 0.15
+                
+                for i in range(total_tugs):
+                    d_atual = (d_inicial + (passo * i)) % comp_total
+                    px, py, _, _ = get_ponto_perimetro(d_atual, geom['segs'])
+                    is_umida = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
+                    msp.add_lwpolyline([(px-0.1, py), (px+0.1, py), (px, py+0.2), (px-0.1, py)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    if is_umida:
+                        msp.add_solid([(px-0.1, py), (px+0.1, py), (px, py+0.2)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
 
-        doc.saveas(tmp_in_path); 
+        doc.saveas(tmp_in_path)
         with open(tmp_in_path, "rb") as f: out_bytes = f.read()
         return out_bytes
     finally: os.remove(tmp_in_path)
