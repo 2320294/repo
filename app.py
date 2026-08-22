@@ -50,7 +50,6 @@ def dimensionar_cargas(nome, area, perimetro):
     nome_lower = nome.lower().strip()
     nome_words = nome_lower.replace('-', ' ').split()
     
-    # Motor 25.0: Reconhecimento exato de palavras curtas (evita que "AS" ative na "SALA")
     is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
     
     if is_umida:
@@ -362,13 +361,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
-                # Identifica se é área úmida para altura das tomadas com lógica estrita de palavras
+                # Inteligência de Área Úmida (Usada para definir a Altura das Tomadas depois)
                 nome_lower = nome_ambiente.lower().strip()
                 nome_words = nome_lower.replace('-', ' ').split()
                 is_area_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
                 
                 # ===============================================
-                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (P/ Interruptor)
+                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA
                 # ===============================================
                 hinge = None
                 latch = None
@@ -582,15 +581,38 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         pt_base1 = (px + ux_w * base_half, py + uy_w * base_half)
                         pt_base2 = (px - ux_w * base_half, py - uy_w * base_half)
                         
-                        if tomadas_pos >= qtd_tugs: 
-                            msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                            msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                        else: 
+                        is_tue = tomadas_pos >= qtd_tugs
+                        fill_mode = "empty"
+                        
+                        # Motor 26.0: Lógica NBR 5410 de Altura de Tomadas
+                        if is_tue:
+                            eq_nome = str(dados_amb.get('Equipamento TUE', '')).lower()
+                            if "chuveiro" in eq_nome or "ar-condicionado" in eq_nome:
+                                fill_mode = "full" # Tomada Alta (2,00m)
+                            elif is_area_umida:
+                                fill_mode = "half" # Tomada Média (1,20m) na bancada
+                        else:
                             if is_area_umida:
-                                msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                            else:
-                                msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                                fill_mode = "half" # TUGs em áreas molhadas geralmente são médias
+                                
+                        # Desenho das hachuras (Pintura do Triângulo)
+                        if fill_mode == "full":
+                            msp.add_solid([pt_base1, pt_base2, pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        elif fill_mode == "half":
+                            # (px, py) é exatamente o centro da base do triângulo! Metade pintada!
+                            msp.add_solid([pt_base1, (px, py), pt_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                            
+                        # O contorno é sempre desenhado
+                        msp.add_lwpolyline([pt_base1, pt_base2, pt_ponta, pt_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        
+                        # TUEs escrevem apenas a POTÊNCIA em W/VA, sem o nome do equipamento!
+                        if is_tue:
+                            pot_tue_val = int(dados_amb.get('Pot. Unit. TUE (VA)', 0))
+                            if pot_tue_val > 0:
+                                txt_tue = f"{pot_tue_val}W" # Pode ser formatado como W ou VA
+                                txt_px = px + ux_n * (height + 0.15)
+                                txt_py = py + uy_n * (height + 0.15)
+                                msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                         
                         dist_atual += passo
                         tomadas_pos += 1
@@ -598,7 +620,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 25.0 (AS EXATA = TOMADAS MEDIAS ATIVAS) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 26.0 (ALTURA DE TOMADAS E POTENCIA NAS TUES) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1110,12 +1132,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 25.0 Ativo: AS Reconhecida para Tomadas Médias e Máquina de Lavar!")
+                st.success("✅ Motor 26.0 Ativo: Altura de Tomadas NBR e Potência Limpa nas TUEs!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 25.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 26.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
