@@ -213,8 +213,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_LUZ": 2,          # Amarelo
             "PROJ_ELETRICA_QDC": 1,          # Vermelho
             "PROJ_ELETRICA_TEXTO": 7,        # Branco / Cinza claro
-            "PROJ_ELETRICA_TOMADA": 6,       # Magenta
-            "PROJ_ELETRICA_INTERRUPTOR": 4,  # Ciano
+            "PROJ_ELETRICA_TOMADA": 4,       # ciano
+            "PROJ_ELETRICA_INTERRUPTOR": 5,  # azul
             "PROJ_ELETRICA_ELETRODUTO": 3    # Verde
         }
         for nome_l, cor_l in camadas.items():
