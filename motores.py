@@ -5,65 +5,143 @@ import os
 
 def dimensionar_cargas(nome, area, perimetro):
     if area <= 0 or perimetro <= 0:
-        return {"Qtd Ilum.": 0, "Pot. Unit. Ilum (VA)": 0, "Carga Ilum. (VA)": 0, "TUGs (Qtd)": 0, "Pot. Unit. TUG (VA)": 0, "Carga TUGs (VA)": 0, "Equipamento TUE": "-", "Qtd TUE": 0, "Pot. Unit. TUE (VA)": 0, "Carga TUE (VA)": 0}
+        return {
+            "Qtd Ilum.": 0, "Pot. Unit. Ilum (VA)": 0, "Carga Ilum. (VA)": 0, 
+            "TUGs (Qtd)": 0, "Pot. Unit. TUG (VA)": 0, "Carga TUGs (VA)": 0, 
+            "Equipamento TUE": "-", "Qtd TUE": 0, "Pot. Unit. TUE (VA)": 0, "Carga TUE (VA)": 0
+        }
 
     qtd_ilum = 1 if area <= 10 else math.ceil(area / 10)
     carga_ilum = 100 if area <= 6 else 100 + (((area - 6) // 4) * 60)
+    
     nome_lower = nome.lower().strip()
-    is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area", "wc", "as"])
+    nome_words = nome_lower.replace('-', ' ').split()
+    
+    is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
+    is_corredor = any(x in nome_lower for x in ["hall", "corredor", "circulação", "circulacao"])
     
     if is_umida:
         qtd_tugs = math.ceil(perimetro / 3.5)
         carga_tugs = (qtd_tugs * 600) if qtd_tugs <= 3 else (3 * 600) + ((qtd_tugs - 3) * 100)
+    elif is_corredor:
+        comprimento_estimado = (perimetro / 2) - 1
+        if comprimento_estimado <= 3:
+            qtd_tugs = 1
+        else:
+            qtd_tugs = max(1, math.ceil(comprimento_estimado / 3))
+        carga_tugs = qtd_tugs * 100
     else:
         qtd_tugs = math.ceil(perimetro / 5)
         carga_tugs = qtd_tugs * 100
         
-    tue_nome, qtd_tue, carga_tue = "-", 0, 0
-    if any(x in nome_lower for x in ["banh", "sanit", "wc", "bwc"]):
-        tue_nome, qtd_tue, carga_tue = "Chuveiro Elétrico", 1, 5500
-    elif "coz" in nome_lower:
-        tue_nome, qtd_tue, carga_tue = "Micro-ondas/Forno", 1, 2000
+    tue_nome = "-"
+    qtd_tue = 0
+    carga_tue = 0
+    
+    if any(x in nome_lower for x in ["banh", "sanit"]) or any(w in nome_words for w in ["wc", "bwc"]):
+        tue_nome = "Chuveiro Elétrico"
+        qtd_tue = 1
+        carga_tue = 5500
+    elif any(x in nome_lower for x in ["coz"]):
+        tue_nome = "Micro-ondas/Forno"
+        qtd_tue = 1
+        carga_tue = 2000
     elif any(x in nome_lower for x in ["quarto", "dorm", "suite"]):
-        tue_nome, qtd_tue, carga_tue = "Ar-Condicionado", 1, 1200
-    elif any(x in nome_lower for x in ["serv", "lavand", "as"]):
-        tue_nome, qtd_tue, carga_tue = "Máquina de Lavar", 1, 1000
+        tue_nome = "Ar-Condicionado"
+        qtd_tue = 1
+        carga_tue = 1200
+    elif any(x in nome_lower for x in ["serv", "lavand"]) or "as" in nome_words:
+        tue_nome = "Máquina de Lavar"
+        qtd_tue = 1
+        carga_tue = 1000
 
     return {
-        "Qtd Ilum.": qtd_ilum, "Pot. Unit. Ilum (VA)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
-        "Carga Ilum. (VA)": carga_ilum, "TUGs (Qtd)": qtd_tugs, "Pot. Unit. TUG (VA)": round(carga_tugs / qtd_tugs) if qtd_tugs > 0 else 0,
-        "Carga TUGs (VA)": carga_tugs, "Equipamento TUE": tue_nome, "Qtd TUE": qtd_tue,
-        "Pot. Unit. TUE (VA)": round(carga_tue / qtd_tue) if qtd_tue > 0 else 0, "Carga TUE (VA)": carga_tue
+        "Qtd Ilum.": qtd_ilum,
+        "Pot. Unit. Ilum (VA)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
+        "Carga Ilum. (VA)": carga_ilum, 
+        "TUGs (Qtd)": qtd_tugs, 
+        "Pot. Unit. TUG (VA)": round(carga_tugs / qtd_tugs) if qtd_tugs > 0 else 0,
+        "Carga TUGs (VA)": carga_tugs,
+        "Equipamento TUE": tue_nome,
+        "Qtd TUE": qtd_tue,
+        "Pot. Unit. TUE (VA)": round(carga_tue / qtd_tue) if qtd_tue > 0 else 0,
+        "Carga TUE (VA)": carga_tue
     }
 
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
     polilinhas, textos = [], []
+    
     for entity in msp:
         tipo = entity.dxftype()
         if hasattr(entity.dxf, 'layer'):
             layer = str(entity.dxf.layer).upper().strip()
-            if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
-                pts = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
-                if pts: polilinhas.append(pts)
-            elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
-                txt = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
-                if txt: textos.append({'nome': txt, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+        else:
+            continue
+            
+        if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
+            try:
+                pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+                if pontos: polilinhas.append(pontos)
+            except: pass
+        elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
+            try:
+                texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
+                if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+            except: pass
+            
     resultados, ambientes_processados = [], {}
     for polilinha in polilinhas:
         xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
-        min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
         area = (max_x - min_x) * (max_y - min_y)
+        perimetro = ((max_x - min_x) * 2) + ((max_y - min_y) * 2)
         if area < 0.5: continue
-        nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "Ambiente")
-        if nome in ambientes_processados:
-            ambientes_processados[nome] += 1
-            nome = f"{nome} {ambientes_processados[nome]}"
-        else: ambientes_processados[nome] = 1
-        cargas = dimensionar_cargas(nome, area, (max_x - min_x)*2 + (max_y - min_y)*2)
-        resultados.append({**{"Ambiente": nome, "Centro_X": (min_x+max_x)/2, "Centro_Y": (min_y+max_y)/2, "Área (m²)": area, "Perímetro (m)": (max_x - min_x)*2 + (max_y - min_y)*2}, **cargas})
+        
+        nome_ambiente = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
+        if not nome_ambiente: continue
+        
+        if nome_ambiente in ambientes_processados:
+            ambientes_processados[nome_ambiente] += 1
+            nome_ambiente = f"{nome_ambiente} {ambientes_processados[nome_ambiente]}"
+        else: ambientes_processados[nome_ambiente] = 1
+                
+        cargas = dimensionar_cargas(nome_ambiente, area, perimetro)
+        resultados.append({
+            "Ambiente": nome_ambiente, "Centro_X": (min_x+max_x)/2, "Centro_Y": (min_y+max_y)/2, "Área (m²)": area, "Perímetro (m)": perimetro,
+            "Qtd Ilum.": int(cargas["Qtd Ilum."]), "Pot. Unit. Ilum (VA)": int(cargas["Pot. Unit. Ilum (VA)"]), "Carga Ilum. (VA)": int(cargas["Carga Ilum. (VA)"]),
+            "TUGs (Qtd)": int(cargas["TUGs (Qtd)"]), "Pot. Unit. TUG (VA)": int(cargas["Pot. Unit. TUG (VA)"]), "Carga TUGs (VA)": int(cargas["Carga TUGs (VA)"]),
+            "Equipamento TUE": cargas["Equipamento TUE"], "Qtd TUE": int(cargas["Qtd TUE"]), "Pot. Unit. TUE (VA)": int(cargas["Pot. Unit. TUE (VA)"]), "Carga TUE (VA)": int(cargas["Carga TUE (VA)"])
+        })
     return resultados
+
+def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
+    n1x, n1y, n2x, n2y = -vy, vx, vy, -vx
+    return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2y)) else (n2x, n2y)
+
+def point_seg_dist(px, py, pt1, pt2):
+    l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+    if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
+    t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+    return math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
+
+def dist_to_line(px, py, pt1, pt2):
+    den = math.hypot(pt2[0]-pt1[0], pt2[1]-pt1[1])
+    if den == 0: return math.hypot(px-pt1[0], py-pt1[1])
+    return abs((pt2[0]-pt1[0])*(pt1[1]-py) - (pt1[0]-px)*(pt2[1]-pt1[1])) / den
+
+def get_dist_on_perimeter(px, py, segs):
+    acumulado, min_d, best_d = 0, float('inf'), 0
+    for pt1, pt2, dst in segs:
+        l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+        if l2 == 0: continue
+        t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+        d = math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
+        if d < min_d: min_d, best_d = d, acumulado + (t * dst)
+        acumulado += dst
+    return best_d
 
 def get_ponto_perimetro(d, segs):
     acumulado = 0
@@ -82,12 +160,22 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     try:
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
-        camadas = {"PROJ_ELETRICA_LUZ": 2, "PROJ_ELETRICA_QDC": 1, "PROJ_ELETRICA_TEXTO": 2, "PROJ_ELETRICA_TOMADA": 4, "PROJ_ELETRICA_INTERRUPTOR": 5}
-        for n, c in camadas.items(): doc.layers.add(name=n, color=c) if n not in doc.layers else setattr(doc.layers.get(n), 'color', c)
+        
+        camadas = {
+            "PROJ_ELETRICA_LUZ": 2,          # Amarelo
+            "PROJ_ELETRICA_QDC": 1,          # Vermelho
+            "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
+            "PROJ_ELETRICA_TOMADA": 4,       # Ciano
+            "PROJ_ELETRICA_INTERRUPTOR": 5   # Azul
+        }
+        for nome_l, cor_l in camadas.items():
+            if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
+            else: doc.layers.get(nome_l).color = cor_l
         
         polilinhas, textos, portas, soleiras = [], [], [], []
         for entity in msp:
-            tipo = entity.dxftype(); layer = str(entity.dxf.layer).upper().strip() if hasattr(entity.dxf, 'layer') else ""
+            tipo = entity.dxftype()
+            layer = str(entity.dxf.layer).upper().strip() if hasattr(entity.dxf, 'layer') else ""
             if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
                 polilinhas.append([(p[0], p[1]) for p in entity.get_points(format='xy')])
             elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
@@ -104,61 +192,91 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     if pts: soleiras.append({'p1': pts[0], 'p2': pts[-1]})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
-        posicoes_sw = []
+        
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
             nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
             if not nome or nome not in dict_dados: continue
             
-            geom = {'centro_x': (min_x+max_x)/2, 'centro_y': (min_y+max_y)/2, 'segs': [], 'walls': []}
+            centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            segmentos_crus, comp_total = [], 0
             poly = list(polilinha); poly.append(poly[0])
-            comp_total = 0
             for i in range(len(poly)-1):
                 dst = math.hypot(poly[i+1][0]-poly[i][0], poly[i+1][1]-poly[i][1])
                 if dst > 0.1:
-                    geom['segs'].append((poly[i], poly[i+1], dst))
-                    geom['walls'].append({'p1': poly[i], 'p2': poly[i+1], 'length': dst})
+                    segmentos_crus.append((poly[i], poly[i+1], dst))
                     comp_total += dst
 
-            sol_encontrada = None
-            for sol in soleiras:
-                mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                if (min_x-0.5)<=mx<=(max_x+0.5) and (min_y-0.5)<=my<=(max_y+0.5):
-                    sol_encontrada = sol
-                    break
+            logical_walls = []
+            for pt1, pt2, dst in segmentos_crus:
+                mx, my = (pt1[0]+pt2[0])/2, (pt1[1]+pt2[1])/2
+                vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
+                logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
+            unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
+
+            # 1. Iluminação e Interruptor
             if dict_dados[nome]['Qtd Ilum.'] > 0:
-                msp.add_circle(center=(geom['centro_x'], geom['centro_y']), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
-                msp.add_text(f"{dict_dados[nome]['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (geom['centro_x'] + 0.3, geom['centro_y'] - 0.07)})
-                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (geom['centro_x'] + 0.3, geom['centro_y'] + 0.15)})
+                msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
+                msp.add_text(f"{dict_dados[nome]['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
+                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
                 
-                sw_x, sw_y = (sol_encontrada['p1'][0]+sol_encontrada['p2'][0])/2, (sol_encontrada['p1'][1]+sol_encontrada['p2'][1])/2 if sol_encontrada else (geom['centro_x'], min_y+0.15)
-                for p in posicoes_sw:
-                    if math.hypot(sw_x - p[0], sw_y - p[1]) < 0.2: sw_y += 0.2
-                posicoes_sw.append((sw_x, sw_y))
+                sw_x, sw_y = centro_x, min_y + 0.15
+                if unique_soleiras:
+                    sol = unique_soleiras[0]
+                    sw_x, sw_y = (sol['p1'][0] + sol['p2'][0])/2, (sol['p1'][1] + sol['p2'][1])/2
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x+0.15, sw_y+0.15)})
+                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            if nome == local_qdc.replace(" (recomendado)", "") and "coz" not in nome.lower() and "banh" not in nome.lower():
-                pts = [(geom['centro_x']-0.2, max_y), (geom['centro_x']+0.2, max_y), (geom['centro_x']+0.2, max_y+0.15), (geom['centro_x']-0.2, max_y+0.15)]
-                msp.add_lwpolyline(pts+[pts[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}); msp.add_solid(pts[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+            # 2. QDC
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
+            if nome == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
+                qdc_w, qdc_d = 0.4, 0.15
+                cx_qdc, cy_qdc = centro_x - 0.2, max_y
+                pts_qdc = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
+                msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            is_ac = "ar" in str(dict_dados[nome]['Equipamento TUE']).lower()
-            if is_ac and int(dict_dados[nome]['Qtd TUE']) > 0 and geom['walls']:
-                p = min(geom['walls'], key=lambda w: w['length'])
-                px, py = (p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2
-                msp.add_solid([(px-0.1, py), (px+0.1, py), (px, py+0.25)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_lwpolyline([(px-0.1, py), (px+0.1, py), (px, py+0.25), (px-0.1, py)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_text(f"{int(dict_dados[nome]['Pot. Unit. TUE (VA)'])}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'insert': (px+0.2, py+0.1)})
+            # 3. TUE (Ar-Condicionado na menor parede, triângulo para dentro)
+            qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
+            qtd_tue = int(dict_dados[nome]['Qtd TUE'])
+            eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
+            pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
+            is_ac = "ar" in eq_lower if 'eq_lower' in locals() else "ar" in eq_tue_nome.lower()
             
-            for i in range(int(dict_dados[nome]['TUGs (Qtd)']) + (int(dict_dados[nome]['Qtd TUE']) if not is_ac else 0)):
-                px, py, _, _ = get_ponto_perimetro((comp_total/(int(dict_dados[nome]['TUGs (Qtd)']) + int(dict_dados[nome]['Qtd TUE']))) * i, geom['segs'])
-                msp.add_lwpolyline([(px-0.1, py), (px+0.1, py), (px, py+0.2), (px-0.1, py)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                if any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
-                    msp.add_solid([(px-0.1, py), (px+0.1, py), (px, py+0.2)], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+            if is_ac and qtd_tue > 0 and logical_walls:
+                menor_parede = min(logical_walls, key=lambda w: w['length'])
+                pt1, pt2 = menor_parede['p1'], menor_parede['p2']
+                px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                vx, vy = menor_parede['vx'], menor_parede['vy']
+                nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
+                
+                ponto_base1 = (px - vx * 0.15, py - vy * 0.15)
+                ponto_base2 = (px + vx * 0.15, py + vy * 0.15)
+                ponto_ponta = (px + nx * 0.25, py + ny * 0.25)
+                
+                msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-        doc.saveas(tmp_in_path); 
+            # 4. TUGs e demais Tomadas no Perímetro
+            total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
+            if total_tugs > 0 and comp_total > 0:
+                passo = comp_total / total_tugs
+                is_umida = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
+                
+                for i in range(total_tugs):
+                    px, py, _, _ = get_ponto_perimetro(passo * i, segmentos_crus)
+                    ponto_b1 = (px - 0.1, py)
+                    ponto_b2 = (px + 0.1, py)
+                    ponto_pt = (px, py + 0.2)
+                    
+                    msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    if is_umida:
+                        msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+
+        doc.saveas(tmp_in_path)
         with open(tmp_in_path, "rb") as f: out_bytes = f.read()
         return out_bytes
     finally: os.remove(tmp_in_path)
