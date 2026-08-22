@@ -217,7 +217,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         if "PROJ_ELETRICA_TEXTO" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         if "PROJ_ELETRICA_TOMADA" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4)
         if "PROJ_ELETRICA_INTERRUPTOR" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_INTERRUPTOR", color=5) 
-        if "PROJ_ELETRICA_DEBUG" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_DEBUG", color=6) # Camada de RX Raio-X
+        if "PROJ_ELETRICA_DEBUG" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_DEBUG", color=6)
         
         polilinhas = []
         textos = []
@@ -340,33 +340,52 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if not merged:
                     logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dist, 'vx': vx, 'vy': vy})
 
+            # ===============================================
+            # LIMPEZA E DEDUPLICAÇÃO DE SOLEIRAS (O Filtro Mágico)
+            # ===============================================
+            unique_soleiras = []
+            for sol in soleiras:
+                mx = (sol['p1'][0] + sol['p2'][0]) / 2
+                my = (sol['p1'][1] + sol['p2'][1]) / 2
+                # Considera apenas soleiras dentro/perto deste ambiente
+                if (min_x - 0.5) <= mx <= (max_x + 0.5) and (min_y - 0.5) <= my <= (max_y + 0.5):
+                    is_dup = False
+                    # Verifica se já registramos uma soleira no mesmo lugar (raio de 30cm)
+                    for usol in unique_soleiras:
+                        umx = (usol['p1'][0] + usol['p2'][0]) / 2
+                        umy = (usol['p1'][1] + usol['p2'][1]) / 2
+                        if math.hypot(mx - umx, my - umy) < 0.3: 
+                            is_dup = True
+                            break
+                    if not is_dup:
+                        unique_soleiras.append(sol)
+
             if nome_ambiente in dict_dados:
                 dados_amb = dict_dados[nome_ambiente]
                 
                 # ===============================================
-                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (Interruptor)
+                # LÓGICA DE DETECÇÃO DE MAÇANETA E DOBRADIÇA (P/ Interruptor)
                 # ===============================================
                 hinge = None
                 latch = None
                 
-                for sol in soleiras:
+                for sol in unique_soleiras:
                     mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                    if (min_x - 0.5) <= mx <= (max_x + 0.5) and (min_y - 0.5) <= my <= (max_y + 0.5):
-                        for p in portas:
-                            if p['tipo'] == 'LINE':
-                                d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
-                                d12 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
-                                d21 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
-                                d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
-                                
-                                min_d = min(d11, d12, d21, d22)
-                                if min_d < 0.2: 
-                                    if min_d == d11: hinge, latch = sol['p1'], sol['p2']
-                                    elif min_d == d12: hinge, latch = sol['p2'], sol['p1']
-                                    elif min_d == d21: hinge, latch = sol['p1'], sol['p2']
-                                    elif min_d == d22: hinge, latch = sol['p2'], sol['p1']
-                                    break
-                        if hinge: break
+                    for p in portas:
+                        if p['tipo'] == 'LINE':
+                            d11 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
+                            d12 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
+                            d21 = math.hypot(p['p2'][0] - sol['p1'][0], p['p2'][1] - sol['p1'][1])
+                            d22 = math.hypot(p['p2'][0] - sol['p2'][0], p['p2'][1] - sol['p2'][1])
+                            
+                            min_d = min(d11, d12, d21, d22)
+                            if min_d < 0.2: 
+                                if min_d == d11: hinge, latch = sol['p1'], sol['p2']
+                                elif min_d == d12: hinge, latch = sol['p2'], sol['p1']
+                                elif min_d == d21: hinge, latch = sol['p1'], sol['p2']
+                                elif min_d == d22: hinge, latch = sol['p2'], sol['p1']
+                                break
+                    if hinge: break
 
                 # ===============================================
                 # 1. ILUMINAÇÃO E INTERRUPTOR ALINHADO
@@ -421,7 +440,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 21.0 - RAIO-X DEBUG)
+                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 22.0)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 
@@ -432,28 +451,34 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     qdc_w, qdc_d = 0.4, 0.15
                     
                     if logical_walls:
-                        # Conta as soleiras para TODAS as paredes lógicas
+                        # Zera a contagem de todas as paredes lógicas
                         for lw in logical_walls:
-                            sol_count = 0
-                            for sol in soleiras:
-                                mx_sol = (sol['p1'][0] + sol['p2'][0]) / 2
-                                my_sol = (sol['p1'][1] + sol['p2'][1]) / 2
-                                d_mid = point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2'])
-                                d_p1 = point_seg_dist(sol['p1'][0], sol['p1'][1], lw['p1'], lw['p2'])
-                                d_p2 = point_seg_dist(sol['p2'][0], sol['p2'][1], lw['p1'], lw['p2'])
-                                if min(d_mid, d_p1, d_p2) < 0.5: 
-                                    sol_count += 1
-                            lw['soleiras'] = sol_count
+                            lw['soleiras'] = 0
+
+                        # Associa CADA soleira limpa à sua parede mais próxima (garante contagem exata)
+                        for sol in unique_soleiras:
+                            mx_sol = (sol['p1'][0] + sol['p2'][0]) / 2
+                            my_sol = (sol['p1'][1] + sol['p2'][1]) / 2
+                            
+                            min_d = float('inf')
+                            closest_lw = None
+                            for lw in logical_walls:
+                                d = point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2'])
+                                if d < min_d:
+                                    min_d = d
+                                    closest_lw = lw
+                            
+                            # Se a parede mais próxima estiver perto o bastante, contabiliza a soleira nela
+                            if closest_lw and min_d < 0.6:
+                                closest_lw['soleiras'] += 1
 
                         # ==========================================
                         # MODO RAIO-X: DESENHA O DIAGNÓSTICO NA TELA
                         # ==========================================
                         for i, lw in enumerate(logical_walls):
                             mx_dbg, my_dbg = (lw['p1'][0] + lw['p2'][0]) / 2, (lw['p1'][1] + lw['p2'][1]) / 2
-                            # Escreve o tamanho e a qtd de soleiras que o Python enxergou
                             debug_txt = f"L:{lw['length']:.2f}m|Sol:{lw['soleiras']}"
                             msp.add_text(debug_txt, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'height': 0.15, 'color': 6, 'insert': (mx_dbg, my_dbg)})
-                            # Desenha uma linha mais grossa para destacar a parede que ele achou
                             msp.add_line(lw['p1'], lw['p2'], dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
                             msp.add_circle(center=(mx_dbg, my_dbg), radius=0.05, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
                         # ==========================================
@@ -461,15 +486,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         # Ordena as paredes pelo tamanho (da maior para a menor)
                         sorted_walls = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
                         
-                        # Pega apenas as DUAS maiores paredes do ambiente
+                        # Pega as DUAS maiores paredes e descarta o resto
                         top_2_walls = sorted_walls[:2]
                         
-                        # Compara as duas e escolhe a que tem MENOS soleiras
+                        # A regra de ouro: Escolhe a parede (entre as duas maiores) que tiver o MENOR numero de soleiras
                         if len(top_2_walls) == 2:
                             if top_2_walls[1]['soleiras'] < top_2_walls[0]['soleiras']:
                                 best_wall = top_2_walls[1]
                             else:
-                                best_wall = top_2_walls[0]
+                                best_wall = top_2_walls[0] # Se empatar, a de índice 0 (que é mais comprida) vence
                         else:
                             best_wall = top_2_walls[0]
                                     
@@ -537,7 +562,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 perto_porta = True
                                 
                         if not perto_porta:
-                            for sol in soleiras:
+                            # Avalia usando apenas as soleiras únicas e limpas
+                            for sol in unique_soleiras:
                                 mx, my = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
                                 if math.hypot(px - mx, py - my) < 0.6:
                                     perto_porta = True
@@ -586,9 +612,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         tomadas_pos += 1
 
         # ===============================================
-        # MARCA D'ÁGUA PARA VOCÊ CONFIRMAR A VERSÃO 
+        # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 21.0 (MODO RAIO-X DEBUG) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 22.0 (RAIO-X: CONTAGEM ESTRITA DE SOLEIRAS) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1100,12 +1126,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 21.0 Ativo: Modo Raio-X Debug!")
+                st.success("✅ Motor 22.0 Ativo: Modo Raio-X com Contagem de Soleiras Pura e Exata!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 21.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 22.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
