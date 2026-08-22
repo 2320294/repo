@@ -501,10 +501,64 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_solid([pts[0], pts[1], pts[2]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'}) 
 
                 # ===============================================
-                # 3. TOMADAS NBR 5410 (ALTURA E LIMPEZA)
+                # 3. TOMADAS ORTOGONAIS E TUEs (MOTOR 28.0 - AR INDEPENDENTE)
                 # ===============================================
                 qtd_tugs = int(dados_amb.get('TUGs (Qtd)', 0))
                 qtd_tues = int(dados_amb.get('Qtd TUE', 0))
+                
+                # MOTOR 28.0: Verifica se tem Ar Condicionado neste comodo
+                eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
+                is_ac = ("ar" in eq_nome_limpo and "cond" in eq_nome_limpo) and qtd_tues > 0
+                
+                ac_placed = False
+                mx_ac, my_ac = 0, 0
+                
+                # Se tiver Ar-Condicionado, saca ele da vala comum e joga na menor parede
+                if is_ac and logical_walls:
+                    # Pega as DUAS MENORES paredes do ambiente
+                    sorted_walls_asc = sorted(logical_walls, key=lambda w: w['length'])
+                    top_2_smallest = sorted_walls_asc[:2]
+                    
+                    def count_sols_for_wall(lw):
+                        cnt = 0
+                        for sol in unique_soleiras:
+                            mx_s = (sol['p1'][0] + sol['p2'][0]) / 2
+                            my_s = (sol['p1'][1] + sol['p2'][1]) / 2
+                            if point_seg_dist(mx_s, my_s, lw['p1'], lw['p2']) < 0.5: cnt += 1
+                        return cnt
+                        
+                    best_ac_wall = top_2_smallest[0]
+                    if len(top_2_smallest) == 2:
+                        # Escolhe a menor parede que tenha MENOS portas atrapalhando
+                        if count_sols_for_wall(top_2_smallest[1]) < count_sols_for_wall(top_2_smallest[0]):
+                            best_ac_wall = top_2_smallest[1]
+                            
+                    pt1_ac, pt2_ac = best_ac_wall['p1'], best_ac_wall['p2']
+                    mx_ac, my_ac = (pt1_ac[0] + pt2_ac[0]) / 2, (pt1_ac[1] + pt2_ac[1]) / 2
+                    vx_ac, vy_ac = best_ac_wall['vx'], best_ac_wall['vy']
+                    nx_ac, ny_ac = get_inside_normal(vx_ac, vy_ac, mx_ac, my_ac, centro_x, centro_y)
+                    
+                    base_half = 0.15
+                    height = 0.25
+                    
+                    pt_base1_ac = (mx_ac + vx_ac * base_half, my_ac + vy_ac * base_half)
+                    pt_base2_ac = (mx_ac - vx_ac * base_half, my_ac - vy_ac * base_half)
+                    pt_ponta_ac = (mx_ac + nx_ac * height, my_ac + ny_ac * height)
+                    
+                    # Desenha Tomada Alta (Totalmente Pintada) centralizada na parede pequena
+                    msp.add_solid([pt_base1_ac, pt_base2_ac, pt_ponta_ac], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    msp.add_lwpolyline([pt_base1_ac, pt_base2_ac, pt_ponta_ac, pt_base1_ac], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    
+                    pot_tue_val = int(dados_amb.get('Pot. Unit. TUE (VA)', 0))
+                    if pot_tue_val > 0:
+                        txt_tue = f"{pot_tue_val}W" 
+                        txt_px = mx_ac + nx_ac * (height + 0.15)
+                        txt_py = my_ac + ny_ac * (height + 0.15)
+                        msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
+                    
+                    ac_placed = True
+                    qtd_tues -= 1 # Desconta o ar da contagem generica do perimetro
+                
                 total_tomadas = qtd_tugs + qtd_tues
                 
                 if total_tomadas > 0 and comp_total > 0:
@@ -556,6 +610,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             mx_b, my_b = (pt1_b[0] + pt2_b[0]) / 2, (pt1_b[1] + pt2_b[1]) / 2
                             if math.hypot(px - mx_b, py - my_b) < 0.5:
                                 perto_porta = True
+                                
+                        # Campo de Força Magnético para evitar sobrepor TUG no Ar-Condicionado que foi pré-posicionado
+                        if ac_placed and not perto_porta:
+                            if math.hypot(px - mx_ac, py - my_ac) < 0.6:
+                                perto_porta = True
                         
                         if perto_porta:
                             dist_atual += 0.4 
@@ -583,9 +642,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         is_tue = tomadas_pos >= qtd_tugs
                         fill_mode = "empty"
                         
-                        # Motor 27.0: Correção anti-falha para strings como "Ar Condicionado" vs "Ar-Condicionado"
                         if is_tue:
-                            eq_nome_limpo = str(dados_amb.get('Equipamento TUE', '')).lower().replace("-", " ")
                             if "chuveiro" in eq_nome_limpo or ("ar" in eq_nome_limpo and "cond" in eq_nome_limpo):
                                 fill_mode = "full" 
                             elif is_area_umida:
@@ -615,7 +672,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 27.0 (CORRECAO HIFEN DO AR CONDICIONADO) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 28.0 (AR-CONDICIONADO NAS MENORES PAREDES) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1127,12 +1184,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 27.0 Ativo: Altura de Tomadas e Textos da TUE Corrigidos!")
+                st.success("✅ Motor 28.0 Ativo: Ar-Condicionado Centralizado nas Menores Paredes!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 27.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 28.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
