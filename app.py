@@ -249,11 +249,6 @@ def get_ponto_perimetro(d, segs):
     pt1, pt2, dst = segs[-1]
     return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
 
-def tracar_eletroduto(msp, pt_origem, pt_destino, layer="PROJ_ELETRICA_ELETRODUTO"):
-    if layer not in msp.doc.layers:
-        msp.doc.layers.add(name=layer, color=7)
-    msp.add_lwpolyline([pt_origem, pt_destino], dxfattribs={'layer': layer})
-
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
         tmp_in.write(dxf_bytes)
@@ -268,7 +263,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         if "PROJ_ELETRICA_TEXTO" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_TEXTO", color=3)
         if "PROJ_ELETRICA_TOMADA" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_TOMADA", color=4)
         if "PROJ_ELETRICA_INTERRUPTOR" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_INTERRUPTOR", color=5) 
-        if "PROJ_ELETRICA_ELETRODUTO" not in doc.layers: doc.layers.add(name="PROJ_ELETRICA_ELETRODUTO", color=7)
         
         polilinhas = []
         textos = []
@@ -483,7 +477,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             
                             msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                             msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
-                            tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y))
                             sw_placed = True
                             
                     if not sw_placed:
@@ -491,7 +484,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         txt_pos_sw = (sw_x + 0.2, sw_y + 0.15)
                         msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
-                        tracar_eletroduto(msp, (sw_x, sw_y), (centro_x, centro_y))
 
                 # ===============================================
                 # 2. QUADRO DE DISTRIBUIÇÃO (QDC EMBUTIDO)
@@ -603,7 +595,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         txt_py = my_ac + ny_ac * (height + 0.15)
                         msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
                     
-                    tracar_eletroduto(msp, (mx_ac, my_ac), (centro_x, centro_y))
                     ac_placed = True
                     qtd_tues -= 1 
                 
@@ -612,7 +603,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if total_tomadas > 0 and comp_total > 0:
                     passo = comp_total / total_tomadas
                     
-                    # Usa a função do escopo global
                     d_sw = get_dist_on_perimeter(sw_base_x, sw_base_y, segmentos_crus)
                     
                     dir_step = 1
@@ -624,6 +614,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         else:
                             dir_step = -1
                             
+                    # --- Alteração aplicada aqui (linha 470) ---
                     dist_atual = d_sw + (0.10 * dir_step)
                     
                     tomadas_pos = 0
@@ -708,8 +699,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                 txt_px = px + ux_n * (height + 0.15)
                                 txt_py = py + uy_n * (height + 0.15)
                                 msp.add_text(txt_tue, dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.1, 'color': 4, 'insert': (txt_px, txt_py)})
-                        
-                        tracar_eletroduto(msp, (px, py), (centro_x, centro_y))
                         
                         dist_atual += (passo * dir_step)
                         tomadas_pos += 1
