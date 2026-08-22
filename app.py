@@ -322,8 +322,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 merged = False
                 for lw in logical_walls:
                     dot = abs(lw['vx']*vx + lw['vy']*vy)
-                    if dot > 0.98: # Paralelas
-                        if dist_to_line(mx, my, lw['p1'], lw['p2']) < 0.2: # Colineares (Mesma parede física)
+                    if dot > 0.98: # Linhas Paralelas
+                        if dist_to_line(mx, my, lw['p1'], lw['p2']) < 0.2: # Mesma parede
                             pts = [lw['p1'], lw['p2'], pt1, pt2]
                             max_d = 0
                             best_p1, best_p2 = lw['p1'], lw['p2']
@@ -335,8 +335,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                                         best_p1, best_p2 = pts[i], pts[j]
                             lw['p1'], lw['p2'] = best_p1, best_p2
                             lw['length'] = max_d
-                            lw['vx'] = (best_p2[0]-best_p1[0])/max_d
-                            lw['vy'] = (best_p2[1]-best_p1[1])/max_d
+                            lw['vx'] = (best_p2[0]-best_p1[0])/max_d if max_d>0 else lw['vx']
+                            lw['vy'] = (best_p2[1]-best_p1[1])/max_d if max_d>0 else lw['vy']
                             merged = True
                             break
                 if not merged:
@@ -427,11 +427,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': txt_pos_sw})
 
                 # ===============================================
-                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 18.0)
+                # 2. QUADRO DE DISTRIBUIÇÃO (MOTOR 19.0 - PRIORIDADE MÁXIMA)
                 # ===============================================
                 qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
                 
-                # Trava NBR 5410
                 ambientes_umidos = ["coz", "serv", "banh", "lav", "wc", "bwc", "sanit", "área de serviço", "area de servico"]
                 is_area_umida = any(x in nome_ambiente.lower() for x in ambientes_umidos)
                 
@@ -439,38 +438,27 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     qdc_w, qdc_d = 0.4, 0.15
                     
                     if logical_walls:
-                        best_wall = None
-                        min_soleiras = float('inf')
-                        max_len = -1
+                        # Passo 1: Descarta as paredes pequenas e inúteis
+                        max_len_in_room = max(w['length'] for w in logical_walls)
+                        major_walls = [w for w in logical_walls if w['length'] >= max_len_in_room * 0.5]
                         
-                        # Analisa todas as paredes Lógicas do ambiente
-                        for lw in logical_walls:
-                            pt1, pt2, dist = lw['p1'], lw['p2'], lw['length']
-                            if dist < 0.5: continue # Ignora bonecas de parede
-                            
-                            soleiras_on_wall = 0
+                        # Passo 2: Conta soleiras APENAS para as paredes principais
+                        for lw in major_walls:
+                            sol_count = 0
                             for sol in soleiras:
-                                m_x = (sol['p1'][0] + sol['p2'][0]) / 2
-                                m_y = (sol['p1'][1] + sol['p2'][1]) / 2
-                                d_mid = point_seg_dist(m_x, m_y, pt1, pt2)
-                                d_p1 = point_seg_dist(sol['p1'][0], sol['p1'][1], pt1, pt2)
-                                d_p2 = point_seg_dist(sol['p2'][0], sol['p2'][1], pt1, pt2)
+                                mx_sol = (sol['p1'][0] + sol['p2'][0]) / 2
+                                my_sol = (sol['p1'][1] + sol['p2'][1]) / 2
                                 
-                                if min(d_mid, d_p1, d_p2) < 0.4: 
-                                    soleiras_on_wall += 1
+                                d_mid = point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2'])
+                                d_p1 = point_seg_dist(sol['p1'][0], sol['p1'][1], lw['p1'], lw['p2'])
+                                d_p2 = point_seg_dist(sol['p2'][0], sol['p2'][1], lw['p1'], lw['p2'])
+                                
+                                if min(d_mid, d_p1, d_p2) < 0.5: 
+                                    sol_count += 1
+                            lw['soleiras'] = sol_count
                             
-                            # A mágica do Motor 18.0: Menos portas ganha. Se empatar, a maior parede ganha!
-                            if soleiras_on_wall < min_soleiras:
-                                min_soleiras = soleiras_on_wall
-                                max_len = dist
-                                best_wall = lw
-                            elif soleiras_on_wall == min_soleiras:
-                                if dist > max_len:
-                                    max_len = dist
-                                    best_wall = lw
-                                    
-                        if not best_wall:
-                            best_wall = max(logical_walls, key=lambda w: w['length'])
+                        # Passo 3: Escolhe a parede com MENOR NUMERO DE SOLEIRAS. Em caso de empate, A MAIOR.
+                        best_wall = sorted(major_walls, key=lambda w: (w['soleiras'], -w['length']))[0]
                                     
                         pt1, pt2, dist = best_wall['p1'], best_wall['p2'], best_wall['length']
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
@@ -587,7 +575,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         # ===============================================
         # MARCA D'ÁGUA (GARANTIA DE ATUALIZAÇÃO DA NUVEM)
         # ===============================================
-        msp.add_text(">>> MOTOR 18.0 (QDC NA MAIOR C/ MENOS SOLEIRAS + INTERRUPTOR SNAP) <<<", dxfattribs={
+        msp.add_text(">>> MOTOR 19.0 (QDC NA MAIOR PAREDE PRIORITARIA) <<<", dxfattribs={
             'layer': 'PROJ_ELETRICA_TEXTO', 
             'height': 0.8, 
             'color': 1, 
@@ -1099,12 +1087,12 @@ def sistema_principal():
 
             with col_exp3:
                 st.write("**Projeto Unifilar (DXF)**")
-                st.success("✅ Motor 18.0 Ativo: Lógica Definitiva de Paredes e Soleiras!")
+                st.success("✅ Motor 19.0 Ativo: Filtro de Paredes Principais!")
                 arquivo_base = st.file_uploader("Reenvie a planta base:", type=["dxf"], key="dxf_unifilar")
                 
                 if arquivo_base is not None:
                     dados_dxf_atualizados = df_editado.to_dict(orient='records')
-                    if st.button("🎨 Gerar CAD (Motor 18.0)", type="primary", use_container_width=True):
+                    if st.button("🎨 Gerar CAD (Motor 19.0)", type="primary", use_container_width=True):
                         with st.spinner("Desenhando projeto no CAD..."):
                             try:
                                 dxf_desenhado = gerar_cad_unifilar(arquivo_base.getvalue(), dados_dxf_atualizados, local_qdc_selecionado)
