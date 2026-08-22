@@ -1,5 +1,6 @@
 from motores import gerar_cad_unifilar, processar_dxf, dimensionar_cargas
 
+
 import streamlit as st
 from supabase import create_client, Client
 import ezdxf
