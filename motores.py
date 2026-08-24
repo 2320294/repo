@@ -234,24 +234,68 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC: REGRA EXATA DE SELEÇÃO DA PAREDE MAIS LONGA SEM PORTAS OU COM O MAIOR TRECHO LIVRE SÓLIDO
+            # 2. QDC: BUSCA A MAIOR PAREDE, MAPEIA O TRECHO SÓLIDO (DO CANTO ATÉ A SOLEIRA) E CENTRALIZA NELE
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             nome_atual_upper = nome.strip().upper()
             
             if nome_atual_upper == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    # Filtra estritamente paredes horizontais (topo ou base do ambiente) que costumam ser as maiores e livres
-                    paredes_horizontais = [w for w in logical_walls if abs(w['vy']) < 0.2]
-                    candidatas = paredes_horizontais if paredes_horizontais else logical_walls
+                    # Ordena as paredes da maior para a menor
+                    paredes_ordenadas = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
                     
-                    # Seleciona a maior parede horizontal
-                    melhor_parede = max(candidatas, key=lambda w: w['length'])
-                    pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
+                    melhor_ponto_central = None
+                    melhor_parede = None
+                    maior_trecho_livre = 0
                     
-                    # Centraliza exatamente no meio da maior parede horizontal do ambiente (longe das soleiras laterais)
-                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                    vx, vy = melhor_parede['vx'], melhor_parede['vy']
+                    for lw in paredes_ordenadas:
+                        pt1, pt2 = lw['p1'], lw['p2']
+                        wall_len = lw['length']
+                        vx, vy = lw['vx'], lw['vy']
+                        
+                        # Identifica quais soleiras interceptam esta parede e suas posições relativas (0.0 a 1.0)
+                        soleiras_na_parede = []
+                        for sol in unique_soleiras:
+                            s_mid_x, s_mid_y = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
+                            if point_seg_dist(s_mid_x, s_mid_y, pt1, pt2) < 0.6:
+                                l2 = wall_len**2
+                                if l2 > 0:
+                                    t1 = ((sol['p1'][0] - pt1[0])*vx + (sol['p1'][1] - pt1[1])*vy) / wall_len
+                                    t2 = ((sol['p2'][0] - pt1[0])*vx + (sol['p2'][1] - pt1[1])*vy) / wall_len
+                                    # Margem de segurança de 0.3m para folga da soleira/porta
+                                    margem = 0.3 / wall_len
+                                    soleiras_na_parede.append((min(t1, t2) - margem, max(t1, t2) + margem))
+                        
+                        soleiras_na_parede.sort(key=lambda x: x[0])
+                        
+                        # Determina os trechos livres disponíveis nesta parede
+                        cursor = 0.0
+                        trechos = []
+                        for inf, sup in soleiras_na_parede:
+                            if inf > cursor:
+                                trechos.append((cursor, inf))
+                            cursor = max(cursor, sup)
+                        if cursor < 1.0:
+                            trechos.append((cursor, 1.0))
+                            
+                        # Procura o maior trecho sólido nesta parede onde o QDC caiba confortavelmente
+                        for inf, sup in trechos:
+                            tamanho_trecho = (sup - inf) * wall_len
+                            if tamanho_trecho > maior_trecho_livre and tamanho_trecho >= qdc_w:
+                                maior_trecho_livre = tamanho_trecho
+                                t_centro = (inf + sup) / 2
+                                melhor_ponto_central = (pt1[0] + t_centro * vx * wall_len, pt1[1] + t_centro * vy * wall_len)
+                                melhor_parede = lw
+                    
+                    if melhor_ponto_central and melhor_parede:
+                        mx, my = melhor_ponto_central
+                        vx, vy = melhor_parede['vx'], melhor_parede['vy']
+                    else:
+                        # Fallback estrito para a maior parede usando a metade inicial se houver restrição excessiva
+                        melhor_parede = paredes_ordenadas[0]
+                        pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
+                        mx, my = (pt1[0] + pt1[0] + (pt2[0]-pt1[0])*0.3) / 2, (pt1[1] + pt1[1] + (pt2[1]-pt1[1])*0.3) / 2
+                        vx, vy = melhor_parede['vx'], melhor_parede['vy']
                     
                     nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                     out_nx, out_ny = -nx, -ny
