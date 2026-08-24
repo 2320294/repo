@@ -234,35 +234,68 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC EXCLUSIVO: Filtra estritamente as paredes livres de soleiras e vãos de porta
+            # 2. QDC COM REGRA AVANÇADA DE DESCONTO DE VÃOS DE PORTA E MAIOR TRECHO LIVRE
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    # Filtra apenas paredes que NÃO contêm soleiras próximas
-                    paredes_livres = []
+                    melhor_ponto_central = None
+                    melhor_vx, melhor_vy = 0, 0
+                    maior_trecho_livre = 0
+                    
+                    # Analisa todas as paredes para encontrar o melhor segmento livre de soleiras
                     for lw in logical_walls:
-                        tem_soleira = False
+                        pt1, pt2 = lw['p1'], lw['p2']
+                        vx, vy = lw['vx'], lw['vy']
+                        
+                        # Coleta todas as soleiras que interceptam esta parede
+                        soleiras_na_parede = []
                         for sol in unique_soleiras:
                             mx_sol, my_sol = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                            if point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']) < 0.7:
-                                tem_soleira = True
-                                break
-                        if not tem_soleira:
-                            paredes_livres.append(lw)
+                            if point_seg_dist(mx_sol, my_sol, pt1, pt2) < 0.5:
+                                # Projeção da soleira na parede (valor escalar t)
+                                l2 = (pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2
+                                if l2 > 0:
+                                    t = ((mx_sol - pt1[0])*(pt2[0]-pt1[0]) + (my_sol - pt1[1])*(pt2[1]-pt1[1])) / l2
+                                    soleiras_na_parede.append(max(0.0, min(1.0, t)))
+                        
+                        soleiras_na_parede.sort()
+                        
+                        # Se não há soleiras nesta parede, o trecho livre é a parede inteira
+                        if not soleiras_na_parede:
+                            trechos = [(0.0, 1.0)]
+                        else:
+                            # Adiciona os limites das extremidades (0 e 1) e fatia os vãos
+                            cortes = [0.0] + soleiras_na_parede + [1.0]
+                            trechos = []
+                            for i in range(len(cortes) - 1):
+                                # Ignora vãos de porta muito pequenos (menor que o QDC + margem)
+                                if (cortes[i+1] - cortes[i]) * lw['length'] >= (qdc_w + 0.3):
+                                    trechos.append((cortes[i], cortes[i+1]))
+                        
+                        # Encontra o maior trecho livre contínuo nesta parede
+                        for inicio, fim in trechos:
+                            comprimento_trecho = (fim - inicio) * lw['length']
+                            if comprimento_trecho > maior_trecho_livre and comprimento_trecho >= qdc_w:
+                                maior_trecho_livre = comprimento_trecho
+                                # Ponto central exato do trecho livre descontado os vãos
+                                t_centro = (inicio + fim) / 2
+                                melhor_ponto_central = (pt1[0] + t_centro * (pt2[0] - pt1[0]), pt1[1] + t_centro * (pt2[1] - pt1[1]))
+                                melhor_vx, melhor_vy = vx, vy
                     
-                    # Se houver paredes livres, pega a maior entre elas; senão, usa qualquer uma das maiores
-                    candidatas = paredes_livres if paredes_livres else logical_walls
-                    melhor_parede = max(candidatas, key=lambda w: w['length'])
+                    # Fallback de segurança se nenhuma parede atender perfeitamente
+                    if not melhor_ponto_central:
+                        melhor_parede = max(logical_walls, key=lambda w: w['length'])
+                        pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
+                        melhor_ponto_central = ((pt1[0]+pt2[0])/2, (pt1[1]+pt2[1])/2)
+                        melhor_vx, melhor_vy = melhor_parede['vx'], melhor_parede['vy']
                     
-                    pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
-                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                    vx, vy = melhor_parede['vx'], melhor_parede['vy']
-                    nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                    mx, my = melhor_ponto_central
+                    nx, ny = get_inside_normal(melhor_vx, melhor_vy, mx, my, centro_x, centro_y)
                     out_nx, out_ny = -nx, -ny
                     
-                    p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
-                    p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                    p1_qdc = (mx - melhor_vx * qdc_w/2, my - melhor_vy * qdc_w/2)
+                    p2_qdc = (mx + melhor_vx * qdc_w/2, my + melhor_vy * qdc_w/2)
                     p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
                     p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
                     pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
