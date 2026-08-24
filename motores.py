@@ -151,7 +151,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico do trecho correto
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Direto da Soleira ao Canto
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -205,36 +205,34 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- DIAGNÓSTICO SEGURO DE TRECHO DA SOLEIRA ATÉ O CANTO ---
+            # --- DIAGNÓSTICO DIRETO DA SOLEIRA ATÉ O CANTO DA PAREDE ---
             if logical_walls:
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = maior_parede['p1'], maior_parede['p2']
                 
                 soleira_na_parede = None
-                ponto_hinge = None
-                
                 for sol in unique_soleiras:
                     s_mid = ((sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2)
                     if point_seg_dist(s_mid[0], s_mid[1], pt1, pt2) < 0.6:
                         soleira_na_parede = sol
-                        min_d = float('inf')
-                        p_mais_proxima = None
-                        for p in portas:
-                            d1 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
-                            d2 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
-                            if min(d1, d2) < min_d:
-                                min_d = min(d1, d2)
-                                p_mais_proxima = sol['p1'] if d1 < d2 else sol['p2']
-                        ponto_hinge = p_mais_proxima or sol['p1']
                         break
                 
-                if soleira_na_parede is not None and ponto_hinge is not None:
-                    d_pt1 = math.hypot(ponto_hinge[0] - pt1[0], ponto_hinge[1] - pt1[1])
-                    d_pt2 = math.hypot(ponto_hinge[0] - pt2[0], ponto_hinge[1] - pt2[1])
-                    ponto_canto = pt1 if d_pt1 < d_pt2 else pt2
+                if soleira_na_parede is not None:
+                    # Pega as duas pontas da soleira (s_p1 e s_p2)
+                    s_p1, s_p2 = soleira_na_parede['p1'], soleira_na_parede['p2']
                     
-                    s_mid = ((soleira_na_parede['p1'][0]+soleira_na_parede['p2'][0])/2, (soleira_na_parede['p1'][1]+soleira_na_parede['p2'][1])/2)
-                    msp.add_line(s_mid, ponto_canto, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    # Para cada ponta da soleira, mede a distância até as pontas da parede (pt1 e pt2)
+                    # Vamos dividir a soleira nas duas direções e traçar a linha magenta para o canto mais próximo de cada lado
+                    mid_sol = ((s_p1[0]+s_p2[0])/2, (s_p1[1]+s_p2[1])/2)
+                    
+                    # Escolhe a extremidade da soleira mais próxima de pt1 para ir até pt1, e a outra para pt2
+                    d1_pt1 = math.hypot(s_p1[0] - pt1[0], s_p1[1] - pt1[1])
+                    d2_pt1 = math.hypot(s_p2[0] - pt1[0], s_p2[1] - pt1[1])
+                    
+                    ponto_ligacao = s_p1 if d1_pt1 < d2_pt1 else s_p2
+                    canto_alvo = pt1 if math.hypot(ponto_ligacao[0] - pt1[0], ponto_ligacao[1] - pt1[1]) < math.hypot(ponto_ligacao[0] - pt2[0], ponto_ligacao[1] - pt2[1]) else pt2
+                    
+                    msp.add_line(ponto_ligacao, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
                 else:
                     msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
             # ----------------------------------------------------------
