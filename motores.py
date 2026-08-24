@@ -151,7 +151,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico baseado em IA_PORTAS
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Ortogonal Perfeito
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -160,11 +160,21 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         polilinhas, textos, portas = [], [], []
         for entity in msp:
             tipo = entity.dxftype()
-            layer = str(entity.dxf.layer).upper().strip() if hasattr(entity.dxf, 'layer') else ""
+            if hasattr(entity.dxf, 'layer'):
+                layer = str(entity.dxf.layer).upper().strip()
+            else:
+                continue
+                
             if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
-                polilinhas.append([(p[0], p[1]) for p in entity.get_points(format='xy')])
+                try:
+                    pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+                    if pontos: polilinhas.append(pontos)
+                except: pass
             elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
-                textos.append({'nome': (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip(), 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+                try:
+                    texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
+                    if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+                except: pass
             elif layer == 'IA_PORTAS':
                 if tipo == 'LINE': portas.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
@@ -198,13 +208,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
                 logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
-            # Mapeia portas do ambiente usando IA_PORTAS
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- DIAGNÓSTICO USANDO IA_PORTAS ---
+            # --- DIAGNÓSTICO COM PROJEÇÃO ORTOGONAL PERFEITA ---
             if logical_walls:
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = maior_parede['p1'], maior_parede['p2']
+                
+                # Identifica se a parede é predominantemente vertical ou horizontal
+                is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
                 
                 porta_na_parede = None
                 ponto_porta_na_parede = None
@@ -218,11 +230,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         break
                 
                 if porta_na_parede is not None and ponto_porta_na_parede is not None:
-                    d_canto1 = math.hypot(ponto_porta_na_parede[0] - pt1[0], ponto_porta_na_parede[1] - pt1[1])
-                    d_canto2 = math.hypot(ponto_porta_na_parede[0] - pt2[0], ponto_porta_na_parede[1] - pt2[1])
-                    canto_alvo = pt1 if d_canto1 < d_canto2 else pt2
+                    # Encontra o canto da parede estritamente ortogonal (mesmo X se vertical, mesmo Y se horizontal)
+                    if is_vertical:
+                        # Mantém o X da parede e usa o Y da extremidade da porta para alinhar perfeitamente no eixo vertical
+                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[1] - ponto_porta_na_parede[1]))
+                        ponto_projetado = (pt1[0], ponto_porta_na_parede[1])
+                    else:
+                        # Mantém o Y da parede e usa o X da extremidade da porta para alinhar no eixo horizontal
+                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[0] - ponto_porta_na_parede[0]))
+                        ponto_projetado = (ponto_porta_na_parede[0], pt1[1])
                     
-                    msp.add_line(ponto_porta_na_parede, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    # Desenha a linha perfeitamente ortogonal unindo a porta até o canto da parede
+                    msp.add_line(ponto_projetado, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
                 else:
                     msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
             # ----------------------------------------------------
