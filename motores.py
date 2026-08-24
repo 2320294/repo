@@ -213,7 +213,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição dos pontos de luz e posicionamento inteligente do Interruptor
+            # 1. Distribuição de Luz e Interruptor Inteligente (Lado oposto à dobradiça, a 10cm, tangenciando a parede para dentro)
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
                 pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
@@ -236,35 +236,27 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-                    # POSICIONAMENTO INTELIGENTE DO INTERRUPTOR (10cm do lado oposto à dobradiça / maçaneta)
+                    # POSICIONAMENTO DO INTERRUPTOR
                     sw_x, sw_y = centro_x, min_y + 0.15
                     if unique_portas and logical_walls:
-                        # Pega a porta principal do ambiente
                         p_porta = unique_portas[0]
                         mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
                         mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
                         
-                        # Identifica a parede mais próxima da porta para achar a orientação
                         parede_porta = min(logical_walls, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
-                        
-                        # Determina qual extremidade da porta está a dobradiça e qual está a maçaneta (lado oposto)
-                        # Assumimos que a ponta mais distante do centro da parede ou a extremidade da linha de porta define o lado oposto
-                        d_p1_pt1 = math.hypot(p_porta['p1'][0] - parede_porta['p1'][0], p_porta['p1'][1] - parede_porta['p1'][1])
-                        d_p2_pt1 = math.hypot(p_porta['p2'][0] - parede_porta['p1'][0], p_porta['p2'][1] - parede_porta['p1'][1])
-                        
-                        # O lado oposto à dobradiça fica a 10cm (0.10m) da soleira em direção ao miolo da parede livre
-                        ponto_dobradica = p_porta['p1'] if d_p1_pt1 < d_p2_pt1 else p_porta['p2']
-                        ponto_mecanismo = p_porta['p2'] if d_p1_pt1 < d_p2_pt1 else p_porta['p1']
-                        
-                        # Vetor de direção da parede para afastar 10cm da soleira tangenciando
                         w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
-                        
-                        # Direção para dentro do ambiente
                         nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, centro_x, centro_y)
                         
-                        # Posiciona o interruptor a 0.10m da soleira na direção do lado oposto à dobradiça, tangenciando a parede
-                        sw_x = ponto_mecanismo[0] + (w_vx * 0.10 if (ponto_mecanismo[0] - ponto_dobradica[0]) >= 0 else -w_vx * 0.10) + (nx * 0.15)
-                        sw_y = ponto_mecanismo[1] + (w_vy * 0.10 if (ponto_mecanismo[1] - ponto_dobradica[1]) >= 0 else -w_vy * 0.10) + (ny * 0.15)
+                        # Identifica a dobradiça (ponto mais próximo do batente/canto) e o lado oposto (maçaneta)
+                        d1 = math.hypot(p_porta['p1'][0] - parede_porta['p1'][0], p_porta['p1'][1] - parede_porta['p1'][1])
+                        d2 = math.hypot(p_porta['p2'][0] - parede_porta['p1'][0], p_porta['p2'][1] - parede_porta['p1'][1])
+                        
+                        # Definimos a soleira/centro da porta como base e deslocamos 0.10m para o lado oposto à dobradiça
+                        s_x, s_y = mid_porta_x, mid_porta_y
+                        
+                        # Afasta 0.10m da soleira e tangencia exatamente a parede por dentro usando o vetor normal (nx, ny) com raio do círculo (0.12)
+                        sw_x = s_x + (w_vx * 0.15 if d1 < d2 else -w_vx * 0.15) + (nx * 0.12)
+                        sw_y = s_y + (w_vy * 0.15 if d1 < d2 else -w_vy * 0.15) + (ny * 0.12)
 
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
@@ -355,7 +347,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            # 3. TUE (Ar-Condicionado na menor parede, triângulo para dentro)
+            # 3. TUE e 4. TUGs
             if nome in dict_dados:
                 qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
                 qtd_tue = int(dict_dados[nome]['Qtd TUE'])
@@ -378,7 +370,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-                # 4. TUGs e demais Tomadas no Perímetro
                 total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
                 if total_tugs > 0 and comp_total > 0:
                     passo = comp_total / total_tugs
