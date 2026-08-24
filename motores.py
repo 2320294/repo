@@ -204,7 +204,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição dos pontos de luz (Mantendo perfeito)
+            # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
             pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
             
@@ -234,34 +234,27 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC INTELIGENTE: ANALISA AS 2 MAIORES PAREDES E DESCONTA AS SOLEIRAS/VÃOS DE PORTA
+            # 2. QDC EXCLUSIVO: Filtra estritamente as paredes livres de soleiras e vãos de porta
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    # Ordena as paredes da maior para a menor para pegar as 2 maiores
-                    paredes_ordenadas = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
-                    
-                    melhor_parede = None
-                    mx, my, vx, vy = 0, 0, 0, 0
-                    
-                    # Testa as maiores paredes até encontrar uma que esteja livre de soleiras/vãos de porta
-                    for parede in paredes_ordenadas:
-                        pt1, pt2 = parede['p1'], parede['p2']
-                        livre = True
+                    # Filtra apenas paredes que NÃO contêm soleiras próximas
+                    paredes_livres = []
+                    for lw in logical_walls:
+                        tem_soleira = False
                         for sol in unique_soleiras:
-                            # Se houver proximidade entre a soleira e o meio desta parede, ela possui vão de porta
-                            if point_seg_dist((sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2, pt1, pt2) < 0.6:
-                                livre = False
+                            mx_sol, my_sol = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
+                            if point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']) < 0.7:
+                                tem_soleira = True
                                 break
-                        if livre:
-                            melhor_parede = parede
-                            break
+                        if not tem_soleira:
+                            paredes_livres.append(lw)
                     
-                    # Se todas as maiores tiverem portas, usa a maior de todas por segurança
-                    if not melhor_parede:
-                        melhor_parede = paredes_ordenadas[0]
-                        
+                    # Se houver paredes livres, pega a maior entre elas; senão, usa qualquer uma das maiores
+                    candidatas = paredes_livres if paredes_livres else logical_walls
+                    melhor_parede = max(candidatas, key=lambda w: w['length'])
+                    
                     pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
                     mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                     vx, vy = melhor_parede['vx'], melhor_parede['vy']
