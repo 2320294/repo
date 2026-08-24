@@ -151,7 +151,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Ortogonal Perfeito
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Ortogonal Restrito aos Elegíveis
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -210,12 +210,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- DIAGNÓSTICO COM PROJEÇÃO ORTOGONAL PERFEITA ---
-            if logical_walls:
+            # --- VERIFICAÇÃO DE ELEGIBILIDADE DO QDC ---
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
+            nome_atual_upper = nome.strip().upper()
+            is_elegivel_qdc = (nome_atual_upper == qdc_formatado) and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
+
+            # --- DIAGNÓSTICO ORTOGONAL APLICADO APENAS AO AMBIENTE ELEGÍVEL ---
+            if is_elegivel_qdc and logical_walls:
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = maior_parede['p1'], maior_parede['p2']
                 
-                # Identifica se a parede é predominantemente vertical ou horizontal
                 is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
                 
                 porta_na_parede = None
@@ -230,21 +234,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         break
                 
                 if porta_na_parede is not None and ponto_porta_na_parede is not None:
-                    # Encontra o canto da parede estritamente ortogonal (mesmo X se vertical, mesmo Y se horizontal)
                     if is_vertical:
-                        # Mantém o X da parede e usa o Y da extremidade da porta para alinhar perfeitamente no eixo vertical
                         canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[1] - ponto_porta_na_parede[1]))
                         ponto_projetado = (pt1[0], ponto_porta_na_parede[1])
                     else:
-                        # Mantém o Y da parede e usa o X da extremidade da porta para alinhar no eixo horizontal
                         canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[0] - ponto_porta_na_parede[0]))
                         ponto_projetado = (ponto_porta_na_parede[0], pt1[1])
                     
-                    # Desenha a linha perfeitamente ortogonal unindo a porta até o canto da parede
                     msp.add_line(ponto_projetado, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
                 else:
                     msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            # ----------------------------------------------------
+            # ------------------------------------------------------------------
 
             # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
