@@ -147,11 +147,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         
         camadas = {
             "PROJ_ELETRICA_LUZ": 2,          # Amarelo
-            "PROJ_ELETRICA_QDC": 1,          # Vermelho (mantido oculto/inativo por enquanto)
+            "PROJ_ELETRICA_QDC": 1,          # Vermelho
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Camada de Diagnóstico
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico de Trecho da Soleira até o Canto
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -205,22 +205,45 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- FERRAMENTA DE DIAGNÓSTICO (MAGENTA) ---
+            # --- DIAGNÓSTICO INTELIGENTE DA SOLEIRA E DOBRADIÇA ---
             if logical_walls:
-                # 1. Encontra e desenha a MAIOR PAREDE do ambiente em Magenta
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
-                msp.add_line(maior_parede['p1'], maior_parede['p2'], dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            
-            # 2. Desenha uma reta de cada soleira atravessando o ambiente até a parede oposta
-            for sol in unique_soleiras:
-                s_mid = ((sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2)
-                parede_mais_proxima = min(logical_walls, key=lambda w: point_seg_dist(s_mid[0], s_mid[1], w['p1'], w['p2']))
-                px, py = s_mid
-                vx, vy = parede_mais_proxima['vx'], parede_mais_proxima['vy']
-                nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
-                ponto_destino = (px + nx * 3.0, py + ny * 3.0)
-                msp.add_line(s_mid, ponto_destino, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            # ---------------------------------------------
+                pt1, pt2 = maior_parede['p1'], maior_parede['p2']
+                
+                # Procura se há alguma soleira nesta maior parede
+                soleira_na_maior_parede = None
+                ponto_hinge = None
+                
+                for sol in unique_soleiras:
+                    s_mid = ((sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2)
+                    if point_seg_dist(s_mid[0], s_mid[1], pt1, pt2) < 0.6:
+                        soleira_na_parede = sol
+                        # Identifica qual extremidade da soleira está mais próxima de uma porta (dobradiça)
+                        # Buscamos a linha de porta mais próxima de uma das pontas da soleira
+                        p_mais_proxima = None
+                        min_d = float('inf')
+                        for p in portas:
+                            d1 = math.hypot(p['p1'][0] - sol['p1'][0], p['p1'][1] - sol['p1'][1])
+                            d2 = math.hypot(p['p1'][0] - sol['p2'][0], p['p1'][1] - sol['p2'][1])
+                            if min(d1, d2) < min_d:
+                                min_d = min(d1, d2)
+                                p_mais_proxima = sol['p1'] if d1 < d2 else sol['p2']
+                        ponto_hinge = p_mais_proxima or sol['p1']
+                        break
+                
+                if soleira_na_parede and ponto_hinge:
+                    # Encontra qual ponta da parede (pt1 ou pt2) está do lado da dobradiça
+                    d_pt1 = math.hypot(ponto_hinge[0] - pt1[0], ponto_hinge[1] - pt1[1])
+                    d_pt2 = math.hypot(ponto_hinge[0] - pt2[0], ponto_hinge[1] - pt2[1])
+                    ponto_canto = pt1 if d_pt1 < d_pt2 else pt2
+                    
+                    # Desenha em Magenta o trecho exato: da soleira (lado da dobradiça) até o canto da parede
+                    s_mid = ((soleira_na_parede['p1'][0]+soleira_na_parede['p2'][0])/2, (soleira_na_parede['p1'][1]+soleira_na_parede['p2'][1])/2)
+                    msp.add_line(s_mid, ponto_canto, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                else:
+                    # Se não achar soleira na maior parede, pinta a parede inteira de magenta para referência
+                    msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+            # -----------------------------------------------------
 
             # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
@@ -251,8 +274,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     sw_x, sw_y = (sol['p1'][0] + sol['p2'][0])/2, (sol['p1'][1] + sol['p2'][1])/2
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
-
-            # (QDC temporariamente desativado para o teste de diagnóstico)
 
             # 3. TUE (Ar-Condicionado na menor parede, triângulo para dentro)
             qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
