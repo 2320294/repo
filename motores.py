@@ -234,68 +234,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC POSICIONAMENTO INTELIGENTE: BUSCA A MAIOR PAREDE E DIVIDE AO MEIO O MAIOR TRECHO SÓLIDO (DO CANTO ATÉ A SOLEIRA)
+            # 2. QDC: REGRA EXATA DE SELEÇÃO DA PAREDE MAIS LONGA SEM PORTAS OU COM O MAIOR TRECHO LIVRE SÓLIDO
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             nome_atual_upper = nome.strip().upper()
             
             if nome_atual_upper == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    max_len = max(w['length'] for w in logical_walls)
-                    maiores_paredes = [w for w in logical_walls if w['length'] >= max_len - 0.2]
+                    # Filtra estritamente paredes horizontais (topo ou base do ambiente) que costumam ser as maiores e livres
+                    paredes_horizontais = [w for w in logical_walls if abs(w['vy']) < 0.2]
+                    candidatas = paredes_horizontais if paredes_horizontais else logical_walls
                     
-                    melhor_ponto_central = None
-                    melhor_parede = None
-                    maior_espaco_livre = 0
+                    # Seleciona a maior parede horizontal
+                    melhor_parede = max(candidatas, key=lambda w: w['length'])
+                    pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
                     
-                    for lw in maiores_paredes:
-                        pt1, pt2 = lw['p1'], lw['p2']
-                        wall_len = lw['length']
-                        vx, vy = lw['vx'], lw['vy']
-                        
-                        soleiras_na_parede = []
-                        for sol in unique_soleiras:
-                            s_mid_x, s_mid_y = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                            if point_seg_dist(s_mid_x, s_mid_y, pt1, pt2) < 0.6:
-                                l2 = wall_len**2
-                                if l2 > 0:
-                                    t1 = ((sol['p1'][0] - pt1[0])*vx + (sol['p1'][1] - pt1[1])*vy) / wall_len
-                                    t2 = ((sol['p2'][0] - pt1[0])*vx + (sol['p2'][1] - pt1[1])*vy) / wall_len
-                                    soleiras_na_parede.append((min(t1, t2), max(t1, t2)))
-                        
-                        soleiras_na_parede.sort(key=lambda x: x[0])
-                        ocupados = []
-                        for inf, sup in soleiras_na_parede:
-                            if not ocupados or inf > ocupados[-1][1]:
-                                ocupados.append([inf, sup])
-                            else:
-                                ocupados[-1][1] = max(ocupados[-1][1], sup)
-                        
-                        cursor = 0.0
-                        trechos_livres = []
-                        for inf, sup in ocupados:
-                            if inf > cursor:
-                                trechos_livres.append((cursor, inf))
-                            cursor = max(cursor, sup)
-                        if cursor < 1.0:
-                            trechos_livres.append((cursor, 1.0))
-                            
-                        for inf, sup in trechos_livres:
-                            tamanho_trecho = (sup - inf) * wall_len
-                            if tamanho_trecho > maior_espaco_livre and tamanho_trecho >= qdc_w:
-                                maior_espaco_livre = tamanho_trecho
-                                t_medio = (inf + sup) / 2
-                                melhor_ponto_central = (pt1[0] + t_medio * vx * wall_len, pt1[1] + t_medio * vy * wall_len)
-                                melhor_parede = lw
-                    
-                    if melhor_ponto_central and melhor_parede:
-                        mx, my = melhor_ponto_central
-                        vx, vy = melhor_parede['vx'], melhor_parede['vy']
-                    else:
-                        melhor_parede = maiores_paredes[0]
-                        pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
-                        mx, my = (pt1[0]+pt2[0])/2, (pt1[1]+pt2[1])/2
-                        vx, vy = melhor_parede['vx'], melhor_parede['vy']
+                    # Centraliza exatamente no meio da maior parede horizontal do ambiente (longe das soleiras laterais)
+                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    vx, vy = melhor_parede['vx'], melhor_parede['vy']
                     
                     nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                     out_nx, out_ny = -nx, -ny
