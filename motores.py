@@ -151,7 +151,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Ortogonal Restrito aos Elegíveis
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Ortogonal Direto no QDC Selecionado
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -210,13 +210,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- VERIFICAÇÃO DE ELEGIBILIDADE DO QDC ---
+            # --- VERIFICAÇÃO EXATA DO AMBIENTE DO QDC SELECIONADO ---
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             nome_atual_upper = nome.strip().upper()
-            is_elegivel_qdc = (nome_atual_upper == qdc_formatado) and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
+            is_ambiente_qdc = (nome_atual_upper == qdc_formatado)
 
-            # --- DIAGNÓSTICO ORTOGONAL APLICADO APENAS AO AMBIENTE ELEGÍVEL ---
-            if is_elegivel_qdc and logical_walls:
+            # --- DIAGNÓSTICO ORTOGONAL APLICADO AO AMBIENTE DO QDC ---
+            if is_ambiente_qdc and logical_walls:
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = maior_parede['p1'], maior_parede['p2']
                 
@@ -244,7 +244,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_line(ponto_projetado, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
                 else:
                     msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            # ------------------------------------------------------------------
+            # ---------------------------------------------------------
 
             # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
