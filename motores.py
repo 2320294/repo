@@ -151,7 +151,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Direto da Soleira ao Canto
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico do trecho lateral válido
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -205,7 +205,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- DIAGNÓSTICO DIRETO DA SOLEIRA ATÉ O CANTO DA PAREDE ---
+            # --- DIAGNÓSTICO ESTRITO DE ESPAÇO LATERAL VÁLIDO ---
             if logical_walls:
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = maior_parede['p1'], maior_parede['p2']
@@ -218,24 +218,29 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         break
                 
                 if soleira_na_parede is not None:
-                    # Pega as duas pontas da soleira (s_p1 e s_p2)
                     s_p1, s_p2 = soleira_na_parede['p1'], soleira_na_parede['p2']
+                    s_mid = ((s_p1[0]+s_p2[0])/2, (s_p1[1]+s_p2[1])/2)
                     
-                    # Para cada ponta da soleira, mede a distância até as pontas da parede (pt1 e pt2)
-                    # Vamos dividir a soleira nas duas direções e traçar a linha magenta para o canto mais próximo de cada lado
-                    mid_sol = ((s_p1[0]+s_p2[0])/2, (s_p1[1]+s_p2[1])/2)
+                    # Calcula as distâncias dos dois lados da soleira até os cantos da parede (pt1 e pt2)
+                    d_pt1 = math.hypot(s_mid[0] - pt1[0], s_mid[1] - pt1[1])
+                    d_pt2 = math.hypot(s_mid[0] - pt2[0], s_mid[1] - pt2[1])
                     
-                    # Escolhe a extremidade da soleira mais próxima de pt1 para ir até pt1, e a outra para pt2
-                    d1_pt1 = math.hypot(s_p1[0] - pt1[0], s_p1[1] - pt1[1])
-                    d2_pt1 = math.hypot(s_p2[0] - pt1[0], s_p2[1] - pt1[1])
+                    # Verifica qual lado tem espaço suficiente para o QDC (mínimo de 0.5m livre)
+                    lado_valido = None
+                    if d_pt1 >= 0.5 and d_pt1 >= d_pt2:
+                        lado_valido = pt1
+                    elif d_pt2 >= 0.5:
+                        lado_valido = pt2
                     
-                    ponto_ligacao = s_p1 if d1_pt1 < d2_pt1 else s_p2
-                    canto_alvo = pt1 if math.hypot(ponto_ligacao[0] - pt1[0], ponto_ligacao[1] - pt1[1]) < math.hypot(ponto_ligacao[0] - pt2[0], ponto_ligacao[1] - pt2[1]) else pt2
-                    
-                    msp.add_line(ponto_ligacao, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    if lado_valido is not None:
+                        # Desenha a linha magenta APENAS no lado válido que possui espaço
+                        msp.add_line(s_mid, lado_valido, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    else:
+                        # Se nenhum lado tiver o espaço mínimo, desenha na parede inteira para alerta
+                        msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
                 else:
                     msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            # ----------------------------------------------------------
+            # --------------------------------------------------
 
             # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
