@@ -121,6 +121,12 @@ def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     n1x, n1y, n2x, n2y = -vy, vx, vy, -vx
     return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2y)) else (n2x, n2y)
 
+def point_seg_dist(px, py, pt1, pt2):
+    l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
+    if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
+    t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
+    return math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
+
 def get_ponto_perimetro(d, segs):
     acumulado = 0
     for pt1, pt2, dst in segs:
@@ -204,9 +210,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             if qtd_ilum > 0:
                 pontos_luz = []
-                # Verifica qual eixo representa a maior parede do ambiente
                 if largura >= comprimento:
-                    # Maior parede na horizontal (eixo X)
                     if qtd_ilum == 1:
                         pontos_luz.append((centro_x, centro_y))
                     else:
@@ -214,7 +218,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         for i in range(1, qtd_ilum + 1):
                             pontos_luz.append((min_x + step * i, centro_y))
                 else:
-                    # Maior parede na vertical (eixo Y)
                     if qtd_ilum == 1:
                         pontos_luz.append((centro_x, centro_y))
                     else:
@@ -235,12 +238,33 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC
+            # 2. QDC POSICIONADO INTELIGENTEMENTE NA PAREDE DO AMBIENTE ESCOLHIDO
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
-                cx_qdc, cy_qdc = centro_x - 0.2, max_y
-                pts_qdc = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
+                if logical_walls:
+                    # Seleciona a parede mais longa que não possui portas/soleiras diretas se possível
+                    for lw in logical_walls: lw['score_porta'] = 0
+                    for sol in unique_soleiras:
+                        mx_sol, my_sol = (sol['p1'][0] + sol['p2'][0]) / 2, (sol['p1'][1] + sol['p2'][1]) / 2
+                        closest_lw = min(logical_walls, key=lambda lw: point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']))
+                        if closest_lw and point_seg_dist(mx_sol, my_sol, closest_lw['p1'], closest_lw['p2']) < 0.6:
+                            closest_lw['score_porta'] += 1
+                    best_wall = min(logical_walls, key=lambda w: (w['score_porta'], -w['length']))
+                    pt1, pt2 = best_wall['p1'], best_wall['p2']
+                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    vx, vy = best_wall['vx'], best_wall['vy']
+                    nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                    out_nx, out_ny = -nx, -ny
+                    p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
+                    p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                    p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
+                    p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
+                    pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
+                else:
+                    cx_qdc, cy_qdc = centro_x - 0.2, max_y
+                    pts_qdc = [(cx_qdc, cy_qdc), (cx_qdc + qdc_w, cy_qdc), (cx_qdc + qdc_w, cy_qdc + qdc_d), (cx_qdc, cy_qdc + qdc_d)]
+                
                 msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
