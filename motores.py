@@ -150,8 +150,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_QDC": 1,          # Vermelho
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
-            "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Ortogonal Direto no QDC Selecionado
+            "PROJ_ELETRICA_INTERRUPTOR": 5   # Azul
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
@@ -210,42 +209,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- VERIFICAÇÃO EXATA DO AMBIENTE DO QDC SELECIONADO ---
-            qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
-            nome_atual_upper = nome.strip().upper()
-            is_ambiente_qdc = (nome_atual_upper == qdc_formatado)
-
-            # --- DIAGNÓSTICO ORTOGONAL APLICADO AO AMBIENTE DO QDC ---
-            if is_ambiente_qdc and logical_walls:
-                maior_parede = max(logical_walls, key=lambda w: w['length'])
-                pt1, pt2 = maior_parede['p1'], maior_parede['p2']
-                
-                is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
-                
-                porta_na_parede = None
-                ponto_porta_na_parede = None
-                
-                for p in unique_portas:
-                    d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
-                    d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
-                    if d_p1 < 0.6 or d_p2 < 0.6:
-                        porta_na_parede = p
-                        ponto_porta_na_parede = p['p1'] if d_p1 < d_p2 else p['p2']
-                        break
-                
-                if porta_na_parede is not None and ponto_porta_na_parede is not None:
-                    if is_vertical:
-                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[1] - ponto_porta_na_parede[1]))
-                        ponto_projetado = (pt1[0], ponto_porta_na_parede[1])
-                    else:
-                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[0] - ponto_porta_na_parede[0]))
-                        ponto_projetado = (ponto_porta_na_parede[0], pt1[1])
-                    
-                    msp.add_line(ponto_projetado, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-                else:
-                    msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            # ---------------------------------------------------------
-
             # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
             pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
@@ -275,6 +238,56 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     sw_x, sw_y = (p_sol['p1'][0] + p_sol['p2'][0])/2, (p_sol['p1'][1] + p_sol['p2'][1])/2
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
+
+            # 2. POSICIONAMENTO DEFINITIVO DO QDC NO TRECHO SÓLIDO CALCULADO
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
+            nome_atual_upper = nome.strip().upper()
+            is_ambiente_qdc = (nome_atual_upper == qdc_formatado)
+
+            if is_ambiente_qdc and logical_walls:
+                qdc_w, qdc_d = 0.4, 0.15
+                maior_parede = max(logical_walls, key=lambda w: w['length'])
+                pt1, pt2 = maior_parede['p1'], maior_parede['p2']
+                
+                is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
+                
+                porta_na_parede = None
+                ponto_porta_na_parede = None
+                
+                for p in unique_portas:
+                    d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
+                    d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
+                    if d_p1 < 0.6 or d_p2 < 0.6:
+                        porta_na_parede = p
+                        ponto_porta_na_parede = p['p1'] if d_p1 < d_p2 else p['p2']
+                        break
+                
+                if porta_na_parede is not None and ponto_porta_na_parede is not None:
+                    if is_vertical:
+                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[1] - ponto_porta_na_parede[1]))
+                        ponto_projetado = (pt1[0], ponto_porta_na_parede[1])
+                    else:
+                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[0] - ponto_porta_na_parede[0]))
+                        ponto_projetado = (ponto_porta_na_parede[0], pt1[1])
+                    
+                    # O trecho sólido válido vai da porta até o canto da parede. Calculamos o ponto central desse trecho:
+                    mx = (ponto_projetado[0] + canto_alvo[0]) / 2
+                    my = (ponto_projetado[1] + canto_alvo[1]) / 2
+                else:
+                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+
+                vx, vy = maior_parede['vx'], maior_parede['vy']
+                nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                out_nx, out_ny = -nx, -ny
+                
+                p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
+                p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
+                p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
+                pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
+
+                msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
             # 3. TUE (Ar-Condicionado na menor parede, triângulo para dentro)
             qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
