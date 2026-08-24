@@ -204,28 +204,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição dos pontos de luz alinhados na direção da MAIOR PAREDE
+            # 1. Distribuição dos pontos de luz (Mantendo perfeito)
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
             pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
             
             if qtd_ilum > 0:
                 pontos_luz = []
                 if largura >= comprimento:
-                    if qtd_ilum == 1:
-                        pontos_luz.append((centro_x, centro_y))
+                    if qtd_ilum == 1: pontos_luz.append((centro_x, centro_y))
                     else:
                         step = largura / (qtd_ilum + 1)
-                        for i in range(1, qtd_ilum + 1):
-                            pontos_luz.append((min_x + step * i, centro_y))
+                        for i in range(1, qtd_ilum + 1): pontos_luz.append((min_x + step * i, centro_y))
                 else:
-                    if qtd_ilum == 1:
-                        pontos_luz.append((centro_x, centro_y))
+                    if qtd_ilum == 1: pontos_luz.append((centro_x, centro_y))
                     else:
                         step = comprimento / (qtd_ilum + 1)
-                        for i in range(1, qtd_ilum + 1):
-                            pontos_luz.append((centro_x, min_y + step * i))
+                        for i in range(1, qtd_ilum + 1): pontos_luz.append((centro_x, min_y + step * i))
                 
-                for idx, (lx, ly) in enumerate(pontos_luz):
+                for lx, ly in pontos_luz:
                     msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
@@ -238,24 +234,40 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC POSICIONADO INTELIGENTEMENTE NA PAREDE DO AMBIENTE ESCOLHIDO
+            # 2. QDC INTELIGENTE: ANALISA AS 2 MAIORES PAREDES E DESCONTA AS SOLEIRAS/VÃOS DE PORTA
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
             if nome == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    # Seleciona a parede mais longa que não possui portas/soleiras diretas se possível
-                    for lw in logical_walls: lw['score_porta'] = 0
-                    for sol in unique_soleiras:
-                        mx_sol, my_sol = (sol['p1'][0] + sol['p2'][0]) / 2, (sol['p1'][1] + sol['p2'][1]) / 2
-                        closest_lw = min(logical_walls, key=lambda lw: point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']))
-                        if closest_lw and point_seg_dist(mx_sol, my_sol, closest_lw['p1'], closest_lw['p2']) < 0.6:
-                            closest_lw['score_porta'] += 1
-                    best_wall = min(logical_walls, key=lambda w: (w['score_porta'], -w['length']))
-                    pt1, pt2 = best_wall['p1'], best_wall['p2']
+                    # Ordena as paredes da maior para a menor para pegar as 2 maiores
+                    paredes_ordenadas = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
+                    
+                    melhor_parede = None
+                    mx, my, vx, vy = 0, 0, 0, 0
+                    
+                    # Testa as maiores paredes até encontrar uma que esteja livre de soleiras/vãos de porta
+                    for parede in paredes_ordenadas:
+                        pt1, pt2 = parede['p1'], parede['p2']
+                        livre = True
+                        for sol in unique_soleiras:
+                            # Se houver proximidade entre a soleira e o meio desta parede, ela possui vão de porta
+                            if point_seg_dist((sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2, pt1, pt2) < 0.6:
+                                livre = False
+                                break
+                        if livre:
+                            melhor_parede = parede
+                            break
+                    
+                    # Se todas as maiores tiverem portas, usa a maior de todas por segurança
+                    if not melhor_parede:
+                        melhor_parede = paredes_ordenadas[0]
+                        
+                    pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
                     mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                    vx, vy = best_wall['vx'], best_wall['vy']
+                    vx, vy = melhor_parede['vx'], melhor_parede['vy']
                     nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                     out_nx, out_ny = -nx, -ny
+                    
                     p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
                     p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
                     p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
