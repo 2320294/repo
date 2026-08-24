@@ -187,7 +187,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             min_x, max_x = min(xs), max(xs)
             min_y, max_y = min(ys), max(ys)
             nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
-            if not nome or nome not in dict_dados: continue
+            if not nome: continue
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
             largura = max_x - min_x
@@ -210,36 +210,37 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
             # 1. Distribuição dos pontos de luz
-            qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
-            pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
-            
-            if qtd_ilum > 0:
-                pontos_luz = []
-                if largura >= comprimento:
-                    if qtd_ilum == 1: pontos_luz.append((centro_x, centro_y))
-                    else:
-                        step = largura / (qtd_ilum + 1)
-                        for i in range(1, qtd_ilum + 1): pontos_luz.append((min_x + step * i, centro_y))
-                else:
-                    if qtd_ilum == 1: pontos_luz.append((centro_x, centro_y))
-                    else:
-                        step = comprimento / (qtd_ilum + 1)
-                        for i in range(1, qtd_ilum + 1): pontos_luz.append((centro_x, min_y + step * i))
+            if nome in dict_dados:
+                qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
+                pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
                 
-                for lx, ly in pontos_luz:
-                    msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
-                    msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
-                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
+                if qtd_ilum > 0:
+                    pontos_luz = []
+                    if largura >= comprimento:
+                        if qtd_ilum == 1: pontos_luz.append((centro_x, centro_y))
+                        else:
+                            step = largura / (qtd_ilum + 1)
+                            for i in range(1, qtd_ilum + 1): pontos_luz.append((min_x + step * i, centro_y))
+                    else:
+                        if qtd_ilum == 1: pontos_luz.append((centro_x, centro_y))
+                        else:
+                            step = comprimento / (qtd_ilum + 1)
+                            for i in range(1, qtd_ilum + 1): pontos_luz.append((centro_x, min_y + step * i))
+                    
+                    for lx, ly in pontos_luz:
+                        msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
+                        msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
+                        msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-                # Interruptor
-                sw_x, sw_y = centro_x, min_y + 0.15
-                if unique_portas:
-                    p_sol = unique_portas[0]
-                    sw_x, sw_y = (p_sol['p1'][0] + p_sol['p2'][0])/2, (p_sol['p1'][1] + p_sol['p2'][1])/2
-                msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
-                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
+                    # Interruptor
+                    sw_x, sw_y = centro_x, min_y + 0.15
+                    if unique_portas:
+                        p_sol = unique_portas[0]
+                        sw_x, sw_y = (p_sol['p1'][0] + p_sol['p2'][0])/2, (p_sol['p1'][1] + p_sol['p2'][1])/2
+                    msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. POSICIONAMENTO DEFINITIVO DO QDC NO TRECHO SÓLIDO CALCULADO
+            # 2. POSICIONAMENTO DEFINITIVO DO QDC CONSIDERANDO TODAS AS PORTAS DA MAIOR PAREDE
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             nome_atual_upper = nome.strip().upper()
             is_ambiente_qdc = (nome_atual_upper == qdc_formatado)
@@ -251,30 +252,70 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
                 
-                porta_na_parede = None
-                ponto_porta_na_parede = None
-                
+                # Coleta todas as projeções de portas que encostam nesta maior parede
+                cortes_portas = []
                 for p in unique_portas:
                     d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
                     d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
                     if d_p1 < 0.6 or d_p2 < 0.6:
-                        porta_na_parede = p
-                        ponto_porta_na_parede = p['p1'] if d_p1 < d_p2 else p['p2']
-                        break
+                        # Mapeia a coordenada ao longo da parede
+                        if is_vertical:
+                            y_min = min(p['p1'][1], p['p2'][1])
+                            y_max = max(p['p1'][1], p['p2'][1])
+                            cortes_portas.append((min(y_min, y_max), max(y_min, y_max)))
+                        else:
+                            x_min = min(p['p1'][0], p['p2'][0])
+                            x_max = max(p['p1'][0], p['p2'][0])
+                            cortes_portas.append((min(x_min, x_max), max(x_min, x_max)))
                 
-                if porta_na_parede is not None and ponto_porta_na_parede is not None:
-                    if is_vertical:
-                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[1] - ponto_porta_na_parede[1]))
-                        ponto_projetado = (pt1[0], ponto_porta_na_parede[1])
-                    else:
-                        canto_alvo = min([pt1, pt2], key=lambda pt: abs(pt[0] - ponto_porta_na_parede[0]))
-                        ponto_projetado = (ponto_porta_na_parede[0], pt1[1])
+                # Ordena e encontra o maior trecho livre contínuo na parede
+                if is_vertical:
+                    parede_min = min(pt1[1], pt2[1])
+                    parede_max = max(pt1[1], pt2[1])
+                    cortes_portas.sort(key=lambda x: x[0])
                     
-                    # O trecho sólido válido vai da porta até o canto da parede. Calculamos o ponto central desse trecho:
-                    mx = (ponto_projetado[0] + canto_alvo[0]) / 2
-                    my = (ponto_projetado[1] + canto_alvo[1]) / 2
+                    trechos_livres = []
+                    cursor = parede_min
+                    for c_inf, c_sup in cortes_portas:
+                        if c_inf > cursor + 0.1:
+                            trechos_livres.append((cursor, c_inf))
+                        cursor = max(cursor, c_sup)
+                    if cursor < parede_max - 0.1:
+                        trechos_livres.append((cursor, parede_max))
+                    
+                    if trechos_livres:
+                        # Pega o maior trecho livre
+                        melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
+                        if (melhor_trecho[1] - melhor_trecho[0]) >= qdc_w:
+                            mid_y = (melhor_trecho[0] + melhor_trecho[1]) / 2
+                            mx, my = pt1[0], mid_y
+                        else:
+                            mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    else:
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                 else:
-                    mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    parede_min = min(pt1[0], pt2[0])
+                    parede_max = max(pt1[0], pt2[0])
+                    cortes_portas.sort(key=lambda x: x[0])
+                    
+                    trechos_livres = []
+                    cursor = parede_min
+                    for c_inf, c_sup in cortes_portas:
+                        if c_inf > cursor + 0.1:
+                            trechos_livres.append((cursor, c_inf))
+                        cursor = max(cursor, c_sup)
+                    if cursor < parede_max - 0.1:
+                        trechos_livres.append((cursor, parede_max))
+                    
+                    if trechos_livres:
+                        melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
+                        if (melhor_trecho[1] - melhor_trecho[0]) >= qdc_w:
+                            mid_x = (melhor_trecho[0] + melhor_trecho[1]) / 2
+                            mx, my = mid_x, pt1[1]
+                        else:
+                            mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    else:
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
 
                 vx, vy = maior_parede['vx'], maior_parede['vy']
                 nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
@@ -290,42 +331,43 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
             # 3. TUE (Ar-Condicionado na menor parede, triângulo para dentro)
-            qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
-            qtd_tue = int(dict_dados[nome]['Qtd TUE'])
-            eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
-            pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
-            is_ac = "ar" in eq_tue_nome.lower()
-            
-            if is_ac and qtd_tue > 0 and logical_walls:
-                menor_parede = min(logical_walls, key=lambda w: w['length'])
-                pt1, pt2 = menor_parede['p1'], menor_parede['p2']
-                px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                vx, vy = menor_parede['vx'], menor_parede['vy']
-                nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
+            if nome in dict_dados:
+                qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
+                qtd_tue = int(dict_dados[nome]['Qtd TUE'])
+                eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
+                pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
+                is_ac = "ar" in eq_tue_nome.lower()
                 
-                ponto_base1 = (px - vx * 0.15, py - vy * 0.15)
-                ponto_base2 = (px + vx * 0.15, py + vy * 0.15)
-                ponto_ponta = (px + nx * 0.25, py + ny * 0.25)
-                
-                msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
-
-            # 4. TUGs e demais Tomadas no Perímetro
-            total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
-            if total_tugs > 0 and comp_total > 0:
-                passo = comp_total / total_tugs
-                is_umida = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
-                
-                for i in range(total_tugs):
-                    px, py, _, _ = get_ponto_perimetro(passo * i, segmentos_crus)
-                    ponto_b1 = (px - 0.1, py)
-                    ponto_b2 = (px + 0.1, py)
-                    ponto_pt = (px, py + 0.2)
+                if is_ac and qtd_tue > 0 and logical_walls:
+                    menor_parede = min(logical_walls, key=lambda w: w['length'])
+                    pt1, pt2 = menor_parede['p1'], menor_parede['p2']
+                    px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                    vx, vy = menor_parede['vx'], menor_parede['vy']
+                    nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                     
-                    msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    if is_umida:
-                        msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    ponto_base1 = (px - vx * 0.15, py - vy * 0.15)
+                    ponto_base2 = (px + vx * 0.15, py + vy * 0.15)
+                    ponto_ponta = (px + nx * 0.25, py + ny * 0.25)
+                    
+                    msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
+
+                # 4. TUGs e demais Tomadas no Perímetro
+                total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
+                if total_tugs > 0 and comp_total > 0:
+                    passo = comp_total / total_tugs
+                    is_umida = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
+                    
+                    for i in range(total_tugs):
+                        px, py, _, _ = get_ponto_perimetro(passo * i, segmentos_crus)
+                        ponto_b1 = (px - 0.1, py)
+                        ponto_b2 = (px + 0.1, py)
+                        ponto_pt = (px, py + 0.2)
+                        
+                        msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        if is_umida:
+                            msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
 
         doc.saveas(tmp_in_path)
         with open(tmp_in_path, "rb") as f: out_bytes = f.read()
