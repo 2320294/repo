@@ -151,13 +151,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             "PROJ_ELETRICA_TEXTO": 2,        # Amarelo
             "PROJ_ELETRICA_TOMADA": 4,       # Ciano
             "PROJ_ELETRICA_INTERRUPTOR": 5,  # Azul
-            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico Direto da Soleira ao Canto
+            "PROJ_ELETRICA_DEBUG": 6         # MAGENTA: Diagnóstico baseado em IA_PORTAS
         }
         for nome_l, cor_l in camadas.items():
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
             else: doc.layers.get(nome_l).color = cor_l
         
-        polilinhas, textos, portas, soleiras = [], [], [], []
+        polilinhas, textos, portas = [], [], []
         for entity in msp:
             tipo = entity.dxftype()
             layer = str(entity.dxf.layer).upper().strip() if hasattr(entity.dxf, 'layer') else ""
@@ -169,12 +169,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if tipo == 'LINE': portas.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                    if pts: portas.append({'p1': pts[0], 'p2': pts[-1]})
-            elif layer == 'IA_SOLEIRA':
-                if tipo == 'LINE': soleiras.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
-                elif tipo in ['LWPOLYLINE', 'POLYLINE']:
-                    pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                    if pts: soleiras.append({'p1': pts[0], 'p2': pts[-1]})
+                    if len(pts) >= 2: portas.append({'p1': pts[0], 'p2': pts[-1]})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
@@ -203,34 +198,34 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
                 logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
-            unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
+            # Mapeia portas do ambiente usando IA_PORTAS
+            unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # --- DIAGNÓSTICO DIRETO DAS EXTREMIDADES DA SOLEIRA ---
+            # --- DIAGNÓSTICO USANDO IA_PORTAS ---
             if logical_walls:
                 maior_parede = max(logical_walls, key=lambda w: w['length'])
                 pt1, pt2 = maior_parede['p1'], maior_parede['p2']
                 
-                soleira_encontrada = None
-                ponto_soleira_na_parede = None
+                porta_na_parede = None
+                ponto_porta_na_parede = None
                 
-                for sol in unique_soleiras:
-                    d_sol_p1 = point_seg_dist(sol['p1'][0], sol['p1'][1], pt1, pt2)
-                    d_sol_p2 = point_seg_dist(sol['p2'][0], sol['p2'][1], pt1, pt2)
-                    
-                    if d_sol_p1 < 0.3 or d_sol_p2 < 0.3:
-                        soleira_encontrada = sol
-                        ponto_soleira_na_parede = sol['p1'] if d_sol_p1 < d_sol_p2 else sol['p2']
+                for p in unique_portas:
+                    d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
+                    d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
+                    if d_p1 < 0.6 or d_p2 < 0.6:
+                        porta_na_parede = p
+                        ponto_porta_na_parede = p['p1'] if d_p1 < d_p2 else p['p2']
                         break
                 
-                if soleira_encontrada is not None and ponto_soleira_na_parede is not None:
-                    d_canto1 = math.hypot(ponto_soleira_na_parede[0] - pt1[0], ponto_soleira_na_parede[1] - pt1[1])
-                    d_canto2 = math.hypot(ponto_soleira_na_parede[0] - pt2[0], ponto_soleira_na_parede[1] - pt2[1])
+                if porta_na_parede is not None and ponto_porta_na_parede is not None:
+                    d_canto1 = math.hypot(ponto_porta_na_parede[0] - pt1[0], ponto_porta_na_parede[1] - pt1[1])
+                    d_canto2 = math.hypot(ponto_porta_na_parede[0] - pt2[0], ponto_porta_na_parede[1] - pt2[1])
                     canto_alvo = pt1 if d_canto1 < d_canto2 else pt2
                     
-                    msp.add_line(ponto_soleira_na_parede, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    msp.add_line(ponto_porta_na_parede, canto_alvo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
                 else:
                     msp.add_line(pt1, pt2, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-            # ----------------------------------------------------------
+            # ----------------------------------------------------
 
             # 1. Distribuição dos pontos de luz
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
@@ -256,9 +251,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
                 # Interruptor
                 sw_x, sw_y = centro_x, min_y + 0.15
-                if unique_soleiras:
-                    sol = unique_soleiras[0]
-                    sw_x, sw_y = (sol['p1'][0] + sol['p2'][0])/2, (sol['p1'][1] + sol['p2'][1])/2
+                if unique_portas:
+                    p_sol = unique_portas[0]
+                    sw_x, sw_y = (p_sol['p1'][0] + p_sol['p2'][0])/2, (p_sol['p1'][1] + p_sol['p2'][1])/2
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
