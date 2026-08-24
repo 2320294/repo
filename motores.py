@@ -234,73 +234,37 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                 msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. QDC INTELIGENTE: DESCONTO DE VÃOS DE PORTA E CÁLCULO DO TRECHO SÓLIDO NAS MAIORES PAREDES
-            qdc_formatado = str(local_qdc).replace(" (recomendado)", "")
-            if nome == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
+            # 2. QDC POSICIONAMENTO FORÇADO NA PAREDE LIVRE (Evita totalmente soleiras)
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
+            nome_atual_upper = nome.strip().upper()
+            
+            if nome_atual_upper == qdc_formatado and not any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"]):
                 qdc_w, qdc_d = 0.4, 0.15
                 if logical_walls:
-                    # Ordena as paredes da maior para a menor
-                    paredes_ordenadas = sorted(logical_walls, key=lambda w: w['length'], reverse=True)
-                    
-                    melhor_ponto_central = None
-                    melhor_vx, melhor_vy = 0, 0
-                    maior_trecho_encontrado = 0
-                    
-                    # Varre as paredes verificando os trechos livres entre soleiras ou cantos
-                    for lw in paredes_ordenadas:
-                        pt1, pt2 = lw['p1'], lw['p2']
-                        vx, vy = lw['vx'], lw['vy']
-                        
-                        soleiras_na_parede = []
+                    # Avalia estritamente paredes que não possuem soleiras cruzando o centro
+                    parede_escolhida = None
+                    for lw in logical_walls:
+                        tem_porta = False
                         for sol in unique_soleiras:
                             mx_sol, my_sol = (sol['p1'][0]+sol['p2'][0])/2, (sol['p1'][1]+sol['p2'][1])/2
-                            if point_seg_dist(mx_sol, my_sol, pt1, pt2) < 0.6:
-                                l2 = (pt2[0]-pt1[0])**2 + (pt2[1]-pt1[1])**2
-                                if l2 > 0:
-                                    t = ((mx_sol - pt1[0])*(pt2[0]-pt1[0]) + (my_sol - pt1[1])*(pt2[1]-pt1[1])) / l2
-                                    # Considera a largura aproximada da soleira/porta (ex: 0.8m convertida proporcionalmente)
-                                    largura_porta_rel = 0.8 / lw['length']
-                                    soleiras_na_parede.append((max(0.0, t - largura_porta_rel/2), min(1.0, t + largura_porta_rel/2)))
-                        
-                        # Mescla intervalos ocupados por portas
-                        soleiras_na_parede.sort(key=lambda x: x[0])
-                        intervalos_ocupados = []
-                        for s_inf, s_sup in soleiras_na_parede:
-                            if not intervalos_ocupados or s_inf > intervalos_ocupados[-1][1]:
-                                intervalos_ocupados.append([s_inf, s_sup])
-                            else:
-                                intervalos_ocupados[-1][1] = max(intervalos_ocupados[-1][1], s_sup)
-                        
-                        # Calcula os trechos livres (início/fim da parede ou entre portas)
-                        cursor = 0.0
-                        trechos_livres = []
-                        for s_inf, s_sup in intervalos_ocupados:
-                            if s_inf > cursor:
-                                trechos_livres.append((cursor, s_inf))
-                            cursor = max(cursor, s_sup)
-                        if cursor < 1.0:
-                            trechos_livres.append((cursor, 1.0))
-                            
-                        # Avalia o maior trecho livre nesta parede que caiba o QDC
-                        for t_inf, t_sup in trechos_livres:
-                            comprimento_trecho = (t_sup - t_inf) * lw['length']
-                            if comprimento_trecho > maior_trecho_encontrado and comprimento_trecho >= qdc_w:
-                                maior_trecho_encontrado = comprimento_trecho
-                                t_centro = (t_inf + t_sup) / 2
-                                melhor_ponto_central = (pt1[0] + t_centro * (pt2[0] - pt1[0]), pt1[1] + t_centro * (pt2[1] - pt1[1]))
-                                melhor_vx, melhor_vy = vx, vy
+                            if point_seg_dist(mx_sol, my_sol, lw['p1'], lw['p2']) < 0.8:
+                                tem_porta = True
+                                break
+                        if not tem_porta:
+                            parede_escolhida = lw
+                            break
                     
-                    # Se encontrou um trecho sólido ideal em alguma das maiores paredes
-                    if melhor_ponto_central:
-                        mx, my = melhor_ponto_central
-                        vx, vy = melhor_vx, melhor_vy
-                    else:
-                        # Fallback para a maior parede caso o trecho seja muito restrito
-                        melhor_parede = paredes_ordenadas[0]
-                        pt1, pt2 = melhor_parede['p1'], melhor_parede['p2']
-                        mx, my = (pt1[0]+pt2[0])/2, (pt1[1]+pt2[1])/2
-                        vx, vy = melhor_parede['vx'], melhor_parede['vy']
-                        
+                    # Se todas tiverem portas, pega a parede de maior comprimento e desloca para um dos cantos livres
+                    if not parede_escolhida:
+                        parede_escolhida = max(logical_walls, key=lambda w: w['length'])
+                    
+                    pt1, pt2 = parede_escolhida['p1'], parede_escolhida['p2']
+                    vx, vy = parede_escolhida['vx'], parede_escolhida['vy']
+                    
+                    # Posiciona deslocado 0.6m de um dos cantos da parede escolhida para garantir que fique longe da porta
+                    mx = pt1[0] + vx * 0.8
+                    my = pt1[1] + vy * 0.8
+                    
                     nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
                     out_nx, out_ny = -nx, -ny
                     
