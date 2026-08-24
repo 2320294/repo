@@ -121,28 +121,6 @@ def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     n1x, n1y, n2x, n2y = -vy, vx, vy, -vx
     return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2y)) else (n2x, n2y)
 
-def point_seg_dist(px, py, pt1, pt2):
-    l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
-    if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
-    t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
-    return math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
-
-def dist_to_line(px, py, pt1, pt2):
-    den = math.hypot(pt2[0]-pt1[0], pt2[1]-pt1[1])
-    if den == 0: return math.hypot(px-pt1[0], py-pt1[1])
-    return abs((pt2[0]-pt1[0])*(pt1[1]-py) - (pt1[0]-px)*(pt2[1]-pt1[1])) / den
-
-def get_dist_on_perimeter(px, py, segs):
-    acumulado, min_d, best_d = 0, float('inf'), 0
-    for pt1, pt2, dst in segs:
-        l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
-        if l2 == 0: continue
-        t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
-        d = math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
-        if d < min_d: min_d, best_d = d, acumulado + (t * dst)
-        acumulado += dst
-    return best_d
-
 def get_ponto_perimetro(d, segs):
     acumulado = 0
     for pt1, pt2, dst in segs:
@@ -200,6 +178,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if not nome or nome not in dict_dados: continue
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            largura = max_x - min_x
+            comprimento = max_y - min_y
+            
             segmentos_crus, comp_total = [], 0
             poly = list(polilinha); poly.append(poly[0])
             for i in range(len(poly)-1):
@@ -216,12 +197,32 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Iluminação e Interruptor
-            if dict_dados[nome]['Qtd Ilum.'] > 0:
-                msp.add_circle(center=(centro_x, centro_y), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
-                msp.add_text(f"{dict_dados[nome]['Pot. Unit. Ilum (VA)']}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (centro_x + 0.3, centro_y - 0.07)})
-                msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (centro_x + 0.3, centro_y + 0.15)})
+            # 1. Distribuição correta de múltiplos pontos de Iluminação
+            qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
+            pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
+            
+            if qtd_ilum > 0:
+                pontos_luz = []
+                if qtd_ilum == 1:
+                    pontos_luz.append((centro_x, centro_y))
+                elif qtd_ilum == 2:
+                    if largura >= comprimento:
+                        pontos_luz.append((min_x + largura * 0.33, centro_y))
+                        pontos_luz.append((min_x + largura * 0.67, centro_y))
+                    else:
+                        pontos_luz.append((centro_x, min_y + comprimento * 0.33))
+                        pontos_luz.append((centro_x, min_y + comprimento * 0.67))
+                else:
+                    step = largura / (qtd_ilum + 1)
+                    for i in range(1, qtd_ilum + 1):
+                        pontos_luz.append((min_x + step * i, centro_y))
                 
+                for idx, (lx, ly) in enumerate(pontos_luz):
+                    msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
+                    msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
+
+                # Interruptor
                 sw_x, sw_y = centro_x, min_y + 0.15
                 if unique_soleiras:
                     sol = unique_soleiras[0]
@@ -243,7 +244,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             qtd_tue = int(dict_dados[nome]['Qtd TUE'])
             eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
             pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
-            is_ac = "ar" in eq_lower if 'eq_lower' in locals() else "ar" in eq_tue_nome.lower()
+            is_ac = "ar" in eq_tue_nome.lower()
             
             if is_ac and qtd_tue > 0 and logical_walls:
                 menor_parede = min(logical_walls, key=lambda w: w['length'])
