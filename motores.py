@@ -173,7 +173,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
-            min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
             nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
             if not nome or nome not in dict_dados: continue
             
@@ -197,25 +198,29 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_soleiras = [sol for sol in soleiras if (min_x - 0.5) <= (sol['p1'][0]+sol['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (sol['p1'][1]+sol['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição correta de múltiplos pontos de Iluminação
+            # 1. Distribuição dos pontos de luz alinhados na direção da MAIOR PAREDE
             qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
             pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
             
             if qtd_ilum > 0:
                 pontos_luz = []
-                if qtd_ilum == 1:
-                    pontos_luz.append((centro_x, centro_y))
-                elif qtd_ilum == 2:
-                    if largura >= comprimento:
-                        pontos_luz.append((min_x + largura * 0.33, centro_y))
-                        pontos_luz.append((min_x + largura * 0.67, centro_y))
+                # Verifica qual eixo representa a maior parede do ambiente
+                if largura >= comprimento:
+                    # Maior parede na horizontal (eixo X)
+                    if qtd_ilum == 1:
+                        pontos_luz.append((centro_x, centro_y))
                     else:
-                        pontos_luz.append((centro_x, min_y + comprimento * 0.33))
-                        pontos_luz.append((centro_x, min_y + comprimento * 0.67))
+                        step = largura / (qtd_ilum + 1)
+                        for i in range(1, qtd_ilum + 1):
+                            pontos_luz.append((min_x + step * i, centro_y))
                 else:
-                    step = largura / (qtd_ilum + 1)
-                    for i in range(1, qtd_ilum + 1):
-                        pontos_luz.append((min_x + step * i, centro_y))
+                    # Maior parede na vertical (eixo Y)
+                    if qtd_ilum == 1:
+                        pontos_luz.append((centro_x, centro_y))
+                    else:
+                        step = comprimento / (qtd_ilum + 1)
+                        for i in range(1, qtd_ilum + 1):
+                            pontos_luz.append((centro_x, min_y + step * i))
                 
                 for idx, (lx, ly) in enumerate(pontos_luz):
                     msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
