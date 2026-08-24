@@ -186,6 +186,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
             min_y, max_y = min(ys), max(ys)
+            area = (max_x - min_x) * (max_y - min_y)
+            perimetro = ((max_x - min_x) * 2) + ((max_y - min_y) * 2)
+            if area < 0.5: continue
+            
             nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
             if not nome: continue
             
@@ -209,7 +213,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição dos pontos de luz
+            # 1. Distribuição dos pontos de luz e posicionamento inteligente do Interruptor
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
                 pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
@@ -232,15 +236,40 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-                    # Interruptor
+                    # POSICIONAMENTO INTELIGENTE DO INTERRUPTOR (10cm do lado oposto à dobradiça / maçaneta)
                     sw_x, sw_y = centro_x, min_y + 0.15
-                    if unique_portas:
-                        p_sol = unique_portas[0]
-                        sw_x, sw_y = (p_sol['p1'][0] + p_sol['p2'][0])/2, (p_sol['p1'][1] + p_sol['p2'][1])/2
+                    if unique_portas and logical_walls:
+                        # Pega a porta principal do ambiente
+                        p_porta = unique_portas[0]
+                        mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
+                        mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+                        
+                        # Identifica a parede mais próxima da porta para achar a orientação
+                        parede_porta = min(logical_walls, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
+                        
+                        # Determina qual extremidade da porta está a dobradiça e qual está a maçaneta (lado oposto)
+                        # Assumimos que a ponta mais distante do centro da parede ou a extremidade da linha de porta define o lado oposto
+                        d_p1_pt1 = math.hypot(p_porta['p1'][0] - parede_porta['p1'][0], p_porta['p1'][1] - parede_porta['p1'][1])
+                        d_p2_pt1 = math.hypot(p_porta['p2'][0] - parede_porta['p1'][0], p_porta['p2'][1] - parede_porta['p1'][1])
+                        
+                        # O lado oposto à dobradiça fica a 10cm (0.10m) da soleira em direção ao miolo da parede livre
+                        ponto_dobradica = p_porta['p1'] if d_p1_pt1 < d_p2_pt1 else p_porta['p2']
+                        ponto_mecanismo = p_porta['p2'] if d_p1_pt1 < d_p2_pt1 else p_porta['p1']
+                        
+                        # Vetor de direção da parede para afastar 10cm da soleira tangenciando
+                        w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
+                        
+                        # Direção para dentro do ambiente
+                        nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, centro_x, centro_y)
+                        
+                        # Posiciona o interruptor a 0.10m da soleira na direção do lado oposto à dobradiça, tangenciando a parede
+                        sw_x = ponto_mecanismo[0] + (w_vx * 0.10 if (ponto_mecanismo[0] - ponto_dobradica[0]) >= 0 else -w_vx * 0.10) + (nx * 0.15)
+                        sw_y = ponto_mecanismo[1] + (w_vy * 0.10 if (ponto_mecanismo[1] - ponto_dobradica[1]) >= 0 else -w_vy * 0.10) + (ny * 0.15)
+
                     msp.add_circle(center=(sw_x, sw_y), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR'})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 5, 'insert': (sw_x + 0.15, sw_y + 0.15)})
 
-            # 2. POSICIONAMENTO DEFINITIVO DO QDC CONSIDERANDO TODAS AS PORTAS DA MAIOR PAREDE
+            # 2. POSICIONAMENTO DEFINITIVO DO QDC
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             nome_atual_upper = nome.strip().upper()
             is_ambiente_qdc = (nome_atual_upper == qdc_formatado)
@@ -252,13 +281,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
                 
-                # Coleta todas as projeções de portas que encostam nesta maior parede
                 cortes_portas = []
                 for p in unique_portas:
                     d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
                     d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
                     if d_p1 < 0.6 or d_p2 < 0.6:
-                        # Mapeia a coordenada ao longo da parede
                         if is_vertical:
                             y_min = min(p['p1'][1], p['p2'][1])
                             y_max = max(p['p1'][1], p['p2'][1])
@@ -268,7 +295,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             x_max = max(p['p1'][0], p['p2'][0])
                             cortes_portas.append((min(x_min, x_max), max(x_min, x_max)))
                 
-                # Ordena e encontra o maior trecho livre contínuo na parede
                 if is_vertical:
                     parede_min = min(pt1[1], pt2[1])
                     parede_max = max(pt1[1], pt2[1])
@@ -284,7 +310,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         trechos_livres.append((cursor, parede_max))
                     
                     if trechos_livres:
-                        # Pega o maior trecho livre
                         melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
                         if (melhor_trecho[1] - melhor_trecho[0]) >= qdc_w:
                             mid_y = (melhor_trecho[0] + melhor_trecho[1]) / 2
