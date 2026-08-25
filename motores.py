@@ -185,6 +185,48 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
+        # 1. LOOP INDEPENDENTE DE PORTAS PARA GERAR O DEBUG MAGENTA EM TODAS ELAS
+        for p_porta in portas:
+            mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
+            mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+            
+            # Descobre a polilinha/ambiente onde esta porta está inserida
+            amb_porta = None
+            for polilinha in polilinhas:
+                xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
+                if min(xs) - 0.2 <= mid_porta_x <= max(xs) + 0.2 and min(ys) - 0.2 <= mid_porta_y <= max(ys) + 0.2:
+                    amb_porta = polilinha
+                    break
+            
+            if amb_porta:
+                cx = sum([pt[0] for pt in amb_porta]) / len(amb_porta)
+                cy = sum([pt[1] for pt in amb_porta]) / len(amb_porta)
+                
+                segmentos_amb = []
+                poly_loop = list(amb_porta); poly_loop.append(poly_loop[0])
+                for i in range(len(poly_loop)-1):
+                    dst = math.hypot(poly_loop[i+1][0]-poly_loop[i][0], poly_loop[i+1][1]-poly_loop[i][1])
+                    if dst > 0.1:
+                        vx, vy = (poly_loop[i+1][0] - poly_loop[i][0]) / dst, (poly_loop[i+1][1] - poly_loop[i][1]) / dst
+                        segmentos_amb.append({'p1': poly_loop[i], 'p2': poly_loop[i+1], 'vx': vx, 'vy': vy})
+                
+                if segmentos_amb:
+                    parede_porta = min(segmentos_amb, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
+                    w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
+                    nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
+                    
+                    center_mx = mid_porta_x + (nx * 0.15)
+                    center_my = mid_porta_y + (ny * 0.15)
+                    
+                    half_len = 0.39 / 2
+                    start_mx = center_mx - (w_vx * half_len)
+                    start_my = center_my - (w_vy * half_len)
+                    end_mx = center_mx + (w_vx * half_len)
+                    end_my = center_my + (w_vy * half_len)
+                    
+                    msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+
+        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (LUZES, QDC E TOMADAS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -210,13 +252,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             logical_walls = []
             for pt1, pt2, dst in segmentos_crus:
-                mx, my = (pt1[0]+pt2[0])/2, (pt1[1]+pt2[1])/2
                 vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
                 logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição de Luz e Linha Magenta perfeitamente centralizada e afastada 15cm da soleira
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
                 pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
@@ -239,30 +279,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-                    # DEPURAÇÃO MAGENTA: Centro alinhado com o centro do vão da soleira, afastada 15cm e com 39cm de comprimento
-                    if unique_portas and logical_walls:
-                        p_porta = unique_portas[0]
-                        mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
-                        mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
-                        
-                        parede_porta = min(logical_walls, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
-                        w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
-                        nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, centro_x, centro_y)
-                        
-                        # Ponto central exato da linha magenta: deslocado 15cm (0.15m) a partir do centro da soleira na direção interna (nx, ny)
-                        center_mx = mid_porta_x + (nx * 0.15)
-                        center_my = mid_porta_y + (ny * 0.15)
-                        
-                        # Cria os extremos da linha magenta de 39cm (0.39m total, 19.5cm para cada lado ao longo da parede) centralizada no vão
-                        half_len = 0.39 / 2
-                        start_mx = center_mx - (w_vx * half_len)
-                        start_my = center_my - (w_vy * half_len)
-                        end_mx = center_mx + (w_vx * half_len)
-                        end_my = center_my + (w_vy * half_len)
-                        
-                        msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
-
-            # 2. POSICIONAMENTO DEFINITIVO DO QDC
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             nome_atual_upper = nome.strip().upper() if nome else ""
             is_ambiente_qdc = (nome_atual_upper == qdc_formatado)
@@ -280,35 +296,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
                     if d_p1 < 0.6 or d_p2 < 0.6:
                         if is_vertical:
-                            y_min = min(p['p1'][1], p['p2'][1])
-                            y_max = max(p['p1'][1], p['p2'][1])
-                            cortes_portas.append((min(y_min, y_max), max(y_min, y_max)))
+                            cortes_portas.append((min(p['p1'][1], p['p2'][1]), max(p['p1'][1], p['p2'][1])))
                         else:
-                            x_min = min(p['p1'][0], p['p2'][0])
-                            x_max = max(p['p1'][0], p['p2'][0])
-                            cortes_portas.append((min(x_min, x_max), max(x_min, x_max)))
+                            cortes_portas.append((min(p['p1'][0], p['p2'][0]), max(p['p1'][0], p['p2'][0])))
                 
                 if is_vertical:
                     parede_min = min(pt1[1], pt2[1])
                     parede_max = max(pt1[1], pt2[1])
                     cortes_portas.sort(key=lambda x: x[0])
                     
-                    trechos_livres = []
-                    cursor = parede_min
+                    trechos_livres, cursor = [], parede_min
                     for c_inf, c_sup in cortes_portas:
-                        if c_inf > cursor + 0.1:
-                            trechos_livres.append((cursor, c_inf))
+                        if c_inf > cursor + 0.1: trechos_livres.append((cursor, c_inf))
                         cursor = max(cursor, c_sup)
-                    if cursor < parede_max - 0.1:
-                        trechos_livres.append((cursor, parede_max))
+                    if cursor < parede_max - 0.1: trechos_livres.append((cursor, parede_max))
                     
                     if trechos_livres:
                         melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
-                        if (melhor_trecho[1] - melhor_trecho[0]) >= qdc_w:
-                            mid_y = (melhor_trecho[0] + melhor_trecho[1]) / 2
-                            mx, my = pt1[0], mid_y
-                        else:
-                            mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                        mid_y = (melhor_trecho[0] + melhor_trecho[1]) / 2
+                        mx, my = pt1[0], mid_y
                     else:
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
                 else:
@@ -316,22 +322,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     parede_max = max(pt1[0], pt2[0])
                     cortes_portas.sort(key=lambda x: x[0])
                     
-                    trechos_livres = []
-                    cursor = parede_min
+                    trechos_livres, cursor = [], parede_min
                     for c_inf, c_sup in cortes_portas:
-                        if c_inf > cursor + 0.1:
-                            trechos_livres.append((cursor, c_inf))
+                        if c_inf > cursor + 0.1: trechos_livres.append((cursor, c_inf))
                         cursor = max(cursor, c_sup)
-                    if cursor < parede_max - 0.1:
-                        trechos_livres.append((cursor, parede_max))
+                    if cursor < parede_max - 0.1: trechos_livres.append((cursor, parede_max))
                     
                     if trechos_livres:
                         melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
-                        if (melhor_trecho[1] - melhor_trecho[0]) >= qdc_w:
-                            mid_x = (melhor_trecho[0] + melhor_trecho[1]) / 2
-                            mx, my = mid_x, pt1[1]
-                        else:
-                            mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                        mid_x = (melhor_trecho[0] + melhor_trecho[1]) / 2
+                        mx, my = mid_x, pt1[1]
                     else:
                         mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
 
