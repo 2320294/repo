@@ -204,11 +204,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE TESTE: ADICIONA UM CÍRCULO NA INTERSEÇÃO OPOSTA (TÉRMINO DA SOLEIRA)
+        # 1. LOOP DE DEBUG MAGENTA: POSICIONADO GARANTIDAMENTE DENTRO DO AMBIENTE CORRETO
         for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
+            # Identifica o ambiente principal ao qual a porta pertence (o que contém o ponto médio com folga)
             amb_porta = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
@@ -230,14 +231,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 if segmentos_amb:
                     parede_porta = min(segmentos_amb, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
+                    w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
+                    nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     
-                    # Identifica qual das duas extremidades da porta/vão está mais distante ou representa o fim da soleira oposta
+                    # Interseção oposta (término do vão da soleira)
                     pt1, pt2 = p_porta['p1'], p_porta['p2']
-                    # Ponto de interseção oposto na soleira (escolhemos uma das pontas do segmento do vão)
-                    ponto_intersecao_oposta = pt2 # Ou pt1 dependendo da geometria do vão
+                    d1 = math.hypot(pt1[0] - parede_porta['p1'][0], pt1[1] - parede_porta['p1'][1])
+                    d2 = math.hypot(pt2[0] - parede_porta['p1'][0], pt2[1] - parede_porta['p1'][1])
+                    ponto_termino = pt2 if d1 < d2 else pt1
                     
-                    # Desenha um círculo de teste na intersecção oposta (Cor 6 - Magenta)
-                    msp.add_circle(center=ponto_intersecao_oposta, radius=0.08, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    direcao_sinal = 1 if (ponto_termino[0] - mid_porta_x >= 0 and abs(w_vx) > 0.5) or (ponto_termino[1] - mid_porta_y >= 0 and abs(w_vy) > 0.5) else -1
+                    
+                    # Inicia 15cm após o término da soleira, forçando o deslocamento estritamente para o interior (nx, ny)
+                    start_mx = ponto_termino[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
+                    start_my = ponto_termino[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
+                    
+                    end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
+                    end_my = start_my + (w_vy * 0.39 * direcao_sinal)
+                    
+                    msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
