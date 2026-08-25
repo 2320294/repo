@@ -69,7 +69,6 @@ def dimensionar_cargas(nome, area, perimetro):
     }
 
 def ponto_em_poligono(x, y, polilinha):
-    """Testa se o ponto (x, y) está dentro da polilinha usando o algoritmo Ray-Casting"""
     n = len(polilinha)
     dentro = False
     p1x, p1y = polilinha[0]
@@ -176,7 +175,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
             else: doc.layers.get(nome_l).color = cor_l
         
-        polilinhas, textos, portas_raw = [], [], []
+        polilinhas, textos, portas_raw, soleiras_raw = [], [], [], []
         for entity in msp:
             tipo = entity.dxftype()
             if hasattr(entity.dxf, 'layer'):
@@ -196,53 +195,46 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 except: pass
             elif layer == 'IA_PORTAS':
                 if tipo == 'LINE':
-                    dst = math.hypot(entity.dxf.end.x - entity.dxf.start.x, entity.dxf.end.y - entity.dxf.start.y)
-                    if 0.5 <= dst <= 1.2:
-                        portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                    portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                    if len(pts) >= 2:
-                        dst = math.hypot(pts[-1][0] - pts[0][0], pts[-1][1] - pts[0][1])
-                        if 0.5 <= dst <= 1.2:
-                            portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+                    if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+            elif layer == 'IA_SOLEIRAS':
+                if tipo == 'LINE':
+                    soleiras_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                    pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
+                    if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # AGRUPAMENTO DE PORTAS ÚNICAS
-        portas_unicas = []
-        for p in portas_raw:
-            pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
-            encontrado = False
-            for pu in portas_unicas:
-                pum = ((pu['p1'][0] + pu['p2'][0])/2, (pu['p1'][1] + pu['p2'][1])/2)
-                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.6:
-                    encontrado = True
-                    break
-            if not encontrado:
-                portas_unicas.append(p)
+        # FILTRA APENAS AS SOLEIRAS QUE POSSUEM PORTA ASSOCIADA (PROXIMIDADE < 0.8m)
+        soleiras_com_porta = []
+        for s in soleiras_raw:
+            sm = ((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2)
+            tem_porta = any(math.hypot(sm[0] - ((p['p1'][0] + p['p2'][0])/2), sm[1] - ((p['p1'][1] + p['p2'][1])/2)) < 0.8 for p in portas_raw)
+            if tem_porta:
+                soleiras_com_porta.append(s)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE CÍRCULOS DE TESTE APENAS ONDE HÁ PORTA, ESTRITAMENTE DENTRO DA POLILINHA DO AMBIENTE
-        for p_porta in portas_unicas:
-            mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
-            mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+        # 1. LOOP DE CÍRCULOS DE TESTE NAS SOLEIRAS COM PORTA
+        for s in soleiras_com_porta:
+            p1, p2 = s['p1'], s['p2']
+            sm_x, sm_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
             
-            # Identifica qual polilinha contém o ponto médio da porta
+            # Encontra o ambiente dono da soleira
             amb_porta = None
             for polilinha in polilinhas:
-                xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.3 <= mid_porta_x <= max(xs) + 0.3 and min(ys) - 0.3 <= mid_porta_y <= max(ys) + 0.3:
-                    if ponto_em_poligono(mid_porta_x, mid_porta_y, polilinha):
+                if ponto_em_poligono(sm_x, sm_y, polilinha):
+                    amb_porta = polilinha
+                    break
+            
+            if not amb_porta:
+                for polilinha in polilinhas:
+                    xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
+                    if min(xs) - 0.4 <= sm_x <= max(xs) + 0.4 and min(ys) - 0.4 <= sm_y <= max(ys) + 0.4:
                         amb_porta = polilinha
                         break
             
-            if not amb_porta:
-                # Se o ponto médio cair exatamente na linha divisória, busca a polilinha mais próxima que contenha a porta nas proximidades
-                for polilinha in polilinhas:
-                    xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                    if min(xs) - 0.5 <= mid_porta_x <= max(xs) + 0.5 and min(ys) - 0.5 <= mid_porta_y <= max(ys) + 0.5:
-                        amb_porta = polilinha
-                        break
-
             if amb_porta:
                 cx = sum([pt[0] for pt in amb_porta]) / len(amb_porta)
                 cy = sum([pt[1] for pt in amb_porta]) / len(amb_porta)
@@ -256,32 +248,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         segmentos_amb.append({'p1': poly_loop[i], 'p2': poly_loop[i+1], 'vx': vx, 'vy': vy})
                 
                 if segmentos_amb:
-                    parede_porta = min(segmentos_amb, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
-                    w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
-                    nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
+                    parede_s = min(segmentos_amb, key=lambda w: point_seg_dist(sm_x, sm_y, w['p1'], w['p2']))
+                    w_vx, w_vy = parede_s['vx'], parede_s['vy']
+                    nx, ny = get_inside_normal(w_vx, w_vy, sm_x, sm_y, cx, cy)
                     
-                    pt1, pt2 = p_porta['p1'], p_porta['p2']
-                    d1 = math.hypot(pt1[0] - parede_porta['p1'][0], pt1[1] - parede_porta['p1'][1])
-                    d2 = math.hypot(pt2[0] - parede_porta['p1'][0], pt2[1] - parede_porta['p1'][1])
+                    # Teste das duas extremidades da soleira para achar o ponto oposto voltado para dentro
+                    cand1_x = p1[0] + (nx * 0.15)
+                    cand1_y = p1[1] + (ny * 0.15)
+                    cand2_x = p2[0] + (nx * 0.15)
+                    cand2_y = p2[1] + (ny * 0.15)
                     
-                    # Término oposto da soleira (lado oposto à dobradiça)
-                    ponto_termino = pt2 if d1 < d2 else pt1
-                    
-                    # Testa os dois sentidos ao longo da parede para garantir que o círculo caia DENTRO da polilinha do ambiente
-                    candidato1_x = ponto_termino[0] + (w_vx * 0.15) + (nx * 0.12)
-                    candidato1_y = ponto_termino[1] + (w_vy * 0.15) + (ny * 0.12)
-                    
-                    candidato2_x = ponto_termino[0] - (w_vx * 0.15) + (nx * 0.12)
-                    candidato2_y = ponto_termino[1] - (w_vy * 0.15) + (ny * 0.12)
-                    
-                    if ponto_em_poligono(candidato1_x, candidato1_y, amb_porta):
-                        final_x, final_y = candidato1_x, candidato1_y
-                    elif ponto_em_poligono(candidato2_x, candidato2_y, amb_porta):
-                        final_x, final_y = candidato2_x, candidato2_y
+                    if ponto_em_poligono(cand1_x, cand1_y, amb_porta):
+                        fx, fy = cand1_x, cand1_y
+                    elif ponto_em_poligono(cand2_x, cand2_y, amb_porta):
+                        fx, fy = cand2_x, cand2_y
                     else:
-                        final_x, final_y = candidato1_x, candidato1_y # fallback
+                        fx, fy = cand1_x, cand1_y
 
-                    msp.add_circle(center=(final_x, final_y), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    msp.add_circle(center=(fx, fy), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
@@ -312,7 +296,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
                 logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
-            unique_portas = [p for p in portas_unicas if (min_x - 0.8) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.8) and (min_y - 0.8) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.8)]
+            unique_portas = [p for p in portas_raw if (min_x - 0.8) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.8) and (min_y - 0.8) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.8)]
 
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
