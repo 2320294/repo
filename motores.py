@@ -216,7 +216,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
-            # 1. Distribuição de Luz e Linha Magenta de Depuração (39cm a 15cm do término da soleira)
+            # 1. Distribuição de Luz e Linha Magenta perfeitamente centralizada e afastada 15cm da soleira
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
                 pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
@@ -239,7 +239,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                         msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-                    # DEPURAÇÃO MAGENTA DA POSIÇÃO DO INTERRUPTOR
+                    # DEPURAÇÃO MAGENTA: Centro alinhado com o centro do vão da soleira, afastada 15cm e com 39cm de comprimento
                     if unique_portas and logical_walls:
                         p_porta = unique_portas[0]
                         mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
@@ -249,18 +249,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
                         nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, centro_x, centro_y)
                         
-                        pt_porta_1, pt_porta_2 = p_porta['p1'], p_porta['p2']
-                        d1 = math.hypot(pt_porta_1[0] - parede_porta['p1'][0], pt_porta_1[1] - parede_porta['p1'][1])
-                        d2 = math.hypot(pt_porta_2[0] - parede_porta['p1'][0], pt_porta_2[1] - parede_porta['p1'][1])
+                        # Ponto central exato da linha magenta: deslocado 15cm (0.15m) a partir do centro da soleira na direção interna (nx, ny)
+                        center_mx = mid_porta_x + (nx * 0.15)
+                        center_my = mid_porta_y + (ny * 0.15)
                         
-                        ponto_termino_soleira = pt_porta_2 if d1 < d2 else pt_porta_1
-                        direcao_sinal = 1 if (ponto_termino_soleira[0] - mid_porta_x >= 0 and abs(w_vx) > 0.5) or (ponto_termino_soleira[1] - mid_porta_y >= 0 and abs(w_vy) > 0.5) else -1
-                        
-                        start_mx = ponto_termino_soleira[0] + (w_vx * 0.15 * direcao_sinal)
-                        start_my = ponto_termino_soleira[1] + (w_vy * 0.15 * direcao_sinal)
-                        
-                        end_mx = start_mx + (nx * 0.39)
-                        end_my = start_my + (ny * 0.39)
+                        # Cria os extremos da linha magenta de 39cm (0.39m total, 19.5cm para cada lado ao longo da parede) centralizada no vão
+                        half_len = 0.39 / 2
+                        start_mx = center_mx - (w_vx * half_len)
+                        start_my = center_my - (w_vy * half_len)
+                        end_mx = center_mx + (w_vx * half_len)
+                        end_my = center_my + (w_vy * half_len)
                         
                         msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
 
