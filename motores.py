@@ -183,14 +183,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # AGRUPAMENTO INTELIGENTE DE PORTAS (Cluster por proximidade para gerar exatamente uma linha por porta)
+        # AGRUPAMENTO REFINADO DE PORTAS (Raio menor de 30cm para não fundir portas distintas)
         portas_unicas = []
         for p in portas_raw:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
             encontrado = False
             for pu in portas_unicas:
                 pum = ((pu['p1'][0] + pu['p2'][0])/2, (pu['p1'][1] + pu['p2'][1])/2)
-                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.8:  # raio de 80cm agrupa as entidades da mesma porta
+                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.3:
                     encontrado = True
                     break
             if not encontrado:
@@ -198,7 +198,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA AGRUPADO POR PORTA ÚNICA
+        # 1. LOOP DE DEBUG MAGENTA PARA TODAS AS PORTAS ÚNICAS
         for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -206,7 +206,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             amb_porta = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.2 <= mid_porta_x <= max(xs) + 0.2 and min(ys) - 0.2 <= mid_porta_y <= max(ys) + 0.2:
+                if min(xs) - 0.4 <= mid_porta_x <= max(xs) + 0.4 and min(ys) - 0.4 <= mid_porta_y <= max(ys) + 0.4:
                     amb_porta = polilinha
                     break
             
