@@ -159,7 +159,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
             else: doc.layers.get(nome_l).color = cor_l
         
-        polilinhas, textos, portas = [], [], []
+        polilinhas, textos, portas_raw = [], [], []
         for entity in msp:
             tipo = entity.dxftype()
             if hasattr(entity.dxf, 'layer'):
@@ -178,19 +178,31 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
                 except: pass
             elif layer == 'IA_PORTAS':
-                if tipo == 'LINE': portas.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                if tipo == 'LINE': portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                    if len(pts) >= 2: portas.append({'p1': pts[0], 'p2': pts[-1]})
+                    if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+
+        # AGRUPAMENTO INTELIGENTE DE PORTAS (Cluster por proximidade para gerar exatamente uma linha por porta)
+        portas_unicas = []
+        for p in portas_raw:
+            pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
+            encontrado = False
+            for pu in portas_unicas:
+                pum = ((pu['p1'][0] + pu['p2'][0])/2, (pu['p1'][1] + pu['p2'][1])/2)
+                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.8:  # raio de 80cm agrupa as entidades da mesma porta
+                    encontrado = True
+                    break
+            if not encontrado:
+                portas_unicas.append(p)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP INDEPENDENTE DE PORTAS PARA GERAR O DEBUG MAGENTA EM TODAS ELAS
-        for p_porta in portas:
+        # 1. LOOP DE DEBUG MAGENTA AGRUPADO POR PORTA ÚNICA
+        for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
-            # Descobre a polilinha/ambiente onde esta porta está inserida
             amb_porta = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
@@ -226,7 +238,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
 
-        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (LUZES, QDC E TOMADAS)
+        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -255,7 +267,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
                 logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
-            unique_portas = [p for p in portas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
+            unique_portas = [p for p in portas_unicas if (min_x - 0.5) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.5) and (min_y - 0.5) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.5)]
 
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
