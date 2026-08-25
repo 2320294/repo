@@ -204,16 +204,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA: POSICIONADO GARANTIDAMENTE DENTRO DO AMBIENTE CORRETO
+        # 1. LOOP DE CÍRCULOS DE TESTE NA INTERSEÇÃO OPOSTA VOLTADA PARA DENTRO DO AMBIENTE
         for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
-            # Identifica o ambiente principal ao qual a porta pertence (o que contém o ponto médio com folga)
+            # Encontra o ambiente dono da porta (onde o ponto médio da porta está contido)
             amb_porta = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.4 <= mid_porta_x <= max(xs) + 0.4 and min(ys) - 0.4 <= mid_porta_y <= max(ys) + 0.4:
+                if min(xs) - 0.2 <= mid_porta_x <= max(xs) + 0.2 and min(ys) - 0.2 <= mid_porta_y <= max(ys) + 0.2:
                     amb_porta = polilinha
                     break
             
@@ -234,22 +234,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
                     nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     
-                    # Interseção oposta (término do vão da soleira)
                     pt1, pt2 = p_porta['p1'], p_porta['p2']
+                    # Define a extremidade oposta do vão
                     d1 = math.hypot(pt1[0] - parede_porta['p1'][0], pt1[1] - parede_porta['p1'][1])
                     d2 = math.hypot(pt2[0] - parede_porta['p1'][0], pt2[1] - parede_porta['p1'][1])
                     ponto_termino = pt2 if d1 < d2 else pt1
                     
-                    direcao_sinal = 1 if (ponto_termino[0] - mid_porta_x >= 0 and abs(w_vx) > 0.5) or (ponto_termino[1] - mid_porta_y >= 0 and abs(w_vy) > 0.5) else -1
+                    # Posiciona o círculo exatamente na intersecção oposta, deslocado 15cm para dentro do ambiente
+                    circ_x = ponto_termino[0] + (nx * 0.15)
+                    circ_y = ponto_termino[1] + (ny * 0.15)
                     
-                    # Inicia 15cm após o término da soleira, forçando o deslocamento estritamente para o interior (nx, ny)
-                    start_mx = ponto_termino[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
-                    start_my = ponto_termino[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
-                    
-                    end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
-                    end_my = start_my + (w_vy * 0.39 * direcao_sinal)
-                    
-                    msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    msp.add_circle(center=(circ_x, circ_y), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
