@@ -119,7 +119,7 @@ def processar_dxf(caminho_arquivo):
 
 def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     n1x, n1y, n2x, n2y = -vy, vx, vy, -vx
-    return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2x)) else (n2x, n2y)
+    return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2y)) else (n2x, n2y)
 
 def point_seg_dist(px, py, pt1, pt2):
     l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
@@ -189,21 +189,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if 0.5 <= dst <= 1.2:
                             portas_raw.append({'p1': pts[0], 'p2': pts[-1], 'tipo': 'polyline'})
                 elif tipo == 'ARC':
-                    # Duplica o arco de abertura da porta na camada de debug com cor diferente (Ex: cor 3 - Verde ou cor 4 - Ciano)
+                    # Calcula o ponto final do arco com base no ângulo final e raio
+                    end_rad = math.radians(entity.dxf.end_angle)
+                    arc_end_x = entity.dxf.center.x + entity.dxf.radius * math.cos(end_rad)
+                    arc_end_y = entity.dxf.center.y + entity.dxf.radius * math.sin(end_rad)
+                    
                     msp.add_arc(
                         center=(entity.dxf.center.x, entity.dxf.center.y),
                         radius=entity.dxf.radius,
                         start_angle=entity.dxf.start_angle,
                         end_angle=entity.dxf.end_angle,
-                        dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 3} # Verde brilhante para destacar o arco duplicado
+                        dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 3}
                     )
-                    portas_raw.append({'arc_center': (entity.dxf.center.x, entity.dxf.center.y), 'tipo': 'arc'})
+                    portas_raw.append({'arc_end': (arc_end_x, arc_end_y), 'tipo': 'arc'})
 
-        # AGRUPAMENTO VÃO + ARCO
+        # AGRUPAMENTO VÃO + FIM DO ARCO
         portas_completas = []
         for p in [x for x in portas_raw if x['tipo'] != 'arc']:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
-            arco_prox = min([a for a in portas_raw if a['tipo'] == 'arc'], key=lambda a: math.hypot(a['arc_center'][0] - pm[0], a['arc_center'][1] - pm[1]), default=None)
+            arco_prox = min([a for a in portas_raw if a['tipo'] == 'arc'], key=lambda a: math.hypot(a['arc_end'][0] - pm[0], a['arc_end'][1] - pm[1]), default=None)
             
             encontrado = False
             for pc in portas_completas:
@@ -212,12 +216,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     encontrado = True
                     break
             if not encontrado:
-                p['arc_center'] = arco_prox['arc_center'] if arco_prox else None
+                p['arc_end'] = arco_prox['arc_end'] if arco_prox else p['p2']
                 portas_completas.append(p)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA ORIENTADO PELO ARCO
+        # 1. LOOP DE DEBUG MAGENTA: INICIANDO A 15CM DO FIM DO ARCO E ALINHADO COM A PAREDE
         for p_porta in portas_completas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -244,20 +248,21 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if segmentos_amb:
                     parede_porta = min(segmentos_amb, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
                     w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
-                    
                     nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
-                    if p_porta['arc_center']:
-                        if (p_porta['arc_center'][0] - mid_porta_x) * nx + (p_porta['arc_center'][1] - mid_porta_y) * ny < 0:
-                            nx, ny = -nx, -ny
                     
-                    center_mx = mid_porta_x + (nx * 0.15)
-                    center_my = mid_porta_y + (ny * 0.15)
+                    # Ponto de referência inicial: Fim do arco (extremidade oposta à dobradiça)
+                    fim_arco = p_porta['arc_end']
                     
-                    half_len = 0.39 / 2
-                    start_mx = center_mx - (w_vx * half_len)
-                    start_my = center_my - (w_vy * half_len)
-                    end_mx = center_mx + (w_vx * half_len)
-                    end_my = center_my + (w_vy * half_len)
+                    # Direção ao longo da parede para afastar os 15cm (0.15m) para fora do vão
+                    direcao_sinal = 1 if (fim_arco[0] - mid_porta_x >= 0 and abs(w_vx) > 0.5) or (fim_arco[1] - mid_porta_y >= 0 and abs(w_vy) > 0.5) else -1
+                    
+                    # Ponto inicial da linha magenta: 15cm após o fim do arco, tangenciando a parede para dentro
+                    start_mx = fim_arco[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
+                    start_my = fim_arco[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
+                    
+                    # Ponto final da linha magenta: comprimento de 39cm alinhado na parede
+                    end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
+                    end_my = start_my + (w_vy * 0.39 * direcao_sinal)
                     
                     msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
 
