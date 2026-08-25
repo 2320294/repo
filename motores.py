@@ -206,17 +206,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # FILTRA APENAS AS SOLEIRAS QUE POSSUEM PORTA ASSOCIADA (PROXIMIDADE < 0.8m)
+        # FILTRA APENAS SOLEIRAS QUE POSSUEM PORTA ASSOCIADA (DISTÂNCIA < 1.0m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             sm = ((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2)
-            tem_porta = any(math.hypot(sm[0] - ((p['p1'][0] + p['p2'][0])/2), sm[1] - ((p['p1'][1] + p['p2'][1])/2)) < 0.8 for p in portas_raw)
+            tem_porta = any(math.hypot(sm[0] - ((p['p1'][0] + p['p2'][0])/2), sm[1] - ((p['p1'][1] + p['p2'][1])/2)) < 1.0 for p in portas_raw)
             if tem_porta:
                 soleiras_com_porta.append(s)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE CÍRCULOS DE TESTE NAS SOLEIRAS COM PORTA
+        # 1. LOOP PARA ADICIONAR O CÍRCULO DENTRO DO AMBIENTE NA EXTREMIDADE OPOSTA DA SOLEIRA
         for s in soleiras_com_porta:
             p1, p2 = s['p1'], s['p2']
             sm_x, sm_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
@@ -224,14 +224,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             # Encontra o ambiente dono da soleira
             amb_porta = None
             for polilinha in polilinhas:
-                if ponto_em_poligono(sm_x, sm_y, polilinha):
-                    amb_porta = polilinha
-                    break
-            
-            if not amb_porta:
-                for polilinha in polilinhas:
-                    xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                    if min(xs) - 0.4 <= sm_x <= max(xs) + 0.4 and min(ys) - 0.4 <= sm_y <= max(ys) + 0.4:
+                xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
+                if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
+                    if ponto_em_poligono(sm_x, sm_y, polilinha) or math.hypot(sm_x - sum(xs)/len(xs), sm_y - sum(ys)/len(ys)) < 3.0:
                         amb_porta = polilinha
                         break
             
@@ -252,18 +247,20 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     w_vx, w_vy = parede_s['vx'], parede_s['vy']
                     nx, ny = get_inside_normal(w_vx, w_vy, sm_x, sm_y, cx, cy)
                     
-                    # Teste das duas extremidades da soleira para achar o ponto oposto voltado para dentro
+                    # Testa as duas extremidades (p1 e p2) da soleira para ver qual avança para dentro da polilinha
                     cand1_x = p1[0] + (nx * 0.15)
                     cand1_y = p1[1] + (ny * 0.15)
                     cand2_x = p2[0] + (nx * 0.15)
                     cand2_y = p2[1] + (ny * 0.15)
                     
+                    # Seleciona o ponto que cai estritamente dentro do ambiente
                     if ponto_em_poligono(cand1_x, cand1_y, amb_porta):
                         fx, fy = cand1_x, cand1_y
                     elif ponto_em_poligono(cand2_x, cand2_y, amb_porta):
                         fx, fy = cand2_x, cand2_y
                     else:
-                        fx, fy = cand1_x, cand1_y
+                        # Se ambos estiverem na borda, escolhe o oposto ao centro da soleira
+                        fx, fy = cand2_x, cand2_y
 
                     msp.add_circle(center=(fx, fy), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
