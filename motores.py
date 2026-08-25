@@ -202,7 +202,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     )
                     portas_raw.append({'arc_end': (arc_end_x, arc_end_y), 'tipo': 'arc'})
 
-        # AGRUPAMENTO VÃO + FIM DO ARCO UNIFICADO
+        # AGRUPAMENTO VÃO + FIM DO ARCO
         portas_completas = []
         for p in [x for x in portas_raw if x['tipo'] != 'arc']:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
@@ -220,7 +220,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA UNIFICADO (15cm após o fim do arco, alinhado perfeitamente na parede para dentro)
+        # 1. LOOP DE DEBUG MAGENTA UNIFICADO EM TODAS AS PORTAS
         for p_porta in portas_completas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -251,16 +251,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     
                     fim_arco = p_porta['arc_end']
                     
-                    # Garantia matemática universal: projeta sempre para dentro do ambiente usando o produto escalar com a normal interna
-                    v_teste_x = fim_arco[0] - mid_porta_x
-                    v_teste_y = fim_arco[1] - mid_porta_y
+                    # Padronização universal baseada na projeção do vetor da parede para garantir que o sentido de avanço seja sempre para dentro do cômodo livre
+                    v_centro_parede_x = cx - mid_porta_x
+                    v_centro_parede_y = cy - mid_porta_y
+                    direcao_sinal = 1 if (w_vx * v_centro_parede_x + w_vy * v_centro_parede_y) >= 0 else -1
                     
-                    # Determina o sentido unificado ao longo da parede de forma consistente
-                    direcao_sinal = 1 if (v_teste_x * w_vx + v_teste_y * w_vy) >= 0 else -1
-                    
+                    # Ponto inicial exato: 15cm após o fim do arco verde, tangenciando a parede por dentro
                     start_mx = fim_arco[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
                     start_my = fim_arco[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
                     
+                    # Ponto final: comprimento exato de 39cm alinhado na parede
                     end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
                     end_my = start_my + (w_vy * 0.39 * direcao_sinal)
                     
