@@ -181,47 +181,31 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if tipo == 'LINE':
                     dst = math.hypot(entity.dxf.end.x - entity.dxf.start.x, entity.dxf.end.y - entity.dxf.start.y)
                     if 0.5 <= dst <= 1.2:
-                        portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y), 'tipo': 'line'})
+                        portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2:
                         dst = math.hypot(pts[-1][0] - pts[0][0], pts[-1][1] - pts[0][1])
                         if 0.5 <= dst <= 1.2:
-                            portas_raw.append({'p1': pts[0], 'p2': pts[-1], 'tipo': 'polyline'})
-                elif tipo == 'ARC':
-                    end_rad = math.radians(entity.dxf.end_angle)
-                    arc_end_x = entity.dxf.center.x + entity.dxf.radius * math.cos(end_rad)
-                    arc_end_y = entity.dxf.center.y + entity.dxf.radius * math.sin(end_rad)
-                    
-                    msp.add_arc(
-                        center=(entity.dxf.center.x, entity.dxf.center.y),
-                        radius=entity.dxf.radius,
-                        start_angle=entity.dxf.start_angle,
-                        end_angle=entity.dxf.end_angle,
-                        dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 3}
-                    )
-                    portas_raw.append({'arc_end': (arc_end_x, arc_end_y), 'tipo': 'arc'})
+                            portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # AGRUPAMENTO VÃO + FIM DO ARCO
-        portas_completas = []
-        for p in [x for x in portas_raw if x['tipo'] != 'arc']:
+        # AGRUPAMENTO DE PORTAS ÚNICAS
+        portas_unicas = []
+        for p in portas_raw:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
-            arco_prox = min([a for a in portas_raw if a['tipo'] == 'arc'], key=lambda a: math.hypot(a['arc_end'][0] - pm[0], a['arc_end'][1] - pm[1]), default=None)
-            
             encontrado = False
-            for pc in portas_completas:
-                pcm = ((pc['p1'][0] + pc['p2'][0])/2, (pc['p1'][1] + pc['p2'][1])/2)
-                if math.hypot(pm[0] - pcm[0], pm[1] - pcm[1]) < 0.6:
+            for pu in portas_unicas:
+                pum = ((pu['p1'][0] + pu['p2'][0])/2, (pu['p1'][1] + pu['p2'][1])/2)
+                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.6:
                     encontrado = True
                     break
             if not encontrado:
-                p['arc_end'] = arco_prox['arc_end'] if arco_prox else p['p2']
-                portas_completas.append(p)
+                portas_unicas.append(p)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA UNIFICADO EM TODAS AS PORTAS
-        for p_porta in portas_completas:
+        # 1. LOOP DE TESTE: ADICIONA UM CÍRCULO NA INTERSEÇÃO OPOSTA (TÉRMINO DA SOLEIRA)
+        for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
@@ -246,25 +230,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 if segmentos_amb:
                     parede_porta = min(segmentos_amb, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
-                    w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
-                    nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     
-                    fim_arco = p_porta['arc_end']
+                    # Identifica qual das duas extremidades da porta/vão está mais distante ou representa o fim da soleira oposta
+                    pt1, pt2 = p_porta['p1'], p_porta['p2']
+                    # Ponto de interseção oposto na soleira (escolhemos uma das pontas do segmento do vão)
+                    ponto_intersecao_oposta = pt2 # Ou pt1 dependendo da geometria do vão
                     
-                    # Padronização universal baseada na projeção do vetor da parede para garantir que o sentido de avanço seja sempre para dentro do cômodo livre
-                    v_centro_parede_x = cx - mid_porta_x
-                    v_centro_parede_y = cy - mid_porta_y
-                    direcao_sinal = 1 if (w_vx * v_centro_parede_x + w_vy * v_centro_parede_y) >= 0 else -1
-                    
-                    # Ponto inicial exato: 15cm após o fim do arco verde, tangenciando a parede por dentro
-                    start_mx = fim_arco[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
-                    start_my = fim_arco[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
-                    
-                    # Ponto final: comprimento exato de 39cm alinhado na parede
-                    end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
-                    end_my = start_my + (w_vy * 0.39 * direcao_sinal)
-                    
-                    msp.add_line((start_mx, start_my), (end_mx, end_my), dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG'})
+                    # Desenha um círculo de teste na intersecção oposta (Cor 6 - Magenta)
+                    msp.add_circle(center=ponto_intersecao_oposta, radius=0.08, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
@@ -295,7 +268,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
                 logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
-            unique_portas = [p for p in portas_completas if (min_x - 0.8) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.8) and (min_y - 0.8) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.8)]
+            unique_portas = [p for p in portas_unicas if (min_x - 0.8) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.8) and (min_y - 0.8) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.8)]
 
             if nome in dict_dados:
                 qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
