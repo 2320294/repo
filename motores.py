@@ -68,6 +68,23 @@ def dimensionar_cargas(nome, area, perimetro):
         "Carga TUE (VA)": carga_tue
     }
 
+def ponto_em_poligono(x, y, polilinha):
+    """Testa se o ponto (x, y) está dentro da polilinha usando o algoritmo Ray-Casting"""
+    n = len(polilinha)
+    dentro = False
+    p1x, p1y = polilinha[0]
+    for i in range(n + 1):
+        p2x, p2y = polilinha[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        dentro = not dentro
+        p1x, p1y = p2x, p2y
+    return dentro
+
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
@@ -204,19 +221,28 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE CÍRCULOS DE TESTE NA INTERSEÇÃO OPOSTA VOLTADA PARA DENTRO DO AMBIENTE
+        # 1. LOOP DE CÍRCULOS DE TESTE APENAS ONDE HÁ PORTA, ESTRITAMENTE DENTRO DA POLILINHA DO AMBIENTE
         for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
-            # Encontra o ambiente dono da porta (onde o ponto médio da porta está contido)
+            # Identifica qual polilinha contém o ponto médio da porta
             amb_porta = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.4 <= mid_porta_x <= max(xs) + 0.4 and min(ys) - 0.4 <= mid_porta_y <= max(ys) + 0.4:
-                    amb_porta = polilinha
-                    break
+                if min(xs) - 0.3 <= mid_porta_x <= max(xs) + 0.3 and min(ys) - 0.3 <= mid_porta_y <= max(ys) + 0.3:
+                    if ponto_em_poligono(mid_porta_x, mid_porta_y, polilinha):
+                        amb_porta = polilinha
+                        break
             
+            if not amb_porta:
+                # Se o ponto médio cair exatamente na linha divisória, busca a polilinha mais próxima que contenha a porta nas proximidades
+                for polilinha in polilinhas:
+                    xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
+                    if min(xs) - 0.5 <= mid_porta_x <= max(xs) + 0.5 and min(ys) - 0.5 <= mid_porta_y <= max(ys) + 0.5:
+                        amb_porta = polilinha
+                        break
+
             if amb_porta:
                 cx = sum([pt[0] for pt in amb_porta]) / len(amb_porta)
                 cy = sum([pt[1] for pt in amb_porta]) / len(amb_porta)
@@ -238,14 +264,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     d1 = math.hypot(pt1[0] - parede_porta['p1'][0], pt1[1] - parede_porta['p1'][1])
                     d2 = math.hypot(pt2[0] - parede_porta['p1'][0], pt2[1] - parede_porta['p1'][1])
                     
-                    # Seleciona rigorosamente a extremidade oposta na soleira
+                    # Término oposto da soleira (lado oposto à dobradiça)
                     ponto_termino = pt2 if d1 < d2 else pt1
                     
-                    # Posiciona o círculo na interseção oposta, deslocado 15cm estritamente para o interior do ambiente correspondente
-                    circ_x = ponto_termino[0] + (nx * 0.15)
-                    circ_y = ponto_termino[1] + (ny * 0.15)
+                    # Testa os dois sentidos ao longo da parede para garantir que o círculo caia DENTRO da polilinha do ambiente
+                    candidato1_x = ponto_termino[0] + (w_vx * 0.15) + (nx * 0.12)
+                    candidato1_y = ponto_termino[1] + (w_vy * 0.15) + (ny * 0.12)
                     
-                    msp.add_circle(center=(circ_x, circ_y), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    candidato2_x = ponto_termino[0] - (w_vx * 0.15) + (nx * 0.12)
+                    candidato2_y = ponto_termino[1] - (w_vy * 0.15) + (ny * 0.12)
+                    
+                    if ponto_em_poligono(candidato1_x, candidato1_y, amb_porta):
+                        final_x, final_y = candidato1_x, candidato1_y
+                    elif ponto_em_poligono(candidato2_x, candidato2_y, amb_porta):
+                        final_x, final_y = candidato2_x, candidato2_y
+                    else:
+                        final_x, final_y = candidato1_x, candidato1_y # fallback
+
+                    msp.add_circle(center=(final_x, final_y), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
