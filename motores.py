@@ -119,7 +119,7 @@ def processar_dxf(caminho_arquivo):
 
 def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     n1x, n1y, n2x, n2y = -vy, vx, vy, -vx
-    return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2y)) else (n2x, n2y)
+    return (n1x, n1y) if math.hypot(cx - (start_x + n1x), cy - (start_y + n1y)) < math.hypot(cx - (start_x + n2x), cy - (start_y + n2x)) else (n2x, n2y)
 
 def point_seg_dist(px, py, pt1, pt2):
     l2 = (pt1[0] - pt2[0])**2 + (pt1[1] - pt2[1])**2
@@ -189,17 +189,22 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if 0.5 <= dst <= 1.2:
                             portas_raw.append({'p1': pts[0], 'p2': pts[-1], 'tipo': 'polyline'})
                 elif tipo == 'ARC':
-                    # Guarda o centro do arco da porta para indicar exatamente para qual lado a porta abre
+                    # Duplica o arco de abertura da porta na camada de debug com cor diferente (Ex: cor 3 - Verde ou cor 4 - Ciano)
+                    msp.add_arc(
+                        center=(entity.dxf.center.x, entity.dxf.center.y),
+                        radius=entity.dxf.radius,
+                        start_angle=entity.dxf.start_angle,
+                        end_angle=entity.dxf.end_angle,
+                        dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 3} # Verde brilhante para destacar o arco duplicado
+                    )
                     portas_raw.append({'arc_center': (entity.dxf.center.x, entity.dxf.center.y), 'tipo': 'arc'})
 
-        # AGRUPAMENTO INTELIGENTE VÃO + ARCO
+        # AGRUPAMENTO VÃO + ARCO
         portas_completas = []
         for p in [x for x in portas_raw if x['tipo'] != 'arc']:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
-            # Busca o arco correspondente mais próximo
             arco_prox = min([a for a in portas_raw if a['tipo'] == 'arc'], key=lambda a: math.hypot(a['arc_center'][0] - pm[0], a['arc_center'][1] - pm[1]), default=None)
             
-            # Evita duplicidade
             encontrado = False
             for pc in portas_completas:
                 pcm = ((pc['p1'][0] + pc['p2'][0])/2, (pc['p1'][1] + pc['p2'][1])/2)
@@ -212,7 +217,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA ORIENTADO PELO ARCO DA PORTA
+        # 1. LOOP DE DEBUG MAGENTA ORIENTADO PELO ARCO
         for p_porta in portas_completas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -240,10 +245,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     parede_porta = min(segmentos_amb, key=lambda w: point_seg_dist(mid_porta_x, mid_porta_y, w['p1'], w['p2']))
                     w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
                     
-                    # Garante que o vetor normal aponte na direção exata do centro do arco da porta (interior do ambiente)
                     nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     if p_porta['arc_center']:
-                        # Se o centro do arco estiver na direção oposta ao normal calculado, inverte para garantir que aponta para dentro do raio de abertura
                         if (p_porta['arc_center'][0] - mid_porta_x) * nx + (p_porta['arc_center'][1] - mid_porta_y) * ny < 0:
                             nx, ny = -nx, -ny
                     
