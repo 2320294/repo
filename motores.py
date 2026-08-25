@@ -193,7 +193,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     arc_end_x = entity.dxf.center.x + entity.dxf.radius * math.cos(end_rad)
                     arc_end_y = entity.dxf.center.y + entity.dxf.radius * math.sin(end_rad)
                     
-                    # Duplica o arco em verde (cor 3)
                     msp.add_arc(
                         center=(entity.dxf.center.x, entity.dxf.center.y),
                         radius=entity.dxf.radius,
@@ -203,7 +202,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     )
                     portas_raw.append({'arc_end': (arc_end_x, arc_end_y), 'tipo': 'arc'})
 
-        # AGRUPAMENTO VÃO + FIM DO ARCO
+        # AGRUPAMENTO VÃO + FIM DO ARCO UNIFICADO
         portas_completas = []
         for p in [x for x in portas_raw if x['tipo'] != 'arc']:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
@@ -221,7 +220,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA: INICIANDO NO FIM DO ARCO VERDE
+        # 1. LOOP DE DEBUG MAGENTA UNIFICADO (15cm após o fim do arco, alinhado perfeitamente na parede para dentro)
         for p_porta in portas_completas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -250,17 +249,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
                     nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     
-                    # Fim exato do arco verde duplicado
                     fim_arco = p_porta['arc_end']
                     
-                    # Direção ao longo da parede para afastar os 15cm (0.15m)
-                    direcao_sinal = 1 if (fim_arco[0] - mid_porta_x >= 0 and abs(w_vx) > 0.5) or (fim_arco[1] - mid_porta_y >= 0 and abs(w_vy) > 0.5) else -1
+                    # Garantia matemática universal: projeta sempre para dentro do ambiente usando o produto escalar com a normal interna
+                    v_teste_x = fim_arco[0] - mid_porta_x
+                    v_teste_y = fim_arco[1] - mid_porta_y
                     
-                    # Ponto inicial: 15cm após o fim do arco, tangenciando a parede por dentro
+                    # Determina o sentido unificado ao longo da parede de forma consistente
+                    direcao_sinal = 1 if (v_teste_x * w_vx + v_teste_y * w_vy) >= 0 else -1
+                    
                     start_mx = fim_arco[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
                     start_my = fim_arco[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
                     
-                    # Ponto final: comprimento de 39cm alinhado na parede
                     end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
                     end_my = start_my + (w_vy * 0.39 * direcao_sinal)
                     
