@@ -178,19 +178,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
                 except: pass
             elif layer == 'IA_PORTAS':
-                if tipo == 'LINE': portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                if tipo == 'LINE':
+                    dst = math.hypot(entity.dxf.end.x - entity.dxf.start.x, entity.dxf.end.y - entity.dxf.start.y)
+                    if 0.5 <= dst <= 1.2:  # Filtra apenas o segmento de vão padrão de porta (excluindo arcos gigantes ou detalhes)
+                        portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                    if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+                    if len(pts) >= 2:
+                        dst = math.hypot(pts[-1][0] - pts[0][0], pts[-1][1] - pts[0][1])
+                        if 0.5 <= dst <= 1.2:
+                            portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # AGRUPAMENTO REFINADO DE PORTAS (Raio menor de 30cm para não fundir portas distintas)
+        # FILTRAGEM RIGOROSA DE PORTAS ÚNICAS (Evita duplicidade por proximidade)
         portas_unicas = []
         for p in portas_raw:
             pm = ((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2)
             encontrado = False
             for pu in portas_unicas:
                 pum = ((pu['p1'][0] + pu['p2'][0])/2, (pu['p1'][1] + pu['p2'][1])/2)
-                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.3:
+                if math.hypot(pm[0] - pum[0], pm[1] - pum[1]) < 0.5:
                     encontrado = True
                     break
             if not encontrado:
@@ -198,7 +204,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA PARA TODAS AS PORTAS ÚNICAS
+        # 1. LOOP DE DEBUG MAGENTA EXATO EM CADA PORTA ÚNICA FILTRADA
         for p_porta in portas_unicas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -206,7 +212,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             amb_porta = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.4 <= mid_porta_x <= max(xs) + 0.4 and min(ys) - 0.4 <= mid_porta_y <= max(ys) + 0.4:
+                if min(xs) - 0.3 <= mid_porta_x <= max(xs) + 0.3 and min(ys) - 0.3 <= mid_porta_y <= max(ys) + 0.3:
                     amb_porta = polilinha
                     break
             
@@ -227,6 +233,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
                     nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     
+                    # Alinhamento central exato na soleira com afastamento de 15cm e 39cm de comprimento
                     center_mx = mid_porta_x + (nx * 0.15)
                     center_my = mid_porta_y + (ny * 0.15)
                     
