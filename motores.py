@@ -206,26 +206,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # IDENTIFICA SOLEIRAS COM PORTA ASSOCIADA (Tolerância expandida para 0.8m)
+        # FILTRAGEM RIGOROSA: Apenas soleiras que possuem pelo menos uma porta cruzando ou muito próxima (tolerância de 1.2m para abranger todos os vãos de portas da casa)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
-            tem_porta = False
-            for p in portas_raw:
-                d_p1_s = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
-                d_p2_s = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
-                d_s1_p = point_seg_dist(s_p1[0], s_p1[1], p['p1'], p['p2'])
-                d_s2_p = point_seg_dist(s_p2[0], s_p2[1], p['p1'], p['p2'])
-                
-                if d_p1_s < 0.8 or d_p2_s < 0.8 or d_s1_p < 0.8 or d_s2_p < 0.8:
-                    tem_porta = True
-                    break
+            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
+            
+            tem_porta = any(
+                math.hypot(sm_x - ((p['p1'][0] + p['p2'][0])/2), sm_y - ((p['p1'][1] + p['p2'][1])/2)) < 1.2 or
+                point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2) < 0.6 or
+                point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2) < 0.6
+                for p in portas_raw
+            )
             if tem_porta:
                 soleiras_com_porta.append(s)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE INSERÇÃO DO CÍRCULO NO PONTO INTERNO DA SOLEIRA COM PORTA
+        # 1. LOOP ESTÁVEL: INSERE O CÍRCULO EXATAMENTE NO PONTO INTERNO DA SOLEIRA ASSOCIADA À PORTA
         for s in soleiras_com_porta:
             s_p1, s_p2 = s['p1'], s['p2']
             
@@ -234,7 +232,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 in_1 = ponto_em_poligono(s_p1[0], s_p1[1], polilinha)
                 in_2 = ponto_em_poligono(s_p2[0], s_p2[1], polilinha)
                 
-                # Se uma ponta está dentro da polilinha e a outra não (ou cruza), a ponta interna é o alvo
                 if in_1 and not in_2:
                     ponto_interno = s_p1
                     break
@@ -243,11 +240,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     break
             
             if not ponto_interno:
-                # Fallback: pega a extremidade que estiver mais para dentro do ambiente adjacente
+                # Se ambos os extremos caírem na divisa, avalia em direção ao interior do ambiente mais próximo
                 sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
                 for polilinha in polilinhas:
                     xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                    if min(xs) - 0.6 <= sm_x <= max(xs) + 0.6 and min(ys) - 0.6 <= sm_y <= max(ys) + 0.6:
+                    if min(xs) - 0.8 <= sm_x <= max(xs) + 0.8 and min(ys) - 0.8 <= sm_y <= max(ys) + 0.8:
                         cx, cy = sum(xs)/len(xs), sum(ys)/len(ys)
                         d1 = math.hypot(s_p1[0] - cx, s_p1[1] - cy)
                         d2 = math.hypot(s_p2[0] - cx, s_p2[1] - cy)
