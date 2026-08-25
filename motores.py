@@ -206,49 +206,62 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # SOLEIRAS COM PORTA: verifica proximidade generica (< 2.5 metros) com qualquer porta
+        # IDENTIFICA APENAS AS SOLEIRAS QUE POSSUEM PORTA CRUZANDO OU TOCANDO DIRETAMENTE (Distância < 0.15m de algum ponto da porta)
         soleiras_com_porta = []
         for s in soleiras_raw:
-            sm = ((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2)
-            tem_porta = any(math.hypot(sm[0] - ((p['p1'][0] + p['p2'][0])/2), sm[1] - ((p['p1'][1] + p['p2'][1])/2)) < 2.5 for p in portas_raw)
+            s_p1, s_p2 = s['p1'], s['p2']
+            tem_porta = False
+            for p in portas_raw:
+                # Verifica se o ponto inicial ou final da porta está perto da soleira, ou se o segmento da porta intercepta/cola na soleira
+                d_p1_s = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
+                d_p2_s = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
+                d_s1_p = point_seg_dist(s_p1[0], s_p1[1], p['p1'], p['p2'])
+                d_s2_p = point_seg_dist(s_p2[0], s_p2[1], p['p1'], p['p2'])
+                
+                if d_p1_s < 0.15 or d_p2_s < 0.15 or d_s1_p < 0.15 or d_s2_p < 0.15:
+                    tem_porta = True
+                    break
             if tem_porta:
                 soleiras_com_porta.append(s)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DIRETO: ADICIONA O CÍRCULO MAGENTA NAS EXTREMIDADES INTERNAS DAS SOLEIRAS COM PORTA
+        # 1. LOOP RIGOROSO: ADICIONA O CÍRCULO APENAS NO PONTO OPOSTO DA SOLEIRA COM PORTA DENTRO DO AMBIENTE
         for s in soleiras_com_porta:
-            p1, p2 = s['p1'], s['p2']
+            s_p1, s_p2 = s['p1'], s['p2']
             
-            # Descobre qual ambiente contém p1 ou p2
-            amb_alvo = None
-            ponto_interno = None
+            # Encontra qual dos extremos da soleira está mais próximo de alguma porta (o lado da dobradiça/batente com porta)
+            # e qual é o extremo oposto (que deve ir para dentro do ambiente)
+            melhor_ponto = None
+            melhor_amb = None
             
             for polilinha in polilinhas:
-                if ponto_em_poligono(p1[0], p1[1], polilinha):
-                    amb_alvo = polilinha
-                    ponto_interno = p1
+                in_1 = ponto_em_poligono(s_p1[0], s_p1[1], polilinha)
+                in_2 = ponto_em_poligono(s_p2[0], s_p2[1], polilinha)
+                
+                if in_1 and not in_2:
+                    melhor_ponto = s_p1
+                    melhor_amb = polilinha
                     break
-                elif ponto_em_poligono(p2[0], p2[1], polilinha):
-                    amb_alvo = polilinha
-                    ponto_interno = p2
+                elif in_2 and not in_1:
+                    melhor_ponto = s_p2
+                    melhor_amb = polilinha
                     break
             
-            if amb_alvo and ponto_interno:
-                msp.add_circle(center=ponto_interno, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
-            else:
-                # Fallback se cair exatamente na divisa: pega o ponto mais distante do centro da soleira em direção ao interior
-                sm_x, sm_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+            if not melhor_ponto:
+                # Se ambos caírem na divisa, escolhe o ponto cuja direção para o interior do ambiente adjacente é válida
+                sm_x, sm_y = (s_p1[0] + s_p1[0])/2, (s_p1[1] + s_p2[1])/2
                 for polilinha in polilinhas:
                     xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                    if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
-                        cx = sum(xs) / len(xs)
-                        cy = sum(ys) / len(ys)
-                        d1 = math.hypot(p1[0] - cx, p1[1] - cy)
-                        d2 = math.hypot(p2[0] - cx, p2[1] - cy)
-                        ponto_interno = p1 if d1 < d2 else p2
-                        msp.add_circle(center=ponto_interno, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    if min(xs) - 0.4 <= sm_x <= max(xs) + 0.4 and min(ys) - 0.4 <= sm_y <= max(ys) + 0.4:
+                        cx, cy = sum(xs)/len(xs), sum(ys)/len(ys)
+                        d1 = math.hypot(s_p1[0] - cx, s_p1[1] - cy)
+                        d2 = math.hypot(s_p2[0] - cx, s_p2[1] - cy)
+                        melhor_ponto = s_p1 if d1 < d2 else s_p2
                         break
+            
+            if melhor_ponto:
+                msp.add_circle(center=melhor_ponto, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
