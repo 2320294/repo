@@ -206,56 +206,49 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # FILTRA APENAS SOLEIRAS QUE POSSUEM PORTA ASSOCIADA (DISTÂNCIA < 1.0m)
+        # FILTRA APENAS SOLEIRAS QUE POSSUEM QUALQUER PORTA PRÓXIMA (RAIO DE ATÉ 2.0 METROS)
         soleiras_com_porta = []
         for s in soleiras_raw:
             sm = ((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2)
-            tem_porta = any(math.hypot(sm[0] - ((p['p1'][0] + p['p2'][0])/2), sm[1] - ((p['p1'][1] + p['p2'][1])/2)) < 1.0 for p in portas_raw)
+            # Verifica se há qualquer linha/segmento de porta a até 2 metros
+            tem_porta = any(
+                point_seg_dist(sm[0], sm[1], p['p1'], p['p2']) < 2.0 or
+                point_seg_dist(p['p1'][0], p['p1'][1], s['p1'], s['p2']) < 2.0
+                for p in portas_raw
+            )
             if tem_porta:
                 soleiras_com_porta.append(s)
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP PARA ADICIONAR O CÍRCULO NO PONTO OPOSTO DA SOLEIRA QUE ESTÁ DENTRO DO AMBIENTE
+        # 1. LOOP PARA ADICIONAR O CÍRCULO NO PONTO DENTRO DO AMBIENTE
         for s in soleiras_com_porta:
             p1, p2 = s['p1'], s['p2']
             
-            # Encontra qual ambiente contém p1 ou p2
+            # Encontra qual ambiente contém p1 ou p2 ou está adjacente
             amb_porta = None
-            ponto_alvo = None
-            
             for polilinha in polilinhas:
-                # Testa se p1 está dentro
-                if ponto_em_poligono(p1[0], p1[1], polilinha):
+                if ponto_em_poligono(p1[0], p1[1], polilinha) or ponto_em_poligono(p2[0], p2[1], polilinha):
                     amb_porta = polilinha
-                    ponto_alvo = p2  # O oposto (p2) está dentro ou a soleira cruza; vamos testar qual ponta está dentro
-                    break
-                elif ponto_em_poligono(p2[0], p2[1], polilinha):
-                    amb_porta = polilinha
-                    ponto_alvo = p1
                     break
             
             if not amb_porta:
-                # Fallback por proximidade ao centroide do ambiente
                 sm_x, sm_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
                 for polilinha in polilinhas:
                     xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                    if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
+                    if min(xs) - 1.0 <= sm_x <= max(xs) + 1.0 and min(ys) - 1.0 <= sm_y <= max(ys) + 1.0:
                         amb_porta = polilinha
                         break
 
             if amb_porta:
-                # Descobre qual extremidade da soleira (p1 ou p2) está estritamente dentro da polilinha do ambiente
                 in_p1 = ponto_em_poligono(p1[0], p1[1], amb_porta)
                 in_p2 = ponto_em_poligono(p2[0], p2[1], amb_porta)
                 
-                # Queremos o ponto oposto ao encontro com a porta (ou seja, a extremidade que avança para dentro do cômodo)
                 if in_p1 and not in_p2:
                     fx, fy = p1
                 elif in_p2 and not in_p1:
                     fx, fy = p2
                 else:
-                    # Se ambos estiverem dentro ou na borda, pega o que está mais afastado do centro da soleira em direção ao interior
                     cx = sum([pt[0] for pt in amb_porta]) / len(amb_porta)
                     cy = sum([pt[1] for pt in amb_porta]) / len(amb_porta)
                     d1 = math.hypot(p1[0] - cx, p1[1] - cy)
