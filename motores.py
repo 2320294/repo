@@ -216,53 +216,53 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP PARA ADICIONAR O CÍRCULO DENTRO DO AMBIENTE NA EXTREMIDADE OPOSTA DA SOLEIRA
+        # 1. LOOP PARA ADICIONAR O CÍRCULO NO PONTO OPOSTO DA SOLEIRA QUE ESTÁ DENTRO DO AMBIENTE
         for s in soleiras_com_porta:
             p1, p2 = s['p1'], s['p2']
-            sm_x, sm_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
             
-            # Encontra o ambiente dono da soleira
+            # Encontra qual ambiente contém p1 ou p2
             amb_porta = None
+            ponto_alvo = None
+            
             for polilinha in polilinhas:
-                xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
-                    if ponto_em_poligono(sm_x, sm_y, polilinha) or math.hypot(sm_x - sum(xs)/len(xs), sm_y - sum(ys)/len(ys)) < 3.0:
+                # Testa se p1 está dentro
+                if ponto_em_poligono(p1[0], p1[1], polilinha):
+                    amb_porta = polilinha
+                    ponto_alvo = p2  # O oposto (p2) está dentro ou a soleira cruza; vamos testar qual ponta está dentro
+                    break
+                elif ponto_em_poligono(p2[0], p2[1], polilinha):
+                    amb_porta = polilinha
+                    ponto_alvo = p1
+                    break
+            
+            if not amb_porta:
+                # Fallback por proximidade ao centroide do ambiente
+                sm_x, sm_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+                for polilinha in polilinhas:
+                    xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
+                    if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
                         amb_porta = polilinha
                         break
-            
-            if amb_porta:
-                cx = sum([pt[0] for pt in amb_porta]) / len(amb_porta)
-                cy = sum([pt[1] for pt in amb_porta]) / len(amb_porta)
-                
-                segmentos_amb = []
-                poly_loop = list(amb_porta); poly_loop.append(poly_loop[0])
-                for i in range(len(poly_loop)-1):
-                    dst = math.hypot(poly_loop[i+1][0]-poly_loop[i][0], poly_loop[i+1][1]-poly_loop[i][1])
-                    if dst > 0.1:
-                        vx, vy = (poly_loop[i+1][0] - poly_loop[i][0]) / dst, (poly_loop[i+1][1] - poly_loop[i][1]) / dst
-                        segmentos_amb.append({'p1': poly_loop[i], 'p2': poly_loop[i+1], 'vx': vx, 'vy': vy})
-                
-                if segmentos_amb:
-                    parede_s = min(segmentos_amb, key=lambda w: point_seg_dist(sm_x, sm_y, w['p1'], w['p2']))
-                    w_vx, w_vy = parede_s['vx'], parede_s['vy']
-                    nx, ny = get_inside_normal(w_vx, w_vy, sm_x, sm_y, cx, cy)
-                    
-                    # Testa as duas extremidades (p1 e p2) da soleira para ver qual avança para dentro da polilinha
-                    cand1_x = p1[0] + (nx * 0.15)
-                    cand1_y = p1[1] + (ny * 0.15)
-                    cand2_x = p2[0] + (nx * 0.15)
-                    cand2_y = p2[1] + (ny * 0.15)
-                    
-                    # Seleciona o ponto que cai estritamente dentro do ambiente
-                    if ponto_em_poligono(cand1_x, cand1_y, amb_porta):
-                        fx, fy = cand1_x, cand1_y
-                    elif ponto_em_poligono(cand2_x, cand2_y, amb_porta):
-                        fx, fy = cand2_x, cand2_y
-                    else:
-                        # Se ambos estiverem na borda, escolhe o oposto ao centro da soleira
-                        fx, fy = cand2_x, cand2_y
 
-                    msp.add_circle(center=(fx, fy), radius=0.10, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+            if amb_porta:
+                # Descobre qual extremidade da soleira (p1 ou p2) está estritamente dentro da polilinha do ambiente
+                in_p1 = ponto_em_poligono(p1[0], p1[1], amb_porta)
+                in_p2 = ponto_em_poligono(p2[0], p2[1], amb_porta)
+                
+                # Queremos o ponto oposto ao encontro com a porta (ou seja, a extremidade que avança para dentro do cômodo)
+                if in_p1 and not in_p2:
+                    fx, fy = p1
+                elif in_p2 and not in_p1:
+                    fx, fy = p2
+                else:
+                    # Se ambos estiverem dentro ou na borda, pega o que está mais afastado do centro da soleira em direção ao interior
+                    cx = sum([pt[0] for pt in amb_porta]) / len(amb_porta)
+                    cy = sum([pt[1] for pt in amb_porta]) / len(amb_porta)
+                    d1 = math.hypot(p1[0] - cx, p1[1] - cy)
+                    d2 = math.hypot(p2[0] - cx, p2[1] - cy)
+                    fx, fy = p1 if d1 < d2 else p2
+
+                msp.add_circle(center=(fx, fy), radius=0.12, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
