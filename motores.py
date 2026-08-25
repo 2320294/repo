@@ -189,11 +189,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         if 0.5 <= dst <= 1.2:
                             portas_raw.append({'p1': pts[0], 'p2': pts[-1], 'tipo': 'polyline'})
                 elif tipo == 'ARC':
-                    # Calcula o ponto final do arco com base no ângulo final e raio
                     end_rad = math.radians(entity.dxf.end_angle)
                     arc_end_x = entity.dxf.center.x + entity.dxf.radius * math.cos(end_rad)
                     arc_end_y = entity.dxf.center.y + entity.dxf.radius * math.sin(end_rad)
                     
+                    # Duplica o arco em verde (cor 3)
                     msp.add_arc(
                         center=(entity.dxf.center.x, entity.dxf.center.y),
                         radius=entity.dxf.radius,
@@ -221,7 +221,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP DE DEBUG MAGENTA: INICIANDO A 15CM DO FIM DO ARCO E ALINHADO COM A PAREDE
+        # 1. LOOP DE DEBUG MAGENTA: INICIANDO NO FIM DO ARCO VERDE
         for p_porta in portas_completas:
             mid_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             mid_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
@@ -250,17 +250,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     w_vx, w_vy = parede_porta['vx'], parede_porta['vy']
                     nx, ny = get_inside_normal(w_vx, w_vy, mid_porta_x, mid_porta_y, cx, cy)
                     
-                    # Ponto de referência inicial: Fim do arco (extremidade oposta à dobradiça)
+                    # Fim exato do arco verde duplicado
                     fim_arco = p_porta['arc_end']
                     
-                    # Direção ao longo da parede para afastar os 15cm (0.15m) para fora do vão
+                    # Direção ao longo da parede para afastar os 15cm (0.15m)
                     direcao_sinal = 1 if (fim_arco[0] - mid_porta_x >= 0 and abs(w_vx) > 0.5) or (fim_arco[1] - mid_porta_y >= 0 and abs(w_vy) > 0.5) else -1
                     
-                    # Ponto inicial da linha magenta: 15cm após o fim do arco, tangenciando a parede para dentro
+                    # Ponto inicial: 15cm após o fim do arco, tangenciando a parede por dentro
                     start_mx = fim_arco[0] + (w_vx * 0.15 * direcao_sinal) + (nx * 0.12)
                     start_my = fim_arco[1] + (w_vy * 0.15 * direcao_sinal) + (ny * 0.12)
                     
-                    # Ponto final da linha magenta: comprimento de 39cm alinhado na parede
+                    # Ponto final: comprimento de 39cm alinhado na parede
                     end_mx = start_mx + (w_vx * 0.39 * direcao_sinal)
                     end_my = start_my + (w_vy * 0.39 * direcao_sinal)
                     
