@@ -228,12 +228,17 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    # Cria o DataFrame e oculta as colunas técnicas indesejadas (Centro_X e Centro_Y)
+    # Cria o DataFrame e oculta colunas técnicas (Centro_X, Centro_X, e todas as potências) + hide_index=True
     df_consolidado = pd.DataFrame(tabela_editada)
-    colunas_para_ocultar = ["Centro_X", "Centro_Y"]
+    colunas_para_ocultar = [
+        "Centro_X", "Centro_Y", 
+        "Pot. Unit. Ilum (W)", "Carga Ilum. (W)", 
+        "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
+        "Pot. Unit. TUE (W)", "Carga TUE (W)"
+    ]
     df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns])
 
-    st.dataframe(df_exibicao, use_container_width=True)
+    st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
 
     # Seleção do QDC
     st.divider()
@@ -276,7 +281,7 @@ if dados_ambientes:
         {"Material": "Cabo Flex. 2,5 mm² - Neutro", "Unidade": "m", "Quantidade": 180},
         {"Material": "Cabo Flex. 4,0 ou 6,0 mm² - Verde (Terra TUEs)", "Unidade": "m", "Quantidade": 84}
     ])
-    st.dataframe(materiais_df, use_container_width=True)
+    st.dataframe(materiais_df, use_container_width=True, hide_index=True)
 
     # ====================================================
     # EXPORTAÇÃO E RELATÓRIOS
