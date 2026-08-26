@@ -231,7 +231,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # Mapeia cada polilinha de ambiente ao seu nome
         ambientes_nomes = {}
         for poly in polilinhas:
             xs, ys = [p[0] for p in poly], [p[1] for p in poly]
@@ -240,33 +239,34 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # SOLEIRAS COM PORTA: Apenas soleiras próximas a portas (raio < 1.5m)
+        # FILTRAGEM RESTRITA: A soleira SÓ é válida se houver uma porta FISICAMENTE SOBREPOSTA ou EXTREMAMENTE PRÓXIMA (< 0.4m) de sua extensão
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
-            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            # Encontra a porta associada mais próxima desta soleira
-            porta_mais_proxima = None
-            menor_dist = 999.0
+            porta_associada = None
             for p in portas_raw:
-                pm_x = (p['p1'][0] + p['p2'][0]) / 2
-                pm_y = (p['p1'][1] + p['p2'][1]) / 2
-                d = math.hypot(sm_x - pm_x, sm_y - pm_y)
-                if d < menor_dist:
-                    menor_dist = d
-                    porta_mais_proxima = p
+                # Verifica a distância mínima entre o segmento da soleira e as pontas da porta
+                d1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
+                d2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
+                pm_porta_x = (p['p1'][0] + p['p2'][0]) / 2
+                pm_porta_y = (p['p1'][1] + p['p2'][1]) / 2
+                d_mid = point_seg_dist(pm_porta_x, pm_porta_y, s_p1, s_p2)
+                
+                if d1 < 0.4 or d2 < 0.4 or d_mid < 0.4:
+                    porta_associada = p
+                    break
             
-            if menor_dist < 1.5 and porta_mais_proxima is not None:
-                soleiras_com_porta.append({'s': s, 'porta': porta_mais_proxima})
+            if porta_associada is not None:
+                soleiras_com_porta.append({'s': s, 'porta': porta_associada})
 
-        # 1. INSERE O CÍRCULO MAGENTA NA EXTREMIDADE OPOSTA DA SOLEIRA (Longe da porta, dentro do ambiente principal)
+        # 1. INSERE O CÍRCULO MAGENTA EXATAMENTE NA EXTREMIDADE OPOSTA DA SOLEIRA COM PORTA
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
             
-            # Determina qual ponta da soleira está mais próxima da porta (junção porta + soleira)
+            # Identifica qual ponta da soleira está mais próxima da porta (junção com a porta)
             pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
@@ -276,12 +276,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             # A extremidade oposta é a que está MAIS LONGE da porta
             ponto_oposto = s_p2 if d1_porta < d2_porta else s_p1
             
-            # Encontra o ambiente principal adjacente (excluindo corredores)
+            # Encontra o ambiente principal adjacente (excluindo corredores/circulação)
             ambientes_adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
                 xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                if min(xs) - 0.6 <= ponto_oposto[0] <= max(xs) + 0.6 and min(ys) - 0.6 <= ponto_oposto[1] <= max(ys) + 0.6:
+                if min(xs) - 0.5 <= ponto_oposto[0] <= max(xs) + 0.5 and min(ys) - 0.5 <= ponto_oposto[1] <= max(ys) + 0.5:
                     ambientes_adjacentes.append((poly, nome_amb))
             
             ambiente_alvo = None
@@ -297,7 +297,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 
-                # Desloca 12cm a partir do ponto oposto na direção do centro do ambiente para garantir que fique interno
+                # Desloca 12cm para dentro do ambiente a partir do ponto oposto da soleira
                 d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
                 if d_tot > 0:
                     dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
