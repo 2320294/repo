@@ -5,17 +5,22 @@ import os
 
 
 # ============================================================
-# CONFIGURAÇÕES GERAIS
+# CONFIGURAÇÕES DE SEGURANÇA PARA POSICIONAMENTO
 # ============================================================
 
-APPID = "PROJ_ELETRICA"
+# Distância mínima entre uma tomada e o vértice/canto da parede
+MARGEM_CANTO = 0.35
 
-TOLERANCIA_PORTA = 0.15
-RAIO_DEBUG = 0.15
+# Distância de segurança em torno de portas e soleiras
+MARGEM_VAO = 0.35
+
+# Distância mínima considerada para identificar um elemento
+# como pertencente a uma determinada parede
+TOLERANCIA_PAREDE = 0.60
 
 
 # ============================================================
-# 1. DIMENSIONAMENTO DAS CARGAS
+# DIMENSIONAMENTO DAS CARGAS
 # ============================================================
 
 def dimensionar_cargas(nome, area, perimetro):
@@ -25,39 +30,25 @@ def dimensionar_cargas(nome, area, perimetro):
             "Qtd Ilum.": 0,
             "Pot. Unit. Ilum (VA)": 0,
             "Carga Ilum. (VA)": 0,
-
             "TUGs (Qtd)": 0,
             "Pot. Unit. TUG (VA)": 0,
             "Carga TUGs (VA)": 0,
-
             "Equipamento TUE": "-",
             "Qtd TUE": 0,
             "Pot. Unit. TUE (VA)": 0,
             "Carga TUE (VA)": 0
         }
 
-    # --------------------------------------------------------
-    # ILUMINAÇÃO
-    # --------------------------------------------------------
-
     qtd_ilum = 1 if area <= 10 else math.ceil(area / 10)
 
-    if area <= 6:
-        carga_ilum = 100
-    else:
-        carga_ilum = 100 + (((area - 6) // 4) * 60)
-
-    nome_lower = nome.lower().strip()
-
-    nome_words = (
-        nome_lower
-        .replace("-", " ")
-        .split()
+    carga_ilum = (
+        100
+        if area <= 6
+        else 100 + (((area - 6) // 4) * 60)
     )
 
-    # --------------------------------------------------------
-    # IDENTIFICA AMBIENTE MOLHADO
-    # --------------------------------------------------------
+    nome_lower = nome.lower().strip()
+    nome_words = nome_lower.replace('-', ' ').split()
 
     is_umida = (
         any(
@@ -72,20 +63,11 @@ def dimensionar_cargas(nome, area, perimetro):
                 "area"
             ]
         )
-        or
-        any(
+        or any(
             w in nome_words
-            for w in [
-                "as",
-                "wc",
-                "bwc"
-            ]
+            for w in ["as", "wc", "bwc"]
         )
     )
-
-    # --------------------------------------------------------
-    # IDENTIFICA CORREDOR / HALL
-    # --------------------------------------------------------
 
     is_corredor = any(
         x in nome_lower
@@ -97,10 +79,6 @@ def dimensionar_cargas(nome, area, perimetro):
         ]
     )
 
-    # --------------------------------------------------------
-    # TUG
-    # --------------------------------------------------------
-
     if is_umida:
 
         qtd_tugs = math.ceil(perimetro / 3.5)
@@ -110,43 +88,28 @@ def dimensionar_cargas(nome, area, perimetro):
         else:
             carga_tugs = (
                 (3 * 600)
-                +
-                ((qtd_tugs - 3) * 100)
+                + ((qtd_tugs - 3) * 100)
             )
-
-        pot_tug_unit = 600
 
     elif is_corredor:
 
-        comprimento_estimado = (
-            perimetro / 2
-        ) - 1
+        comprimento_estimado = (perimetro / 2) - 1
 
         if comprimento_estimado <= 3:
             qtd_tugs = 1
         else:
             qtd_tugs = max(
                 1,
-                math.ceil(
-                    comprimento_estimado / 3
-                )
+                math.ceil(comprimento_estimado / 3)
             )
 
         carga_tugs = qtd_tugs * 100
-        pot_tug_unit = 100
 
     else:
 
-        qtd_tugs = math.ceil(
-            perimetro / 5
-        )
+        qtd_tugs = math.ceil(perimetro / 5)
 
         carga_tugs = qtd_tugs * 100
-        pot_tug_unit = 100
-
-    # --------------------------------------------------------
-    # TUE
-    # --------------------------------------------------------
 
     tue_nome = "-"
     qtd_tue = 0
@@ -155,18 +118,11 @@ def dimensionar_cargas(nome, area, perimetro):
     if (
         any(
             x in nome_lower
-            for x in [
-                "banh",
-                "sanit"
-            ]
+            for x in ["banh", "sanit"]
         )
-        or
-        any(
+        or any(
             w in nome_words
-            for w in [
-                "wc",
-                "bwc"
-            ]
+            for w in ["wc", "bwc"]
         )
     ):
 
@@ -176,9 +132,7 @@ def dimensionar_cargas(nome, area, perimetro):
 
     elif any(
         x in nome_lower
-        for x in [
-            "coz"
-        ]
+        for x in ["coz"]
     ):
 
         tue_nome = "Micro-ondas/Forno"
@@ -201,40 +155,28 @@ def dimensionar_cargas(nome, area, perimetro):
     elif (
         any(
             x in nome_lower
-            for x in [
-                "serv",
-                "lavand"
-            ]
+            for x in ["serv", "lavand"]
         )
-        or
-        "as" in nome_words
+        or "as" in nome_words
     ):
 
         tue_nome = "Máquina de Lavar"
         qtd_tue = 1
         carga_tue = 1000
 
-    # --------------------------------------------------------
-    # RETORNO
-    # --------------------------------------------------------
-
     return {
-
         "Qtd Ilum.": qtd_ilum,
 
-        "Pot. Unit. Ilum (VA)": (
-            round(
-                carga_ilum / qtd_ilum
-            )
-            if qtd_ilum > 0
-            else 0
-        ),
+        "Pot. Unit. Ilum (VA)":
+            round(carga_ilum / qtd_ilum)
+            if qtd_ilum > 0 else 0,
 
         "Carga Ilum. (VA)": carga_ilum,
 
         "TUGs (Qtd)": qtd_tugs,
 
-        "Pot. Unit. TUG (VA)": pot_tug_unit,
+        "Pot. Unit. TUG (VA)":
+            600 if is_umida else 100,
 
         "Carga TUGs (VA)": carga_tugs,
 
@@ -242,29 +184,25 @@ def dimensionar_cargas(nome, area, perimetro):
 
         "Qtd TUE": qtd_tue,
 
-        "Pot. Unit. TUE (VA)": (
+        "Pot. Unit. TUE (VA)":
             round(
-                carga_tue / max(
-                    1,
-                    qtd_tue
-                )
-            )
-        ),
+                carga_tue / max(1, qtd_tue)
+            ),
 
         "Carga TUE (VA)": carga_tue
     }
 
 
 # ============================================================
-# 2. PONTO DENTRO DO POLÍGONO
+# PONTO DENTRO DE POLÍGONO
 # ============================================================
 
 def ponto_em_poligono(x, y, polilinha):
 
-    if not polilinha:
-        return False
-
     n = len(polilinha)
+
+    if n < 3:
+        return False
 
     dentro = False
 
@@ -274,36 +212,29 @@ def ponto_em_poligono(x, y, polilinha):
 
         p2x, p2y = polilinha[i % n]
 
-        if (
-            y > min(p1y, p2y)
-            and
-            y <= max(p1y, p2y)
-            and
-            x <= max(p1x, p2x)
-        ):
+        if y > min(p1y, p2y):
 
-            if p1y != p2y:
+            if y <= max(p1y, p2y):
 
-                xinters = (
-                    (y - p1y)
-                    *
-                    (p2x - p1x)
-                    /
-                    (p2y - p1y)
-                    +
-                    p1x
-                )
+                if x <= max(p1x, p2x):
 
-            else:
+                    if p1y != p2y:
 
-                xinters = x
+                        xinters = (
+                            (y - p1y)
+                            * (p2x - p1x)
+                            / (p2y - p1y)
+                            + p1x
+                        )
 
-            if (
-                p1x == p2x
-                or
-                x <= xinters
-            ):
-                dentro = not dentro
+                    else:
+                        xinters = p1x
+
+                    if (
+                        p1x == p2x
+                        or x <= xinters
+                    ):
+                        dentro = not dentro
 
         p1x, p1y = p2x, p2y
 
@@ -311,76 +242,18 @@ def ponto_em_poligono(x, y, polilinha):
 
 
 # ============================================================
-# 3. LEITURA ROBUSTA DOS PONTOS DE UMA POLILINE
+# PONTO AO LONGO DO PERÍMETRO
 # ============================================================
 
-def obter_pontos_polilinha(entity):
-
-    pontos = []
-
-    try:
-
-        tipo = entity.dxftype()
-
-        if tipo == "LWPOLYLINE":
-
-            for p in entity.get_points(
-                format="xy"
-            ):
-                pontos.append(
-                    (
-                        float(p[0]),
-                        float(p[1])
-                    )
-                )
-
-        elif tipo == "POLYLINE":
-
-            for vertex in entity.vertices:
-
-                pontos.append(
-                    (
-                        float(
-                            vertex.dxf.location.x
-                        ),
-                        float(
-                            vertex.dxf.location.y
-                        )
-                    )
-                )
-
-    except Exception:
-
-        return []
-
-    return pontos
-
-
-# ============================================================
-# 4. PONTO NO PERÍMETRO
-# ============================================================
-
-def get_ponto_perimetro(
-    d,
-    segs
-):
+def get_ponto_perimetro(d, segs):
 
     acumulado = 0
-
-    if not segs:
-        return (
-            0,
-            0,
-            1,
-            0
-        )
 
     for pt1, pt2, dst in segs:
 
         if (
             acumulado + dst >= d
-            or
-            math.isclose(
+            or math.isclose(
                 acumulado + dst,
                 d,
                 abs_tol=1e-5
@@ -400,71 +273,70 @@ def get_ponto_perimetro(
             ) / dst
 
             return (
-
                 pt1[0]
-                +
-                (
-                    pt2[0] - pt1[0]
-                )
-                *
-                ratio,
+                + (pt2[0] - pt1[0]) * ratio,
 
                 pt1[1]
-                +
-                (
-                    pt2[1] - pt1[1]
-                )
-                *
-                ratio,
+                + (pt2[1] - pt1[1]) * ratio,
 
-                (
-                    pt2[0] - pt1[0]
-                ) / dst,
+                (pt2[0] - pt1[0]) / dst,
 
-                (
-                    pt2[1] - pt1[1]
-                ) / dst
+                (pt2[1] - pt1[1]) / dst
             )
 
         acumulado += dst
 
     pt1, pt2, dst = segs[-1]
 
-    if dst == 0:
-        return (
-            pt2[0],
-            pt2[1],
-            1,
-            0
-        )
-
     return (
         pt2[0],
         pt2[1],
-        (
-            pt2[0] - pt1[0]
-        ) / dst,
-        (
-            pt2[1] - pt1[1]
-        ) / dst
+        (pt2[0] - pt1[0]) / dst,
+        (pt2[1] - pt1[1]) / dst
     )
 
 
 # ============================================================
-# 5. DISTÂNCIA DE PONTO PARA SEGMENTO
+# NORMAL INTERNA DA PAREDE
 # ============================================================
 
-def point_seg_dist(
-    px,
-    py,
-    pt1,
-    pt2
+def get_inside_normal(
+    vx,
+    vy,
+    start_x,
+    start_y,
+    cx,
+    cy
 ):
+
+    n1x, n1y = -vy, vx
+    n2x, n2y = vy, -vx
+
+    dist1 = math.hypot(
+        cx - (start_x + n1x),
+        cy - (start_y + n1y)
+    )
+
+    dist2 = math.hypot(
+        cx - (start_x + n2x),
+        cy - (start_y + n2y)
+    )
+
+    if dist1 < dist2:
+        return n1x, n1y
+
+    return n2x, n2y
+
+
+# ============================================================
+# DISTÂNCIA DE PONTO A SEGMENTO
+# ============================================================
+
+def point_seg_dist(px, py, pt1, pt2):
 
     l2 = (
         (pt1[0] - pt2[0]) ** 2
-        +
-        (pt1[1] - pt2[1]) ** 2
+        + (pt1[1] - pt2[1]) ** 2
     )
 
     if l2 == 0:
@@ -480,485 +352,620 @@ def point_seg_dist(
             1,
             (
                 (px - pt1[0])
-                *
-                (pt2[0] - pt1[0])
+                * (pt2[0] - pt1[0])
                 +
                 (py - pt1[1])
-                *
-                (pt2[1] - pt1[1])
-            )
-            /
-            l2
+                * (pt2[1] - pt1[1])
+            ) / l2
         )
     )
 
     return math.hypot(
-
-        px
-        -
-        (
+        px - (
             pt1[0]
-            +
-            t *
-            (
-                pt2[0] - pt1[0]
-            )
+            + t * (pt2[0] - pt1[0])
         ),
-
-        py
-        -
-        (
+        py - (
             pt1[1]
-            +
-            t *
-            (
-                pt2[1] - pt1[1]
-            )
+            + t * (pt2[1] - pt1[1])
         )
     )
 
 
 # ============================================================
-# 6. NORMAL INTERNA DA PAREDE
+# PROJEÇÃO DE PONTO EM PAREDE
 # ============================================================
 
-def get_inside_normal(
-    vx,
-    vy,
-    start_x,
-    start_y,
-    cx,
-    cy
-):
+def projetar_ponto_na_parede(px, py, pt1, pt2):
 
-    n1x = -vy
-    n1y = vx
+    vx = pt2[0] - pt1[0]
+    vy = pt2[1] - pt1[1]
 
-    n2x = vy
-    n2y = -vx
+    comprimento = math.hypot(vx, vy)
 
-    d1 = math.hypot(
-        cx
-        -
-        (
-            start_x + n1x
-        ),
-        cy
-        -
-        (
-            start_y + n1y
-        )
-    )
-
-    d2 = math.hypot(
-        cx
-        -
-        (
-            start_x + n2x
-        ),
-        cy
-        -
-        (
-            start_y + n2y
-        )
-    )
-
-    if d1 < d2:
-        return (
-            n1x,
-            n1y
-        )
+    if comprimento == 0:
+        return 0.0
 
     return (
-        n2x,
-        n2y
+        (
+            (px - pt1[0]) * vx
+            +
+            (py - pt1[1]) * vy
+        )
+        / (comprimento ** 2)
     )
 
 
 # ============================================================
-# 7. LEITURA DAS CAMADAS OBRIGATÓRIAS
+# INTERVALOS LIVRES DE UMA PAREDE
+#
+# Aqui está a principal alteração.
+#
+# A parede é dividida em:
+#
+# [ canto ] [ trecho livre ] [ porta ] [ trecho livre ] [ canto ]
+#
+# As tomadas somente podem ser colocadas nos trechos livres.
 # ============================================================
 
-def validar_camadas_entrada(doc):
+def obter_intervalos_livres_parede(
+    parede,
+    portas,
+    soleiras,
+    margem_canto=MARGEM_CANTO,
+    margem_vao=MARGEM_VAO
+):
 
-    msp = doc.modelspace()
+    pt1 = parede['p1']
+    pt2 = parede['p2']
 
-    contagem = {
+    comprimento = parede['length']
 
-        "IA_AMBIENTES": 0,
-        "IA_TEXTOS": 0,
-        "IA_PORTAS": 0,
-        "IA_SOLEIRAS": 0
-    }
+    if comprimento <= (
+        2 * margem_canto
+    ):
 
-    for entity in msp:
+        return []
 
-        if not hasattr(
-            entity.dxf,
-            "layer"
-        ):
-            continue
+    intervalos_proibidos = []
 
-        layer = str(
-            entity.dxf.layer
-        ).upper().strip()
+    # --------------------------------------------------------
+    # CANTOS DA PAREDE
+    # --------------------------------------------------------
 
-        if layer in contagem:
-            contagem[layer] += 1
+    intervalos_proibidos.append(
+        (
+            0,
+            margem_canto
+        )
+    )
 
-    vazias = [
-        cam
-        for cam, qtd in contagem.items()
-        if qtd == 0
-    ]
+    intervalos_proibidos.append(
+        (
+            comprimento - margem_canto,
+            comprimento
+        )
+    )
 
-    if vazias:
+    # --------------------------------------------------------
+    # PORTAS
+    # --------------------------------------------------------
 
-        raise ValueError(
+    for porta in portas:
 
-            "❌ Erro de Validação do DXF:\n\n"
-
-            "As seguintes camadas obrigatórias "
-            "estão vazias ou ausentes:\n\n"
-
-            +
-            "\n".join(
-                f"• {cam}"
-                for cam in vazias
-            )
-
-            +
-            "\n\n"
-            "Certifique-se de desenhar os elementos "
-            "nos respectivos layers."
+        d1 = point_seg_dist(
+            porta['p1'][0],
+            porta['p1'][1],
+            pt1,
+            pt2
         )
 
-    return contagem
+        d2 = point_seg_dist(
+            porta['p2'][0],
+            porta['p2'][1],
+            pt1,
+            pt2
+        )
 
+        distancia_porta = min(d1, d2)
 
-# ============================================================
-# 8. CRIAÇÃO DAS CAMADAS DO PROJETO
-# ============================================================
+        if distancia_porta > TOLERANCIA_PAREDE:
+            continue
 
-def criar_camadas_projeto(doc):
+        t1 = projetar_ponto_na_parede(
+            porta['p1'][0],
+            porta['p1'][1],
+            pt1,
+            pt2
+        )
 
-    camadas = {
+        t2 = projetar_ponto_na_parede(
+            porta['p2'][0],
+            porta['p2'][1],
+            pt1,
+            pt2
+        )
 
-        "PROJ_ELETRICA_LUZ": 2,
+        pos1 = max(
+            0,
+            min(
+                comprimento,
+                t1 * comprimento
+            )
+        )
 
-        "PROJ_ELETRICA_QDC": 1,
+        pos2 = max(
+            0,
+            min(
+                comprimento,
+                t2 * comprimento
+            )
+        )
 
-        "PROJ_ELETRICA_TEXTO": 2,
+        inicio = min(pos1, pos2)
+        fim = max(pos1, pos2)
 
-        "PROJ_ELETRICA_TOMADA": 4,
+        # Expande a área proibida
+        inicio -= margem_vao
+        fim += margem_vao
 
-        "PROJ_ELETRICA_INTERRUPTOR": 5,
+        inicio = max(0, inicio)
+        fim = min(comprimento, fim)
 
-        "PROJ_ELETRICA_DEBUG": 6
-    }
+        intervalos_proibidos.append(
+            (inicio, fim)
+        )
 
-    for nome_layer, cor in camadas.items():
+    # --------------------------------------------------------
+    # SOLEIRAS
+    # --------------------------------------------------------
 
-        if nome_layer not in doc.layers:
+    for soleira in soleiras:
 
-            doc.layers.add(
-                name=nome_layer,
-                color=cor
+        d1 = point_seg_dist(
+            soleira['p1'][0],
+            soleira['p1'][1],
+            pt1,
+            pt2
+        )
+
+        d2 = point_seg_dist(
+            soleira['p2'][0],
+            soleira['p2'][1],
+            pt1,
+            pt2
+        )
+
+        distancia_soleira = min(d1, d2)
+
+        if distancia_soleira > TOLERANCIA_PAREDE:
+            continue
+
+        t1 = projetar_ponto_na_parede(
+            soleira['p1'][0],
+            soleira['p1'][1],
+            pt1,
+            pt2
+        )
+
+        t2 = projetar_ponto_na_parede(
+            soleira['p2'][0],
+            soleira['p2'][1],
+            pt1,
+            pt2
+        )
+
+        pos1 = max(
+            0,
+            min(
+                comprimento,
+                t1 * comprimento
+            )
+        )
+
+        pos2 = max(
+            0,
+            min(
+                comprimento,
+                t2 * comprimento
+            )
+        )
+
+        inicio = min(pos1, pos2)
+        fim = max(pos1, pos2)
+
+        inicio -= margem_vao
+        fim += margem_vao
+
+        inicio = max(0, inicio)
+        fim = min(comprimento, fim)
+
+        intervalos_proibidos.append(
+            (inicio, fim)
+        )
+
+    # --------------------------------------------------------
+    # ORDENA OS INTERVALOS PROIBIDOS
+    # --------------------------------------------------------
+
+    intervalos_proibidos.sort(
+        key=lambda x: x[0]
+    )
+
+    # --------------------------------------------------------
+    # UNE INTERVALOS SOBREPOSTOS
+    # --------------------------------------------------------
+
+    proibidos_unidos = []
+
+    for inicio, fim in intervalos_proibidos:
+
+        if not proibidos_unidos:
+
+            proibidos_unidos.append(
+                [inicio, fim]
             )
 
         else:
 
-            doc.layers.get(
-                nome_layer
-            ).color = cor
+            ultimo = proibidos_unidos[-1]
 
+            if inicio <= ultimo[1]:
 
-# ============================================================
-# 9. REGISTRA APPID PARA XDATA
-# ============================================================
+                ultimo[1] = max(
+                    ultimo[1],
+                    fim
+                )
 
-def registrar_appid(doc):
+            else:
 
-    if APPID not in doc.appids:
+                proibidos_unidos.append(
+                    [inicio, fim]
+                )
 
-        doc.appids.add(
-            APPID
+    # --------------------------------------------------------
+    # CALCULA OS TRECHOS LIVRES
+    # --------------------------------------------------------
+
+    livres = []
+
+    cursor = 0
+
+    for inicio, fim in proibidos_unidos:
+
+        if inicio > cursor:
+
+            if (
+                inicio - cursor
+                >= 0.15
+            ):
+
+                livres.append(
+                    (
+                        cursor,
+                        inicio
+                    )
+                )
+
+        cursor = max(
+            cursor,
+            fim
         )
 
-
-# ============================================================
-# 10. MARCA ENTIDADE COM XDATA
-# ============================================================
-
-def marcar_entidade(
-    entity,
-    tipo,
-    ambiente,
-    indice,
-    potencia=0
-):
-
-    entity.set_xdata(
-        APPID,
-        [
-
-            (1000, str(tipo)),
-
-            (1000, str(ambiente)),
-
-            (1071, int(indice)),
-
-            (1071, int(potencia))
-        ]
-    )
-
-
-# ============================================================
-# 11. CRIA TUG/TUE
-# ============================================================
-
-def adicionar_tomada(
-    msp,
-    tipo,
-    ambiente,
-    indice,
-    px,
-    py,
-    seg_vx,
-    seg_vy,
-    nx,
-    ny,
-    potencia,
-    is_molhado=False,
-    is_chuveiro_ou_ac=False
-):
-
-    # --------------------------------------------------------
-    # GEOMETRIA DO SÍMBOLO
-    # --------------------------------------------------------
-
-    ponto_b1 = (
-
-        px
-        -
-        seg_vx * 0.10,
-
-        py
-        -
-        seg_vy * 0.10
-    )
-
-    ponto_b2 = (
-
-        px
-        +
-        seg_vx * 0.10,
-
-        py
-        +
-        seg_vy * 0.10
-    )
-
-    ponto_pt = (
-
-        px
-        +
-        nx * 0.20,
-
-        py
-        +
-        ny * 0.20
-    )
-
-    # --------------------------------------------------------
-    # SÍMBOLO PRINCIPAL
-    # --------------------------------------------------------
-
-    simbolo = msp.add_lwpolyline(
-
-        [
-            ponto_b1,
-            ponto_b2,
-            ponto_pt,
-            ponto_b1
-        ],
-
-        close=True,
-
-        dxfattribs={
-            "layer":
-                "PROJ_ELETRICA_TOMADA"
-        }
-    )
-
-    # --------------------------------------------------------
-    # XDATA
-    # --------------------------------------------------------
-
-    marcar_entidade(
-
-        simbolo,
-
-        tipo=tipo,
-
-        ambiente=ambiente,
-
-        indice=indice,
-
-        potencia=potencia
-    )
-
-    # --------------------------------------------------------
-    # PREENCHIMENTO TUE
-    # --------------------------------------------------------
-
-    if (
-        tipo == "TUE"
-        and
-        is_chuveiro_ou_ac
-    ):
-
-        solid = msp.add_solid(
-
-            [
-                ponto_b1,
-                ponto_b2,
-                ponto_pt
-            ],
-
-            dxfattribs={
-                "layer":
-                    "PROJ_ELETRICA_TOMADA"
-            }
-        )
-
-        marcar_entidade(
-
-            solid,
-
-            tipo="TUE_SOLID",
-
-            ambiente=ambiente,
-
-            indice=indice,
-
-            potencia=potencia
-        )
-
-    # --------------------------------------------------------
-    # PREENCHIMENTO TUG EM AMBIENTE MOLHADO
-    # --------------------------------------------------------
-
-    elif (
-        tipo == "TUG"
-        and
-        is_molhado
-    ):
-
-        ponto_medio_base = (
-            px,
-            py
-        )
-
-        solid = msp.add_solid(
-
-            [
-                ponto_b1,
-                ponto_medio_base,
-                ponto_pt
-            ],
-
-            dxfattribs={
-                "layer":
-                    "PROJ_ELETRICA_TOMADA"
-            }
-        )
-
-        marcar_entidade(
-
-            solid,
-
-            tipo="TUG_SOLID",
-
-            ambiente=ambiente,
-
-            indice=indice,
-
-            potencia=potencia
-        )
-
-    # --------------------------------------------------------
-    # TEXTO DA POTÊNCIA
-    # --------------------------------------------------------
-
-    texto = msp.add_text(
-
-        f"{potencia}VA",
-
-        dxfattribs={
-
-            "layer":
-                "PROJ_ELETRICA_TEXTO",
-
-            "height":
-                0.12,
-
-            "color":
-                2,
-
-            "insert": (
-
-                px
-                +
-                nx * 0.35,
-
-                py
-                +
-                ny * 0.35
+    if cursor < comprimento:
+
+        if (
+            comprimento - cursor
+            >= 0.15
+        ):
+
+            livres.append(
+                (
+                    cursor,
+                    comprimento
+                )
             )
-        }
-    )
 
-    marcar_entidade(
-
-        texto,
-
-        tipo=f"{tipo}_TEXTO",
-
-        ambiente=ambiente,
-
-        indice=indice,
-
-        potencia=potencia
-    )
-
-    return simbolo
+    return livres
 
 
 # ============================================================
-# 12. IDENTIFICA AMBIENTES DO DXF
+# CONVERTE POSIÇÃO DA PAREDE EM COORDENADA
 # ============================================================
 
-def ler_ambientes(
-    msp
+def ponto_na_parede_por_distancia(
+    parede,
+    distancia
 ):
+
+    pt1 = parede['p1']
+
+    vx = parede['vx']
+    vy = parede['vy']
+
+    return (
+        pt1[0] + vx * distancia,
+        pt1[1] + vy * distancia
+    )
+
+
+# ============================================================
+# GERA PONTOS DE TOMADAS EM UMA PAREDE
+# ============================================================
+
+def gerar_pontos_em_intervalo(
+    parede,
+    intervalo,
+    quantidade
+):
+
+    if quantidade <= 0:
+        return []
+
+    inicio, fim = intervalo
+
+    comprimento = fim - inicio
+
+    if comprimento <= 0:
+        return []
+
+    pontos = []
+
+    # Distribuição uniforme dentro do trecho.
+    # Nunca toca nas extremidades.
+    passo = comprimento / quantidade
+
+    for i in range(quantidade):
+
+        distancia = (
+            inicio
+            + passo * (i + 0.5)
+        )
+
+        pontos.append(
+            ponto_na_parede_por_distancia(
+                parede,
+                distancia
+            )
+        )
+
+    return pontos
+
+
+# ============================================================
+# ESCOLHE PONTOS SEGUROS PARA UMA QUANTIDADE EXATA
+#
+# IMPORTANTE:
+# Esta função SEMPRE tenta retornar exatamente "quantidade".
+# ============================================================
+
+def escolher_pontos_tomadas(
+    paredes,
+    portas,
+    soleiras,
+    quantidade
+):
+
+    if quantidade <= 0:
+        return []
+
+    candidatos = []
+
+    # --------------------------------------------------------
+    # MONTA TODOS OS TRECHOS LIVRES DAS PAREDES
+    # --------------------------------------------------------
+
+    for indice, parede in enumerate(paredes):
+
+        intervalos = obter_intervalos_livres_parede(
+            parede,
+            portas,
+            soleiras
+        )
+
+        for intervalo in intervalos:
+
+            inicio, fim = intervalo
+
+            comprimento = fim - inicio
+
+            if comprimento > 0.15:
+
+                candidatos.append(
+                    {
+                        'parede': parede,
+                        'intervalo': intervalo,
+                        'comprimento': comprimento,
+                        'indice_parede': indice
+                    }
+                )
+
+    if not candidatos:
+        return []
+
+    # --------------------------------------------------------
+    # ORDENA PELOS TRECHOS MAIORES
+    # --------------------------------------------------------
+
+    candidatos.sort(
+        key=lambda x: x['comprimento'],
+        reverse=True
+    )
+
+    # --------------------------------------------------------
+    # PRIMEIRA DISTRIBUIÇÃO:
+    # UMA TOMADA POR TRECHO QUANDO POSSÍVEL
+    #
+    # Isso evita concentrar todas as tomadas em uma única parede.
+    # --------------------------------------------------------
+
+    pontos = []
+
+    quantidade_restante = quantidade
+
+    for candidato in candidatos:
+
+        if quantidade_restante <= 0:
+            break
+
+        ponto = gerar_pontos_em_intervalo(
+            candidato['parede'],
+            candidato['intervalo'],
+            1
+        )[0]
+
+        pontos.append(
+            {
+                'ponto': ponto,
+                'parede': candidato['parede'],
+                'intervalo': candidato['intervalo']
+            }
+        )
+
+        quantidade_restante -= 1
+
+    # --------------------------------------------------------
+    # SE AINDA FALTAM TOMADAS:
+    # DISTRIBUI NOVAMENTE NOS TRECHOS
+    # --------------------------------------------------------
+
+    rodada = 0
+
+    while quantidade_restante > 0:
+
+        houve_insercao = False
+
+        for candidato in candidatos:
+
+            if quantidade_restante <= 0:
+                break
+
+            # Verifica quantas tomadas já existem
+            # neste mesmo trecho
+            tomadas_no_trecho = [
+                p
+                for p in pontos
+                if (
+                    p['parede'] is candidato['parede']
+                    and p['intervalo']
+                    == candidato['intervalo']
+                )
+            ]
+
+            qtd_atual = len(
+                tomadas_no_trecho
+            )
+
+            nova_qtd = qtd_atual + 1
+
+            novos_pontos = gerar_pontos_em_intervalo(
+                candidato['parede'],
+                candidato['intervalo'],
+                nova_qtd
+            )
+
+            # Remove os pontos antigos deste trecho
+            pontos = [
+                p
+                for p in pontos
+                if not (
+                    p['parede'] is candidato['parede']
+                    and p['intervalo']
+                    == candidato['intervalo']
+                )
+            ]
+
+            # Adiciona os novos pontos
+            for ponto in novos_pontos:
+
+                pontos.append(
+                    {
+                        'ponto': ponto,
+                        'parede': candidato['parede'],
+                        'intervalo': candidato['intervalo']
+                    }
+                )
+
+            quantidade_restante -= 1
+
+            houve_insercao = True
+
+        rodada += 1
+
+        if not houve_insercao:
+            break
+
+        # Segurança
+        if rodada > quantidade + 5:
+            break
+
+    # --------------------------------------------------------
+    # RETORNA SOMENTE COORDENADAS
+    # --------------------------------------------------------
+
+    return [
+        item['ponto']
+        for item in pontos
+    ][:quantidade]
+
+
+# ============================================================
+# PROCESSAMENTO DO DXF
+# ============================================================
+
+def processar_dxf(caminho_arquivo):
+
+    doc = ezdxf.readfile(
+        caminho_arquivo
+    )
+
+    msp = doc.modelspace()
+
+    contagem_camadas = {
+        'IA_AMBIENTES': 0,
+        'IA_TEXTOS': 0,
+        'IA_PORTAS': 0,
+        'IA_SOLEIRAS': 0
+    }
+
+    for entity in msp:
+
+        if hasattr(entity.dxf, 'layer'):
+
+            l = str(
+                entity.dxf.layer
+            ).upper().strip()
+
+            if l in contagem_camadas:
+
+                contagem_camadas[l] += 1
+
+    camadas_vazias = [
+        cam
+        for cam, qtd
+        in contagem_camadas.items()
+        if qtd == 0
+    ]
+
+    if camadas_vazias:
+
+        raise ValueError(
+            "❌ Erro de Validação do DXF: "
+            "A(s) seguinte(s) camada(s) obrigatória(s) "
+            "está(ão) vazia(s) ou ausente(s): "
+            + ", ".join(camadas_vazias)
+            + ". Certifique-se de desenhar os elementos "
+            "nos respectivos layers "
+            "(IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, "
+            "IA_SOLEIRAS) antes de gerar o projeto."
+        )
 
     polilinhas = []
     textos = []
 
-    # --------------------------------------------------------
-    # PRIMEIRO: POLÍGONOS
-    # --------------------------------------------------------
-
     for entity in msp:
 
         tipo = entity.dxftype()
-
-        if not hasattr(
-            entity.dxf,
-            "layer"
-        ):
-            continue
 
         layer = str(
             entity.dxf.layer
@@ -966,95 +973,69 @@ def ler_ambientes(
 
         if (
             tipo in [
-                "LWPOLYLINE",
-                "POLYLINE"
+                'LWPOLYLINE',
+                'POLYLINE'
             ]
-            and
-            layer == "IA_AMBIENTES"
+            and layer == 'IA_AMBIENTES'
         ):
 
-            pontos = obter_pontos_polilinha(
-                entity
-            )
+            try:
 
-            if pontos:
+                if tipo == 'LWPOLYLINE':
 
-                polilinhas.append(
-                    pontos
-                )
+                    pontos = [
+                        (p[0], p[1])
+                        for p in entity.get_points(
+                            format='xy'
+                        )
+                    ]
 
-    # --------------------------------------------------------
-    # SEGUNDO: TEXTOS
-    # --------------------------------------------------------
+                else:
 
-    for entity in msp:
+                    pontos = [
+                        (
+                            v.dxf.location.x,
+                            v.dxf.location.y
+                        )
+                        for v in entity.vertices
+                    ]
 
-        tipo = entity.dxftype()
+                if pontos:
+                    polilinhas.append(
+                        pontos
+                    )
 
-        if tipo not in [
-            "TEXT",
-            "MTEXT"
-        ]:
-            continue
+            except:
+                pass
 
-        if not hasattr(
-            entity.dxf,
-            "layer"
+        elif (
+            tipo in ['TEXT', 'MTEXT']
+            and layer == 'IA_TEXTOS'
         ):
-            continue
 
-        layer = str(
-            entity.dxf.layer
-        ).upper().strip()
-
-        if layer != "IA_TEXTOS":
-            continue
-
-        try:
-
-            if tipo == "MTEXT":
+            try:
 
                 texto_str = (
                     entity.text
-                    .strip()
-                )
+                    if tipo == 'MTEXT'
+                    else entity.dxf.text
+                ).strip()
 
-            else:
+                if texto_str:
 
-                texto_str = (
-                    entity.dxf.text
-                    .strip()
-                )
-
-            if not texto_str:
-                continue
-
-            textos.append({
-
-                "nome":
-                    texto_str,
-
-                "x":
-                    float(
-                        entity.dxf.insert.x
-                    ),
-
-                "y":
-                    float(
-                        entity.dxf.insert.y
+                    textos.append(
+                        {
+                            'nome': texto_str,
+                            'x': entity.dxf.insert.x,
+                            'y': entity.dxf.insert.y
+                        }
                     )
-            })
 
-        except Exception:
-            continue
+            except:
+                pass
 
-    # --------------------------------------------------------
-    # ASSOCIA TEXTO AO POLÍGONO
-    # --------------------------------------------------------
-
-    ambientes = []
-
-    contador_nomes = {}
+    resultados = []
+    ambientes_processados = {}
 
     for polilinha in polilinhas:
 
@@ -1068,871 +1049,156 @@ def ler_ambientes(
             for p in polilinha
         ]
 
-        if not xs or not ys:
-            continue
-
         min_x = min(xs)
         max_x = max(xs)
 
         min_y = min(ys)
         max_y = max(ys)
 
-        area_bbox = (
+        area = (
             max_x - min_x
         ) * (
             max_y - min_y
         )
 
-        if area_bbox < 0.5:
+        perimetro = (
+            (max_x - min_x) * 2
+        ) + (
+            (max_y - min_y) * 2
+        )
+
+        if area < 0.5:
             continue
 
-        # ----------------------------------------------------
-        # PROCURA TEXTO REALMENTE DENTRO DO POLÍGONO
-        # ----------------------------------------------------
-
-        candidatos = [
-
-            t
-            for t in textos
-
-            if ponto_em_poligono(
-                t["x"],
-                t["y"],
-                polilinha
-            )
-        ]
-
-        if not candidatos:
-
-            # Fallback para desenho com pequenas
-            # diferenças de coordenada
-            candidatos = [
-
-                t
+        nome_ambiente = next(
+            (
+                t['nome']
                 for t in textos
-
                 if (
                     min_x - 0.5
-                    <=
-                    t["x"]
-                    <=
-                    max_x + 0.5
-                )
-                and
-                (
+                    <= t['x']
+                    <= max_x + 0.5
+                    and
                     min_y - 0.5
-                    <=
-                    t["y"]
-                    <=
-                    max_y + 0.5
+                    <= t['y']
+                    <= max_y + 0.5
                 )
-            ]
+            ),
+            None
+        )
 
-        if not candidatos:
+        if not nome_ambiente:
             continue
 
-        nome_original = (
-            candidatos[0]["nome"]
-            .strip()
-        )
+        if nome_ambiente in ambientes_processados:
 
-        contador_nomes.setdefault(
-            nome_original,
-            0
-        )
+            ambientes_processados[
+                nome_ambiente
+            ] += 1
 
-        contador_nomes[
-            nome_original
-        ] += 1
-
-        numero = contador_nomes[
-            nome_original
-        ]
-
-        if numero == 1:
-
-            nome = nome_original
+            nome_ambiente = (
+                f"{nome_ambiente} "
+                f"{ambientes_processados[nome_ambiente]}"
+            )
 
         else:
 
-            nome = (
-                f"{nome_original} "
-                f"{numero}"
-            )
-
-        largura = (
-            max_x - min_x
-        )
-
-        comprimento = (
-            max_y - min_y
-        )
-
-        perimetro = (
-            largura * 2
-            +
-            comprimento * 2
-        )
-
-        ambientes.append({
-
-            "nome":
-                nome,
-
-            "nome_original":
-                nome_original,
-
-            "poligono":
-                polilinha,
-
-            "area":
-                area_bbox,
-
-            "perimetro":
-                perimetro,
-
-            "min_x":
-                min_x,
-
-            "max_x":
-                max_x,
-
-            "min_y":
-                min_y,
-
-            "max_y":
-                max_y,
-
-            "centro_x":
-                (
-                    min_x + max_x
-                ) / 2,
-
-            "centro_y":
-                (
-                    min_y + max_y
-                ) / 2
-        })
-
-    return ambientes
-
-
-# ============================================================
-# 13. LÊ PORTAS E SOLEIRAS
-# ============================================================
-
-def ler_portas_soleiras(msp):
-
-    portas_raw = []
-    soleiras_raw = []
-
-    for entity in msp:
-
-        tipo = entity.dxftype()
-
-        if not hasattr(
-            entity.dxf,
-            "layer"
-        ):
-            continue
-
-        layer = str(
-            entity.dxf.layer
-        ).upper().strip()
-
-        # ----------------------------------------------------
-        # PORTAS
-        # ----------------------------------------------------
-
-        if layer == "IA_PORTAS":
-
-            if tipo == "LINE":
-
-                portas_raw.append({
-
-                    "p1": (
-                        float(
-                            entity.dxf.start.x
-                        ),
-                        float(
-                            entity.dxf.start.y
-                        )
-                    ),
-
-                    "p2": (
-                        float(
-                            entity.dxf.end.x
-                        ),
-                        float(
-                            entity.dxf.end.y
-                        )
-                    )
-                })
-
-            elif tipo in [
-                "LWPOLYLINE",
-                "POLYLINE"
-            ]:
-
-                pts = obter_pontos_polilinha(
-                    entity
-                )
-
-                if len(pts) >= 2:
-
-                    portas_raw.append({
-
-                        "p1":
-                            pts[0],
-
-                        "p2":
-                            pts[-1]
-                    })
-
-        # ----------------------------------------------------
-        # SOLEIRAS
-        # ----------------------------------------------------
-
-        elif layer == "IA_SOLEIRAS":
-
-            if tipo == "LINE":
-
-                soleiras_raw.append({
-
-                    "p1": (
-                        float(
-                            entity.dxf.start.x
-                        ),
-                        float(
-                            entity.dxf.start.y
-                        )
-                    ),
-
-                    "p2": (
-                        float(
-                            entity.dxf.end.x
-                        ),
-                        float(
-                            entity.dxf.end.y
-                        )
-                    )
-                })
-
-            elif tipo in [
-                "LWPOLYLINE",
-                "POLYLINE"
-            ]:
-
-                pts = obter_pontos_polilinha(
-                    entity
-                )
-
-                if len(pts) >= 2:
-
-                    soleiras_raw.append({
-
-                        "p1":
-                            pts[0],
-
-                        "p2":
-                            pts[-1]
-                    })
-
-    return (
-        portas_raw,
-        soleiras_raw
-    )
-
-
-# ============================================================
-# 14. PROCESSA O DXF PARA A TABELA
-# ============================================================
-
-def processar_dxf(
-    caminho_arquivo
-):
-
-    doc = ezdxf.readfile(
-        caminho_arquivo
-    )
-
-    msp = doc.modelspace()
-
-    validar_camadas_entrada(
-        doc
-    )
-
-    ambientes = ler_ambientes(
-        msp
-    )
-
-    resultados = []
-
-    for ambiente in ambientes:
-
-        nome = ambiente[
-            "nome"
-        ]
-
-        area = ambiente[
-            "area"
-        ]
-
-        perimetro = ambiente[
-            "perimetro"
-        ]
+            ambientes_processados[
+                nome_ambiente
+            ] = 1
 
         cargas = dimensionar_cargas(
-            nome,
+            nome_ambiente,
             area,
             perimetro
         )
 
-        resultados.append({
+        resultados.append(
+            {
+                "Ambiente": nome_ambiente,
 
-            "Ambiente":
-                nome,
+                "Centro_X":
+                    (min_x + max_x) / 2,
 
-            "Centro_X":
-                ambiente[
-                    "centro_x"
-                ],
+                "Centro_Y":
+                    (min_y + max_y) / 2,
 
-            "Centro_Y":
-                ambiente[
-                    "centro_y"
-                ],
+                "Área (m²)": area,
 
-            "Área (m²)":
-                area,
+                "Perímetro (m)":
+                    perimetro,
 
-            "Perímetro (m)":
-                perimetro,
+                "Qtd Ilum.":
+                    int(cargas["Qtd Ilum."]),
 
-            "Qtd Ilum.":
-                int(
+                "Pot. Unit. Ilum (VA)":
+                    int(
+                        cargas[
+                            "Pot. Unit. Ilum (VA)"
+                        ]
+                    ),
+
+                "Carga Ilum. (VA)":
+                    int(
+                        cargas[
+                            "Carga Ilum. (VA)"
+                        ]
+                    ),
+
+                "TUGs (Qtd)":
+                    int(
+                        cargas[
+                            "TUGs (Qtd)"
+                        ]
+                    ),
+
+                "Pot. Unit. TUG (VA)":
+                    int(
+                        cargas[
+                            "Pot. Unit. TUG (VA)"
+                        ]
+                    ),
+
+                "Carga TUGs (VA)":
+                    int(
+                        cargas[
+                            "Carga TUGs (VA)"
+                        ]
+                    ),
+
+                "Equipamento TUE":
                     cargas[
-                        "Qtd Ilum."
-                    ]
-                ),
+                        "Equipamento TUE"
+                    ],
 
-            "Pot. Unit. Ilum (VA)":
-                int(
-                    cargas[
-                        "Pot. Unit. Ilum (VA)"
-                    ]
-                ),
+                "Qtd TUE":
+                    int(
+                        cargas[
+                            "Qtd TUE"
+                        ]
+                    ),
 
-            "Carga Ilum. (VA)":
-                int(
-                    cargas[
-                        "Carga Ilum. (VA)"
-                    ]
-                ),
+                "Pot. Unit. TUE (VA)":
+                    int(
+                        cargas[
+                            "Pot. Unit. TUE (VA)"
+                        ]
+                    ),
 
-            "TUGs (Qtd)":
-                int(
-                    cargas[
-                        "TUGs (Qtd)"
-                    ]
-                ),
-
-            "Pot. Unit. TUG (VA)":
-                int(
-                    cargas[
-                        "Pot. Unit. TUG (VA)"
-                    ]
-                ),
-
-            "Carga TUGs (VA)":
-                int(
-                    cargas[
-                        "Carga TUGs (VA)"
-                    ]
-                ),
-
-            "Equipamento TUE":
-                cargas[
-                    "Equipamento TUE"
-                ],
-
-            "Qtd TUE":
-                int(
-                    cargas[
-                        "Qtd TUE"
-                    ]
-                ),
-
-            "Pot. Unit. TUE (VA)":
-                int(
-                    cargas[
-                        "Pot. Unit. TUE (VA)"
-                    ]
-                ),
-
-            "Carga TUE (VA)":
-                int(
-                    cargas[
-                        "Carga TUE (VA)"
-                    ]
-                )
-        })
+                "Carga TUE (VA)":
+                    int(
+                        cargas[
+                            "Carga TUE (VA)"
+                        ]
+                    )
+            }
+        )
 
     return resultados
 
 
 # ============================================================
-# 15. ENCONTRA DADOS DA TABELA
-# ============================================================
-
-def obter_dados_ambiente(
-    dict_dados,
-    nome
-):
-
-    # Primeiro tenta o nome exato
-    if nome in dict_dados:
-
-        return dict_dados[
-            nome
-        ]
-
-    # Depois tenta comparação sem espaços
-    nome_normalizado = (
-        nome.strip().upper()
-    )
-
-    for chave, valor in dict_dados.items():
-
-        if (
-            str(chave)
-            .strip()
-            .upper()
-            ==
-            nome_normalizado
-        ):
-
-            return valor
-
-    # Por último tenta nome original
-    # antes do sufixo 2, 3...
-    partes = nome.rsplit(
-        " ",
-        1
-    )
-
-    if (
-        len(partes) == 2
-        and
-        partes[1].isdigit()
-    ):
-
-        nome_base = partes[0]
-
-        if nome_base in dict_dados:
-
-            return dict_dados[
-                nome_base
-            ]
-
-    return None
-
-
-# ============================================================
-# 16. IDENTIFICA SE PONTO ESTÁ PRÓXIMO DE PORTA
-# ============================================================
-
-def ponto_proximo_de_porta(
-    px,
-    py,
-    portas,
-    tolerancia=0.35
-):
-
-    for p in portas:
-
-        pmx = (
-            p["p1"][0]
-            +
-            p["p2"][0]
-        ) / 2
-
-        pmy = (
-            p["p1"][1]
-            +
-            p["p2"][1]
-        ) / 2
-
-        if math.hypot(
-            px - pmx,
-            py - pmy
-        ) < tolerancia:
-
-            return True
-
-    return False
-
-
-# ============================================================
-# 17. EXTRAI DADOS XDATA
-# ============================================================
-
-def obter_xdata_tomada(
-    entity
-):
-
-    if not entity.has_xdata(
-        APPID
-    ):
-        return None
-
-    try:
-
-        tags = entity.get_xdata(
-            APPID
-        )
-
-    except Exception:
-
-        return None
-
-    valores_string = []
-
-    valores_int = []
-
-    for tag in tags:
-
-        if tag.code == 1000:
-
-            valores_string.append(
-                str(tag.value)
-            )
-
-        elif tag.code == 1071:
-
-            valores_int.append(
-                int(tag.value)
-            )
-
-    if len(valores_string) < 2:
-
-        return None
-
-    tipo = valores_string[0]
-
-    ambiente = valores_string[1]
-
-    indice = (
-        valores_int[0]
-        if len(valores_int) >= 1
-        else 0
-    )
-
-    potencia = (
-        valores_int[1]
-        if len(valores_int) >= 2
-        else 0
-    )
-
-    return {
-
-        "tipo":
-            tipo,
-
-        "ambiente":
-            ambiente,
-
-        "indice":
-            indice,
-
-        "potencia":
-            potencia
-    }
-
-
-# ============================================================
-# 18. VALIDA QUANTITATIVOS DO CAD
-# ============================================================
-
-def validar_quantitativos(
-    doc,
-    dados_editados
-):
-
-    msp = doc.modelspace()
-
-    # --------------------------------------------------------
-    # ESPERADO PELA TABELA
-    # --------------------------------------------------------
-
-    esperado = {}
-
-    for row in dados_editados:
-
-        ambiente = str(
-            row.get(
-                "Ambiente",
-                ""
-            )
-        ).strip()
-
-        if not ambiente:
-            continue
-
-        esperado[
-            ambiente
-        ] = {
-
-            "TUG":
-                int(
-                    row.get(
-                        "TUGs (Qtd)",
-                        0
-                    )
-                ),
-
-            "TUE":
-                int(
-                    row.get(
-                        "Qtd TUE",
-                        0
-                    )
-                )
-        }
-
-    # --------------------------------------------------------
-    # ENCONTRADO NO CAD
-    # --------------------------------------------------------
-
-    encontrado = {}
-
-    for entity in msp:
-
-        dados = obter_xdata_tomada(
-            entity
-        )
-
-        if dados is None:
-            continue
-
-        tipo = dados[
-            "tipo"
-        ]
-
-        # Somente símbolos principais
-        if tipo not in [
-            "TUG",
-            "TUE"
-        ]:
-            continue
-
-        ambiente = dados[
-            "ambiente"
-        ]
-
-        if ambiente not in encontrado:
-
-            encontrado[
-                ambiente
-            ] = {
-
-                "TUG": 0,
-                "TUE": 0
-            }
-
-        encontrado[
-            ambiente
-        ][tipo] += 1
-
-    # --------------------------------------------------------
-    # COMPARAÇÃO
-    # --------------------------------------------------------
-
-    erros = []
-
-    linhas_relatorio = []
-
-    total_esperado_tug = 0
-    total_encontrado_tug = 0
-
-    total_esperado_tue = 0
-    total_encontrado_tue = 0
-
-    todos_ambientes = sorted(
-        set(
-            esperado.keys()
-        )
-        |
-        set(
-            encontrado.keys()
-        )
-    )
-
-    for ambiente in todos_ambientes:
-
-        exp = esperado.get(
-
-            ambiente,
-
-            {
-                "TUG": 0,
-                "TUE": 0
-            }
-        )
-
-        enc = encontrado.get(
-
-            ambiente,
-
-            {
-                "TUG": 0,
-                "TUE": 0
-            }
-        )
-
-        total_esperado_tug += exp[
-            "TUG"
-        ]
-
-        total_encontrado_tug += enc[
-            "TUG"
-        ]
-
-        total_esperado_tue += exp[
-            "TUE"
-        ]
-
-        total_encontrado_tue += enc[
-            "TUE"
-        ]
-
-        status_tug = (
-            "OK"
-            if exp["TUG"] == enc["TUG"]
-            else "ERRO"
-        )
-
-        status_tue = (
-            "OK"
-            if exp["TUE"] == enc["TUE"]
-            else "ERRO"
-        )
-
-        linhas_relatorio.append(
-
-            f"{ambiente}: "
-            f"TUG {enc['TUG']}/{exp['TUG']} "
-            f"[{status_tug}] | "
-            f"TUE {enc['TUE']}/{exp['TUE']} "
-            f"[{status_tue}]"
-        )
-
-        if exp["TUG"] != enc["TUG"]:
-
-            erros.append(
-
-                f"{ambiente}: "
-                f"TUG esperadas = {exp['TUG']}, "
-                f"encontradas = {enc['TUG']}"
-            )
-
-        if exp["TUE"] != enc["TUE"]:
-
-            erros.append(
-
-                f"{ambiente}: "
-                f"TUE esperadas = {exp['TUE']}, "
-                f"encontradas = {enc['TUE']}"
-            )
-
-    # --------------------------------------------------------
-    # VALIDA TOTAL
-    # --------------------------------------------------------
-
-    if (
-        total_esperado_tug
-        !=
-        total_encontrado_tug
-    ):
-
-        erros.append(
-
-            "TOTAL TUG: "
-            f"esperadas = {total_esperado_tug}, "
-            f"encontradas = {total_encontrado_tug}"
-        )
-
-    if (
-        total_esperado_tue
-        !=
-        total_encontrado_tue
-    ):
-
-        erros.append(
-
-            "TOTAL TUE: "
-            f"esperadas = {total_esperado_tue}, "
-            f"encontradas = {total_encontrado_tue}"
-        )
-
-    # --------------------------------------------------------
-    # RESULTADO
-    # --------------------------------------------------------
-
-    relatorio = (
-        "\n"
-        "================================================\n"
-        "VALIDAÇÃO DO QUANTITATIVO ELÉTRICO\n"
-        "================================================\n\n"
-        +
-        "\n".join(
-            linhas_relatorio
-        )
-        +
-        "\n\n"
-        "TOTAL TUG: "
-        f"{total_encontrado_tug}/"
-        f"{total_esperado_tug}\n"
-        "TOTAL TUE: "
-        f"{total_encontrado_tue}/"
-        f"{total_esperado_tue}\n"
-        "================================================\n"
-    )
-
-    if erros:
-
-        raise ValueError(
-
-            "❌ O PROJETO NÃO FOI VALIDADO.\n\n"
-
-            +
-            "\n".join(
-                erros
-            )
-
-            +
-            "\n\n"
-            +
-            relatorio
-        )
-
-    return {
-
-        "ok": True,
-
-        "total_tug":
-            total_encontrado_tug,
-
-        "total_tue":
-            total_encontrado_tue,
-
-        "relatorio":
-            relatorio
-    }
-
-
-# ============================================================
-# 19. GERAÇÃO PRINCIPAL DO CAD
+# GERA CAD UNIFILAR
 # ============================================================
 
 def gerar_cad_unifilar(
@@ -1946,7 +1212,7 @@ def gerar_cad_unifilar(
     try:
 
         # ----------------------------------------------------
-        # CRIA ARQUIVO TEMPORÁRIO
+        # SALVA DXF TEMPORÁRIO
         # ----------------------------------------------------
 
         with tempfile.NamedTemporaryFile(
@@ -1954,17 +1220,9 @@ def gerar_cad_unifilar(
             suffix=".dxf"
         ) as tmp_in:
 
-            tmp_in.write(
-                dxf_bytes
-            )
+            tmp_in.write(dxf_bytes)
 
-            tmp_in_path = (
-                tmp_in.name
-            )
-
-        # ----------------------------------------------------
-        # ABRE DXF
-        # ----------------------------------------------------
+            tmp_in_path = tmp_in.name
 
         doc = ezdxf.readfile(
             tmp_in_path
@@ -1973,201 +1231,390 @@ def gerar_cad_unifilar(
         msp = doc.modelspace()
 
         # ----------------------------------------------------
-        # VALIDA ENTRADA
+        # VALIDA CAMADAS
         # ----------------------------------------------------
 
-        validar_camadas_entrada(
-            doc
-        )
+        contagem_camadas = {
+            'IA_AMBIENTES': 0,
+            'IA_TEXTOS': 0,
+            'IA_PORTAS': 0,
+            'IA_SOLEIRAS': 0
+        }
 
-        # ----------------------------------------------------
-        # REGISTRA XDATA
-        # ----------------------------------------------------
+        for entity in msp:
 
-        registrar_appid(
-            doc
-        )
+            if hasattr(entity.dxf, 'layer'):
 
-        # ----------------------------------------------------
-        # CRIA CAMADAS
-        # ----------------------------------------------------
+                l = str(
+                    entity.dxf.layer
+                ).upper().strip()
 
-        criar_camadas_projeto(
-            doc
-        )
+                if l in contagem_camadas:
 
-        # ----------------------------------------------------
-        # LÊ AMBIENTES
-        # ----------------------------------------------------
+                    contagem_camadas[l] += 1
 
-        ambientes = ler_ambientes(
-            msp
-        )
+        camadas_vazias = [
+            cam
+            for cam, qtd
+            in contagem_camadas.items()
+            if qtd == 0
+        ]
 
-        # ----------------------------------------------------
-        # LÊ PORTAS E SOLEIRAS
-        # ----------------------------------------------------
+        if camadas_vazias:
 
-        portas_raw, soleiras_raw = (
-            ler_portas_soleiras(
-                msp
+            raise ValueError(
+                "❌ Erro de Geração do CAD: "
+                "A(s) seguinte(s) camada(s) "
+                "obrigatória(s) está(ão) vazia(s) "
+                "ou ausente(s): "
+                + ", ".join(camadas_vazias)
+                + ". Verifique se os elementos "
+                "estão corretamente posicionados "
+                "em suas camadas antes de processar."
             )
-        )
 
         # ----------------------------------------------------
-        # IGNORA SOLEIRAS SEM PORTA
+        # CAMADAS DO PROJETO
         # ----------------------------------------------------
+
+        camadas = {
+
+            "PROJ_ELETRICA_LUZ": 2,
+
+            "PROJ_ELETRICA_QDC": 1,
+
+            "PROJ_ELETRICA_TEXTO": 2,
+
+            "PROJ_ELETRICA_TOMADA": 4,
+
+            "PROJ_ELETRICA_INTERRUPTOR": 5,
+
+            "PROJ_ELETRICA_DEBUG": 6
+        }
+
+        for nome_l, cor_l in camadas.items():
+
+            if nome_l not in doc.layers:
+
+                doc.layers.add(
+                    name=nome_l,
+                    color=cor_l
+                )
+
+            else:
+
+                doc.layers.get(
+                    nome_l
+                ).color = cor_l
+
+        # ----------------------------------------------------
+        # LEITURA DOS ELEMENTOS DO DXF
+        # ----------------------------------------------------
+
+        polilinhas = []
+        textos = []
+        portas_raw = []
+        soleiras_raw = []
+
+        for entity in msp:
+
+            tipo = entity.dxftype()
+
+            if hasattr(
+                entity.dxf,
+                'layer'
+            ):
+
+                layer = str(
+                    entity.dxf.layer
+                ).upper().strip()
+
+            else:
+
+                continue
+
+            # ------------------------------------------------
+            # AMBIENTES
+            # ------------------------------------------------
+
+            if (
+                tipo in [
+                    'LWPOLYLINE',
+                    'POLYLINE'
+                ]
+                and layer == 'IA_AMBIENTES'
+            ):
+
+                try:
+
+                    if tipo == 'LWPOLYLINE':
+
+                        pontos = [
+                            (p[0], p[1])
+                            for p in entity.get_points(
+                                format='xy'
+                            )
+                        ]
+
+                    else:
+
+                        pontos = [
+                            (
+                                v.dxf.location.x,
+                                v.dxf.location.y
+                            )
+                            for v in entity.vertices
+                        ]
+
+                    if pontos:
+
+                        polilinhas.append(
+                            pontos
+                        )
+
+                except:
+
+                    pass
+
+            # ------------------------------------------------
+            # TEXTOS
+            # ------------------------------------------------
+
+            elif (
+                tipo in ['TEXT', 'MTEXT']
+                and layer == 'IA_TEXTOS'
+            ):
+
+                try:
+
+                    texto_str = (
+                        entity.text
+                        if tipo == 'MTEXT'
+                        else entity.dxf.text
+                    ).strip()
+
+                    if texto_str:
+
+                        textos.append(
+                            {
+                                'nome': texto_str,
+                                'x': entity.dxf.insert.x,
+                                'y': entity.dxf.insert.y
+                            }
+                        )
+
+                except:
+
+                    pass
+
+            # ------------------------------------------------
+            # PORTAS
+            # ------------------------------------------------
+
+            elif layer == 'IA_PORTAS':
+
+                if tipo == 'LINE':
+
+                    portas_raw.append(
+                        {
+                            'p1': (
+                                entity.dxf.start.x,
+                                entity.dxf.start.y
+                            ),
+
+                            'p2': (
+                                entity.dxf.end.x,
+                                entity.dxf.end.y
+                            )
+                        }
+                    )
+
+                elif tipo in [
+                    'LWPOLYLINE',
+                    'POLYLINE'
+                ]:
+
+                    try:
+
+                        pts = [
+                            (p[0], p[1])
+                            for p in entity.get_points(
+                                format='xy'
+                            )
+                        ]
+
+                        if len(pts) >= 2:
+
+                            portas_raw.append(
+                                {
+                                    'p1': pts[0],
+                                    'p2': pts[-1]
+                                }
+                            )
+
+                    except:
+
+                        pass
+
+            # ------------------------------------------------
+            # SOLEIRAS
+            # ------------------------------------------------
+
+            elif layer == 'IA_SOLEIRAS':
+
+                if tipo == 'LINE':
+
+                    soleiras_raw.append(
+                        {
+                            'p1': (
+                                entity.dxf.start.x,
+                                entity.dxf.start.y
+                            ),
+
+                            'p2': (
+                                entity.dxf.end.x,
+                                entity.dxf.end.y
+                            )
+                        }
+                    )
+
+                elif tipo in [
+                    'LWPOLYLINE',
+                    'POLYLINE'
+                ]:
+
+                    try:
+
+                        pts = [
+                            (p[0], p[1])
+                            for p in entity.get_points(
+                                format='xy'
+                            )
+                        ]
+
+                        if len(pts) >= 2:
+
+                            soleiras_raw.append(
+                                {
+                                    'p1': pts[0],
+                                    'p2': pts[-1]
+                                }
+                            )
+
+                    except:
+
+                        pass
+
+        # ====================================================
+        # DEBUG DAS SOLEIRAS COM PORTAS
+        # ====================================================
+
+        raio_circulo = 0.15
 
         soleiras_com_porta = []
 
         for s in soleiras_raw:
 
-            s_p1 = s["p1"]
-            s_p2 = s["p2"]
+            s_p1 = s['p1']
+            s_p2 = s['p2']
 
             porta_encostada = None
 
             for p in portas_raw:
 
                 d1 = point_seg_dist(
-
-                    p["p1"][0],
-                    p["p1"][1],
-
+                    p['p1'][0],
+                    p['p1'][1],
                     s_p1,
                     s_p2
                 )
 
                 d2 = point_seg_dist(
-
-                    p["p2"][0],
-                    p["p2"][1],
-
+                    p['p2'][0],
+                    p['p2'][1],
                     s_p1,
                     s_p2
                 )
 
                 pm_porta_x = (
-                    p["p1"][0]
-                    +
-                    p["p2"][0]
+                    p['p1'][0]
+                    + p['p2'][0]
                 ) / 2
 
                 pm_porta_y = (
-                    p["p1"][1]
-                    +
-                    p["p2"][1]
+                    p['p1'][1]
+                    + p['p2'][1]
                 ) / 2
 
                 d3 = point_seg_dist(
-
                     pm_porta_x,
                     pm_porta_y,
-
                     s_p1,
                     s_p2
                 )
 
                 if (
-                    d1 < TOLERANCIA_PORTA
-                    or
-                    d2 < TOLERANCIA_PORTA
-                    or
-                    d3 < TOLERANCIA_PORTA
+                    d1 < 0.15
+                    or d2 < 0.15
+                    or d3 < 0.15
                 ):
 
                     porta_encostada = p
-
                     break
 
-            if (
-                porta_encostada
-                is not None
-            ):
+            if porta_encostada is not None:
 
-                soleiras_com_porta.append({
+                soleiras_com_porta.append(
+                    {
+                        's': s,
+                        'porta': porta_encostada
+                    }
+                )
 
-                    "s":
-                        s,
-
-                    "porta":
-                        porta_encostada
-                })
-
-        # ----------------------------------------------------
-        # DESENHA DEBUG DAS SOLEIRAS/PORTAS
-        # ----------------------------------------------------
+        # ====================================================
+        # PROCESSAMENTO VISUAL DAS SOLEIRAS
+        # ====================================================
 
         for item in soleiras_com_porta:
 
-            s = item["s"]
-            p_porta = item["porta"]
+            s = item['s']
+            p_porta = item['porta']
 
-            s_pA = s["p1"]
-            s_pB = s["p2"]
+            s_pA = s['p1']
+            s_pB = s['p2']
 
             sm_x = (
-                s_pA[0]
-                +
-                s_pB[0]
+                s_pA[0] + s_pB[0]
             ) / 2
 
             sm_y = (
-                s_pA[1]
-                +
-                s_pB[1]
+                s_pA[1] + s_pB[1]
             ) / 2
 
             d_p1_sA = math.hypot(
-
-                p_porta["p1"][0]
-                -
-                s_pA[0],
-
-                p_porta["p1"][1]
-                -
-                s_pA[1]
+                p_porta['p1'][0] - s_pA[0],
+                p_porta['p1'][1] - s_pA[1]
             )
 
             d_p1_sB = math.hypot(
-
-                p_porta["p1"][0]
-                -
-                s_pB[0],
-
-                p_porta["p1"][1]
-                -
-                s_pB[1]
+                p_porta['p1'][0] - s_pB[0],
+                p_porta['p1'][1] - s_pB[1]
             )
 
-            dobradica_pt = (
-
-                p_porta["p1"]
+            dobradiça_pt = (
+                p_porta['p1']
                 if d_p1_sA < d_p1_sB
-                else
-                p_porta["p2"]
+                else p_porta['p2']
             )
 
             d_sA_dob = math.hypot(
-
-                s_pA[0]
-                -
-                dobradica_pt[0],
-
-                s_pA[1]
-                -
-                dobradica_pt[1]
+                s_pA[0] - dobradiça_pt[0],
+                s_pA[1] - dobradiça_pt[1]
             )
 
             d_sB_dob = math.hypot(
-
-                s_pB[0]
-                -
-                dobradica_pt[0],
-
-                s_pB[1]
-                -
-                dobradica_pt[1]
+                s_pB[0] - dobradiça_pt[0],
+                s_pB[1] - dobradiça_pt[1]
             )
 
             p1 = (
@@ -2183,7 +1630,6 @@ def gerar_cad_unifilar(
             )
 
             s_len = math.hypot(
-
                 p4[0] - p1[0],
                 p4[1] - p1[1]
             )
@@ -2201,87 +1647,68 @@ def gerar_cad_unifilar(
 
             ambientes_adjacentes = []
 
-            for ambiente in ambientes:
+            for poly in polilinhas:
 
-                poly = ambiente[
-                    "poligono"
+                xs = [
+                    pt[0]
+                    for pt in poly
+                ]
+
+                ys = [
+                    pt[1]
+                    for pt in poly
                 ]
 
                 if (
-                    ambiente["min_x"]
-                    - 0.5
-                    <=
-                    sm_x
-                    <=
-                    ambiente["max_x"]
-                    + 0.5
-                ) and (
-                    ambiente["min_y"]
-                    - 0.5
-                    <=
-                    sm_y
-                    <=
-                    ambiente["max_y"]
-                    + 0.5
+                    min(xs) - 0.5
+                    <= sm_x
+                    <= max(xs) + 0.5
+                    and
+                    min(ys) - 0.5
+                    <= sm_y
+                    <= max(ys) + 0.5
                 ):
 
                     ambientes_adjacentes.append(
                         poly
                     )
 
-            # ------------------------------------------------
-            # DOIS AMBIENTES
-            # ------------------------------------------------
+            if len(ambientes_adjacentes) >= 2:
 
-            if len(
-                ambientes_adjacentes
-            ) >= 2:
+                poly_a = ambientes_adjacentes[0]
+                poly_b = ambientes_adjacentes[1]
 
-                poly_a = (
-                    ambientes_adjacentes[0]
-                )
-
-                poly_b = (
-                    ambientes_adjacentes[1]
-                )
-
-                cx_a = sum(
-                    pt[0]
-                    for pt in poly_a
-                ) / len(poly_a)
-
-                cy_a = sum(
-                    pt[1]
-                    for pt in poly_a
-                ) / len(poly_a)
-
-                nx_1, ny_1 = (
-                    get_inside_normal(
-
-                        vx,
-                        vy,
-
-                        p1[0],
-                        p1[1],
-
-                        cx_a,
-                        cy_a
+                cx_a = (
+                    sum(
+                        pt[0]
+                        for pt in poly_a
                     )
+                    / len(poly_a)
+                )
+
+                cy_a = (
+                    sum(
+                        pt[1]
+                        for pt in poly_a
+                    )
+                    / len(poly_a)
+                )
+
+                nx_1, ny_1 = get_inside_normal(
+                    vx,
+                    vy,
+                    p1[0],
+                    p1[1],
+                    cx_a,
+                    cy_a
                 )
 
                 c_test_p2 = (
-
-                    p1[0]
-                    +
-                    nx_1 * RAIO_DEBUG,
-
-                    p1[1]
-                    +
-                    ny_1 * RAIO_DEBUG
+                    p1[0] + nx_1 * raio_circulo,
+                    p1[1] + ny_1 * raio_circulo
                 )
 
                 target_poly_p2 = (
-
                     poly_a
                     if ponto_em_poligono(
                         c_test_p2[0],
@@ -2292,210 +1719,161 @@ def gerar_cad_unifilar(
                 )
 
                 target_poly_p3 = (
-
                     poly_b
                     if target_poly_p2 == poly_a
                     else poly_a
                 )
 
-                cx_p2 = sum(
-                    pt[0]
-                    for pt in target_poly_p2
-                ) / len(
-                    target_poly_p2
-                )
-
-                cy_p2 = sum(
-                    pt[1]
-                    for pt in target_poly_p2
-                ) / len(
-                    target_poly_p2
-                )
-
-                nx_p2, ny_p2 = (
-                    get_inside_normal(
-
-                        vx,
-                        vy,
-
-                        p1[0],
-                        p1[1],
-
-                        cx_p2,
-                        cy_p2
+                cx_p2 = (
+                    sum(
+                        pt[0]
+                        for pt in target_poly_p2
                     )
+                    / len(target_poly_p2)
+                )
+
+                cy_p2 = (
+                    sum(
+                        pt[1]
+                        for pt in target_poly_p2
+                    )
+                    / len(target_poly_p2)
+                )
+
+                nx_p2, ny_p2 = get_inside_normal(
+                    vx,
+                    vy,
+                    p1[0],
+                    p1[1],
+                    cx_p2,
+                    cy_p2
                 )
 
                 center_p2 = (
-
-                    p1[0]
-                    +
-                    nx_p2 * RAIO_DEBUG,
-
-                    p1[1]
-                    +
-                    ny_p2 * RAIO_DEBUG
+                    p1[0] + nx_p2 * raio_circulo,
+                    p1[1] + ny_p2 * raio_circulo
                 )
 
-                cx_p3 = sum(
-                    pt[0]
-                    for pt in target_poly_p3
-                ) / len(
-                    target_poly_p3
-                )
-
-                cy_p3 = sum(
-                    pt[1]
-                    for pt in target_poly_p3
-                ) / len(
-                    target_poly_p3
-                )
-
-                nx_p3, ny_p3 = (
-                    get_inside_normal(
-
-                        vx,
-                        vy,
-
-                        p4[0],
-                        p4[1],
-
-                        cx_p3,
-                        cy_p3
+                cx_p3 = (
+                    sum(
+                        pt[0]
+                        for pt in target_poly_p3
                     )
+                    / len(target_poly_p3)
+                )
+
+                cy_p3 = (
+                    sum(
+                        pt[1]
+                        for pt in target_poly_p3
+                    )
+                    / len(target_poly_p3)
+                )
+
+                nx_p3, ny_p3 = get_inside_normal(
+                    vx,
+                    vy,
+                    p4[0],
+                    p4[1],
+                    cx_p3,
+                    cy_p3
                 )
 
                 center_p3 = (
-
-                    p4[0]
-                    +
-                    nx_p3 * RAIO_DEBUG,
-
-                    p4[1]
-                    +
-                    ny_p3 * RAIO_DEBUG
+                    p4[0] + nx_p3 * raio_circulo,
+                    p4[1] + ny_p3 * raio_circulo
                 )
 
                 if ponto_em_poligono(
-
                     center_p2[0],
                     center_p2[1],
                     target_poly_p2
                 ):
 
                     msp.add_circle(
-
                         center=center_p2,
-
-                        radius=RAIO_DEBUG,
-
+                        radius=raio_circulo,
                         dxfattribs={
-                            "layer":
-                                "PROJ_ELETRICA_DEBUG",
-                            "color":
-                                6
+                            'layer':
+                                'PROJ_ELETRICA_DEBUG',
+                            'color': 6
                         }
                     )
 
                 if ponto_em_poligono(
-
                     center_p3[0],
                     center_p3[1],
                     target_poly_p3
                 ):
 
                     msp.add_circle(
-
                         center=center_p3,
-
-                        radius=RAIO_DEBUG,
-
+                        radius=raio_circulo,
                         dxfattribs={
-                            "layer":
-                                "PROJ_ELETRICA_DEBUG",
-                            "color":
-                                6
+                            'layer':
+                                'PROJ_ELETRICA_DEBUG',
+                            'color': 6
                         }
                     )
 
-            # ------------------------------------------------
-            # UM AMBIENTE
-            # ------------------------------------------------
+            elif len(ambientes_adjacentes) == 1:
 
-            elif len(
-                ambientes_adjacentes
-            ) == 1:
+                poly = ambientes_adjacentes[0]
 
-                poly = (
-                    ambientes_adjacentes[0]
+                cx = (
+                    sum(
+                        pt[0]
+                        for pt in poly
+                    )
+                    / len(poly)
                 )
 
-                cx = sum(
-                    pt[0]
-                    for pt in poly
-                ) / len(poly)
-
-                cy = sum(
-                    pt[1]
-                    for pt in poly
-                ) / len(poly)
-
-                nx, ny = (
-                    get_inside_normal(
-
-                        vx,
-                        vy,
-
-                        p1[0],
-                        p1[1],
-
-                        cx,
-                        cy
+                cy = (
+                    sum(
+                        pt[1]
+                        for pt in poly
                     )
+                    / len(poly)
+                )
+
+                nx, ny = get_inside_normal(
+                    vx,
+                    vy,
+                    p1[0],
+                    p1[1],
+                    cx,
+                    cy
                 )
 
                 center_p2 = (
-
-                    p1[0]
-                    +
-                    nx * RAIO_DEBUG,
-
-                    p1[1]
-                    +
-                    ny * RAIO_DEBUG
+                    p1[0] + nx * raio_circulo,
+                    p1[1] + ny * raio_circulo
                 )
 
                 if ponto_em_poligono(
-
                     center_p2[0],
                     center_p2[1],
                     poly
                 ):
 
                     msp.add_circle(
-
                         center=center_p2,
-
-                        radius=RAIO_DEBUG,
-
+                        radius=raio_circulo,
                         dxfattribs={
-                            "layer":
-                                "PROJ_ELETRICA_DEBUG",
-                            "color":
-                                6
+                            'layer':
+                                'PROJ_ELETRICA_DEBUG',
+                            'color': 6
                         }
                     )
 
         # ====================================================
-        # DADOS EDITADOS DA TABELA
+        # DADOS DA TABELA
         # ====================================================
 
+        ambientes_processados = {}
+
         dict_dados = {
-
-            str(row["Ambiente"])
-            .strip():
-                row
-
+            row['Ambiente']: row
             for row in dados_editados
         }
 
@@ -2503,116 +1881,133 @@ def gerar_cad_unifilar(
         # PROCESSA CADA AMBIENTE
         # ====================================================
 
-        for ambiente in ambientes:
+        for polilinha in polilinhas:
 
-            nome = ambiente[
-                "nome"
+            xs = [
+                p[0]
+                for p in polilinha
             ]
 
-            polilinha = ambiente[
-                "poligono"
+            ys = [
+                p[1]
+                for p in polilinha
             ]
 
-            min_x = ambiente[
-                "min_x"
-            ]
+            min_x = min(xs)
+            max_x = max(xs)
 
-            max_x = ambiente[
-                "max_x"
-            ]
+            min_y = min(ys)
+            max_y = max(ys)
 
-            min_y = ambiente[
-                "min_y"
-            ]
-
-            max_y = ambiente[
-                "max_y"
-            ]
-
-            centro_x = ambiente[
-                "centro_x"
-            ]
-
-            centro_y = ambiente[
-                "centro_y"
-            ]
-
-            largura = (
+            area = (
                 max_x - min_x
-            )
-
-            comprimento = (
+            ) * (
                 max_y - min_y
             )
 
-            # ------------------------------------------------
-            # BUSCA DADOS DA TABELA
-            # ------------------------------------------------
-
-            row_data = obter_dados_ambiente(
-
-                dict_dados,
-
-                nome
+            perimetro = (
+                (max_x - min_x) * 2
+            ) + (
+                (max_y - min_y) * 2
             )
 
-            if row_data is None:
+            if area < 0.5:
+                continue
 
-                raise ValueError(
+            nome = next(
+                (
+                    t['nome']
+                    for t in textos
+                    if (
+                        min_x - 0.5
+                        <= t['x']
+                        <= max_x + 0.5
+                        and
+                        min_y - 0.5
+                        <= t['y']
+                        <= max_y + 0.5
+                    )
+                ),
+                None
+            )
 
-                    "❌ Ambiente encontrado no DXF "
-                    "mas não encontrado na tabela:\n\n"
-                    f"'{nome}'\n\n"
-                    "Verifique o nome do ambiente."
+            if not nome:
+                continue
+
+            if nome in ambientes_processados:
+
+                ambientes_processados[nome] += 1
+
+                nome_busca = (
+                    f"{nome} "
+                    f"{ambientes_processados[nome]}"
                 )
 
-            # ------------------------------------------------
-            # MONTA PAREDES
-            # ------------------------------------------------
+            else:
+
+                ambientes_processados[nome] = 1
+
+                nome_busca = nome
+
+            row_data = dict_dados.get(
+                nome_busca,
+                dict_dados.get(
+                    nome,
+                    None
+                )
+            )
+
+            centro_x = (
+                min_x + max_x
+            ) / 2
+
+            centro_y = (
+                min_y + max_y
+            ) / 2
+
+            largura = max_x - min_x
+            comprimento = max_y - min_y
+
+            # =================================================
+            # PAREDES DO AMBIENTE
+            # =================================================
 
             segmentos_crus = []
-
             comp_total = 0
 
-            poly_fechado = (
-                list(polilinha)
-                +
-                [polilinha[0]]
-            )
+            poly = list(polilinha)
+
+            if (
+                len(poly) > 1
+                and poly[0] != poly[-1]
+            ):
+                poly.append(
+                    poly[0]
+                )
 
             for i in range(
-                len(poly_fechado) - 1
+                len(poly) - 1
             ):
 
-                pt1 = (
-                    poly_fechado[i]
-                )
-
-                pt2 = (
-                    poly_fechado[i + 1]
-                )
-
                 dst = math.hypot(
+                    poly[i + 1][0]
+                    - poly[i][0],
 
-                    pt2[0] - pt1[0],
-
-                    pt2[1] - pt1[1]
+                    poly[i + 1][1]
+                    - poly[i][1]
                 )
 
                 if dst > 0.1:
 
                     segmentos_crus.append(
                         (
-                            pt1,
-                            pt2,
+                            poly[i],
+                            poly[i + 1],
                             dst
                         )
                     )
 
                     comp_total += dst
-
-            if not segmentos_crus:
-                continue
 
             logical_walls = []
 
@@ -2626,56 +2021,61 @@ def gerar_cad_unifilar(
                     pt2[1] - pt1[1]
                 ) / dst
 
-                logical_walls.append({
+                logical_walls.append(
+                    {
+                        'p1': pt1,
+                        'p2': pt2,
+                        'length': dst,
+                        'vx': vx,
+                        'vy': vy
+                    }
+                )
 
-                    "p1":
-                        pt1,
-
-                    "p2":
-                        pt2,
-
-                    "length":
-                        dst,
-
-                    "vx":
-                        vx,
-
-                    "vy":
-                        vy
-                })
-
-            # ------------------------------------------------
-            # PORTAS DO AMBIENTE
-            # ------------------------------------------------
+            # =================================================
+            # PORTAS DESTE AMBIENTE
+            # =================================================
 
             unique_portas = [
-
                 p
-
                 for p in portas_raw
-
                 if (
                     min_x - 0.8
-                    <=
-                    (
-                        p["p1"][0]
-                        +
-                        p["p2"][0]
+                    <= (
+                        p['p1'][0]
+                        + p['p2'][0]
                     ) / 2
-                    <=
-                    max_x + 0.8
-                )
-                and
-                (
+                    <= max_x + 0.8
+                    and
                     min_y - 0.8
-                    <=
-                    (
-                        p["p1"][1]
-                        +
-                        p["p2"][1]
+                    <= (
+                        p['p1'][1]
+                        + p['p2'][1]
                     ) / 2
-                    <=
-                    max_y + 0.8
+                    <= max_y + 0.8
+                )
+            ]
+
+            # =================================================
+            # SOLEIRAS DESTE AMBIENTE
+            # =================================================
+
+            unique_soleiras = [
+                s
+                for s in soleiras_raw
+                if (
+                    min_x - 0.8
+                    <= (
+                        s['p1'][0]
+                        + s['p2'][0]
+                    ) / 2
+                    <= max_x + 0.8
+                    and
+                    min_y - 0.8
+                    <= (
+                        s['p1'][1]
+                        + s['p2'][1]
+                    ) / 2
+                    <= max_y + 0.8
                 )
             ]
 
@@ -2683,166 +2083,138 @@ def gerar_cad_unifilar(
             # ILUMINAÇÃO
             # =================================================
 
-            qtd_ilum = int(
-                row_data.get(
-                    "Qtd Ilum.",
-                    0
+            if row_data:
+
+                qtd_ilum = int(
+                    row_data.get(
+                        "Qtd Ilum.",
+                        1
+                    )
                 )
-            )
 
-            pot_ilum_unit = int(
-                row_data.get(
-                    "Pot. Unit. Ilum (VA)",
-                    100
+                pot_ilum_unit = int(
+                    row_data.get(
+                        "Pot. Unit. Ilum (VA)",
+                        100
+                    )
                 )
-            )
 
-            if qtd_ilum > 0:
+                if qtd_ilum > 0:
 
-                pontos_luz = []
+                    pontos_luz = []
 
-                if largura >= comprimento:
+                    if largura >= comprimento:
 
-                    if qtd_ilum == 1:
-
-                        pontos_luz.append(
-                            (
-                                centro_x,
-                                centro_y
-                            )
-                        )
-
-                    else:
-
-                        step = (
-                            largura
-                            /
-                            (
-                                qtd_ilum + 1
-                            )
-                        )
-
-                        for i in range(
-                            1,
-                            qtd_ilum + 1
-                        ):
+                        if qtd_ilum == 1:
 
                             pontos_luz.append(
-
                                 (
-                                    min_x
-                                    +
-                                    step * i,
-
+                                    centro_x,
                                     centro_y
                                 )
                             )
 
-                else:
+                        else:
 
-                    if qtd_ilum == 1:
-
-                        pontos_luz.append(
-                            (
-                                centro_x,
-                                centro_y
-                            )
-                        )
-
-                    else:
-
-                        step = (
-                            comprimento
-                            /
-                            (
-                                qtd_ilum + 1
-                            )
-                        )
-
-                        for i in range(
-                            1,
-                            qtd_ilum + 1
-                        ):
-
-                            pontos_luz.append(
-
-                                (
-                                    centro_x,
-
-                                    min_y
-                                    +
-                                    step * i
+                            step = (
+                                largura
+                                / (
+                                    qtd_ilum + 1
                                 )
                             )
 
-                for lx, ly in pontos_luz:
+                            for i in range(
+                                1,
+                                qtd_ilum + 1
+                            ):
 
-                    msp.add_circle(
+                                pontos_luz.append(
+                                    (
+                                        min_x
+                                        + step * i,
+                                        centro_y
+                                    )
+                                )
 
-                        center=(
-                            lx,
-                            ly
-                        ),
+                    else:
 
-                        radius=0.25,
+                        if qtd_ilum == 1:
 
-                        dxfattribs={
-                            "layer":
-                                "PROJ_ELETRICA_LUZ"
-                        }
-                    )
-
-                    msp.add_text(
-
-                        f"{pot_ilum_unit}VA",
-
-                        dxfattribs={
-
-                            "layer":
-                                "PROJ_ELETRICA_TEXTO",
-
-                            "height":
-                                0.15,
-
-                            "insert": (
-
-                                lx + 0.3,
-
-                                ly - 0.07
+                            pontos_luz.append(
+                                (
+                                    centro_x,
+                                    centro_y
+                                )
                             )
-                        }
-                    )
 
-                    msp.add_text(
+                        else:
 
-                        "a",
-
-                        dxfattribs={
-
-                            "layer":
-                                "PROJ_ELETRICA_TEXTO",
-
-                            "height":
-                                0.15,
-
-                            "color":
-                                2,
-
-                            "insert": (
-
-                                lx + 0.3,
-
-                                ly + 0.15
+                            step = (
+                                comprimento
+                                / (
+                                    qtd_ilum + 1
+                                )
                             )
-                        }
-                    )
+
+                            for i in range(
+                                1,
+                                qtd_ilum + 1
+                            ):
+
+                                pontos_luz.append(
+                                    (
+                                        centro_x,
+                                        min_y
+                                        + step * i
+                                    )
+                                )
+
+                    for lx, ly in pontos_luz:
+
+                        msp.add_circle(
+                            center=(
+                                lx,
+                                ly
+                            ),
+                            radius=0.25,
+                            dxfattribs={
+                                'layer':
+                                    'PROJ_ELETRICA_LUZ'
+                            }
+                        )
+
+                        msp.add_text(
+                            f"{pot_ilum_unit}VA",
+                            dxfattribs={
+                                'layer':
+                                    'PROJ_ELETRICA_TEXTO',
+                                'height': 0.15,
+                                'insert': (
+                                    lx + 0.3,
+                                    ly - 0.07
+                                )
+                            }
+                        )
+
+                        msp.add_text(
+                            "a",
+                            dxfattribs={
+                                'layer':
+                                    'PROJ_ELETRICA_TEXTO',
+                                'height': 0.15,
+                                'color': 2,
+                                'insert': (
+                                    lx + 0.3,
+                                    ly + 0.15
+                                )
+                            }
+                        )
 
             # =================================================
             # QDC
             # =================================================
 
             qdc_formatado = (
-
                 str(local_qdc)
                 .replace(
                     " (recomendado)",
@@ -2853,54 +2225,37 @@ def gerar_cad_unifilar(
             )
 
             nome_atual_upper = (
-                nome
-                .strip()
-                .upper()
+                nome.strip().upper()
             )
 
             is_ambiente_qdc = (
                 nome_atual_upper
-                ==
-                qdc_formatado
+                == qdc_formatado
             )
 
             if (
                 is_ambiente_qdc
-                and
-                logical_walls
+                and logical_walls
             ):
 
                 qdc_w = 0.4
                 qdc_d = 0.15
 
                 maior_parede = max(
-
                     logical_walls,
-
-                    key=lambda w:
-                        w["length"]
+                    key=lambda w: w['length']
                 )
 
-                pt1 = maior_parede[
-                    "p1"
-                ]
-
-                pt2 = maior_parede[
-                    "p2"
-                ]
+                pt1 = maior_parede['p1']
+                pt2 = maior_parede['p2']
 
                 is_vertical = (
-
                     abs(
-                        pt1[0]
-                        -
-                        pt2[0]
+                        pt1[0] - pt2[0]
                     )
                     <
                     abs(
-                        pt1[1]
-                        -
-                        pt2[1]
+                        pt1[1] - pt2[1]
                     )
                 )
 
@@ -2909,42 +2264,35 @@ def gerar_cad_unifilar(
                 for p in unique_portas:
 
                     d_p1 = point_seg_dist(
-
-                        p["p1"][0],
-                        p["p1"][1],
-
+                        p['p1'][0],
+                        p['p1'][1],
                         pt1,
                         pt2
                     )
 
                     d_p2 = point_seg_dist(
-
-                        p["p2"][0],
-                        p["p2"][1],
-
+                        p['p2'][0],
+                        p['p2'][1],
                         pt1,
                         pt2
                     )
 
                     if (
                         d_p1 < 0.6
-                        or
-                        d_p2 < 0.6
+                        or d_p2 < 0.6
                     ):
 
                         if is_vertical:
 
                             cortes_portas.append(
-
                                 (
                                     min(
-                                        p["p1"][1],
-                                        p["p2"][1]
+                                        p['p1'][1],
+                                        p['p2'][1]
                                     ),
-
                                     max(
-                                        p["p1"][1],
-                                        p["p2"][1]
+                                        p['p1'][1],
+                                        p['p2'][1]
                                     )
                                 )
                             )
@@ -2952,23 +2300,17 @@ def gerar_cad_unifilar(
                         else:
 
                             cortes_portas.append(
-
                                 (
                                     min(
-                                        p["p1"][0],
-                                        p["p2"][0]
+                                        p['p1'][0],
+                                        p['p2'][0]
                                     ),
-
                                     max(
-                                        p["p1"][0],
-                                        p["p2"][0]
+                                        p['p1'][0],
+                                        p['p2'][0]
                                     )
                                 )
                             )
-
-                cortes_portas.sort(
-                    key=lambda x: x[0]
-                )
 
                 if is_vertical:
 
@@ -2982,14 +2324,18 @@ def gerar_cad_unifilar(
                         pt2[1]
                     )
 
-                    trechos_livres = []
+                    cortes_portas.sort(
+                        key=lambda x: x[0]
+                    )
 
+                    trechos_livres = []
                     cursor = parede_min
 
                     for c_inf, c_sup in cortes_portas:
 
-                        if c_inf > (
-                            cursor + 0.1
+                        if (
+                            c_inf
+                            > cursor + 0.1
                         ):
 
                             trechos_livres.append(
@@ -3004,8 +2350,9 @@ def gerar_cad_unifilar(
                             c_sup
                         )
 
-                    if cursor < (
-                        parede_max - 0.1
+                    if (
+                        cursor
+                        < parede_max - 0.1
                     ):
 
                         trechos_livres.append(
@@ -3018,17 +2365,14 @@ def gerar_cad_unifilar(
                     if trechos_livres:
 
                         melhor_trecho = max(
-
                             trechos_livres,
-
                             key=lambda t:
                                 t[1] - t[0]
                         )
 
                         mid_y = (
                             melhor_trecho[0]
-                            +
-                            melhor_trecho[1]
+                            + melhor_trecho[1]
                         ) / 2
 
                         mx = pt1[0]
@@ -3038,14 +2382,12 @@ def gerar_cad_unifilar(
 
                         mx = (
                             pt1[0]
-                            +
-                            pt2[0]
+                            + pt2[0]
                         ) / 2
 
                         my = (
                             pt1[1]
-                            +
-                            pt2[1]
+                            + pt2[1]
                         ) / 2
 
                 else:
@@ -3060,14 +2402,18 @@ def gerar_cad_unifilar(
                         pt2[0]
                     )
 
-                    trechos_livres = []
+                    cortes_portas.sort(
+                        key=lambda x: x[0]
+                    )
 
+                    trechos_livres = []
                     cursor = parede_min
 
                     for c_inf, c_sup in cortes_portas:
 
-                        if c_inf > (
-                            cursor + 0.1
+                        if (
+                            c_inf
+                            > cursor + 0.1
                         ):
 
                             trechos_livres.append(
@@ -3082,8 +2428,9 @@ def gerar_cad_unifilar(
                             c_sup
                         )
 
-                    if cursor < (
-                        parede_max - 0.1
+                    if (
+                        cursor
+                        < parede_max - 0.1
                     ):
 
                         trechos_livres.append(
@@ -3096,17 +2443,14 @@ def gerar_cad_unifilar(
                     if trechos_livres:
 
                         melhor_trecho = max(
-
                             trechos_livres,
-
                             key=lambda t:
                                 t[1] - t[0]
                         )
 
                         mid_x = (
                             melhor_trecho[0]
-                            +
-                            melhor_trecho[1]
+                            + melhor_trecho[1]
                         ) / 2
 
                         mx = mid_x
@@ -3116,32 +2460,22 @@ def gerar_cad_unifilar(
 
                         mx = (
                             pt1[0]
-                            +
-                            pt2[0]
+                            + pt2[0]
                         ) / 2
 
                         my = (
                             pt1[1]
-                            +
-                            pt2[1]
+                            + pt2[1]
                         ) / 2
 
-                vx = maior_parede[
-                    "vx"
-                ]
-
-                vy = maior_parede[
-                    "vy"
-                ]
+                vx = maior_parede['vx']
+                vy = maior_parede['vy']
 
                 nx, ny = get_inside_normal(
-
                     vx,
                     vy,
-
                     mx,
                     my,
-
                     centro_x,
                     centro_y
                 )
@@ -3150,51 +2484,30 @@ def gerar_cad_unifilar(
                 out_ny = -ny
 
                 p1_qdc = (
-
-                    mx
-                    -
-                    vx * qdc_w / 2,
-
-                    my
-                    -
-                    vy * qdc_w / 2
+                    mx - vx * qdc_w / 2,
+                    my - vy * qdc_w / 2
                 )
 
                 p2_qdc = (
-
-                    mx
-                    +
-                    vx * qdc_w / 2,
-
-                    my
-                    +
-                    vy * qdc_w / 2
+                    mx + vx * qdc_w / 2,
+                    my + vy * qdc_w / 2
                 )
 
                 p3_qdc = (
-
                     p2_qdc[0]
-                    +
-                    out_nx * qdc_d,
-
+                    + out_nx * qdc_d,
                     p2_qdc[1]
-                    +
-                    out_ny * qdc_d
+                    + out_ny * qdc_d
                 )
 
                 p4_qdc = (
-
                     p1_qdc[0]
-                    +
-                    out_nx * qdc_d,
-
+                    + out_nx * qdc_d,
                     p1_qdc[1]
-                    +
-                    out_ny * qdc_d
+                    + out_ny * qdc_d
                 )
 
                 pts_qdc = [
-
                     p1_qdc,
                     p2_qdc,
                     p3_qdc,
@@ -3202,516 +2515,563 @@ def gerar_cad_unifilar(
                 ]
 
                 msp.add_lwpolyline(
-
-                    pts_qdc
-                    +
-                    [pts_qdc[0]],
-
+                    pts_qdc + [pts_qdc[0]],
                     dxfattribs={
-                        "layer":
-                            "PROJ_ELETRICA_QDC"
+                        'layer':
+                            'PROJ_ELETRICA_QDC'
                     }
                 )
 
                 msp.add_solid(
-
                     pts_qdc[:3],
-
                     dxfattribs={
-                        "layer":
-                            "PROJ_ELETRICA_QDC"
+                        'layer':
+                            'PROJ_ELETRICA_QDC'
                     }
                 )
 
             # =================================================
-            # TUG / TUE
+            # TOMADAS TUG / TUE
             # =================================================
 
-            qtd_tugs = int(
-                row_data.get(
-                    "TUGs (Qtd)",
-                    0
-                )
-            )
+            if row_data:
 
-            pot_tug_val = int(
-                row_data.get(
-                    "Pot. Unit. TUG (VA)",
-                    100
-                )
-            )
-
-            qtd_tue = int(
-                row_data.get(
-                    "Qtd TUE",
-                    0
-                )
-            )
-
-            eq_tue_nome = str(
-                row_data.get(
-                    "Equipamento TUE",
-                    "-"
-                )
-            )
-
-            pot_tue_val = int(
-                row_data.get(
-                    "Pot. Unit. TUE (VA)",
-                    0
-                )
-            )
-
-            # ------------------------------------------------
-            # CORREÇÃO DE POTÊNCIA TUE
-            # ------------------------------------------------
-
-            if pot_tue_val == 0:
-
-                eq_lower = (
-                    eq_tue_nome
-                    .lower()
-                )
-
-                if "chuveiro" in eq_lower:
-
-                    pot_tue_val = 5500
-
-                elif "ar" in eq_lower:
-
-                    pot_tue_val = 1200
-
-                elif (
-                    "micro" in eq_lower
-                    or
-                    "forno" in eq_lower
-                ):
-
-                    pot_tue_val = 2000
-
-                elif (
-                    "máquina" in eq_lower
-                    or
-                    "lavar" in eq_lower
-                ):
-
-                    pot_tue_val = 1000
-
-                else:
-
-                    pot_tue_val = 1000
-
-            eq_lower = (
-                eq_tue_nome
-                .lower()
-            )
-
-            is_chuveiro_ou_ac = any(
-
-                x in eq_lower
-
-                for x in [
-                    "chuveiro",
-                    "ar-condicionado",
-                    "ar condicionado"
-                ]
-            )
-
-            nome_lower_env = (
-                nome
-                .lower()
-                .strip()
-            )
-
-            is_ambiente_molhado = any(
-
-                x in nome_lower_env
-
-                for x in [
-                    "coz",
-                    "serv",
-                    "banh",
-                    "lav",
-                    "sanit",
-                    "wc",
-                    "as"
-                ]
-            )
-
-            # =================================================
-            # TUEs
-            # =================================================
-
-            if (
-                qtd_tue > 0
-                and
-                logical_walls
-            ):
-
-                # ---------------------------------------------
-                # PRIORIZA PAREDES SEM PORTA
-                # ---------------------------------------------
-
-                paredes_candidatas = sorted(
-
-                    logical_walls,
-
-                    key=lambda w:
-                        w["length"]
-                )
-
-                paredes_sem_porta = [
-
-                    w
-
-                    for w in paredes_candidatas
-
-                    if not any(
-
-                        point_seg_dist(
-
-                            (
-                                p["p1"][0]
-                                +
-                                p["p2"][0]
-                            ) / 2,
-
-                            (
-                                p["p1"][1]
-                                +
-                                p["p2"][1]
-                            ) / 2,
-
-                            w["p1"],
-                            w["p2"]
-
-                        ) < 0.6
-
-                        for p in unique_portas
+                qtd_tugs = int(
+                    row_data.get(
+                        'TUGs (Qtd)',
+                        row_data.get(
+                            'TUGs',
+                            0
+                        )
                     )
-                ]
-
-                paredes_finais = (
-
-                    paredes_sem_porta
-                    if paredes_sem_porta
-                    else paredes_candidatas
                 )
 
-                # ---------------------------------------------
-                # GERA EXATAMENTE qtd_tue
-                # ---------------------------------------------
+                qtd_tue = int(
+                    row_data.get(
+                        'Qtd TUE',
+                        row_data.get(
+                            'TUE',
+                            0
+                        )
+                    )
+                )
 
-                for idx_tue in range(
-                    qtd_tue
-                ):
+                eq_tue_nome = str(
+                    row_data.get(
+                        'Equipamento TUE',
+                        '-'
+                    )
+                )
 
-                    p_alvo = (
+                pot_tue_val = int(
+                    row_data.get(
+                        'Pot. Unit. TUE (VA)',
+                        0
+                    )
+                )
 
-                        paredes_finais[
-                            idx_tue
-                            %
-                            len(paredes_finais)
-                        ]
+                if pot_tue_val == 0:
+
+                    eq_lower = (
+                        eq_tue_nome.lower()
                     )
 
-                    pt1 = p_alvo[
-                        "p1"
-                    ]
+                    if "chuveiro" in eq_lower:
 
-                    pt2 = p_alvo[
-                        "p2"
-                    ]
+                        pot_tue_val = 5500
 
-                    if qtd_tue == 1:
+                    elif "ar" in eq_lower:
 
-                        fator = 0.5
+                        pot_tue_val = 1200
+
+                    elif (
+                        "micro" in eq_lower
+                        or "forno" in eq_lower
+                    ):
+
+                        pot_tue_val = 2000
+
+                    elif (
+                        "máquina" in eq_lower
+                        or "lavar" in eq_lower
+                    ):
+
+                        pot_tue_val = 1000
 
                     else:
 
-                        fator = (
-                            idx_tue + 1
-                        ) / (
-                            qtd_tue + 1
-                        )
+                        pot_tue_val = 1000
 
-                    px = (
-
-                        pt1[0]
-                        +
-                        (
-                            pt2[0]
-                            -
-                            pt1[0]
-                        )
-                        *
-                        fator
-                    )
-
-                    py = (
-
-                        pt1[1]
-                        +
-                        (
-                            pt2[1]
-                            -
-                            pt1[1]
-                        )
-                        *
-                        fator
-                    )
-
-                    vx = p_alvo[
-                        "vx"
-                    ]
-
-                    vy = p_alvo[
-                        "vy"
-                    ]
-
-                    nx, ny = (
-                        get_inside_normal(
-
-                            vx,
-                            vy,
-
-                            px,
-                            py,
-
-                            centro_x,
-                            centro_y
-                        )
-                    )
-
-                    # -----------------------------------------
-                    # GERA TUE
-                    # -----------------------------------------
-
-                    adicionar_tomada(
-
-                        msp=msp,
-
-                        tipo="TUE",
-
-                        ambiente=nome,
-
-                        indice=idx_tue + 1,
-
-                        px=px,
-                        py=py,
-
-                        seg_vx=vx,
-                        seg_vy=vy,
-
-                        nx=nx,
-                        ny=ny,
-
-                        potencia=pot_tue_val,
-
-                        is_molhado=
-                            is_ambiente_molhado,
-
-                        is_chuveiro_ou_ac=
-                            is_chuveiro_ou_ac
-                    )
-
-            # =================================================
-            # TUGs
-            # =================================================
-
-            if (
-                qtd_tugs > 0
-                and
-                comp_total > 0
-            ):
-
-                # ---------------------------------------------
-                # FOLGA DOS CANTOS
-                # ---------------------------------------------
-
-                margem_inicial = 0.25
-
-                comprimento_util = (
-
-                    comp_total
-                    -
-                    (
-                        2
-                        *
-                        margem_inicial
-                    )
+                eq_lower = (
+                    eq_tue_nome.lower()
                 )
 
-                if (
-                    comprimento_util > 0
-                    and
-                    qtd_tugs > 0
-                ):
+                is_chuveiro_ou_ac = any(
+                    x in eq_lower
+                    for x in [
+                        "chuveiro",
+                        "ar-condicionado",
+                        "ar condicionado"
+                    ]
+                )
 
-                    passo = (
-                        comprimento_util
-                        /
-                        qtd_tugs
+                nome_lower_env = (
+                    nome.lower().strip()
+                )
+
+                is_ambiente_molhado = any(
+                    x in nome_lower_env
+                    for x in [
+                        "coz",
+                        "serv",
+                        "banh",
+                        "lav",
+                        "sanit",
+                        "wc",
+                        "as"
+                    ]
+                )
+
+                # =================================================
+                # TUEs
+                #
+                # AGORA TAMBÉM UTILIZAM OS TRECHOS SEGUROS.
+                # =================================================
+
+                if qtd_tue > 0:
+
+                    pontos_tue = escolher_pontos_tomadas(
+                        logical_walls,
+                        unique_portas,
+                        unique_soleiras,
+                        qtd_tue
                     )
 
-                    inicio_offset = (
+                    # -------------------------------------------------
+                    # GARANTIA EXTRA DE QUANTIDADE
+                    #
+                    # Se por alguma geometria extremamente pequena
+                    # a função retornar menos pontos, usamos uma
+                    # distribuição alternativa nas paredes.
+                    # -------------------------------------------------
 
-                        margem_inicial
-                        +
-                        (
-                            passo / 2
+                    if len(pontos_tue) < qtd_tue:
+
+                        pontos_tue = []
+
+                        paredes_ordenadas = sorted(
+                            logical_walls,
+                            key=lambda w: w['length'],
+                            reverse=True
                         )
-                    )
 
-                else:
+                        for parede in paredes_ordenadas:
 
-                    passo = (
-                        comp_total
-                        /
-                        qtd_tugs
-                    )
+                            if len(pontos_tue) >= qtd_tue:
+                                break
 
-                    inicio_offset = (
-                        passo / 2
-                    )
+                            intervalo = (
+                                MARGEM_CANTO,
+                                parede['length']
+                                - MARGEM_CANTO
+                            )
 
-                # ---------------------------------------------
-                # GERA EXATAMENTE qtd_tugs
-                # ---------------------------------------------
+                            if (
+                                intervalo[1]
+                                > intervalo[0]
+                            ):
 
-                for i in range(
-                    qtd_tugs
-                ):
+                                ponto = (
+                                    gerar_pontos_em_intervalo(
+                                        parede,
+                                        intervalo,
+                                        1
+                                    )[0]
+                                )
 
-                    dist_atual = (
+                                pontos_tue.append(
+                                    ponto
+                                )
 
-                        inicio_offset
-                        +
-                        (
-                            i * passo
+                        # Se ainda faltar, repete nas paredes
+                        # mantendo a margem dos cantos.
+                        indice = 0
+
+                        while (
+                            len(pontos_tue)
+                            < qtd_tue
+                            and paredes_ordenadas
+                        ):
+
+                            parede = (
+                                paredes_ordenadas[
+                                    indice
+                                    % len(
+                                        paredes_ordenadas
+                                    )
+                                ]
+                            )
+
+                            intervalo = (
+                                MARGEM_CANTO,
+                                parede['length']
+                                - MARGEM_CANTO
+                            )
+
+                            if (
+                                intervalo[1]
+                                > intervalo[0]
+                            ):
+
+                                qtd_local = 2 + (
+                                    indice
+                                    // len(
+                                        paredes_ordenadas
+                                    )
+                                )
+
+                                pts = (
+                                    gerar_pontos_em_intervalo(
+                                        parede,
+                                        intervalo,
+                                        qtd_local
+                                    )
+                                )
+
+                                for pt in pts:
+
+                                    if (
+                                        len(pontos_tue)
+                                        >= qtd_tue
+                                    ):
+                                        break
+
+                                    pontos_tue.append(
+                                        pt
+                                    )
+
+                            indice += 1
+
+                            if indice > (
+                                qtd_tue * 10
+                            ):
+                                break
+
+                    # -------------------------------------------------
+                    # DESENHA TUE
+                    # -------------------------------------------------
+
+                    for px, py in pontos_tue:
+
+                        # Descobre parede mais próxima
+                        parede = min(
+                            logical_walls,
+                            key=lambda w:
+                                point_seg_dist(
+                                    px,
+                                    py,
+                                    w['p1'],
+                                    w['p2']
+                                )
                         )
-                    )
 
-                    px, py, seg_vx, seg_vy = (
-                        get_ponto_perimetro(
+                        vx = parede['vx']
+                        vy = parede['vy']
 
-                            dist_atual,
-
-                            segmentos_crus
-                        )
-                    )
-
-                    # -----------------------------------------
-                    # EVITA CENTRO DA PORTA
-                    # -----------------------------------------
-
-                    perto_de_vao = (
-                        ponto_proximo_de_porta(
-
+                        nx, ny = get_inside_normal(
+                            vx,
+                            vy,
                             px,
                             py,
-
-                            portas_raw,
-
-                            tolerancia=0.35
-                        )
-                    )
-
-                    if perto_de_vao:
-
-                        # Primeiro tenta deslocar no sentido
-                        # da parede
-                        px += (
-                            seg_vx * 0.30
-                        )
-
-                        py += (
-                            seg_vy * 0.30
-                        )
-
-                    # -----------------------------------------
-                    # NORMAL INTERNA
-                    # -----------------------------------------
-
-                    nx, ny = (
-                        get_inside_normal(
-
-                            seg_vx,
-                            seg_vy,
-
-                            px,
-                            py,
-
                             centro_x,
                             centro_y
                         )
-                    )
 
-                    # -----------------------------------------
-                    # GARANTE PONTO DENTRO DO AMBIENTE
-                    # -----------------------------------------
-
-                    if not ponto_em_poligono(
-
-                        px,
-                        py,
-                        polilinha
-                    ):
-
-                        px -= (
-                            seg_vx * 0.30
+                        ponto_b1 = (
+                            px - vx * 0.10,
+                            py - vy * 0.10
                         )
 
-                        py -= (
-                            seg_vy * 0.30
+                        ponto_b2 = (
+                            px + vx * 0.10,
+                            py + vy * 0.10
                         )
 
-                    # -----------------------------------------
-                    # GERA TUG
-                    # -----------------------------------------
+                        ponto_pt = (
+                            px + nx * 0.20,
+                            py + ny * 0.20
+                        )
 
-                    adicionar_tomada(
+                        msp.add_lwpolyline(
+                            [
+                                ponto_b1,
+                                ponto_b2,
+                                ponto_pt,
+                                ponto_b1
+                            ],
+                            close=True,
+                            dxfattribs={
+                                'layer':
+                                    'PROJ_ELETRICA_TOMADA'
+                            }
+                        )
 
-                        msp=msp,
+                        if is_chuveiro_ou_ac:
 
-                        tipo="TUG",
+                            msp.add_solid(
+                                [
+                                    ponto_b1,
+                                    ponto_b2,
+                                    ponto_pt
+                                ],
+                                dxfattribs={
+                                    'layer':
+                                        'PROJ_ELETRICA_TOMADA'
+                                }
+                            )
 
-                        ambiente=nome,
+                        elif is_ambiente_molhado:
 
-                        indice=i + 1,
+                            ponto_medio_base = (
+                                px,
+                                py
+                            )
 
-                        px=px,
-                        py=py,
+                            msp.add_solid(
+                                [
+                                    ponto_b1,
+                                    ponto_medio_base,
+                                    ponto_pt
+                                ],
+                                dxfattribs={
+                                    'layer':
+                                        'PROJ_ELETRICA_TOMADA'
+                                }
+                            )
 
-                        seg_vx=seg_vx,
-                        seg_vy=seg_vy,
+                        msp.add_text(
+                            f"{pot_tue_val}W",
+                            dxfattribs={
+                                'layer':
+                                    'PROJ_ELETRICA_TEXTO',
+                                'height': 0.12,
+                                'color': 2,
+                                'insert': (
+                                    px + nx * 0.35,
+                                    py + ny * 0.35
+                                )
+                            }
+                        )
 
-                        nx=nx,
-                        ny=ny,
+                # =================================================
+                # TUGs
+                #
+                # ESTA É A PRINCIPAL ALTERAÇÃO.
+                # =================================================
 
-                        potencia=pot_tug_val,
+                if qtd_tugs > 0:
 
-                        is_molhado=
-                            is_ambiente_molhado,
-
-                        is_chuveiro_ou_ac=False
+                    pontos_tug = escolher_pontos_tomadas(
+                        logical_walls,
+                        unique_portas,
+                        unique_soleiras,
+                        qtd_tugs
                     )
 
+                    # -------------------------------------------------
+                    # GARANTIA EXTRA DE QUANTIDADE
+                    # -------------------------------------------------
+
+                    if len(pontos_tug) < qtd_tugs:
+
+                        pontos_tug = []
+
+                        paredes_ordenadas = sorted(
+                            logical_walls,
+                            key=lambda w: w['length'],
+                            reverse=True
+                        )
+
+                        # Primeiro tenta uma tomada em cada parede
+                        for parede in paredes_ordenadas:
+
+                            if len(pontos_tug) >= qtd_tugs:
+                                break
+
+                            intervalo = (
+                                MARGEM_CANTO,
+                                parede['length']
+                                - MARGEM_CANTO
+                            )
+
+                            if (
+                                intervalo[1]
+                                > intervalo[0]
+                            ):
+
+                                ponto = (
+                                    gerar_pontos_em_intervalo(
+                                        parede,
+                                        intervalo,
+                                        1
+                                    )[0]
+                                )
+
+                                pontos_tug.append(
+                                    ponto
+                                )
+
+                        # Depois completa a quantidade
+                        indice = 0
+
+                        while (
+                            len(pontos_tug)
+                            < qtd_tugs
+                            and paredes_ordenadas
+                        ):
+
+                            parede = (
+                                paredes_ordenadas[
+                                    indice
+                                    % len(
+                                        paredes_ordenadas
+                                    )
+                                ]
+                            )
+
+                            intervalo = (
+                                MARGEM_CANTO,
+                                parede['length']
+                                - MARGEM_CANTO
+                            )
+
+                            if (
+                                intervalo[1]
+                                > intervalo[0]
+                            ):
+
+                                qtd_local = 2 + (
+                                    indice
+                                    // len(
+                                        paredes_ordenadas
+                                    )
+                                )
+
+                                pts = (
+                                    gerar_pontos_em_intervalo(
+                                        parede,
+                                        intervalo,
+                                        qtd_local
+                                    )
+                                )
+
+                                for pt in pts:
+
+                                    if (
+                                        len(pontos_tug)
+                                        >= qtd_tugs
+                                    ):
+                                        break
+
+                                    pontos_tug.append(
+                                        pt
+                                    )
+
+                            indice += 1
+
+                            if indice > (
+                                qtd_tugs * 10
+                            ):
+                                break
+
+                    # -------------------------------------------------
+                    # DESENHA TODAS AS TUGs
+                    # -------------------------------------------------
+
+                    for px, py in pontos_tug:
+
+                        # Identifica a parede onde o ponto foi criado
+                        parede = min(
+                            logical_walls,
+                            key=lambda w:
+                                point_seg_dist(
+                                    px,
+                                    py,
+                                    w['p1'],
+                                    w['p2']
+                                )
+                        )
+
+                        seg_vx = parede['vx']
+                        seg_vy = parede['vy']
+
+                        nx, ny = get_inside_normal(
+                            seg_vx,
+                            seg_vy,
+                            px,
+                            py,
+                            centro_x,
+                            centro_y
+                        )
+
+                        ponto_b1 = (
+                            px - seg_vx * 0.10,
+                            py - seg_vy * 0.10
+                        )
+
+                        ponto_b2 = (
+                            px + seg_vx * 0.10,
+                            py + seg_vy * 0.10
+                        )
+
+                        ponto_pt = (
+                            px + nx * 0.20,
+                            py + ny * 0.20
+                        )
+
+                        # -------------------------------------------------
+                        # SÍMBOLO DA TUG
+                        # -------------------------------------------------
+
+                        msp.add_lwpolyline(
+                            [
+                                ponto_b1,
+                                ponto_b2,
+                                ponto_pt,
+                                ponto_b1
+                            ],
+                            close=True,
+                            dxfattribs={
+                                'layer':
+                                    'PROJ_ELETRICA_TOMADA'
+                            }
+                        )
+
+                        # -------------------------------------------------
+                        # TOMADA EM AMBIENTE MOLHADO
+                        # -------------------------------------------------
+
+                        if is_ambiente_molhado:
+
+                            ponto_medio_base = (
+                                px,
+                                py
+                            )
+
+                            msp.add_solid(
+                                [
+                                    ponto_b1,
+                                    ponto_medio_base,
+                                    ponto_pt
+                                ],
+                                dxfattribs={
+                                    'layer':
+                                        'PROJ_ELETRICA_TOMADA'
+                                }
+                            )
+
         # ====================================================
-        # VALIDAÇÃO FINAL
-        # ====================================================
-
-        resultado_validacao = (
-            validar_quantitativos(
-
-                doc,
-
-                dados_editados
-            )
-        )
-
-        # ====================================================
-        # SALVA SOMENTE SE ESTIVER CORRETO
+        # SALVA O DXF
         # ====================================================
 
         doc.saveas(
@@ -3735,8 +3095,7 @@ def gerar_cad_unifilar(
 
         if (
             tmp_in_path
-            and
-            os.path.exists(
+            and os.path.exists(
                 tmp_in_path
             )
         ):
