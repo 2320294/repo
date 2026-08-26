@@ -1,8 +1,4 @@
 streamlit
-ezdxf
 pandas
+ezdxf
 supabase
-openpyxl
-fpdf
-postgrest
-httpx
