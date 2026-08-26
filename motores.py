@@ -1188,6 +1188,14 @@ def gerar_cad_unifilar(
 
         # ====================================================
         # DESENHO DOS PONTOS DEBUG DAS SOLEIRAS
+        # REGRA DOS PONTOS DA PORTA: P1 -> P2 -> P3 -> P4
+        #
+        # P1 = encontro da porta com a soleira
+        # P2 = extremidade oposta da folha da porta
+        # P4 = outra extremidade da soleira
+        # P3 = ponto correspondente a P2 no outro lado da abertura
+        #
+        # Os círculos DEBUG são permitidos SOMENTE em P2 e P3.
         # ====================================================
 
         raio_circulo = 0.15
@@ -1200,70 +1208,84 @@ def gerar_cad_unifilar(
             s_pA = s['p1']
             s_pB = s['p2']
 
-            sm_x = (
-                s_pA[0] +
-                s_pB[0]
-            ) / 2
+            # ------------------------------------------------
+            # P1 = endpoint da porta que realmente encosta na
+            # soleira. P2 = o outro endpoint da porta.
+            # ------------------------------------------------
+            d_porta_1 = point_seg_dist(
+                p_porta['p1'][0],
+                p_porta['p1'][1],
+                s_pA,
+                s_pB
+            )
 
-            sm_y = (
-                s_pA[1] +
-                s_pB[1]
-            ) / 2
+            d_porta_2 = point_seg_dist(
+                p_porta['p2'][0],
+                p_porta['p2'][1],
+                s_pA,
+                s_pB
+            )
 
+            if d_porta_1 <= d_porta_2:
+                p1 = p_porta['p1']
+                p2 = p_porta['p2']
+            else:
+                p1 = p_porta['p2']
+                p2 = p_porta['p1']
+
+            # ------------------------------------------------
+            # P4 = extremidade da soleira que não é P1.
+            # ------------------------------------------------
             d_p1_sA = math.hypot(
-                p_porta['p1'][0] - s_pA[0],
-                p_porta['p1'][1] - s_pA[1]
+                p1[0] - s_pA[0],
+                p1[1] - s_pA[1]
             )
 
             d_p1_sB = math.hypot(
-                p_porta['p1'][0] - s_pB[0],
-                p_porta['p1'][1] - s_pB[1]
-            )
-
-            dobradiça_pt = (
-                p_porta['p1']
-                if d_p1_sA < d_p1_sB
-                else p_porta['p2']
-            )
-
-            d_sA_dob = math.hypot(
-                s_pA[0] - dobradiça_pt[0],
-                s_pA[1] - dobradiça_pt[1]
-            )
-
-            d_sB_dob = math.hypot(
-                s_pB[0] - dobradiça_pt[0],
-                s_pB[1] - dobradiça_pt[1]
-            )
-
-            p1 = (
-                s_pA
-                if d_sA_dob > d_sB_dob
-                else s_pB
+                p1[0] - s_pB[0],
+                p1[1] - s_pB[1]
             )
 
             p4 = (
-                s_pB
-                if d_sA_dob > d_sB_dob
-                else s_pA
+                s_pA
+                if d_p1_sB < d_p1_sA
+                else s_pB
             )
 
-            s_len = math.hypot(
-                p4[0] - p1[0],
-                p4[1] - p1[1]
-            )
+            # ------------------------------------------------
+            # Vetor P1 -> P4 = direção da soleira.
+            # P3 é o quarto ponto do retângulo P1-P2-P3-P4.
+            # ------------------------------------------------
+            vx = p4[0] - p1[0]
+            vy = p4[1] - p1[1]
+
+            s_len = math.hypot(vx, vy)
 
             if s_len == 0:
                 continue
 
-            vx = (
-                p4[0] - p1[0]
-            ) / s_len
+            vx /= s_len
+            vy /= s_len
 
-            vy = (
-                p4[1] - p1[1]
-            ) / s_len
+            p3 = (
+                p2[0] + (p4[0] - p1[0]),
+                p2[1] + (p4[1] - p1[1])
+            )
 
+            # ------------------------------------------------
+            # Centro aproximado da soleira.
+            # ------------------------------------------------
+            sm_x = (
+                s_pA[0] + s_pB[0]
+            ) / 2
+
+            sm_y = (
+                s_pA[1] + s_pB[1]
+            ) / 2
+
+            # ------------------------------------------------
+            # Descobre os ambientes adjacentes à abertura.
+            # ------------------------------------------------
             ambientes_adjacentes = []
 
             for poly in polilinhas:
@@ -1276,14 +1298,57 @@ def gerar_cad_unifilar(
                     and
                     min(ys) - 0.5 <= sm_y <= max(ys) + 0.5
                 ):
-
                     ambientes_adjacentes.append(poly)
 
+            # ------------------------------------------------
+            # Função local para desenhar círculo somente se o
+            # ponto deslocado estiver realmente dentro do ambiente.
+            # ------------------------------------------------
+            def desenhar_circulo_porta(ponto, poly):
+
+                cx = sum(pt[0] for pt in poly) / len(poly)
+                cy = sum(pt[1] for pt in poly) / len(poly)
+
+                nx, ny = get_inside_normal(
+                    vx,
+                    vy,
+                    ponto[0],
+                    ponto[1],
+                    cx,
+                    cy
+                )
+
+                centro = (
+                    ponto[0] + nx * raio_circulo,
+                    ponto[1] + ny * raio_circulo
+                )
+
+                if ponto_em_poligono(
+                    centro[0],
+                    centro[1],
+                    poly
+                ):
+                    msp.add_circle(
+                        center=centro,
+                        radius=raio_circulo,
+                        dxfattribs={
+                            'layer':
+                                'PROJ_ELETRICA_DEBUG',
+                            'color': 6
+                        }
+                    )
+
+            # ------------------------------------------------
+            # Os círculos são permitidos APENAS em P2 e P3.
+            # Nunca desenhar círculo em P1 ou P4.
+            # ------------------------------------------------
             if len(ambientes_adjacentes) >= 2:
 
                 poly_a = ambientes_adjacentes[0]
                 poly_b = ambientes_adjacentes[1]
 
+                # Descobre qual ambiente está de cada lado da
+                # linha P2-P3.
                 cx_a = sum(
                     pt[0] for pt in poly_a
                 ) / len(poly_a)
@@ -1292,159 +1357,51 @@ def gerar_cad_unifilar(
                     pt[1] for pt in poly_a
                 ) / len(poly_a)
 
-                nx_1, ny_1 = get_inside_normal(
+                nx_a, ny_a = get_inside_normal(
                     vx,
                     vy,
-                    p1[0],
-                    p1[1],
+                    p2[0],
+                    p2[1],
                     cx_a,
                     cy_a
                 )
 
-                c_test_p2 = (
-                    p1[0] + nx_1 * raio_circulo,
-                    p1[1] + ny_1 * raio_circulo
+                teste_a = (
+                    p2[0] + nx_a * raio_circulo,
+                    p2[1] + ny_a * raio_circulo
                 )
 
-                target_poly_p2 = (
+                if ponto_em_poligono(
+                    teste_a[0],
+                    teste_a[1],
                     poly_a
-                    if ponto_em_poligono(
-                        c_test_p2[0],
-                        c_test_p2[1],
-                        poly_a
-                    )
-                    else poly_b
-                )
-
-                target_poly_p3 = (
-                    poly_b
-                    if target_poly_p2 == poly_a
-                    else poly_a
-                )
-
-                cx_p2 = sum(
-                    pt[0]
-                    for pt in target_poly_p2
-                ) / len(target_poly_p2)
-
-                cy_p2 = sum(
-                    pt[1]
-                    for pt in target_poly_p2
-                ) / len(target_poly_p2)
-
-                nx_p2, ny_p2 = get_inside_normal(
-                    vx,
-                    vy,
-                    p1[0],
-                    p1[1],
-                    cx_p2,
-                    cy_p2
-                )
-
-                center_p2 = (
-                    p1[0] + nx_p2 * raio_circulo,
-                    p1[1] + ny_p2 * raio_circulo
-                )
-
-                cx_p3 = sum(
-                    pt[0]
-                    for pt in target_poly_p3
-                ) / len(target_poly_p3)
-
-                cy_p3 = sum(
-                    pt[1]
-                    for pt in target_poly_p3
-                ) / len(target_poly_p3)
-
-                nx_p3, ny_p3 = get_inside_normal(
-                    vx,
-                    vy,
-                    p4[0],
-                    p4[1],
-                    cx_p3,
-                    cy_p3
-                )
-
-                center_p3 = (
-                    p4[0] + nx_p3 * raio_circulo,
-                    p4[1] + ny_p3 * raio_circulo
-                )
-
-                if ponto_em_poligono(
-                    center_p2[0],
-                    center_p2[1],
-                    target_poly_p2
                 ):
+                    poly_p2 = poly_a
+                    poly_p3 = poly_b
+                else:
+                    poly_p2 = poly_b
+                    poly_p3 = poly_a
 
-                    msp.add_circle(
-                        center=center_p2,
-                        radius=raio_circulo,
-                        dxfattribs={
-                            'layer':
-                                'PROJ_ELETRICA_DEBUG',
-                            'color': 6
-                        }
-                    )
+                desenhar_circulo_porta(
+                    p2,
+                    poly_p2
+                )
 
-                if ponto_em_poligono(
-                    center_p3[0],
-                    center_p3[1],
-                    target_poly_p3
-                ):
-
-                    msp.add_circle(
-                        center=center_p3,
-                        radius=raio_circulo,
-                        dxfattribs={
-                            'layer':
-                                'PROJ_ELETRICA_DEBUG',
-                            'color': 6
-                        }
-                    )
+                desenhar_circulo_porta(
+                    p3,
+                    poly_p3
+                )
 
             elif len(ambientes_adjacentes) == 1:
 
+                # Em abertura encostada em apenas um ambiente,
+                # somente P2 recebe círculo. P1 e P4 jamais recebem.
                 poly = ambientes_adjacentes[0]
 
-                cx = sum(
-                    pt[0]
-                    for pt in poly
-                ) / len(poly)
-
-                cy = sum(
-                    pt[1]
-                    for pt in poly
-                ) / len(poly)
-
-                nx, ny = get_inside_normal(
-                    vx,
-                    vy,
-                    p1[0],
-                    p1[1],
-                    cx,
-                    cy
-                )
-
-                center_p2 = (
-                    p1[0] + nx * raio_circulo,
-                    p1[1] + ny * raio_circulo
-                )
-
-                if ponto_em_poligono(
-                    center_p2[0],
-                    center_p2[1],
+                desenhar_circulo_porta(
+                    p2,
                     poly
-                ):
-
-                    msp.add_circle(
-                        center=center_p2,
-                        radius=raio_circulo,
-                        dxfattribs={
-                            'layer':
-                                'PROJ_ELETRICA_DEBUG',
-                            'color': 6
-                        }
-                    )
+                )
 
         # ====================================================
         # DADOS DA TABELA
