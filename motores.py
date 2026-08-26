@@ -68,22 +68,6 @@ def dimensionar_cargas(nome, area, perimetro):
         "Carga TUE (VA)": carga_tue
     }
 
-def ponto_em_poligono(x, y, polilinha):
-    n = len(polilinha)
-    dentro = False
-    p1x, p1y = polilinha[0]
-    for i in range(n + 1):
-        p2x, p2y = polilinha[i % n]
-        if y > min(p1y, p2y):
-            if y <= max(p1y, p2y):
-                if x <= max(p1x, p2x):
-                    if p1y != p2y:
-                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                    if p1x == p2x or x <= xinters:
-                        dentro = not dentro
-        p1x, p1y = p2x, p2y
-    return dentro
-
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
@@ -206,7 +190,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # SOLEIRAS COM PORTA: Filtra soleiras que possuem porta associada num raio de até 1.5m
+        # SOLEIRAS COM PORTA: Identifica soleiras que possuem porta associada num raio de até 1.5m
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -221,14 +205,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if tem_porta:
                 soleiras_com_porta.append(s)
 
-        ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
-        
-        # 1. LOOP ROBUSTO: INSERE O CÍRCULO NA EXTREMIDADE CORRETA DA SOLEIRA VOLTADA PARA O INTERIOR DO AMBIENTE
+        # 1. INSERE O CÍRCULO MAGENTA DE DEPURO NA EXTREMIDADE INTERNA DA SOLEIRA COM PORTA
         for s in soleiras_com_porta:
             s_p1, s_p2 = s['p1'], s['p2']
             sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            # Encontra o ambiente adjacente onde a soleira está conectada
             ambiente_alvo = None
             for polilinha in polilinhas:
                 xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
@@ -239,17 +220,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if ambiente_alvo:
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
-                
-                # Escolhe a extremidade da soleira (p1 ou p2) que está mais direcionada para o interior (centroide) do ambiente
                 d1 = math.hypot(s_p1[0] - cx, s_p1[1] - cy)
                 d2 = math.hypot(s_p2[0] - cx, s_p2[1] - cy)
-                
-                # Queremos o ponto oposto ao alinhamento externo, ou seja, a ponta que avança para dentro
-                ponto_escolhido = s_p1 if d1 < d2 else s_p2
-                
-                msp.add_circle(center=ponto_escolhido, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                ponto_interno = s_p1 if d1 < d2 else s_p2
+                msp.add_circle(center=ponto_interno, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
-        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
+        ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
+
+        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -260,6 +238,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
             if not nome: continue
+            
+            if nome in ambientes_processados:
+                ambientes_processados[nome] += 1
+                nome = f"{nome} {ambientes_processados[nome]}"
+            else:
+                ambientes_processados[nome] = 1
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
             largura = max_x - min_x
