@@ -68,22 +68,6 @@ def dimensionar_cargas(nome, area, perimetro):
         "Carga TUE (VA)": carga_tue
     }
 
-def ponto_em_poligono(x, y, polilinha):
-    n = len(polilinha)
-    dentro = False
-    p1x, p1y = polilinha[0]
-    for i in range(n + 1):
-        p2x, p2y = polilinha[i % n]
-        if y > min(p1y, p2y):
-            if y <= max(p1y, p2y):
-                if x <= max(p1x, p2x):
-                    if p1y != p2y:
-                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                    if p1x == p2x or x <= xinters:
-                        dentro = not dentro
-        p1x, p1y = p2x, p2y
-    return dentro
-
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
@@ -239,42 +223,43 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # FILTRAGEM INDIVIDUAL ESTRITA: Cada soleira só é aceita se houver uma porta a menos de 0.6m DELA PRÓPRIA (sempre checando individualmente cada soleira do ambiente)
+        # REGRA SIMPLES E DIRETA: Tem porta encostada na soleira? (< 0.25m). Se sim, armazena com a porta. Se não, descarta.
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
             
-            porta_direta = None
+            porta_encostada = None
             for p in portas_raw:
-                # Distância exata da porta até o segmento desta soleira específica
-                d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
-                d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
-                pm_porta_x = (p['p1'][0] + p['p2'][0]) / 2
-                pm_porta_y = (p['p1'][1] + p['p2'][1]) / 2
-                d_mid = point_seg_dist(pm_porta_x, pm_porta_y, s_p1, s_p2)
+                # Verifica se as pontas da porta ou o segmento da porta encostam na soleira
+                d1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
+                d2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
+                d3 = point_seg_dist(s_p1[0], s_p1[1], p['p1'], p['p2'])
+                d4 = point_seg_dist(s_p2[0], s_p2[1], p['p1'], p['p2'])
                 
-                if d_p1 < 0.6 or d_p2 < 0.6 or d_mid < 0.6:
-                    porta_direta = p
+                if d1 < 0.25 or d2 < 0.25 or d3 < 0.25 or d4 < 0.25:
+                    porta_encostada = p
                     break
             
-            if porta_direta is not None:
-                soleiras_com_porta.append({'s': s, 'porta': porta_direta})
+            if porta_encostada is not None:
+                soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. INSERE O CÍRCULO MAGENTA EXATAMENTE NA EXTREMIDADE OPOSTA DA SOLEIRA VÁLIDA
+        # 1. CRIA O CÍRCULO NA EXTREMIDADE OPOSTA DA SOLEIRA QUE TEM PORTA ENCOSTADA
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
             
+            # Descobre qual ponta da soleira está mais próxima da porta encostada
             pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
-            d1_porta = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
-            d2_porta = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
+            d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
+            d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
             
-            # Ponto oposto (longe da porta)
-            ponto_oposto = s_p2 if d1_porta < d2_porta else s_p1
+            # Ponto oposto (o lado livre da soleira, que fica para dentro do ambiente)
+            ponto_oposto = s_p2 if d1 < d2 else s_p1
             
+            # Encontra o ambiente adjacente (priorizando o ambiente que não é corredor)
             ambientes_adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
@@ -434,7 +419,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             if nome in dict_dados:
                 qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
-                qtd_tue = int(dict_dados[nome]['Qtd TUE'])
+                qtd_tue = int(dict_dados[nome]['TUE']) if 'TUE' in dict_dados[nome] else int(dict_dados[nome]['Qtd TUE'])
                 eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
                 pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
                 is_ac = "ar" in eq_tue_nome.lower()
