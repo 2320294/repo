@@ -183,6 +183,9 @@ if uploaded_file is not None:
         st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 
 if dados_ambientes:
+    # Ordena os ambientes em ordem alfabética
+    dados_ambientes = sorted(dados_ambientes, key=lambda x: x['Ambiente'])
+
     st.divider()
     st.subheader("📊 Quadro de Previsão de Cargas Consolidado")
 
@@ -225,8 +228,12 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
+    # Cria o DataFrame e oculta as colunas técnicas indesejadas (Centro_X e Centro_Y)
     df_consolidado = pd.DataFrame(tabela_editada)
-    st.dataframe(df_consolidado, use_container_width=True)
+    colunas_para_ocultar = ["Centro_X", "Centro_Y"]
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns])
+
+    st.dataframe(df_exibicao, use_container_width=True)
 
     # Seleção do QDC
     st.divider()
