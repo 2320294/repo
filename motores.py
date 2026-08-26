@@ -313,7 +313,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS E APLICAÇÃO DE TOMADA MÉDIA PINTADA PELA METADE)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS TANGENTE À PAREDE E VOLTADAS PARA DENTRO)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -458,12 +458,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     vx, vy = menor_parede['vx'], menor_parede['vy']
                     nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                     
-                    ponto_base1 = (px - vx * 0.15, py - vy * 0.15)
-                    ponto_base2 = (px + vx * 0.15, py + vy * 0.15)
-                    ponto_ponta = (px + nx * 0.25, py + ny * 0.25)
+                    # Base da tomada perfeitamente tangenciada na parede (px, py) e ponta apontando para dentro
+                    ponto_b1 = (px - vx * 0.10, py - vy * 0.10)
+                    ponto_b2 = (px + vx * 0.10, py + vy * 0.10)
+                    ponto_pt = (px + nx * 0.20, py + ny * 0.20)
                     
-                    msp.add_solid([ponto_base1, ponto_base2, ponto_ponta], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    msp.add_lwpolyline([ponto_base1, ponto_base2, ponto_ponta, ponto_base1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
                 total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
@@ -474,18 +474,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(passo * i, segmentos_crus)
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
                         
-                        t_x = px + (nx * 0.10)
-                        t_y = py + (ny * 0.10)
+                        # Base da tomada encostada/tangente diretamente na parede (px, py)
+                        ponto_b1 = (px - seg_vx * 0.10, py - seg_vy * 0.10)
+                        ponto_b2 = (px + seg_vx * 0.10, py + seg_vy * 0.10)
+                        ponto_pt = (px + nx * 0.20, py + ny * 0.20)  # Bico apontando para dentro do ambiente
                         
-                        ponto_b1 = (t_x - seg_vx * 0.10, t_y - seg_vy * 0.10)
-                        ponto_b2 = (t_x + seg_vx * 0.10, t_y + seg_vy * 0.10)
-                        ponto_pt = (t_x + nx * 0.20, t_y + ny * 0.20)
-                        
+                        # Desenha o triângulo da tomada
                         msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
-                        # Tomada Média em ambientes molhados: preenchida apenas pela metade (metade geométrica do triângulo)
+                        # Se for ambiente molhado, pinta a metade esquerda/inferior para representar tomada média
                         if is_ambiente_molhado:
-                            ponto_medio_base = ((ponto_b1[0] + ponto_b2[0]) / 2, (ponto_b1[1] + ponto_b2[1]) / 2)
+                            ponto_medio_base = (px, py)
                             msp.add_solid([ponto_b1, ponto_medio_base, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
 
         doc.saveas(tmp_in_path)
