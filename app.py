@@ -8,7 +8,6 @@ import motores
 # ============================================================
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================================
-
 st.set_page_config(
     page_title="AutoElétrica Profissional",
     page_icon="⚡",
@@ -18,80 +17,67 @@ st.set_page_config(
 # ============================================================
 # SUPABASE
 # ============================================================
-
 def obter_credenciais_supabase():
+    """
+    Compatível com o formato usado no Streamlit Cloud:
 
+    [supabase]
+    url = "https://...supabase.co"
+    key = "..."
+
+    Também aceita variáveis de ambiente como fallback.
+    """
     try:
         bloco = st.secrets["supabase"]
-
-        url = str(
-            bloco.get("url", "")
-        ).strip()
-
-        key = str(
-            bloco.get("key", "")
-        ).strip()
-
+        url = str(bloco.get("url", "")).strip()
+        key = str(bloco.get("key", "")).strip()
         if url and key:
             return url, key
-
     except Exception:
         pass
 
-    url = os.getenv(
-        "SUPABASE_URL",
-        ""
-    ).strip()
-
+    url = os.getenv("SUPABASE_URL", "").strip()
     key = (
-        os.getenv(
-            "SUPABASE_SERVICE_ROLE_KEY",
-            ""
-        ).strip()
-
-        or
-
-        os.getenv(
-            "SUPABASE_KEY",
-            ""
-        ).strip()
-
-        or
-
-        os.getenv(
-            "SUPABASE_ANON_KEY",
-            ""
-        ).strip()
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        or os.getenv("SUPABASE_KEY", "").strip()
+        or os.getenv("SUPABASE_ANON_KEY", "").strip()
     )
-
     return url, key
 
 
-SUPABASE_URL, SUPABASE_KEY = (
-    obter_credenciais_supabase()
-)
-
+SUPABASE_URL, SUPABASE_KEY = obter_credenciais_supabase()
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-
     st.error(
         "❌ As credenciais do Supabase não foram encontradas. "
-        "Confira o bloco [supabase] nos Secrets do Streamlit."
+        "Confira o bloco [supabase] nos Secrets do Streamlit Cloud."
     )
-
     st.stop()
 
 
 @st.cache_resource
 def obter_supabase() -> Client:
-
-    return create_client(
-        SUPABASE_URL,
-        SUPABASE_KEY
-    )
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 supabase = obter_supabase()
+
+# ============================================================
+# CONVERSÃO VA -> W
+# ============================================================
+# Como o sistema antigo armazenava VA e não há fator de potência
+# individual informado por carga, usamos FP = 1,00.
+# Portanto: W = VA x 1,00.
+FATOR_POTENCIA = 1.0
+
+
+def va_para_w(valor):
+    try:
+        return float(valor) * FATOR_POTENCIA
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # ============================================================
 # FUNÇÕES DE BANCO
 # ============================================================
@@ -190,7 +176,14 @@ def apagar_projeto(email, nome_projeto):
     supabase.table("projetos").delete().eq("user_email", email).eq("nome_projeto", nome_projeto).execute()
 
 
-def salvar_dados_projeto(email, nome_projeto, dxf_bytes=None, tabela_editada=None, local_qdc=None, config_interruptores=None):
+def salvar_dados_projeto(
+    email,
+    nome_projeto,
+    dxf_bytes=None,
+    tabela_editada=None,
+    local_qdc=None,
+    config_interruptores=None
+):
     existentes = (
         supabase.table("dados_projetos")
         .select("id")
@@ -246,6 +239,7 @@ def converter_dxf_do_supabase(valor):
             return None
     return None
 
+
 # ============================================================
 # ESTADO DE SESSÃO
 # ============================================================
@@ -258,6 +252,7 @@ for chave, valor in {
     if chave not in st.session_state:
         st.session_state[chave] = valor
 
+
 # ============================================================
 # BARRA LATERAL
 # ============================================================
@@ -266,14 +261,36 @@ with st.sidebar:
     st.divider()
 
     if not st.session_state.logged_in:
-        aba_auth = st.radio("Acesso ao Sistema", ["Entrar (Login)", "Cadastrar-se"], horizontal=True)
+        aba_auth = st.radio(
+            "Acesso ao Sistema",
+            ["Entrar (Login)", "Cadastrar-se"],
+            horizontal=True
+        )
 
+        # ====================================================
+        # LOGIN — FORMULÁRIO SUBMETIDO POR ENTER
+        # ====================================================
         if aba_auth == "Entrar (Login)":
             st.subheader("🔐 Fazer Login")
-            login_email = st.text_input("E-mail / Login", key="login_email")
-            login_senha = st.text_input("Senha", type="password", key="login_senha")
 
-            if st.button("Entrar", use_container_width=True):
+            # st.form permite que Enter no campo de senha envie
+            # o formulário pelo botão submit.
+            with st.form("form_login", clear_on_submit=False):
+                login_email = st.text_input(
+                    "E-mail / Login",
+                    key="login_email"
+                )
+                login_senha = st.text_input(
+                    "Senha",
+                    type="password",
+                    key="login_senha"
+                )
+                btn_login = st.form_submit_button(
+                    "Entrar",
+                    use_container_width=True
+                )
+
+            if btn_login:
                 if not login_email or not login_senha:
                     st.warning("Preencha o e-mail e a senha.")
                 else:
@@ -290,13 +307,22 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"❌ Erro ao consultar o Supabase: {e}")
 
+        # ====================================================
+        # CADASTRO — FORMULÁRIO SUBMETIDO POR ENTER
+        # ====================================================
         else:
             st.subheader("📝 Novo Cadastro")
-            cad_nome = st.text_input("Nome Completo", key="cad_nome")
-            cad_email = st.text_input("E-mail (Login)", key="cad_email")
-            cad_senha = st.text_input("Senha", type="password", key="cad_senha")
 
-            if st.button("Criar Conta", use_container_width=True):
+            with st.form("form_cadastro", clear_on_submit=False):
+                cad_nome = st.text_input("Nome Completo", key="cad_nome")
+                cad_email = st.text_input("E-mail (Login)", key="cad_email")
+                cad_senha = st.text_input("Senha", type="password", key="cad_senha")
+                btn_cadastrar = st.form_submit_button(
+                    "Criar Conta",
+                    use_container_width=True
+                )
+
+            if btn_cadastrar:
                 if not cad_nome or not cad_email or not cad_senha:
                     st.warning("Preencha todos os campos.")
                 else:
@@ -352,7 +378,11 @@ with st.sidebar:
         if projetos_usuario:
             nomes_projetos = [p["nome_projeto"] for p in projetos_usuario]
             opcoes_selectbox = ["Selecione um projeto..."] + nomes_projetos
-            indice_atual = opcoes_selectbox.index(st.session_state.projeto_ativo) if st.session_state.projeto_ativo in opcoes_selectbox else 0
+            indice_atual = (
+                opcoes_selectbox.index(st.session_state.projeto_ativo)
+                if st.session_state.projeto_ativo in opcoes_selectbox
+                else 0
+            )
 
             projeto_selecionado = st.selectbox(
                 "Selecione o projeto ativo:",
@@ -365,7 +395,10 @@ with st.sidebar:
                 st.session_state.projeto_ativo = projeto_selecionado
                 st.rerun()
 
-            if projeto_selecionado != "Selecione um projeto..." and st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
+            if (
+                projeto_selecionado != "Selecione um projeto..."
+                and st.button("🗑️ Apagar Projeto Selecionado", type="secondary")
+            ):
                 try:
                     apagar_projeto(st.session_state.user_email, projeto_selecionado)
                     st.session_state.projeto_ativo = "Selecione um projeto..."
@@ -377,12 +410,14 @@ with st.sidebar:
             st.info("Nenhum projeto cadastrado ainda.")
             st.session_state.projeto_ativo = "Selecione um projeto..."
 
+
 # ============================================================
 # BLOQUEIO
 # ============================================================
 if not st.session_state.logged_in:
     st.warning("⚠️ Faça login ou cadastre-se na barra lateral para acessar o painel.")
     st.stop()
+
 
 # ============================================================
 # PROJETO ATIVO
@@ -416,7 +451,10 @@ if dados_obj is None:
             tabela_editada=[],
             config_interruptores={}
         )
-        _, dados_obj = buscar_projeto(st.session_state.user_email, st.session_state.projeto_ativo)
+        _, dados_obj = buscar_projeto(
+            st.session_state.user_email,
+            st.session_state.projeto_ativo
+        )
     except Exception as e:
         st.error(f"❌ Não foi possível criar os dados do projeto: {e}")
         st.stop()
@@ -427,6 +465,7 @@ dados_ambientes = dados_obj.get("tabela_editada") or []
 config_salva = dados_obj.get("config_interruptores") or {}
 local_qdc_salvo = dados_obj.get("local_qdc")
 
+
 # ============================================================
 # UPLOAD / REENVIO DXF
 # ============================================================
@@ -434,7 +473,12 @@ tem_dxf_salvo = dxf_bytes is not None and len(dados_ambientes) > 0
 
 if not tem_dxf_salvo:
     st.subheader("📁 Enviar Planta Base (Formato DXF)")
-    uploaded_file = st.file_uploader("Envie o arquivo DXF para iniciar o dimensionamento:", type=["dxf"], key="upload_inicial")
+    uploaded_file = st.file_uploader(
+        "Envie o arquivo DXF para iniciar o dimensionamento:",
+        type=["dxf"],
+        key="upload_inicial"
+    )
+
     if uploaded_file is not None:
         novo_dxf = uploaded_file.read()
         try:
@@ -458,10 +502,16 @@ if not tem_dxf_salvo:
             st.rerun()
         except Exception as e:
             st.error(f"❌ Erro ao processar/salvar o DXF: {e}")
+
 else:
     with st.expander("🔄 Reenviar / Substituir Planta Baixa (DXF)"):
         st.markdown("Envie um novo DXF caso a geometria tenha sido alterada.")
-        novo_uploaded_file = st.file_uploader("Envie a nova planta base (.dxf):", type=["dxf"], key="upload_substituicao")
+        novo_uploaded_file = st.file_uploader(
+            "Envie a nova planta base (.dxf):",
+            type=["dxf"],
+            key="upload_substituicao"
+        )
+
         if novo_uploaded_file is not None:
             novo_dxf = novo_uploaded_file.read()
             try:
@@ -486,73 +536,234 @@ else:
             except Exception as e:
                 st.error(f"❌ Erro ao substituir o DXF: {e}")
 
+
 # ============================================================
 # QUADRO DE CARGAS
 # ============================================================
 if dados_ambientes:
-    dados_ambientes = sorted(dados_ambientes, key=lambda x: x.get("Ambiente", ""))
+    # Ordem alfabética crescente pelo nome do ambiente.
+    dados_ambientes = sorted(
+        dados_ambientes,
+        key=lambda x: str(x.get("Ambiente", "")).casefold()
+    )
 
     st.divider()
     st.subheader("📊 Quadro de Previsão de Cargas Consolidado")
 
     tabela_editada = []
+
     for row in dados_ambientes:
         ambiente = row["Ambiente"]
-        with st.container():
-            st.markdown(f"**Ambiente: {ambiente}** — *Área: {float(row.get('Área (m²)', 0)):.2f}m² | Perímetro: {float(row.get('Perímetro (m)', 0)):.2f}m*")
-            c1, c2, c3, c4, c5, c6 = st.columns(6)
-            with c1:
-                q_ilum = st.number_input("Qtd Ilum", min_value=0, value=int(row.get("Qtd Ilum.", 1)), key=f"ilum_{ambiente}")
-            with c2:
-                p_ilum = st.number_input("Pot Ilum (VA)", min_value=0, value=int(row.get("Pot. Unit. Ilum (VA)", row.get("Pot. Unit. Ilum (W)", 100))), key=f"pilum_{ambiente}")
-            with c3:
-                qtd_tugs = st.number_input("Qtd TUGs", min_value=0, value=int(row.get("TUGs (Qtd)", 1)), key=f"tugs_{ambiente}")
-            with c4:
-                pot_tug_unit = st.number_input("Pot TUG (VA)", min_value=0, value=int(row.get("Pot. Unit. TUG (VA)", row.get("Pot. Unit. TUG (W)", 100))), key=f"ptug_{ambiente}")
-            with c5:
-                qtd_tue = st.number_input("Qtd TUE", min_value=0, value=int(row.get("Qtd TUE", 0)), key=f"tue_{ambiente}")
-            with c6:
-                pot_tue_unit = st.number_input("Pot TUE (VA)", min_value=0, value=int(row.get("Pot. Unit. TUE (VA)", row.get("Pot. Unit. TUE (W)", 0))), key=f"ptue_{ambiente}")
 
-            eq_tue = st.text_input(f"Equipamento TUE ({ambiente})", value=str(row.get("Equipamento TUE", "-")), key=f"eq_{ambiente}")
+        with st.container():
+            st.markdown(
+                f"**Ambiente: {ambiente}** — "
+                f"*Área: {float(row.get('Área (m²)', 0)):.2f}m² | "
+                f"Perímetro: {float(row.get('Perímetro (m)', 0)):.2f}m*"
+            )
+
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+
+            with c1:
+                q_ilum = st.number_input(
+                    "Qtd Ilum",
+                    min_value=0,
+                    value=int(row.get("Qtd Ilum.", 1)),
+                    key=f"ilum_{ambiente}"
+                )
+
+            with c2:
+                # Compatibilidade com projetos antigos em VA e novos em W.
+                p_ilum_original = row.get(
+                    "Pot. Unit. Ilum (W)",
+                    va_para_w(row.get("Pot. Unit. Ilum (VA)", 100))
+                )
+                p_ilum = st.number_input(
+                    "Pot Ilum (W)",
+                    min_value=0.0,
+                    value=float(p_ilum_original),
+                    step=10.0,
+                    key=f"pilum_{ambiente}"
+                )
+
+            with c3:
+                qtd_tugs = st.number_input(
+                    "Qtd TUG",
+                    min_value=0,
+                    value=int(row.get("Qtd TUG", row.get("TUGs (Qtd)", 1))),
+                    key=f"tugs_{ambiente}"
+                )
+
+            with c4:
+                p_tug_original = row.get(
+                    "Pot. Unit. TUG (W)",
+                    va_para_w(row.get("Pot. Unit. TUG (VA)", 100))
+                )
+                pot_tug_unit = st.number_input(
+                    "Pot TUG (W)",
+                    min_value=0.0,
+                    value=float(p_tug_original),
+                    step=10.0,
+                    key=f"ptug_{ambiente}"
+                )
+
+            with c5:
+                qtd_tue = st.number_input(
+                    "Qtd TUE",
+                    min_value=0,
+                    value=int(row.get("Qtd TUE", 0)),
+                    key=f"tue_{ambiente}"
+                )
+
+            with c6:
+                p_tue_original = row.get(
+                    "Pot. Unit. TUE (W)",
+                    va_para_w(row.get("Pot. Unit. TUE (VA)", 0))
+                )
+                pot_tue_unit = st.number_input(
+                    "Pot TUE (W)",
+                    min_value=0.0,
+                    value=float(p_tue_original),
+                    step=10.0,
+                    key=f"ptue_{ambiente}"
+                )
+
+            eq_tue = st.text_input(
+                f"Equipamento TUE ({ambiente})",
+                value=str(row.get("Equipamento TUE", "-")),
+                key=f"eq_{ambiente}"
+            )
 
             row_modificado = row.copy()
-            row_modificado["Qtd Ilum."] = q_ilum
-            row_modificado["Pot. Unit. Ilum (VA)"] = p_ilum
-            row_modificado["Carga Ilum. (VA)"] = q_ilum * p_ilum
-            row_modificado["TUGs (Qtd)"] = qtd_tugs
-            row_modificado["Pot. Unit. TUG (VA)"] = pot_tug_unit
-            row_modificado["Carga TUGs (VA)"] = qtd_tugs * pot_tug_unit
-            row_modificado["Qtd TUE"] = qtd_tue
-            row_modificado["Pot. Unit. TUE (VA)"] = pot_tue_unit
-            row_modificado["Carga TUE (VA)"] = qtd_tue * pot_tue_unit
+
+            # Dados novos ficam em Watts.
+            row_modificado["Qtd Ilum."] = int(q_ilum)
+            row_modificado["Pot. Unit. Ilum (W)"] = float(p_ilum)
+            row_modificado["Carga Ilum. (W)"] = float(q_ilum * p_ilum)
+
+            row_modificado["Qtd TUG"] = int(qtd_tugs)
+            # Mantém também a chave antiga para o motores.py atual.
+            row_modificado["TUGs (Qtd)"] = int(qtd_tugs)
+            row_modificado["Pot. Unit. TUG (W)"] = float(pot_tug_unit)
+            row_modificado["Carga TUGs (W)"] = float(qtd_tugs * pot_tug_unit)
+
+            row_modificado["Qtd TUE"] = int(qtd_tue)
+            row_modificado["Pot. Unit. TUE (W)"] = float(pot_tue_unit)
+            row_modificado["Carga TUE (W)"] = float(qtd_tue * pot_tue_unit)
             row_modificado["Equipamento TUE"] = eq_tue
+
+            # Compatibilidade temporária com motores.py, que ainda lê VA.
+            row_modificado["Pot. Unit. Ilum (VA)"] = float(p_ilum)
+            row_modificado["Carga Ilum. (VA)"] = float(q_ilum * p_ilum)
+            row_modificado["Pot. Unit. TUG (VA)"] = float(pot_tug_unit)
+            row_modificado["Carga TUGs (VA)"] = float(qtd_tugs * pot_tug_unit)
+            row_modificado["Pot. Unit. TUE (VA)"] = float(pot_tue_unit)
+            row_modificado["Carga TUE (VA)"] = float(qtd_tue * pot_tue_unit)
+
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    df_consolidado = pd.DataFrame(tabela_editada)
-    colunas_para_ocultar = [
-        "Centro_X", "Centro_Y",
-        "Pot. Unit. Ilum (VA)", "Carga Ilum. (VA)",
-        "Pot. Unit. TUG (VA)", "Carga TUGs (VA)",
-        "Pot. Unit. TUE (VA)", "Carga TUE (VA)"
-    ]
-    df_exibicao = df_consolidado.drop(columns=[c for c in colunas_para_ocultar if c in df_consolidado.columns], errors="ignore")
-    if "Área (m²)" in df_exibicao.columns:
-        df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
-    if "Perímetro (m)" in df_exibicao.columns:
-        df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
+    # ========================================================
+    # TABELA CONSOLIDADA — ORDEM IGUAL À IMAGEM + POTÊNCIAS
+    # ========================================================
+    linhas_tabela = []
+
+    for row in tabela_editada:
+        qtd_tue = int(row.get("Qtd TUE", 0))
+        qtd_ilum = int(row.get("Qtd Ilum.", 0))
+        qtd_tug = int(row.get("Qtd TUG", row.get("TUGs (Qtd)", 0)))
+
+        pot_tue_total = float(row.get(
+            "Carga TUE (W)",
+            qtd_tue * row.get(
+                "Pot. Unit. TUE (W)",
+                va_para_w(row.get("Pot. Unit. TUE (VA)", 0))
+            )
+        ))
+
+        pot_ilum_total = float(row.get(
+            "Carga Ilum. (W)",
+            qtd_ilum * row.get(
+                "Pot. Unit. Ilum (W)",
+                va_para_w(row.get("Pot. Unit. Ilum (VA)", 0))
+            )
+        ))
+
+        pot_tug_total = float(row.get(
+            "Carga TUGs (W)",
+            qtd_tug * row.get(
+                "Pot. Unit. TUG (W)",
+                va_para_w(row.get("Pot. Unit. TUG (VA)", 0))
+            )
+        ))
+
+        linhas_tabela.append({
+            "Ambiente": row.get("Ambiente", ""),
+            "Área (m²)": round(float(row.get("Área (m²)", 0)), 2),
+            "Perímetro (m)": round(float(row.get("Perímetro (m)", 0)), 2),
+            "Qtd TUE": qtd_tue,
+            "Potência TUE (W)": round(pot_tue_total, 2),
+            "Qtd Ilum.": qtd_ilum,
+            "Potência Ilum. (W)": round(pot_ilum_total, 2),
+            "Qtd TUG": qtd_tug,
+            "Potência TUG (W)": round(pot_tug_total, 2),
+            "Equipamento TUE": row.get("Equipamento TUE", "-")
+        })
+
+    # Reforça a ordem crescente na própria tabela final.
+    linhas_tabela = sorted(
+        linhas_tabela,
+        key=lambda x: str(x.get("Ambiente", "")).casefold()
+    )
+
+    df_exibicao = pd.DataFrame(linhas_tabela)
 
     linha_total = {
         "Ambiente": "TOTAL GERAL",
         "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
         "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
+        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum()),
+        "Potência TUE (W)": round(df_exibicao["Potência TUE (W)"].sum(), 2),
         "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
-        "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
-        "Equipamento TUE": "-",
-        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
+        "Potência Ilum. (W)": round(df_exibicao["Potência Ilum. (W)"].sum(), 2),
+        "Qtd TUG": int(df_exibicao["Qtd TUG"].sum()),
+        "Potência TUG (W)": round(df_exibicao["Potência TUG (W)"].sum(), 2),
+        "Equipamento TUE": "-"
     }
-    st.dataframe(pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True), use_container_width=True, hide_index=True)
+
+    df_exibicao_com_total = pd.concat(
+        [df_exibicao, pd.DataFrame([linha_total])],
+        ignore_index=True
+    )
+
+    # Cinza claro semelhante ao cabeçalho padrão do Streamlit.
+    COR_CINZA_CLARO = "#f0f2f6"
+
+    def destacar_total(row):
+        if row["Ambiente"] == "TOTAL GERAL":
+            return [
+                f"background-color: {COR_CINZA_CLARO}; font-weight: 600;"
+                for _ in row
+            ]
+        return ["" for _ in row]
+
+    tabela_estilizada = (
+        df_exibicao_com_total.style
+        .apply(destacar_total, axis=1)
+        .format({
+            "Área (m²)": "{:.2f}",
+            "Perímetro (m)": "{:.2f}",
+            "Potência TUE (W)": "{:.2f}",
+            "Potência Ilum. (W)": "{:.2f}",
+            "Potência TUG (W)": "{:.2f}"
+        })
+    )
+
+    st.dataframe(
+        tabela_estilizada,
+        use_container_width=True,
+        hide_index=True
+    )
 
     # ========================================================
     # QDC
@@ -560,13 +771,21 @@ if dados_ambientes:
     st.divider()
     ambientes_validos_qdc = []
     ambientes_recomendados_qdc = []
+
     for r in dados_ambientes:
         nome_amb = r["Ambiente"]
         nome_lower = nome_amb.lower()
-        is_molhado = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as", "área", "area"])
+        is_molhado = any(
+            x in nome_lower
+            for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as", "área", "area"]
+        )
         if is_molhado:
             continue
-        is_circulacao = any(x in nome_lower for x in ["hall", "corredor", "circul", "circ"])
+
+        is_circulacao = any(
+            x in nome_lower
+            for x in ["hall", "corredor", "circul", "circ"]
+        )
         if is_circulacao:
             ambientes_recomendados_qdc.append(f"{nome_amb} (Recomendado)")
         else:
@@ -597,7 +816,11 @@ if dados_ambientes:
     # ========================================================
     st.divider()
     st.subheader("⚙️ Configuração de Interruptores nas Soleiras")
-    st.markdown("Escolha **0, 1 ou 2 interruptores por ambiente**. Com 2, o motor usará as duas portas/posições disponíveis da soleira. Com 1, escolha qual porta deverá receber o interruptor.")
+    st.markdown(
+        "Escolha **0, 1 ou 2 interruptores por ambiente**. "
+        "Com 2, o motor usará as duas portas/posições disponíveis da soleira. "
+        "Com 1, escolha qual porta deverá receber o interruptor."
+    )
 
     nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
@@ -627,37 +850,72 @@ if dados_ambientes:
                     "porta": porta_num
                 }
                 st.caption(f"Será desenhado 1 círculo tangente à posição da porta {porta_num}.")
+
             elif qtd_int == 2:
-                config_interruptores_usuario[amb] = {
-                    "quantidade": 2
-                }
+                config_interruptores_usuario[amb] = {"quantidade": 2}
                 st.caption("Serão desenhados 2 círculos: um em cada extremidade/posição da soleira associada às portas.")
+
             else:
-                config_interruptores_usuario[amb] = {
-                    "quantidade": 0
-                }
+                config_interruptores_usuario[amb] = {"quantidade": 0}
 
     # ========================================================
     # MATERIAIS
     # ========================================================
     st.divider()
     st.subheader("📦 Tabela Quantitativa de Materiais")
+
     total_caixas_luz = sum(int(r.get("Qtd Ilum.", 0)) for r in tabela_editada)
-    total_tugs_geral = sum(int(r.get("TUGs (Qtd)", 0)) for r in tabela_editada)
+    total_tugs_geral = sum(int(r.get("Qtd TUG", r.get("TUGs (Qtd)", 0))) for r in tabela_editada)
     total_tues_geral = sum(int(r.get("Qtd TUE", 0)) for r in tabela_editada)
     total_tomadas_geral = total_tugs_geral + total_tues_geral
-    total_interruptores = sum(int(cfg.get("quantidade", 0)) for cfg in config_interruptores_usuario.values())
+    total_interruptores = sum(
+        int(cfg.get("quantidade", 0))
+        for cfg in config_interruptores_usuario.values()
+    )
 
     materiais_df = pd.DataFrame([
-        {"Material": "Caixa Octogonal de teto 4x4\" (Plástico)", "Unidade": "pç", "Quantidade": total_caixas_luz},
-        {"Material": "Caixa de Embutir de Parede 4x2\" (Plástico) — Tomadas", "Unidade": "pç", "Quantidade": total_tomadas_geral},
-        {"Material": "Caixa de Embutir de Parede 4x2\" (Plástico) — Interruptores", "Unidade": "pç", "Quantidade": total_interruptores},
-        {"Material": "Eletroduto Corrugado Flexível Reforçado 3/4\"", "Unidade": "m", "Quantidade": 247},
-        {"Material": "Cabo Flex. 2,5 mm² - Fase", "Unidade": "m", "Quantidade": 180},
-        {"Material": "Cabo Flex. 2,5 mm² - Neutro", "Unidade": "m", "Quantidade": 180},
-        {"Material": "Cabo Flex. 4,0 ou 6,0 mm² - Verde (Terra TUEs)", "Unidade": "m", "Quantidade": 84}
+        {
+            "Material": "Caixa Octogonal de teto 4x4\" (Plástico)",
+            "Unidade": "pç",
+            "Quantidade": total_caixas_luz
+        },
+        {
+            "Material": "Caixa de Embutir de Parede 4x2\" (Plástico) — Tomadas",
+            "Unidade": "pç",
+            "Quantidade": total_tomadas_geral
+        },
+        {
+            "Material": "Caixa de Embutir de Parede 4x2\" (Plástico) — Interruptores",
+            "Unidade": "pç",
+            "Quantidade": total_interruptores
+        },
+        {
+            "Material": "Eletroduto Corrugado Flexível Reforçado 3/4\"",
+            "Unidade": "m",
+            "Quantidade": 247
+        },
+        {
+            "Material": "Cabo Flex. 2,5 mm² - Fase",
+            "Unidade": "m",
+            "Quantidade": 180
+        },
+        {
+            "Material": "Cabo Flex. 2,5 mm² - Neutro",
+            "Unidade": "m",
+            "Quantidade": 180
+        },
+        {
+            "Material": "Cabo Flex. 4,0 ou 6,0 mm² - Verde (Terra TUEs)",
+            "Unidade": "m",
+            "Quantidade": 84
+        }
     ])
-    st.dataframe(materiais_df, use_container_width=True, hide_index=True)
+
+    st.dataframe(
+        materiais_df,
+        use_container_width=True,
+        hide_index=True
+    )
 
     # ========================================================
     # SALVAR / EXPORTAR / CAD
@@ -680,20 +938,22 @@ if dados_ambientes:
             st.error(f"❌ Erro ao salvar alterações: {e}")
 
     col_e1, col_e2 = st.columns(2)
+
     with col_e1:
         if st.button("📊 Baixar Planilha (Excel)", use_container_width=True):
             st.info("Exportação para Excel pronta.")
+
     with col_e2:
         if st.button("📄 Baixar Memorial (PDF)", use_container_width=True):
             st.info("Memorial descritivo pronto.")
 
     st.markdown("### Projeto Unifilar (DXF)")
+
     if st.button("🚀 Gerar CAD (Atualizado)", type="primary", use_container_width=True):
         if not dxf_bytes:
             st.error("❌ Nenhum arquivo DXF associado.")
         else:
             try:
-                # Salva as configurações atuais antes de gerar o CAD.
                 salvar_dados_projeto(
                     st.session_state.user_email,
                     st.session_state.projeto_ativo,
@@ -717,5 +977,6 @@ if dados_ambientes:
                     mime="application/dxf",
                     use_container_width=True
                 )
+
             except Exception as e:
                 st.error(f"❌ Erro ao gerar o arquivo CAD: {e}")
