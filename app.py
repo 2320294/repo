@@ -36,7 +36,7 @@ if supabase is None:
     st.error("❌ **Erro de Configuração do Supabase:** As credenciais de conexão não foram encontradas. Certifique-se de configurar os Secrets no painel do Streamlit Cloud (`Settings > Secrets`) com a estrutura correta:")
     st.code("""
 [supabase]
-url = "sua-url-do-supabase"
-key = "sua-chave-anon-aqui"
+url = "https://nqnqwddvguqvvzigtbkk.supabase.co"
+key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
     """, language="toml")
     st.stop()
