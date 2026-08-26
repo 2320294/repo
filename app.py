@@ -242,7 +242,7 @@ if dados_ambientes:
 
     linha_total = {
         "Ambiente": "TOTAL GERAL",
-        "Área (m²)"] : round(df_exibicao["Área (m²)"].sum(), 2),
+        "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
         "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
         "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
         "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
