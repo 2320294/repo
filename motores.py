@@ -313,7 +313,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS E APLICAÇÃO DE TOMADA MÉDIA EM AMBIENTES MOLHADOS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS E APLICAÇÃO DE TOMADA MÉDIA PINTADA PELA METADE)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -448,7 +448,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
                 is_ac = "ar" in eq_tue_nome.lower()
                 
-                # Identifica se o ambiente é molhado (Cozinha, Banheiro, Lavanderia, Área de Serviço)
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
@@ -484,9 +483,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                         msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
-                        # Conforme norma técnica: em ambientes molhados, as TUGs ganham representação gráfica de tomada média (preenchida/solid)
+                        # Tomada Média em ambientes molhados: preenchida apenas pela metade (metade geométrica do triângulo)
                         if is_ambiente_molhado:
-                            msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                            ponto_medio_base = ((ponto_b1[0] + ponto_b2[0]) / 2, (ponto_b1[1] + ponto_b2[1]) / 2)
+                            msp.add_solid([ponto_b1, ponto_medio_base, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
 
         doc.saveas(tmp_in_path)
         with open(tmp_in_path, "rb") as f:
