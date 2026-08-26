@@ -102,10 +102,13 @@ def processar_dxf(caminho_arquivo):
             f"Certifique-se de desenhar os elementos nos respectivos layers (IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, IA_SOLEIRAS) antes de gerar o projeto."
         )
 
-    polilinhas, textos = [], []
+    polilinhas, textos, portas_raw, soleiras_raw = [], [], [], []
     for entity in msp:
         tipo = entity.dxftype()
-        layer = str(entity.dxf.layer).upper().strip()
+        if hasattr(entity.dxf, 'layer'):
+            layer = str(entity.dxf.layer).upper().strip()
+        else:
+            continue
             
         if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
             try:
@@ -117,6 +120,18 @@ def processar_dxf(caminho_arquivo):
                 texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
                 if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
             except: pass
+        elif layer == 'IA_PORTAS':
+            if tipo == 'LINE':
+                portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+            elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
+                if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+        elif layer == 'IA_SOLEIRAS':
+            if tipo == 'LINE':
+                soleiras_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+            elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
+                if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
             
     resultados, ambientes_processados = [], {}
     for polilinha in polilinhas:
@@ -313,7 +328,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TUE COM POTÊNCIA EM WATTS E ALTURA CONDICIONAL)
+        # Coleta pontos proibidos (vãos de portas e soleiras) para evitar colocar tomadas neles
+        pontos_proibidos = []
+        for p in portas_raw:
+            pontos_proibidos.append(((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2))
+        for s in soleiras_raw:
+            pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
+
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS EVITANDO VÃOS DE PORTAS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -447,7 +469,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
                 pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)']) if 'Pot. Unit. TUE (VA)' in dict_dados[nome] else 0
                 
-                # Se não veio a potência na linha, define conforme o equipamento TUE
                 if pot_tue_val == 0:
                     eq_lower = eq_tue_nome.lower()
                     if "chuveiro" in eq_lower: pot_tue_val = 5500
@@ -462,7 +483,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
-                # TUEs específicas (Chuveiro e Ar-Condicionado geram tomada alta; outras TUEs seguem a regra do ambiente)
                 if qtd_tue > 0 and logical_walls:
                     menor_parede = min(logical_walls, key=lambda w: w['length'])
                     pt1, pt2 = menor_parede['p1'], menor_parede['p2']
@@ -477,14 +497,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     
                     if is_chuveiro_ou_ac:
-                        # Tomada Alta (inteiramente preenchida)
                         msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     elif is_ambiente_molhado:
-                        # Tomada Média (metade preenchida)
                         ponto_medio_base = (px, py)
                         msp.add_solid([ponto_b1, ponto_medio_base, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                         
-                    # Potência em Watts obrigatória para TUEs
                     msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
                 total_tugs = qtd_tugs
@@ -502,6 +519,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     for i in range(total_tugs):
                         dist_atual = inicio_offset + (i * passo)
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(dist_atual, segmentos_crus)
+                        
+                        # Validação rigorosa: ignora o ponto se ele estiver em cima de um vão de porta/soleira (raio < 0.50m)
+                        perto_de_vao = any(math.hypot(px - v[0], py - v[1]) < 0.50 for v in pontos_proibidos)
+                        if perto_de_vao:
+                            continue
+
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
                         
                         ponto_b1 = (px - seg_vx * 0.10, py - seg_vy * 0.10)
