@@ -1187,13 +1187,37 @@ def gerar_cad_unifilar(
                 })
 
         # ====================================================
+        # LIMPA DEBUG ANTIGO
+        # ====================================================
+        # O usuário pode executar o script sobre um DXF que já foi
+        # gerado anteriormente. Nesse caso, os círculos magenta
+        # antigos continuam dentro do arquivo e podem dar a impressão
+        # de que P1 e P4 também estão sendo desenhados.
+        #
+        # Antes de gerar os novos pontos, remove TODOS os elementos
+        # existentes no layer de DEBUG. Assim, somente P2 e P3 da
+        # execução atual permanecerão no desenho.
+        for entidade_debug in list(msp):
+            try:
+                if (
+                    str(entidade_debug.dxf.layer)
+                    .upper()
+                    .strip()
+                    == 'PROJ_ELETRICA_DEBUG'
+                ):
+                    msp.delete_entity(entidade_debug)
+            except Exception:
+                pass
+
+        # ====================================================
         # DESENHO DOS PONTOS DEBUG DAS SOLEIRAS
         # REGRA DOS PONTOS DA PORTA: P1 -> P2 -> P3 -> P4
         #
         # P1 = encontro da porta com a soleira
-        # P2 = extremidade oposta da folha da porta
-        # P4 = outra extremidade da soleira
-        # P3 = ponto correspondente a P2 no outro lado da abertura
+        # P2 = segunda extremidade da porta / ponto superior esquerdo
+        # P4 = extremidade oposta da soleira
+        # P3 = quarto vértice, correspondente a P2 no outro lado
+        #       da abertura.
         #
         # Os círculos DEBUG são permitidos SOMENTE em P2 e P3.
         # ====================================================
