@@ -17,7 +17,7 @@ st.set_page_config(
 # ============================================================
 # CREDENCIAIS DO SUPABASE
 # ============================================================
-SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
+SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
 @st.cache_resource
@@ -191,7 +191,6 @@ if dados_ambientes:
         with st.container():
             st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']:.2f}m*")
             
-            # Organizado em colunas para Iluminação, TUGs e TUEs com os novos inputs em Watts
             c1, c2, c3, c4, c5, c6 = st.columns(6)
 
             with c1:
@@ -207,7 +206,7 @@ if dados_ambientes:
             with c6:
                 pot_tue_unit = st.number_input(f"Pot TUE (W)", min_value=0, value=row["Pot. Unit. TUE (W)"], key=f"ptue_{row['Ambiente']}")
 
-            eq_tue_nome = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
+            eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
 
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
