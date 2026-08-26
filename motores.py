@@ -223,7 +223,6 @@ def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_
             soleira = item_porta['soleiras'][0]
             geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha, polilinhas)
             if geom:
-                cx, cy = sum(pt[0] for pt in polilinha)/len(polilinha), sum(pt[1] for pt in polilinha)/len(polilinha)
                 ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
                 desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
     elif quantidade == 2:
@@ -393,7 +392,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if melhor_porta is not None:
                 soleiras_com_porta.append({'s': s, 'porta': melhor_porta})
 
-        # PROCESSA INTERRUPTORES (CÍRCULOS)
+        # 1. PROCESSA INTERRUPTORES (CÍRCULOS)
         ambientes_proc_int = {}
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
@@ -411,7 +410,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_busca_int, polilinha)
 
-        # PROCESSA TOMADAS E ILUMINAÇÃO (DINÂMICO DA TABELA)
+        # 2. PROCESSA AMBIENTES (QDC, ILUMINAÇÃO, TOMADAS TUE E TUG)
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
         for polilinha in polilinhas:
@@ -463,6 +462,66 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
                     msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
+
+            # RENDERIZAÇÃO DO QDC (RESTAURADA COM SUCESSO)
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
+            if (nome.strip().upper() == qdc_formatado) and logical_walls:
+                qdc_w, qdc_d = 0.4, 0.15
+                maior_parede = max(logical_walls, key=lambda w: w['length'])
+                pt1, pt2 = maior_parede['p1'], maior_parede['p2']
+                is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
+                
+                cortes_portas = []
+                for p in unique_portas:
+                    d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
+                    d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
+                    if d_p1 < 0.6 or d_p2 < 0.6:
+                        if is_vertical:
+                            cortes_portas.append((min(p['p1'][1], p['p2'][1]), max(p['p1'][1], p['p2'][1])))
+                        else:
+                            cortes_portas.append((min(p['p1'][0], p['p2'][0]), max(p['p1'][0], p['p2'][0])))
+                
+                if is_vertical:
+                    parede_min, parede_max = min(pt1[1], pt2[1]), max(pt1[1], pt2[1])
+                    cortes_portas.sort(key=lambda x: x[0])
+                    trechos_livres, cursor = [], parede_min
+                    for c_inf, c_sup in cortes_portas:
+                        if c_inf > cursor + 0.1: trechos_livres.append((cursor, c_inf))
+                        cursor = max(cursor, c_sup)
+                    if cursor < parede_max - 0.1: trechos_livres.append((cursor, parede_max))
+                    
+                    if trechos_livres:
+                        melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
+                        mx, my = pt1[0], (melhor_trecho[0] + melhor_trecho[1]) / 2
+                    else:
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                else:
+                    parede_min, parede_max = min(pt1[0], pt2[0]), max(pt1[0], pt2[0])
+                    cortes_portas.sort(key=lambda x: x[0])
+                    trechos_livres, cursor = [], parede_min
+                    for c_inf, c_sup in cortes_portas:
+                        if c_inf > cursor + 0.1: trechos_livres.append((cursor, c_inf))
+                        cursor = max(cursor, c_sup)
+                    if cursor < parede_max - 0.1: trechos_livres.append((cursor, parede_max))
+                    
+                    if trechos_livres:
+                        melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
+                        mx, my = (melhor_trecho[0] + melhor_trecho[1]) / 2, pt1[1]
+                    else:
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+
+                vx, vy = maior_parede['vx'], maior_parede['vy']
+                nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                out_nx, out_ny = -nx, -ny
+                
+                p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
+                p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
+                p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
+                pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
+
+                msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
             # TOMADAS TUE
             qtd_tue = int(row_data.get('Qtd TUE', row_data.get('TUE', 0)))
