@@ -39,7 +39,7 @@ if "user_email" not in st.session_state:
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 if "projeto_ativo" not in st.session_state:
-    st.session_state.projeto_ativo = "Nenhum"
+    st.session_state.projeto_ativo = "Selecione um projeto..."
 
 # ============================================================
 # BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DE PROJETOS)
@@ -71,6 +71,7 @@ with st.sidebar:
                             st.session_state.logged_in = True
                             st.session_state.user_email = dados_usuario[0]["email"]
                             st.session_state.user_name = dados_usuario[0]["nome"]
+                            st.session_state.projeto_ativo = "Selecione um projeto..."
                             st.success(f"Bem-vindo, {st.session_state.user_name}!")
                             st.rerun()
                         else:
@@ -111,7 +112,7 @@ with st.sidebar:
             st.session_state.logged_in = False
             st.session_state.user_email = ""
             st.session_state.user_name = ""
-            st.session_state.projeto_ativo = "Nenhum"
+            st.session_state.projeto_ativo = "Selecione um projeto..."
             st.rerun()
 
         st.divider()
@@ -132,7 +133,8 @@ with st.sidebar:
                             "user_email": st.session_state.user_email,
                             "nome_projeto": novo_proj_nome.strip()
                         }).execute()
-                        st.success("Projeto cadastrado com sucesso!")
+                        st.session_state.projeto_ativo = novo_proj_nome.strip()
+                        st.success("Projeto cadastrado e selecionado!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao criar projeto: {e}")
@@ -149,15 +151,15 @@ with st.sidebar:
         st.markdown("### 📋 Seus Projetos Salvos:")
         if lista_projetos:
             nomes_projetos = [p["nome_projeto"] for p in lista_projetos]
+            opcoes_selectbox = ["Selecione um projeto..."] + nomes_projetos
             
-            # Garante que o índice selecionado é válido no estado atual
             indice_atual = 0
-            if st.session_state.projeto_ativo in nomes_projetos:
-                indice_atual = nomes_projetos.index(st.session_state.projeto_ativo)
+            if st.session_state.projeto_ativo in opcoes_selectbox:
+                indice_atual = opcoes_selectbox.index(st.session_state.projeto_ativo)
 
             projeto_selecionado = st.selectbox(
                 "Selecione o projeto ativo:", 
-                nomes_projetos, 
+                opcoes_selectbox, 
                 index=indice_atual,
                 key="selectbox_projeto_ativo"
             )
@@ -166,19 +168,19 @@ with st.sidebar:
                 st.session_state.projeto_ativo = projeto_selecionado
                 st.rerun()
             
-            if st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
+            if projeto_selecionado != "Selecione um projeto..." and st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
                 proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
                 if proj_alvo and supabase is not None:
                     try:
                         supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
-                        st.session_state.projeto_ativo = "Nenhum"
+                        st.session_state.projeto_ativo = "Selecione um projeto..."
                         st.success(f"Projeto '{projeto_selecionado}' apagado!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao apagar projeto: {e}")
         else:
             st.info("Nenhum projeto cadastrado ainda.")
-            st.session_state.projeto_ativo = "Nenhum"
+            st.session_state.projeto_ativo = "Selecione um projeto..."
 
 # ============================================================
 # BLOQUEIO DE SEGURANÇA
@@ -191,10 +193,12 @@ if not st.session_state.logged_in:
 # TELA PRINCIPAL DA APLICAÇÃO
 # ============================================================
 st.title(f"⚡ Painel de Projetos Elétricos — Olá, {st.session_state.user_name}!")
-if st.session_state.projeto_ativo != "Nenhum":
-    st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
-else:
-    st.warning("⚠️ Nenhum projeto ativo selecionado. Crie ou selecione um projeto na barra lateral.")
+
+if st.session_state.projeto_ativo == "Selecione um projeto...":
+    st.info("👈 Por favor, **selecione um projeto** na barra lateral ou cadastre um novo para iniciar o dimensionamento e envio do DXF.")
+    st.stop()
+
+st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
 
 # Upload do arquivo DXF da planta baixa
 st.subheader("📁 Projeto Unifilar (DXF)")
@@ -276,16 +280,13 @@ if dados_ambientes:
     linha_total = {
         "Ambiente": "TOTAL GERAL",
         "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
-        "Perímetro (m)": round(df_exibicao["Períperimetro (m)"].sum() if "Perímetro (m)" in df_exibicao.columns else df_exibicao["Perímetro (m)"].sum(), 2),
+        "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
         "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
         "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
         "Equipamento TUE": "-",
         "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
     }
     
-    # Ajuste correto da chave de perímetro na linha de total
-    linha_total["Perímetro (m)"] = round(df_exibicao["Perímetro (m)"].sum(), 2)
-
     df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
 
     st.dataframe(df_exibicao_com_total, use_container_width=True, hide_index=True)
