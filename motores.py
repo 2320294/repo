@@ -251,7 +251,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSAMENTO COM A REGRA RIGOROSA DE P1/P4 (REFERÊNCIA) -> P2/P3 (CENTROS DOS CÍRCULOS)
+        # 2. PROCESSAMENTO COM OS CENTROS EM P2 E P3 TANGENCIANDO EM P1 E P4
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -287,22 +287,22 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 cx_a, cy_a = sum(pt[0] for pt in poly_a)/len(poly_a), sum(pt[1] for pt in poly_a)/len(poly_a)
                 
-                # Teste para associar p1 ao ambiente correto
+                # Descobre qual ambiente fica do lado de p1 e qual fica do lado de p4
                 nx_1, ny_1 = get_inside_normal(vx, vy, p1[0], p1[1], cx_a, cy_a)
-                c_test = (p1[0] + nx_1 * raio_circulo, p1[1] + ny_1 * raio_circulo)
+                c_test_p2 = (p1[0] + nx_1 * raio_circulo, p1[1] + ny_1 * raio_circulo)
                 
-                target_poly_p2 = poly_a if ponto_em_poligono(c_test[0], c_test[1], poly_a) else poly_b
+                target_poly_p2 = poly_a if ponto_em_poligono(c_test_p2[0], c_test_p2[1], poly_a) else poly_b
                 target_poly_p3 = poly_b if target_poly_p2 == poly_a else poly_a
                 
-                # Círculo p2: Tangencia em p1 (referência superior), gerando o centro p2 no ambiente correspondente
+                # Centro do círculo P2 (deslocado para dentro do ambiente a partir de p1, de modo que o quadrante toque em p1)
                 cx_p2, cy_p2 = sum(pt[0] for pt in target_poly_p2)/len(target_poly_p2), sum(pt[1] for pt in target_poly_p2)/len(target_poly_p2)
-                nx_p1, ny_p1 = get_inside_normal(vx, vy, p1[0], p1[1], cx_p2, cy_p2)
-                center_p2 = (p1[0] + nx_p1 * raio_circulo, p1[1] + ny_p1 * raio_circulo)
+                nx_p2, ny_p2 = get_inside_normal(vx, vy, p1[0], p1[1], cx_p2, cy_p2)
+                center_p2 = (p1[0] + nx_p2 * raio_circulo, p1[1] + ny_p2 * raio_circulo)
                 
-                # Círculo p3: Tangencia em p4 (referência superior), gerando o centro p3 no ambiente correspondente
+                # Centro do círculo P3 (deslocado para dentro do ambiente a partir de p4, de modo que o quadrante toque em p4)
                 cx_p3, cy_p3 = sum(pt[0] for pt in target_poly_p3)/len(target_poly_p3), sum(pt[1] for pt in target_poly_p3)/len(target_poly_p3)
-                nx_p4, ny_p4 = get_inside_normal(vx, vy, p4[0], p4[1], cx_p3, cy_p3)
-                center_p3 = (p4[0] + nx_p4 * raio_circulo, p4[1] + ny_p4 * raio_circulo)
+                nx_p3, ny_p3 = get_inside_normal(vx, vy, p4[0], p4[1], cx_p3, cy_p3)
+                center_p3 = (p4[0] + nx_p3 * raio_circulo, p4[1] + ny_p3 * raio_circulo)
                 
                 if ponto_em_poligono(center_p2[0], center_p2[1], target_poly_p2):
                     msp.add_circle(center=center_p2, radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
