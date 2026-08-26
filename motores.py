@@ -44,8 +44,8 @@ def dimensionar_cargas(nome, area, perimetro):
         carga_tue = 5500
     elif any(x in nome_lower for x in ["coz"]):
         tue_nome = "Micro-ondas/Forno"
-        qtd_tue = 1
-        carga_tue = 2000
+        qtd_tue = 2  # Cozinha prevê TUE para Geladeira/Micro-ondas conforme padrão
+        carga_tue = 3500
     elif any(x in nome_lower for x in ["quarto", "dorm", "suite"]):
         tue_nome = "Ar-Condicionado"
         qtd_tue = 1
@@ -64,7 +64,7 @@ def dimensionar_cargas(nome, area, perimetro):
         "Carga TUGs (VA)": carga_tugs,
         "Equipamento TUE": tue_nome,
         "Qtd TUE": qtd_tue,
-        "Pot. Unit. TUE (VA)": round(carga_tue / qtd_tue) if qtd_tue > 0 else 0,
+        "Pot. Unit. TUE (VA)": round(carga_tue / max(1, qtd_tue)),
         "Carga TUE (VA)": carga_tue
     }
 
@@ -319,7 +319,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         for s in soleiras_raw:
             pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (DISTRIBUIÇÃO SEPARADA DE TUGs E TUES COM 15cm DE AFASTAMENTO DOS CANTOS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (DISTRIBUIÇÃO PRECISA: TUEs NAS MENORES PAREDES SEM PORTA E TUGs COM 15cm DE FOLGA DOS CANTOS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -467,38 +467,42 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
-                # 1. DISTRIBUIÇÃO DAS TUEs: Centralizadas em uma das menores paredes (sem porta de preferência)
+                # DISTRIBUIÇÃO DAS TUEs (Exatamente qtd_tue nas menores paredes sem portas)
                 if qtd_tue > 0 and logical_walls:
-                    paredes_sem_porta = []
-                    for w in logical_walls:
-                        tem_porta = any(point_seg_dist((p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2, w['p1'], w['p2']) < 0.6 for p in unique_portas)
-                        if not tem_porta:
-                            paredes_sem_porta.append(w)
+                    paredes_candidatas = sorted(logical_walls, key=lambda w: w['length'])
+                    paredes_sem_porta = [w for w in paredes_candidatas if not any(point_seg_dist((p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2, w['p1'], w['p2']) < 0.6 for p in unique_portas)]
+                    paredes_finais = paredes_sem_porta if paredes_sem_porta else paredes_candidatas
                     
-                    parede_tue = min(paredes_sem_porta if paredes_sem_porta else logical_walls, key=lambda w: w['length'])
-                    pt1, pt2 = parede_tue['p1'], parede_tue['p2']
-                    px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                    vx, vy = parede_tue['vx'], parede_tue['vy']
-                    nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
-                    
-                    ponto_b1 = (px - vx * 0.10, py - vy * 0.10)
-                    ponto_b2 = (px + vx * 0.10, py + vy * 0.10)
-                    ponto_pt = (px + nx * 0.20, py + ny * 0.20)
-                    
-                    msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    
-                    if is_chuveiro_ou_ac:
-                        msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    elif is_ambiente_molhado:
-                        ponto_medio_base = (px, py)
-                        msp.add_solid([ponto_b1, ponto_medio_base, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    for idx_tue in range(qtd_tue):
+                        p_alvo = paredes_finais[idx_tue % len(paredes_finais)]
+                        pt1, pt2 = p_alvo['p1'], p_alvo['p2']
                         
-                    msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
+                        # Se houver mais de uma TUE na mesma parede, distribui ao longo dela; senão centraliza
+                        fator = (idx_tue + 1) / (qtd_tue + 1)
+                        px = pt1[0] + (pt2[0] - pt1[0]) * fator
+                        py = pt1[1] + (pt2[1] - pt1[1]) * fator
+                        
+                        vx, vy = p_alvo['vx'], p_alvo['vy']
+                        nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
+                        
+                        ponto_b1 = (px - vx * 0.10, py - vy * 0.10)
+                        ponto_b2 = (px + vx * 0.10, py + vy * 0.10)
+                        ponto_pt = (px + nx * 0.20, py + ny * 0.20)
+                        
+                        msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        
+                        if is_chuveiro_ou_ac:
+                            msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        elif is_ambiente_molhado:
+                            ponto_medio_base = (px, py)
+                            msp.add_solid([ponto_b1, ponto_medio_base, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                            
+                        msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-                # 2. DISTRIBUIÇÃO DAS TUGs: Separadas das TUEs, respeitando 15cm (0.15m) de afastamento dos cantos e livres de vãos
+                # DISTRIBUIÇÃO DAS TUGs (Exatamente qtd_tugs com afastamento de 15cm dos cantos e sem vãos)
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    margem = 0.15  # Exatamente 15cm de afastamento das extremidades/cantos
+                    margem = 0.15  # Exatamente 15cm (0.15m) de afastamento dos vértices/cantos
                     comprimento_util = comp_total - (2 * margem)
                     
                     if comprimento_util > 0 and total_tugs > 0:
