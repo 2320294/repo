@@ -15,9 +15,9 @@ st.set_page_config(
 )
 
 # ============================================================
-# CREDENCIAIS OFICIAIS DO SUPABASE
+# CREDENCIAIS DO SUPABASE
 # ============================================================
-SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
+SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
 @st.cache_resource
@@ -37,7 +37,7 @@ if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 
 # ============================================================
-# BARRA LATERAL (AUTENTICAÇÃO COM SUPABASE & GERENCIADOR)
+# BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DINÂMICO DE PROJETOS)
 # ============================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
@@ -57,7 +57,6 @@ with st.sidebar:
                     st.warning("Preencha o e-mail e a senha.")
                 else:
                     try:
-                        # Consulta na tabela 'usuarios' do Supabase
                         response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
                         dados_usuario = response.data
 
@@ -65,12 +64,12 @@ with st.sidebar:
                             st.session_state.logged_in = True
                             st.session_state.user_email = dados_usuario[0]["email"]
                             st.session_state.user_name = dados_usuario[0]["nome"]
-                            st.success(f"Bem-vindo de volta, {st.session_state.user_name}!")
+                            st.success(f"Bem-vindo, {st.session_state.user_name}!")
                             st.rerun()
                         else:
                             st.error("E-mail ou senha incorretos.")
                     except Exception as e:
-                        st.error(f"Erro ao consultar banco de dados: {e}")
+                        st.error(f"Erro ao logar: {e}")
 
         else:
             st.subheader("📝 Novo Cadastro")
@@ -80,23 +79,21 @@ with st.sidebar:
 
             if st.button("Criar Conta", use_container_width=True):
                 if not cad_nome or not cad_email or not cad_senha:
-                    st.warning("Preencha todos os campos (Nome, E-mail e Senha).")
+                    st.warning("Preencha todos os campos.")
                 else:
                     try:
-                        # Verifica se o e-mail já existe na tabela 'usuarios'
                         check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
                         if check.data:
-                            st.error("Este e-mail já está cadastrado no sistema.")
+                            st.error("E-mail já cadastrado.")
                         else:
-                            # Insere diretamente na tabela 'usuarios' do Supabase
                             supabase.table("usuarios").insert({
                                 "nome": cad_nome.strip(),
                                 "email": cad_email.strip(),
                                 "senha": cad_senha
                             }).execute()
-                            st.success("Conta criada com sucesso! Faça login na aba ao lado.")
+                            st.success("Conta criada! Faça login ao lado.")
                     except Exception as e:
-                        st.error(f"Erro ao salvar no Supabase: {e}")
+                        st.error(f"Erro ao cadastrar: {e}")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
@@ -109,34 +106,69 @@ with st.sidebar:
 
         st.divider()
         st.markdown("### 📂 Gerenciador de Obras")
-        if st.button("➕ Novo Projeto / Pavimento", use_container_width=True):
-            st.toast("Novo projeto inicializado.")
+        
+        # Formulário para criar novo projeto dinamicamente
+        with st.form("form_novo_projeto", clear_on_submit=True):
+            novo_proj_nome = st.text_input("Nome do Novo Projeto / Pavimento")
+            btn_criar_proj = st.form_submit_button("➕ Cadastrar Projeto")
+            
+            if btn_criar_proj:
+                if novo_proj_nome.strip():
+                    try:
+                        supabase.table("projetos").insert({
+                            "user_email": st.session_state.user_email,
+                            "nome_projeto": novo_proj_nome.strip()
+                        }).execute()
+                        st.success("Projeto cadastrado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao criar projeto: {e}")
+                else:
+                    st.warning("Digite o nome do projeto.")
 
-        st.markdown("### 📋 Projetos Salvos:")
-        projeto_selecionado = st.selectbox(
-            "Selecione o pavimento:",
-            ["Teste 01 - Térreo", "Teste 02 - Superior"]
-        )
+        # Busca projetos salvos do usuário no Supabase
+        try:
+            res_proj = supabase.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
+            lista_projetos = res_proj.data
+        except:
+            lista_projetos = []
 
-        if st.button("⚙️ Opções do Pavimento Atual", use_container_width=True):
-            st.info(f"Gerenciando propriedades de: {projeto_selecionado}")
+        st.markdown("### 📋 Seus Projetos Salvos:")
+        if lista_projetos:
+            nomes_projetos = [p["nome_projeto"] for p in lista_projetos]
+            projeto_selecionado = st.selectbox("Selecione o projeto ativo:", nomes_projetos)
+            
+            # Botão para apagar o projeto selecionado
+            if st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
+                proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
+                if proj_alvo:
+                    try:
+                        supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
+                        st.success(f"Projeto '{projeto_selecionado}' apagado!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao apagar: {e}")
+        else:
+            st.info("Nenhum projeto cadastrado ainda.")
+            projeto_selecionado = "Nenhum"
 
 # ============================================================
 # BLOQUEIO DE SEGURANÇA
 # ============================================================
 if not st.session_state.logged_in:
-    st.warning("⚠️ Por favor, faça login ou cadastre-se na barra lateral para acessar o painel de projetos elétricos.")
+    st.warning("⚠️ Faça login ou cadastre-se na barra lateral para acessar o painel de projetos elétricos.")
     st.stop()
 
 # ============================================================
 # TELA PRINCIPAL DA APLICAÇÃO
 # ============================================================
 st.title(f"⚡ Painel de Projetos Elétricos — Olá, {st.session_state.user_name}!")
-st.markdown("Automação profissional em conformidade com a NBR 5410 para dimensionamento, quantificação e CAD.")
+if 'projeto_selecionado' in locals() and projeto_selecionado != "Nenhum":
+    st.info(f"📁 **Projeto Ativo:** {projeto_selecionado}")
 
 # Upload do arquivo DXF da planta baixa
 st.subheader("📁 Projeto Unifilar (DXF)")
-uploaded_file = st.file_uploader("Reenvie a planta base (formato DXF):", type=["dxf"])
+uploaded_file = st.file_uploader("Envie a planta base (formato DXF):", type=["dxf"])
 
 dados_ambientes = []
 
