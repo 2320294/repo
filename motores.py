@@ -239,7 +239,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # REGRA SIMPLES: Soleira tem porta encostada (< 0.3m)? Se sim, processa. Se não, ignora.
+        # FILTRAGEM RIGOROSA: Soleira só é válida se tiver porta encostada (< 0.3m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -258,7 +258,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. INSERE O CÍRCULO NA EXTREMIDADE OPOSTA DA SOLEIRA COM PORTA
+        # 1. INSERE O CÍRCULO EXCLUSIVAMENTE NO AMBIENTE PRINCIPAL (EXCLUINDO CIRCULAÇÃO/CORREDOR)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -270,21 +270,24 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
             d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
             
-            # Ponto oposto à porta na soleira
             ponto_oposto = s_p2 if d1 < d2 else s_p1
             
-            # Encontra qualquer ambiente cujas extremidades ou centroide estejam em contato/proximidade com a soleira
-            ambiente_alvo = None
+            # Encontra os ambientes adjacentes à soleira
+            ambientes_adjacentes = []
             for poly in polilinhas:
+                nome_amb = ambientes_nomes.get(tuple(poly), "")
                 xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
-                if min(xs) - 0.8 <= sm_x <= max(xs) + 0.8 and min(ys) - 0.8 <= sm_y <= max(ys) + 0.8:
+                if min(xs) - 0.6 <= ponto_oposto[0] <= max(xs) + 0.6 and min(ys) - 0.6 <= ponto_oposto[1] <= max(ys) + 0.6:
+                    ambientes_adjacentes.append((poly, nome_amb))
+            
+            # Seleciona estritamente o ambiente que NÃO é corredor ou circulação
+            ambiente_alvo = None
+            for poly, nome_amb in ambientes_adjacentes:
+                if not any(w in nome_amb.lower() for w in ["circula", "corredor", "hall"]):
                     ambiente_alvo = poly
                     break
             
-            if not ambiente_alvo and polilinhas:
-                ambiente_alvo = polilinhas[0]
-            
+            # Se encontrou um ambiente principal válido (excluindo corredores), insere o círculo estritamente dentro dele
             if ambiente_alvo:
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
@@ -294,11 +297,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
                     final_x = ponto_oposto[0] + dir_x * 0.12
                     final_y = ponto_oposto[1] + dir_y * 0.12
-                    msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    
+                    # Validação final: o ponto gerado precisa estar estritamente dentro da polilinha do ambiente principal
+                    if ponto_em_poligono(final_x, final_y, ambiente_alvo):
+                        msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS)
+        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (SOMENTE PARA AMBIENTES PRESENTES NA LAYER IA_AMBIENTES)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
