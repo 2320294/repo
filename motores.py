@@ -313,7 +313,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (GARANTINDO CONTAGEM EXATA IGUAL AO QUADRO DE CARGAS)
+        pontos_proibidos = []
+        for p in portas_raw:
+            pontos_proibidos.append(((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2))
+        for s in soleiras_raw:
+            pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
+
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (DISTRIBUIÇÃO SEPARADA DE TUGs E TUES COM 15cm DE AFASTAMENTO DOS CANTOS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -461,11 +467,18 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
+                # 1. DISTRIBUIÇÃO DAS TUEs: Centralizadas em uma das menores paredes (sem porta de preferência)
                 if qtd_tue > 0 and logical_walls:
-                    menor_parede = min(logical_walls, key=lambda w: w['length'])
-                    pt1, pt2 = menor_parede['p1'], menor_parede['p2']
+                    paredes_sem_porta = []
+                    for w in logical_walls:
+                        tem_porta = any(point_seg_dist((p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2, w['p1'], w['p2']) < 0.6 for p in unique_portas)
+                        if not tem_porta:
+                            paredes_sem_porta.append(w)
+                    
+                    parede_tue = min(paredes_sem_porta if paredes_sem_porta else logical_walls, key=lambda w: w['length'])
+                    pt1, pt2 = parede_tue['p1'], parede_tue['p2']
                     px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
-                    vx, vy = menor_parede['vx'], menor_parede['vy']
+                    vx, vy = parede_tue['vx'], parede_tue['vy']
                     nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
                     
                     ponto_b1 = (px - vx * 0.10, py - vy * 0.10)
@@ -482,14 +495,27 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         
                     msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
+                # 2. DISTRIBUIÇÃO DAS TUGs: Separadas das TUEs, respeitando 15cm (0.15m) de afastamento dos cantos e livres de vãos
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    passo = comp_total / total_tugs
-                    inicio_offset = passo / 2
+                    margem = 0.15  # Exatamente 15cm de afastamento das extremidades/cantos
+                    comprimento_util = comp_total - (2 * margem)
+                    
+                    if comprimento_util > 0 and total_tugs > 0:
+                        passo = comprimento_util / total_tugs
+                        inicio_offset = margem + (passo / 2)
+                    else:
+                        passo = comp_total / total_tugs
+                        inicio_offset = passo / 2
 
                     for i in range(total_tugs):
                         dist_atual = inicio_offset + (i * passo)
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(dist_atual, segmentos_crus)
+                        
+                        perto_de_vao = any(math.hypot(px - v[0], py - v[1]) < 0.40 for v in pontos_proibidos)
+                        if perto_de_vao:
+                            continue
+
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
                         
                         ponto_b1 = (px - seg_vx * 0.10, py - seg_vy * 0.10)
