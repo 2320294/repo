@@ -239,11 +239,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # FILTRAGEM RIGOROSA: Soleira só é válida se tiver porta encostada (< 0.3m)
+        # ASSOCIAÇÃO DE SOLEIRAS A PORTAS VÁLIDAS
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
-            
             porta_encostada = None
             for p in portas_raw:
                 d1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
@@ -254,11 +253,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if d1 < 0.3 or d2 < 0.3 or d3 < 0.3 or d4 < 0.3:
                     porta_encostada = p
                     break
-            
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. INSERE O CÍRCULO EXCLUSIVAMENTE NO AMBIENTE PRINCIPAL (EXCLUINDO CIRCULAÇÃO/CORREDOR)
+        # 1. PROCESSAMENTO DE TODAS AS SOLEIRAS VÁLIDAS (SUPORTANDO MÚLTIPLAS PORTAS POR AMBIENTE)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -269,10 +267,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
             d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
-            
             ponto_oposto = s_p2 if d1 < d2 else s_p1
             
-            # Encontra os ambientes adjacentes à soleira
+            # Identifica os ambientes adjacentes à soleira
             ambientes_adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
@@ -280,14 +277,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if min(xs) - 0.6 <= ponto_oposto[0] <= max(xs) + 0.6 and min(ys) - 0.6 <= ponto_oposto[1] <= max(ys) + 0.6:
                     ambientes_adjacentes.append((poly, nome_amb))
             
-            # Seleciona estritamente o ambiente que NÃO é corredor ou circulação
+            # Prioriza estritamente o ambiente principal (excluindo corredores/circulação)
             ambiente_alvo = None
             for poly, nome_amb in ambientes_adjacentes:
                 if not any(w in nome_amb.lower() for w in ["circula", "corredor", "hall"]):
                     ambiente_alvo = poly
                     break
             
-            # Se encontrou um ambiente principal válido (excluindo corredores), insere o círculo estritamente dentro dele
             if ambiente_alvo:
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
@@ -298,13 +294,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     final_x = ponto_oposto[0] + dir_x * 0.12
                     final_y = ponto_oposto[1] + dir_y * 0.12
                     
-                    # Validação final: o ponto gerado precisa estar estritamente dentro da polilinha do ambiente principal
                     if ponto_em_poligono(final_x, final_y, ambiente_alvo):
                         msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (SOMENTE PARA AMBIENTES PRESENTES NA LAYER IA_AMBIENTES)
+        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS - SOMENTE PARA AMBIENTES NA LAYER IA_AMBIENTES)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
