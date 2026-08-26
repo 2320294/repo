@@ -1211,15 +1211,21 @@ def gerar_cad_unifilar(
 
         # ====================================================
         # DESENHO DOS PONTOS DEBUG DAS SOLEIRAS
-        # REGRA DOS PONTOS DA PORTA: P1 -> P2 -> P3 -> P4
+        # ====================================================
+        # REGRA GEOMÉTRICA DEFINIDA PARA PORTA + SOLEIRA:
         #
-        # P1 = encontro da porta com a soleira
-        # P2 = segunda extremidade da porta / ponto superior esquerdo
-        # P4 = extremidade oposta da soleira
-        # P3 = quarto vértice, correspondente a P2 no outro lado
-        #       da abertura.
+        #                 P1 ───────── P2
+        #                 │   SOLEIRA  │
+        #                 │            │
+        #                 P4 ───────── P3
         #
-        # Os círculos DEBUG são permitidos SOMENTE em P2 e P3.
+        # P1 = ponto onde a porta encosta na soleira
+        # P2 = outra extremidade da soleira
+        # P4 = outra extremidade da porta
+        # P3 = quarto ponto, calculado por paralelogramo
+        #
+        # CÍRCULOS DEBUG SOMENTE EM P2 E P3.
+        # NUNCA desenhar círculo em P1 ou P4.
         # ====================================================
 
         raio_circulo = 0.15
@@ -1229,87 +1235,88 @@ def gerar_cad_unifilar(
             s = item['s']
             p_porta = item['porta']
 
-            s_pA = s['p1']
-            s_pB = s['p2']
+            s_p1 = s['p1']
+            s_p2 = s['p2']
 
             # ------------------------------------------------
-            # P1 = endpoint da porta que realmente encosta na
-            # soleira. P2 = o outro endpoint da porta.
+            # P1 = extremidade da porta que encosta na soleira.
+            # P4 = a outra extremidade da porta.
             # ------------------------------------------------
             d_porta_1 = point_seg_dist(
                 p_porta['p1'][0],
                 p_porta['p1'][1],
-                s_pA,
-                s_pB
+                s_p1,
+                s_p2
             )
 
             d_porta_2 = point_seg_dist(
                 p_porta['p2'][0],
                 p_porta['p2'][1],
-                s_pA,
-                s_pB
+                s_p1,
+                s_p2
             )
 
             if d_porta_1 <= d_porta_2:
                 p1 = p_porta['p1']
-                p2 = p_porta['p2']
+                p4 = p_porta['p2']
             else:
                 p1 = p_porta['p2']
-                p2 = p_porta['p1']
+                p4 = p_porta['p1']
 
             # ------------------------------------------------
-            # P4 = extremidade da soleira que não é P1.
+            # P2 = a outra extremidade da SOLEIRA.
+            # Escolhemos a extremidade da soleira que não é
+            # a extremidade correspondente ao encontro em P1.
             # ------------------------------------------------
-            d_p1_sA = math.hypot(
-                p1[0] - s_pA[0],
-                p1[1] - s_pA[1]
+            d_p1_s1 = math.hypot(
+                p1[0] - s_p1[0],
+                p1[1] - s_p1[1]
             )
 
-            d_p1_sB = math.hypot(
-                p1[0] - s_pB[0],
-                p1[1] - s_pB[1]
+            d_p1_s2 = math.hypot(
+                p1[0] - s_p2[0],
+                p1[1] - s_p2[1]
             )
 
-            p4 = (
-                s_pA
-                if d_p1_sB < d_p1_sA
-                else s_pB
-            )
+            if d_p1_s1 <= d_p1_s2:
+                p2 = s_p2
+            else:
+                p2 = s_p1
 
             # ------------------------------------------------
-            # Vetor P1 -> P4 = direção da soleira.
-            # P3 é o quarto ponto do retângulo P1-P2-P3-P4.
+            # P3 = quarto ponto da geometria.
+            #
+            # O vetor P1 -> P2 é copiado a partir de P4.
+            # Assim:
+            #
+            #       P1 -------- P2
+            #       |            |
+            #       |            |
+            #       P4 -------- P3
+            #
+            # Isso mantém P1/P2 exatamente na SOLEIRA e
+            # P1/P4 exatamente na PORTA.
             # ------------------------------------------------
-            vx = p4[0] - p1[0]
-            vy = p4[1] - p1[1]
-
-            s_len = math.hypot(vx, vy)
-
-            if s_len == 0:
-                continue
-
-            vx /= s_len
-            vy /= s_len
+            vetor_x = p2[0] - p1[0]
+            vetor_y = p2[1] - p1[1]
 
             p3 = (
-                p2[0] + (p4[0] - p1[0]),
-                p2[1] + (p4[1] - p1[1])
+                p4[0] + vetor_x,
+                p4[1] + vetor_y
             )
 
             # ------------------------------------------------
-            # Centro aproximado da soleira.
+            # Centro da soleira para localizar os ambientes
+            # adjacentes.
             # ------------------------------------------------
             sm_x = (
-                s_pA[0] + s_pB[0]
+                s_p1[0] + s_p2[0]
             ) / 2
 
             sm_y = (
-                s_pA[1] + s_pB[1]
+                s_p1[1] + s_p2[1]
             ) / 2
 
-            # ------------------------------------------------
-            # Descobre os ambientes adjacentes à abertura.
-            # ------------------------------------------------
             ambientes_adjacentes = []
 
             for poly in polilinhas:
@@ -1325,17 +1332,40 @@ def gerar_cad_unifilar(
                     ambientes_adjacentes.append(poly)
 
             # ------------------------------------------------
-            # Função local para desenhar círculo somente se o
-            # ponto deslocado estiver realmente dentro do ambiente.
+            # Vetor P2 -> P3.
+            # Ele representa a largura da abertura/soleira.
             # ------------------------------------------------
-            def desenhar_circulo_porta(ponto, poly):
+            abertura_vx = p3[0] - p2[0]
+            abertura_vy = p3[1] - p2[1]
 
-                cx = sum(pt[0] for pt in poly) / len(poly)
-                cy = sum(pt[1] for pt in poly) / len(poly)
+            abertura_len = math.hypot(
+                abertura_vx,
+                abertura_vy
+            )
+
+            if abertura_len == 0:
+                continue
+
+            abertura_vx /= abertura_len
+            abertura_vy /= abertura_len
+
+            # ------------------------------------------------
+            # Desenha círculo SOMENTE no ponto indicado e no
+            # ambiente correspondente.
+            # ------------------------------------------------
+            def desenhar_circulo_debug(ponto, poly):
+
+                cx = sum(
+                    pt[0] for pt in poly
+                ) / len(poly)
+
+                cy = sum(
+                    pt[1] for pt in poly
+                ) / len(poly)
 
                 nx, ny = get_inside_normal(
-                    vx,
-                    vy,
+                    abertura_vx,
+                    abertura_vy,
                     ponto[0],
                     ponto[1],
                     cx,
@@ -1363,16 +1393,18 @@ def gerar_cad_unifilar(
                     )
 
             # ------------------------------------------------
-            # Os círculos são permitidos APENAS em P2 e P3.
-            # Nunca desenhar círculo em P1 ou P4.
+            # Quando existem dois ambientes adjacentes:
+            #
+            # P2 recebe o círculo no ambiente de um lado.
+            # P3 recebe o círculo no ambiente do outro lado.
+            #
+            # P1 e P4 NÃO recebem círculo.
             # ------------------------------------------------
             if len(ambientes_adjacentes) >= 2:
 
                 poly_a = ambientes_adjacentes[0]
                 poly_b = ambientes_adjacentes[1]
 
-                # Descobre qual ambiente está de cada lado da
-                # linha P2-P3.
                 cx_a = sum(
                     pt[0] for pt in poly_a
                 ) / len(poly_a)
@@ -1382,8 +1414,8 @@ def gerar_cad_unifilar(
                 ) / len(poly_a)
 
                 nx_a, ny_a = get_inside_normal(
-                    vx,
-                    vy,
+                    abertura_vx,
+                    abertura_vy,
                     p2[0],
                     p2[1],
                     cx_a,
@@ -1406,25 +1438,24 @@ def gerar_cad_unifilar(
                     poly_p2 = poly_b
                     poly_p3 = poly_a
 
-                desenhar_circulo_porta(
+                desenhar_circulo_debug(
                     p2,
                     poly_p2
                 )
 
-                desenhar_circulo_porta(
+                desenhar_circulo_debug(
                     p3,
                     poly_p3
                 )
 
             elif len(ambientes_adjacentes) == 1:
 
-                # Em abertura encostada em apenas um ambiente,
-                # somente P2 recebe círculo. P1 e P4 jamais recebem.
-                poly = ambientes_adjacentes[0]
-
-                desenhar_circulo_porta(
+                # Em caso de apenas um ambiente detectado,
+                # desenha somente o ponto P2.
+                # P1, P3 e P4 nunca recebem círculo nesse caso.
+                desenhar_circulo_debug(
                     p2,
-                    poly
+                    ambientes_adjacentes[0]
                 )
 
         # ====================================================
