@@ -68,13 +68,27 @@ def dimensionar_cargas(nome, area, perimetro):
         "Carga TUE (VA)": carga_tue
     }
 
+def ponto_em_poligono(x, y, polilinha):
+    n = len(polilinha)
+    dentro = False
+    p1x, p1y = polilinha[0]
+    for i in range(n + 1):
+        p2x, p2y = polilinha[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        dentro = not dentro
+        p1x, p1y = p2x, p2y
+    return dentro
+
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
     
-    # Contagem de entidades reais por camada obrigatória
     contagem_camadas = {'IA_AMBIENTES': 0, 'IA_TEXTOS': 0, 'IA_PORTAS': 0, 'IA_SOLEIRAS': 0}
-    
     for entity in msp:
         if hasattr(entity.dxf, 'layer'):
             l = str(entity.dxf.layer).upper().strip()
@@ -160,7 +174,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
         
-        # Validação estrita de conteúdo na geração também
         contagem_camadas = {'IA_AMBIENTES': 0, 'IA_TEXTOS': 0, 'IA_PORTAS': 0, 'IA_SOLEIRAS': 0}
         for entity in msp:
             if hasattr(entity.dxf, 'layer'):
@@ -218,7 +231,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # SOLEIRAS COM PORTA: Identifica soleiras que possuem porta associada num raio de até 1.5m
+        # Mapeia cada polilinha de ambiente ao seu nome correspondente
+        ambientes_nomes = {}
+        for poly in polilinhas:
+            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
+            ambientes_nomes[tuple(poly)] = nome_achado
+
+        # SOLEIRAS COM PORTA: Apenas soleiras próximas a portas (raio < 1.5m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -233,17 +255,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if tem_porta:
                 soleiras_com_porta.append(s)
 
-        # 1. INSERE O CÍRCULO MAGENTA DE DEPURAÇÃO NA EXTREMIDADE INTERNA DA SOLEIRA COM PORTA
+        # 1. INSERE O CÍRCULO MAGENTA ESTRICTAMENTE NO AMBIENTE PRINCIPAL (Excluindo corredores)
         for s in soleiras_com_porta:
             s_p1, s_p2 = s['p1'], s['p2']
-            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
+            ambientes_adjacentes = []
+            for poly in polilinhas:
+                nome_amb = ambientes_nomes.get(tuple(poly), "")
+                if ponto_em_poligono(s_p1[0], s_p1[1], poly) or ponto_em_poligono(s_p2[0], s_p2[1], poly):
+                    ambientes_adjacentes.append((poly, nome_amb))
+            
+            # Prioriza estritamente o ambiente que NÃO é corredor/circulação
             ambiente_alvo = None
-            for polilinha in polilinhas:
-                xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                if min(xs) - 0.8 <= sm_x <= max(xs) + 0.8 and min(ys) - 0.8 <= sm_y <= max(ys) + 0.8:
-                    ambiente_alvo = polilinha
+            for poly, nome_amb in ambientes_adjacentes:
+                if not any(w in nome_amb.lower() for w in ["circula", "corredor", "hall"]):
+                    ambiente_alvo = poly
                     break
+            
+            if not ambiente_alvo and ambientes_adjacentes:
+                ambiente_alvo = ambientes_adjacentes[0][0]
             
             if ambiente_alvo:
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
