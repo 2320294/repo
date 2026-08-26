@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
 import os
+import json
 import pandas as pd
 import motores
 
@@ -14,49 +15,91 @@ st.set_page_config(
 )
 
 # ============================================================
-# SISTEMA DE AUTENTICAÇÃO (E-MAIL E SENHA)
+# GERENCIAMENTO DE BANCO DE DADOS DE USUÁRIOS (JSON LOCAL)
 # ============================================================
+ARQUIVO_USUARIOS = "usuarios_db.json"
+
+def carregar_usuarios():
+    if os.path.exists(ARQUIVO_USUARIOS):
+        try:
+            with open(ARQUIVO_USUARIOS, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {
+        # Usuário padrão inicial para testes
+        "jrsebadelhe@gmail.com": {"nome": "Roberto Sebadelhe", "senha": "123456"}
+    }
+
+def salvar_usuarios(usuarios):
+    with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
+        json.dump(usuarios, f, ensure_ascii=False, indent=4)
+
+# Inicializa sessões de login
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
+if "user_name" not in st.session_state:
+    st.session_state.user_name = ""
 
-# Base de usuários simulada (Pode ser integrada a um banco de dados posteriormente)
-# Senha padrão para testes: 123456 (ou o usuário pode cadastrar/usar a padrão)
-USUARIOS_VALIDOS = {
-    "jrsebadelhe@gmail.com": "123456",
-    "admin@autoletrica.com": "admin123"
-}
-
+# ============================================================
+# BARRA LATERAL (AUTENTICAÇÃO, CADASTRO E GERENCIADOR)
+# ============================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
     st.markdown("### AutoElétrica NBR 5410")
     st.divider()
     
+    db_usuarios = carregar_usuarios()
+
     if not st.session_state.logged_in:
-        st.subheader("🔐 Área Restrita - Login")
-        email_input = st.text_input("E-mail", value="jrsebadelhe@gmail.com")
-        senha_input = st.text_input("Senha", type="password", value="")
+        aba_auth = st.radio("Acesso ao Sistema", ["Entrar (Login)", "Cadastrar-se"], horizontal=True)
         
-        if st.button("Entrar no Sistema", use_container_width=True):
-            if email_input in USUARIOS_VALIDOS and USUARIOS_VALIDOS[email_input] == senha_input:
-                st.session_state.logged_in = True
-                st.session_state.user_email = email_input
-                st.success("Login realizado com sucesso!")
-                st.rerun()
-            else:
-                st.error("E-mail ou senha incorretos.")
+        if aba_auth == "Entrar (Login)":
+            st.subheader("🔐 Fazer Login")
+            login_email = st.text_input("E-mail / Login", key="login_email")
+            login_senha = st.text_input("Senha", type="password", key="login_senha")
+            
+            if st.button("Entrar", use_container_width=True):
+                if login_email in db_usuarios and db_usuarios[login_email]["senha"] == login_senha:
+                    st.session_state.logged_in = True
+                    st.session_state.user_email = login_email
+                    st.session_state.user_name = db_usuarios[login_email]["nome"]
+                    st.success(f"Bem-vindo de volta, {st.session_state.user_name}!")
+                    st.rerun()
+                else:
+                    st.error("E-mail ou senha inválidos.")
+                    
+        else:
+            st.subheader("📝 Novo Cadastro")
+            cad_nome = st.text_input("Nome Completo", key="cad_nome")
+            cad_email = st.text_input("E-mail (Login)", key="cad_email")
+            cad_senha = st.text_input("Senha", type="password", key="cad_senha")
+            
+            if st.button("Criar Conta", use_container_width=True):
+                if not cad_nome or not cad_email or not cad_senha:
+                    st.warning("Preencha todos os campos obrigatórios (Nome, E-mail e Senha).")
+                elif cad_email in db_usuarios:
+                    st.error("Este e-mail já está cadastrado no sistema.")
+                else:
+                    db_usuarios[cad_email] = {"nome": cad_nome, "senha": cad_senha}
+                    salvar_usuarios(db_usuarios)
+                    st.success("Cadastro realizado com sucesso! Faça login na aba ao lado.")
     else:
-        st.markdown(f"👤 **Usuário:**\n`{st.session_state.user_email}`")
+        st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
+        st.caption(f"📧 `{st.session_state.user_email}`")
+        
         if st.button("🚪 Sair / Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user_email = ""
+            st.session_state.user_name = ""
             st.rerun()
             
         st.divider()
         st.markdown("### 📂 Gerenciador de Obras")
         if st.button("➕ Novo Projeto / Pavimento", use_container_width=True):
-            st.toast("Novo projeto inicializado com sucesso.")
+            st.toast("Novo projeto inicializado.")
             
         st.markdown("### 📋 Projetos Salvos:")
         projeto_selecionado = st.selectbox(
@@ -68,17 +111,17 @@ with st.sidebar:
             st.info(f"Gerenciando propriedades de: {projeto_selecionado}")
 
 # ============================================================
-# BLOQUEIO DE SEGURANÇA PARA QUEM NÃO ESTÁ LOGADO
+# BLOQUEIO DE SEGURANÇA
 # ============================================================
 if not st.session_state.logged_in:
-    st.warning("⚠️ Por favor, insira suas credenciais (e-mail e senha) na barra lateral para acessar o painel de projetos elétricos.")
+    st.warning("⚠️ Por favor, faça login ou cadastre-se na barra lateral para acessar o painel de projetos elétricos.")
     st.stop()
 
 # ============================================================
 # TELA PRINCIPAL DA APLICAÇÃO
 # ============================================================
-st.title("⚡ Gerador de Projetos Elétricos (NBR 5410)")
-st.markdown("Automação profissional para dimensionamento de cargas, previsão, quantificação de materiais e CAD.")
+st.title(f"⚡ Painel de Projetos Elétricos — Olá, {st.session_state.user_name}!")
+st.markdown("Automação profissional em conformidade com a NBR 5410 para dimensionamento, quantificação e CAD.")
 
 # Upload do arquivo DXF da planta baixa
 st.subheader("📁 Projeto Unifilar (DXF)")
@@ -94,7 +137,6 @@ if uploaded_file is not None:
             tmp.write(dxf_bytes)
             tmp_path = tmp.name
             
-        # Processa o DXF utilizando o motor geométrico
         dados_ambientes = motores.processar_dxf(tmp_path)
         os.remove(tmp_path)
     except Exception as e:
@@ -121,7 +163,6 @@ if dados_ambientes:
             with c5:
                 eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
             
-            # Sincroniza dados modificados
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
             row_modificado["Pot. Unit. Ilum (VA)"] = p_ilum
@@ -129,7 +170,6 @@ if dados_ambientes:
             row_modificado["Qtd TUE"] = qtd_tue
             row_modificado["Equipamento TUE"] = eq_tue
             
-            # Recálculos consistentes
             row_modificado["Carga Ilum. (VA)"] = q_ilum * p_ilum
             is_molhado = any(x in row['Ambiente'].lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
             pot_tup_unit_calc = 600 if is_molhado else 100
@@ -139,7 +179,6 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    # Exibição do DataFrame consolidado
     df_consolidado = pd.DataFrame(tabela_editada)
     st.dataframe(df_consolidado, use_container_width=True)
 
