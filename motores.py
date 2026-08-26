@@ -231,7 +231,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # 1. ENCONTRA SOLEIRAS COM PORTA ENCOSTADA (< 0.4m) - Sem limitação de corredores
+        # 1. IGNORA SOLEIRAS SEM PORTAS (Distância < 0.4m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -248,51 +248,58 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 2. PROCESSA CADA SOLEIRA VÁLIDA
+        # 2. PROCESSA CADA SOLEIRA COM PORTA INDEPENDENTEMENTE
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
-            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            # Encontra todos os ambientes que encostam nesta soleira
-            adjacentes = []
+            # Encontra quais ambientes tocam diretamente nas extremidades ou no corpo da soleira
+            ambientes_adjacentes = []
             for poly in polilinhas:
-                xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
-                    adjacentes.append(poly)
+                poly_closed = list(poly) + [poly[0]]
+                tocou = False
+                for i in range(len(poly)):
+                    if point_seg_dist(s_p1[0], s_p1[1], poly_closed[i], poly_closed[i+1]) < 0.25 or \
+                       point_seg_dist(s_p2[0], s_p2[1], poly_closed[i], poly_closed[i+1]) < 0.25:
+                        tocou = True
+                        break
+                if tocou:
+                    ambientes_adjacentes.append(poly)
             
             pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+            
             d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
             d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
             
             ponto_oposto_1 = s_p2 if d1 < d2 else s_p1
             ponto_oposto_2 = s_p1 if d1 < d2 else s_p2
             
-            if len(adjacentes) >= 2:
-                # Faz divisa com dois ambientes: gera dois círculos (um em cada extremidade oposta, voltados para dentro)
+            if len(ambientes_adjacentes) >= 2:
+                # Se faz divisa com dois ambientes, gera um círculo em cada extremidade oposta voltado para dentro
                 pontos_opostos = [ponto_oposto_1, ponto_oposto_2]
-                for idx, poly in enumerate(adjacentes[:2]):
+                for idx, poly in enumerate(ambientes_adjacentes[:2]):
                     p_op = pontos_opostos[idx]
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
                     d_tot = math.hypot(cx - p_op[0], cy - p_op[1])
                     if d_tot > 0:
-                        dir_x, dir_y = (cx - p_op[0]) / d_tot, (cy - p_op[0]) / d_tot # Corrigido para dir_y
+                        dir_x = (cx - p_op[0]) / d_tot
                         dir_y = (cy - p_op[1]) / d_tot
                         final_x = p_op[0] + dir_x * 0.18
                         final_y = p_op[1] + dir_y * 0.18
                         if ponto_em_poligono(final_x, final_y, poly):
                             msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
-            elif len(adjacentes) == 1:
-                # Não faz divisa com outro ambiente (único ambiente): gera apenas um círculo voltado para dentro
-                poly = adjacentes[0]
+            elif len(ambientes_adjacentes) == 1:
+                # Se toca em apenas um ambiente, gera apenas um círculo na extremidade oposta
+                poly = ambientes_adjacentes[0]
                 cx = sum([pt[0] for pt in poly]) / len(poly)
                 cy = sum([pt[1] for pt in poly]) / len(poly)
                 d_tot = math.hypot(cx - ponto_oposto_1[0], cy - ponto_oposto_1[1])
                 if d_tot > 0:
-                    dir_x, dir_y = (cx - ponto_oposto_1[0]) / d_tot, (cy - ponto_oposto_1[1]) / d_tot
+                    dir_x = (cx - ponto_oposto_1[0]) / d_tot
+                    dir_y = (cy - ponto_oposto_1[1]) / d_tot
                     final_x = ponto_oposto_1[0] + dir_x * 0.18
                     final_y = ponto_oposto_1[1] + dir_y * 0.18
                     if ponto_em_poligono(final_x, final_y, poly):
