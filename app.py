@@ -17,48 +17,24 @@ st.set_page_config(
 # ============================================================
 # SUPABASE
 # ============================================================
-def obter_credenciais_supabase():
-    """
-    Lê primeiro o formato usado no Streamlit Cloud:
-
-    [supabase]
-    url = "..."
-    key = "..."
-
-    Também aceita, como alternativa, variáveis de ambiente
-    SUPABASE_URL / SUPABASE_KEY / SUPABASE_ANON_KEY.
-    """
-    url = ""
-    key = ""
-
+def obter_credencial(nome):
     try:
-        if "supabase" in st.secrets:
-            bloco = st.secrets["supabase"]
-            url = str(bloco.get("url", "")).strip()
-            key = str(bloco.get("key", "")).strip()
+        valor = st.secrets.get(nome)
+        if valor:
+            return str(valor)
     except Exception:
         pass
-
-    if not url:
-        url = os.getenv("SUPABASE_URL", "").strip()
-
-    if not key:
-        key = (
-            os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-            or os.getenv("SUPABASE_KEY", "").strip()
-            or os.getenv("SUPABASE_ANON_KEY", "").strip()
-        )
-
-    return url, key
+    return os.getenv(nome, "").strip()
 
 
-SUPABASE_URL, SUPABASE_KEY = obter_credenciais_supabase()
+SUPABASE_URL = obter_credencial("SUPABASE_URL")
+SUPABASE_KEY = obter_credencial("SUPABASE_SERVICE_ROLE_KEY") or obter_credencial("SUPABASE_KEY") or obter_credencial("SUPABASE_ANON_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     st.error(
-        "❌ As credenciais do Supabase não foram encontradas. "
-        "No Streamlit Cloud, use o bloco [supabase] com "
-        "url e key, exatamente como configurado nos Secrets."
+        "❌ As credenciais do Supabase não foram configuradas. "
+        "Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY "
+        "nos Secrets do Streamlit ou nas variáveis de ambiente."
     )
     st.stop()
 
@@ -508,148 +484,29 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    # ========================================================
-    # TABELA CONSOLIDADA
-    # ========================================================
-
-    # Mantém os ambientes em ordem crescente de nome.
-    tabela_editada = sorted(
-        tabela_editada,
-        key=lambda x: str(x.get("Ambiente", "")).strip().casefold()
-    )
-
     df_consolidado = pd.DataFrame(tabela_editada)
-
-    # Colunas exibidas no quadro consolidado.
-    # Agora mostramos quantidade, potência unitária e carga total
-    # de iluminação, TUG e TUE.
-    colunas_exibicao = [
-        "Ambiente",
-        "Área (m²)",
-        "Perímetro (m)",
-        "Qtd Ilum.",
-        "Pot. Unit. Ilum (VA)",
-        "Carga Ilum. (VA)",
-        "TUGs (Qtd)",
-        "Pot. Unit. TUG (VA)",
-        "Carga TUGs (VA)",
-        "Equipamento TUE",
-        "Qtd TUE",
-        "Pot. Unit. TUE (VA)",
-        "Carga TUE (VA)"
+    colunas_para_ocultar = [
+        "Centro_X", "Centro_Y",
+        "Pot. Unit. Ilum (VA)", "Carga Ilum. (VA)",
+        "Pot. Unit. TUG (VA)", "Carga TUGs (VA)",
+        "Pot. Unit. TUE (VA)", "Carga TUE (VA)"
     ]
-
-    colunas_existentes = [
-        c for c in colunas_exibicao
-        if c in df_consolidado.columns
-    ]
-
-    df_exibicao = df_consolidado[colunas_existentes].copy()
-
-    # Garante novamente a ordem alfabética no DataFrame.
-    if "Ambiente" in df_exibicao.columns:
-        df_exibicao = (
-            df_exibicao
-            .sort_values(
-                by="Ambiente",
-                key=lambda serie: serie.astype(str).str.casefold(),
-                ascending=True
-            )
-            .reset_index(drop=True)
-        )
-
+    df_exibicao = df_consolidado.drop(columns=[c for c in colunas_para_ocultar if c in df_consolidado.columns], errors="ignore")
     if "Área (m²)" in df_exibicao.columns:
         df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
-
     if "Perímetro (m)" in df_exibicao.columns:
         df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
-    # --------------------------------------------------------
-    # LINHA DE TOTAL GERAL
-    # --------------------------------------------------------
-    # Quantidades e cargas totais são somadas.
-    # Potências unitárias recebem "—", pois não faz sentido
-    # somar potências unitárias de equipamentos diferentes.
-
-    linha_total = {c: "" for c in df_exibicao.columns}
-    linha_total["Ambiente"] = "TOTAL GERAL"
-
-    if "Área (m²)" in df_exibicao.columns:
-        linha_total["Área (m²)"] = round(
-            pd.to_numeric(df_exibicao["Área (m²)"], errors="coerce").fillna(0).sum(),
-            2
-        )
-
-    if "Perímetro (m)" in df_exibicao.columns:
-        linha_total["Perímetro (m)"] = round(
-            pd.to_numeric(df_exibicao["Perímetro (m)"], errors="coerce").fillna(0).sum(),
-            2
-        )
-
-    for coluna in ["Qtd Ilum.", "TUGs (Qtd)", "Qtd TUE"]:
-        if coluna in df_exibicao.columns:
-            linha_total[coluna] = int(
-                pd.to_numeric(df_exibicao[coluna], errors="coerce").fillna(0).sum()
-            )
-
-    for coluna in [
-        "Carga Ilum. (VA)",
-        "Carga TUGs (VA)",
-        "Carga TUE (VA)"
-    ]:
-        if coluna in df_exibicao.columns:
-            linha_total[coluna] = int(
-                pd.to_numeric(df_exibicao[coluna], errors="coerce").fillna(0).sum()
-            )
-
-    for coluna in [
-        "Pot. Unit. Ilum (VA)",
-        "Pot. Unit. TUG (VA)",
-        "Pot. Unit. TUE (VA)"
-    ]:
-        if coluna in df_exibicao.columns:
-            linha_total[coluna] = "—"
-
-    if "Equipamento TUE" in df_exibicao.columns:
-        linha_total["Equipamento TUE"] = "—"
-
-    df_exibicao_com_total = pd.concat(
-        [
-            df_exibicao,
-            pd.DataFrame([linha_total])
-        ],
-        ignore_index=True
-    )
-
-    # --------------------------------------------------------
-    # DESTAQUE DA LINHA TOTAL
-    # --------------------------------------------------------
-    # Streamlit usa normalmente #f0f2f6 no cabeçalho da tabela
-    # em tema claro. Aplicamos a mesma tonalidade à última linha.
-
-    def destacar_total(row):
-        if str(row.get("Ambiente", "")).strip().upper() == "TOTAL GERAL":
-            return [
-                "background-color: #f0f2f6; "
-                "font-weight: 700; "
-                "border-top: 2px solid #d0d3d8"
-            ] * len(row)
-        return [""] * len(row)
-
-    tabela_estilizada = (
-        df_exibicao_com_total.style
-        .apply(destacar_total, axis=1)
-        .format({
-            "Área (m²)": lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x,
-            "Perímetro (m)": lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x
-        })
-    )
-
-    st.dataframe(
-        tabela_estilizada,
-        use_container_width=True,
-        hide_index=True
-    )
+    linha_total = {
+        "Ambiente": "TOTAL GERAL",
+        "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
+        "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
+        "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
+        "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
+        "Equipamento TUE": "-",
+        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
+    }
+    st.dataframe(pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True), use_container_width=True, hide_index=True)
 
     # ========================================================
     # QDC
