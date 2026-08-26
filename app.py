@@ -1,378 +1,586 @@
-import streamlit as st
+import ezdxf
+import math
 import tempfile
 import os
-import pandas as pd
-from supabase import create_client, Client
-import motores
+
+RAIO_CIRCULO_INTERRUPT = 0.15
 
 # ============================================================
-# CONFIGURAÇÃO DA PÁGINA
+# DIMENSIONAMENTO DAS CARGAS (DINÂMICO EM WATTS)
 # ============================================================
-st.set_page_config(
-    page_title="AutoElétrica NBR 5410",
-    page_icon="⚡",
-    layout="wide"
-)
 
-# ============================================================
-# CONEXÃO BLINDADA COM O SUPABASE
-# ============================================================
-SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
+def dimensionar_cargas(nome, area, perimetro):
+    if area <= 0 or perimetro <= 0:
+        return {
+            "Qtd Ilum.": 0, "Pot. Unit. Ilum (W)": 0, "Carga Ilum. (W)": 0, 
+            "TUGs (Qtd)": 0, "Pot. Unit. TUG (W)": 0, "Carga TUGs (W)": 0, 
+            "Equipamento TUE": "-", "Qtd TUE": 0, "Pot. Unit. TUE (W)": 0, "Carga TUE (W)": 0
+        }
 
-@st.cache_resource
-def init_supabase():
-    try:
-        client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        return client
-    except Exception:
-        return None
-
-supabase = init_supabase()
-
-# ============================================================
-# ESTADO DE SESSÃO
-# ============================================================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "user_email" not in st.session_state:
-    st.session_state.user_email = ""
-if "user_name" not in st.session_state:
-    st.session_state.user_name = ""
-
-# ============================================================
-# BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DE PROJETOS)
-# ============================================================
-with st.sidebar:
-    st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
-    st.markdown("### AutoElétrica NBR 5410")
-    st.divider()
-
-    if not st.session_state.logged_in:
-        aba_auth = st.radio("Acesso ao Sistema", ["Entrar (Login)", "Cadastrar-se"], horizontal=True)
-
-        if aba_auth == "Entrar (Login)":
-            st.subheader("🔐 Fazer Login")
-            login_email = st.text_input("E-mail / Login", key="login_email")
-            login_senha = st.text_input("Senha", type="password", key="login_senha")
-
-            if st.button("Entrar", use_container_width=True):
-                if not login_email or not login_senha:
-                    st.warning("Preencha o e-mail e a senha.")
-                elif supabase is None:
-                    st.error("Erro de conexão com o banco de dados.")
-                else:
-                    try:
-                        response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
-                        dados_usuario = response.data
-
-                        if dados_usuario and dados_usuario[0]["senha"] == login_senha:
-                            st.session_state.logged_in = True
-                            st.session_state.user_email = dados_usuario[0]["email"]
-                            st.session_state.user_name = dados_usuario[0]["nome"]
-                            st.success(f"Bem-vindo, {st.session_state.user_name}!")
-                            st.rerun()
-                        else:
-                            st.error("E-mail ou senha incorretos.")
-                    except Exception as e:
-                        st.error(f"Erro ao autenticar: {e}")
-
+    qtd_ilum = 1 if area <= 10 else math.ceil(area / 10)
+    carga_ilum = 100 if area <= 6 else 100 + (((area - 6) // 4) * 60)
+    
+    nome_lower = nome.lower().strip()
+    nome_words = nome_lower.replace('-', ' ').split()
+    
+    is_umida = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "área", "area"]) or any(w in nome_words for w in ["as", "wc", "bwc"])
+    is_corredor = any(x in nome_lower for x in ["hall", "corredor", "circulação", "circulacao"])
+    
+    if is_umida:
+        qtd_tugs = math.ceil(perimetro / 3.5)
+        carga_tugs = (qtd_tugs * 600) if qtd_tugs <= 3 else (3 * 600) + ((qtd_tugs - 3) * 100)
+    elif is_corredor:
+        comprimento_estimado = (perimetro / 2) - 1
+        if comprimento_estimado <= 3:
+            qtd_tugs = 1
         else:
-            st.subheader("📝 Novo Cadastro")
-            cad_nome = st.text_input("Nome Completo", key="cad_nome")
-            cad_email = st.text_input("E-mail (Login)", key="cad_email")
-            cad_senha = st.text_input("Senha", type="password", key="cad_senha")
-
-            if st.button("Criar Conta", use_container_width=True):
-                if not cad_nome or not cad_email or not cad_senha:
-                    st.warning("Preencha todos os campos.")
-                elif supabase is None:
-                    st.error("Erro de conexão com o banco de dados.")
-                else:
-                    try:
-                        check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
-                        if check.data:
-                            st.error("E-mail já cadastrado.")
-                        else:
-                            supabase.table("usuarios").insert({
-                                "nome": cad_nome.strip(),
-                                "email": cad_email.strip(),
-                                "senha": cad_senha
-                            }).execute()
-                            st.success("Conta criada! Faça login ao lado.")
-                    except Exception as e:
-                        st.error(f"Erro ao cadastrar: {e}")
+            qtd_tugs = max(1, math.ceil(comprimento_estimado / 3))
+        carga_tugs = qtd_tugs * 100
     else:
-        st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
-        st.caption(f"📧 `{st.session_state.user_email}`")
-
-        if st.button("🚪 Sair / Logout", use_container_width=True):
-            st.session_state.logged_in = False
-            st.session_state.user_email = ""
-            st.session_state.user_name = ""
-            st.rerun()
-
-        st.divider()
-        st.markdown("### 📂 Gerenciador de Obras")
+        qtd_tugs = math.ceil(perimetro / 5)
+        carga_tugs = qtd_tugs * 100
         
-        with st.form("form_novo_projeto", clear_on_submit=True):
-            novo_proj_nome = st.text_input("Nome do Novo Projeto / Pavimento")
-            btn_criar_proj = st.form_submit_button("➕ Cadastrar Projeto")
-            
-            if btn_criar_proj:
-                if not novo_proj_nome.strip():
-                    st.warning("Digite o nome do projeto.")
-                elif supabase is None:
-                    st.error("Banco de dados indisponível.")
-                else:
-                    try:
-                        supabase.table("projetos").insert({
-                            "user_email": st.session_state.user_email,
-                            "nome_projeto": novo_proj_nome.strip()
-                        }).execute()
-                        st.success("Projeto cadastrado com sucesso!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao criar projeto: {e}")
-
-        # Busca projetos salvos
-        lista_projetos = []
-        if supabase is not None:
-            try:
-                res_proj = supabase.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
-                lista_projetos = res_proj.data if res_proj.data else []
-            except Exception:
-                lista_projetos = []
-
-        st.markdown("### 📋 Seus Projetos Salvos:")
-        if lista_projetos:
-            nomes_projetos = [p["nome_projeto"] for p in lista_projetos]
-            projeto_selecionado = st.selectbox("Selecione o projeto ativo:", nomes_projetos)
-            
-            if st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
-                proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
-                if proj_alvo and supabase is not None:
-                    try:
-                        supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
-                        st.success(f"Projeto '{projeto_selecionado}' apagado!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao apagar projeto: {e}")
-        else:
-            st.info("Nenhum projeto cadastrado ainda.")
-            projeto_selecionado = "Nenhum"
-
-# ============================================================
-# BLOQUEIO DE SEGURANÇA
-# ============================================================
-if not st.session_state.logged_in:
-    st.warning("⚠️ Faça login ou cadastre-se na barra lateral para acessar o painel de projetos elétricos.")
-    st.stop()
-
-# ============================================================
-# TELA PRINCIPAL DA APLICAÇÃO
-# ============================================================
-st.title(f"⚡ Painel de Projetos Elétricos — Olá, {st.session_state.user_name}!")
-if 'projeto_selecionado' in locals() and projeto_selecionado != "Nenhum":
-    st.info(f"📁 **Projeto Ativo:** {projeto_selecionado}")
-
-# Upload do arquivo DXF da planta baixa
-st.subheader("📁 Projeto Unifilar (DXF)")
-uploaded_file = st.file_uploader("Envie a planta base (formato DXF):", type=["dxf"])
-
-dados_ambientes = []
-
-if uploaded_file is not None:
-    dxf_bytes = uploaded_file.read()
-
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-            tmp.write(dxf_bytes)
-            tmp_path = tmp.name
-
-        dados_ambientes = motores.processar_dxf(tmp_path)
-        os.remove(tmp_path)
-    except Exception as e:
-        st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
-
-if dados_ambientes:
-    dados_ambientes = sorted(dados_ambientes, key=lambda x: x['Ambiente'])
-
-    st.divider()
-    st.subheader("📊 Quadro de Previsão de Cargas Consolidado")
-
-    tabela_editada = []
-    for row in dados_ambientes:
-        with st.container():
-            st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']:.2f}m*")
-            
-            c1, c2, c3, c4, c5, c6 = st.columns(6)
-
-            with c1:
-                q_ilum = st.number_input(f"Qtd Ilum", min_value=0, value=row["Qtd Ilum."], key=f"ilum_{row['Ambiente']}")
-            with c2:
-                p_ilum = st.number_input(f"Pot Ilum (W)", min_value=0, value=row["Pot. Unit. Ilum (W)"], key=f"pilum_{row['Ambiente']}")
-            with c3:
-                qtd_tugs = st.number_input(f"Qtd TUGs", min_value=0, value=row["TUGs (Qtd)"], key=f"tugs_{row['Ambiente']}")
-            with c4:
-                pot_tug_unit = st.number_input(f"Pot TUG (W)", min_value=0, value=row["Pot. Unit. TUG (W)"], key=f"ptug_{row['Ambiente']}")
-            with c5:
-                qtd_tue = st.number_input(f"Qtd TUE", min_value=0, value=row["Qtd TUE"], key=f"tue_{row['Ambiente']}")
-            with c6:
-                pot_tue_unit = st.number_input(f"Pot TUE (W)", min_value=0, value=row["Pot. Unit. TUE (W)"], key=f"ptue_{row['Ambiente']}")
-
-            eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
-
-            row_modificado = row.copy()
-            row_modificado["Qtd Ilum."] = q_ilum
-            row_modificado["Pot. Unit. Ilum (W)"] = p_ilum
-            row_modificado["Carga Ilum. (W)"] = q_ilum * p_ilum
-
-            row_modificado["TUGs (Qtd)"] = qtd_tugs
-            row_modificado["Pot. Unit. TUG (W)"] = pot_tug_unit
-            row_modificado["Carga TUGs (W)"] = qtd_tugs * pot_tug_unit
-
-            row_modificado["Qtd TUE"] = qtd_tue
-            row_modificado["Pot. Unit. TUE (W)"] = pot_tue_unit
-            row_modificado["Carga TUE (W)"] = qtd_tue * pot_tue_unit
-            row_modificado["Equipamento TUE"] = eq_tue
-
-            tabela_editada.append(row_modificado)
-            st.markdown("---")
-
-    df_consolidado = pd.DataFrame(tabela_editada)
+    tue_nome = "-"
+    qtd_tue = 0
+    carga_tue = 0
     
-    colunas_para_ocultar = [
-        "Centro_X", "Centro_Y", 
-        "Pot. Unit. Ilum (W)", "Carga Ilum. (W)", 
-        "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
-        "Pot. Unit. TUE (W)", "Carga TUE (W)"
-    ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns]).copy()
+    if any(x in nome_lower for x in ["banh", "sanit"]) or any(w in nome_words for w in ["wc", "bwc"]):
+        tue_nome = "Chuveiro Elétrico"
+        qtd_tue = 1
+        carga_tue = 5500
+    elif any(x in nome_lower for x in ["coz"]):
+        tue_nome = "Micro-ondas/Forno"
+        qtd_tue = 1
+        carga_tue = 2000
+    elif any(x in nome_lower for x in ["quarto", "dorm", "suite"]):
+        tue_nome = "Ar-Condicionado"
+        qtd_tue = 1
+        carga_tue = 1200
+    elif any(x in nome_lower for x in ["serv", "lavand"]) or "as" in nome_words:
+        tue_nome = "Máquina de Lavar"
+        qtd_tue = 1
+        carga_tue = 1000
 
-    df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
-    df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
+    pot_tug_unit = 600 if is_umida else 100
 
-    linha_total = {
-        "Ambiente": "TOTAL GERAL",
-        "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
-        "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
-        "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
-        "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
-        "Equipamento TUE": "-",
-        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
+    return {
+        "Qtd Ilum.": qtd_ilum,
+        "Pot. Unit. Ilum (W)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
+        "Carga Ilum. (W)": carga_ilum, 
+        "TUGs (Qtd)": qtd_tugs, 
+        "Pot. Unit. TUG (W)": pot_tug_unit, 
+        "Carga TUGs (W)": carga_tugs,
+        "Equipamento TUE": tue_nome,
+        "Qtd TUE": qtd_tue,
+        "Pot. Unit. TUE (W)": round(carga_tue / max(1, qtd_tue)),
+        "Carga TUE (W)": carga_tue
     }
-    df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
 
-    st.dataframe(df_exibicao_com_total, use_container_width=True, hide_index=True)
+# ============================================================
+# GEOMETRIA E AUXILIARES
+# ============================================================
 
-    # ====================================================
-    # SELEÇÃO DO QDC (CONFORME NBR 5410)
-    # ====================================================
-    st.divider()
+def ponto_em_poligono(x, y, polilinha):
+    if not polilinha: return False
+    n = len(polilinha)
+    dentro = False
+    p1x, p1y = polilinha[0]
+    for i in range(n + 1):
+        p2x, p2y = polilinha[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    xinters = None
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or (xinters is not None and x <= xinters):
+                        dentro = not dentro
+        p1x, p1y = p2x, p2y
+    return dentro
+
+def point_seg_dist(px, py, pt1, pt2):
+    l2 = (pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2
+    if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
+    t = max(0, min(1, ((px - pt1[0]) * (pt2[0] - pt1[0]) + (py - pt1[1]) * (pt2[1] - pt1[1])) / l2))
+    proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+    proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+    return math.hypot(px - proj_x, py - proj_y)
+
+def get_ponto_perimetro(d, segs):
+    acumulado = 0
+    for pt1, pt2, dst in segs:
+        if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
+            if dst == 0: return (pt1[0], pt1[1], 0, 0)
+            ratio = (d - acumulado) / dst
+            x = pt1[0] + (pt2[0] - pt1[0]) * ratio
+            y = pt1[1] + (pt2[1] - pt1[1]) * ratio
+            vx = (pt2[0] - pt1[0]) / dst
+            vy = (pt2[1] - pt1[1]) / dst
+            return (x, y, vx, vy)
+        acumulado += dst
+    pt1, pt2, dst = segs[-1]
+    if dst == 0: return (pt2[0], pt2[1], 0, 0)
+    return (pt2[0], pt2[1], (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst)
+
+def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
+    n1x, n1y = -vy, vx
+    n2x, n2y = vy, -vx
+    d1 = math.hypot(cx - (start_x + n1x), cy - (start_y + n1y))
+    d2 = math.hypot(cx - (start_x + n2x), cy - (start_y + n2y))
+    return (n1x, n1y) if d1 < d2 else (n2x, n2y)
+
+# ============================================================
+# LÓGICA DE INTERRUPTORES (CÍRCULOS NAS SOLEIRAS)
+# ============================================================
+
+def normalizar_nome_ambiente(nome):
+    if nome is None: return ""
+    return str(nome).strip().lower()
+
+def obter_config_interruptores(nome_ambiente, config_interruptores):
+    if not config_interruptores: return None
+    nome_normalizado = normalizar_nome_ambiente(nome_ambiente)
+    for nome_config, config in config_interruptores.items():
+        if normalizar_nome_ambiente(nome_config) == nome_normalizado:
+            return config
+    return None
+
+def encontrar_portas_do_ambiente(polilinha, portas_raw):
+    if not polilinha: return []
+    xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    portas_ambiente = []
+    for porta in portas_raw:
+        cx, cy = (porta['p1'][0] + porta['p2'][0]) / 2, (porta['p1'][1] + porta['p2'][1]) / 2
+        # Ampliado a margem para capturar portas na borda do ambiente
+        if min_x - 1.2 <= cx <= max_x + 1.2 and min_y - 1.2 <= cy <= max_y + 1.2:
+            portas_ambiente.append(porta)
+    return portas_ambiente
+
+def criar_geometria_circulo_soleira(soleira, porta, polilinha):
+    s_p1, s_p2 = soleira['p1'], soleira['p2']
+    d_porta_1 = point_seg_dist(porta['p1'][0], porta['p1'][1], s_p1, s_p2)
+    d_porta_2 = point_seg_dist(porta['p2'][0], porta['p2'][1], s_p1, s_p2)
+    extremo_porta_encostado = porta['p1'] if d_porta_1 <= d_porta_2 else porta['p2']
+    p4 = porta['p2'] if d_porta_1 <= d_porta_2 else porta['p1']
+
+    sx, sy = s_p2[0] - s_p1[0], s_p2[1] - s_p1[1]
+    s2 = sx * sx + sy * sy
+    if s2 == 0: return None
+    t = max(0.0, min(1.0, ((extremo_porta_encostado[0] - s_p1[0]) * sx + (extremo_porta_encostado[1] - s_p1[1]) * sy) / s2))
+    p1 = (s_p1[0] + t * sx, s_p1[1] + t * sy)
+    p2 = s_p2 if math.hypot(p1[0]-s_p1[0], p1[1]-s_p1[1]) <= math.hypot(p1[0]-s_p2[0], p1[1]-s_p2[1]) else s_p1
     
-    ambientes_validos_qdc = []
-    ambientes_recomendados_qdc = []
+    vetor_x, vetor_y = p2[0] - p1[0], p2[1] - p1[1]
+    p3 = (p4[0] + vetor_x, p4[1] + vetor_y)
     
-    for r in dados_ambientes:
-        nome_amb = r["Ambiente"]
-        nome_lower = nome_amb.lower()
+    soleira_len = math.hypot(vetor_x, vetor_y)
+    if soleira_len == 0: return None
+    
+    return {
+        'p1': p1, 'p2': p2, 'p3': p3, 'p4': p4,
+        'soleira_vx': vetor_x / soleira_len, 'soleira_vy': vetor_y / soleira_len
+    }
+
+def desenhar_circulo_tangente_soleira(msp, ponto_tangencia, soleira_vx, soleira_vy, polilinha, raio=RAIO_CIRCULO_INTERRUPT):
+    cx_ambiente = sum(pt[0] for pt in polilinha) / len(polilinha)
+    cy_ambiente = sum(pt[1] for pt in polilinha) / len(polilinha)
+    nx, ny = get_inside_normal(soleira_vx, soleira_vy, ponto_tangencia[0], ponto_tangencia[1], cx_ambiente, cy_ambiente)
+    
+    centro = (ponto_tangencia[0] + nx * raio, ponto_tangencia[1] + ny * raio)
+    if not ponto_em_poligono(centro[0], centro[1], polilinha):
+        centro = (ponto_tangencia[0] - nx * raio, ponto_tangencia[1] - ny * raio)
+    if not ponto_em_poligono(centro[0], centro[1], polilinha): return False
+
+    msp.add_circle(center=centro, radius=raio, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR', 'color': 5})
+    return True
+
+def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_ambiente, polilinha, config_interruptores):
+    config = obter_config_interruptores(nome_ambiente, config_interruptores)
+    if not config: return
+    quantidade = int(config.get('quantidade', 0))
+    if quantidade not in [1, 2]: return
+
+    portas_ambiente = encontrar_portas_do_ambiente(polilinha, portas_raw)
+    if not portas_ambiente: return
+
+    portas_com_soleira = []
+    for porta in portas_ambiente:
+        soleiras_porta = [item['s'] for item in soleiras_com_porta if item['porta'] is porta]
+        if soleiras_porta:
+            portas_com_soleira.append({'porta': porta, 'soleiras': soleiras_porta})
+
+    if not portas_com_soleira: return
+
+    if quantidade == 1:
+        porta_escolhida = int(config.get('porta', 1)) - 1
+        if 0 <= porta_escolhida < len(portas_com_soleira):
+            item_porta = portas_com_soleira[porta_escolhida]
+            soleira = item_porta['soleiras'][0]
+            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha)
+            if geom:
+                ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
+                desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
+    elif quantidade == 2:
+        for item_porta in portas_com_soleira[:2]:
+            soleira = item_porta['soleiras'][0]
+            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha)
+            if geom:
+                ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
+                desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
+
+# ============================================================
+# REGRAS DE SEGURANÇA PARA TOMADAS
+# ============================================================
+
+DISTANCIA_MINIMA_CANTO_TOMADA = 0.20
+DISTANCIA_MINIMA_PORTA_TOMADA = 0.30
+DISTANCIA_MINIMA_SOLEIRA_TOMADA = 0.30
+
+def ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
+    for vx, vy in polilinha:
+        if math.hypot(px - vx, py - vy) < DISTANCIA_MINIMA_CANTO_TOMADA:
+            return False
+    for porta in portas_raw:
+        if point_seg_dist(px, py, porta['p1'], porta['p2']) < DISTANCIA_MINIMA_PORTA_TOMADA:
+            return False
+    for soleira in soleiras_raw:
+        if point_seg_dist(px, py, soleira['p1'], soleira['p2']) < DISTANCIA_MINIMA_SOLEIRA_TOMADA:
+            return False
+    return True
+
+def procurar_ponto_valido_perimetro(distancia_original, comp_total, segmentos_crus, polilinha, portas_raw, soleiras_raw):
+    if comp_total <= 0: return None
+    px, py, vx, vy = get_ponto_perimetro(distancia_original, segmentos_crus)
+    if ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
+        return (px, py, vx, vy)
+    for deslocamento in [0.05, 0.10, 0.20, 0.35, 0.50, -0.05, -0.10, -0.20, -0.35, -0.50]:
+        dt = distancia_original + deslocamento
+        if 0 < dt < comp_total:
+            tx, ty, tvx, tvy = get_ponto_perimetro(dt, segmentos_crus)
+            if ponto_tomada_valido(tx, ty, polilinha, portas_raw, soleiras_raw):
+                return (tx, ty, tvx, tvy)
+    return (px, py, vx, vy)
+
+def procurar_ponto_valido_na_parede(pt1, pt2, fator_original, polilinha, portas_raw, soleiras_raw):
+    dx, dy = pt2[0] - pt1[0], pt2[1] - pt1[1]
+    comprimento = math.hypot(dx, dy)
+    if comprimento <= 0.4: return (pt1[0] + dx/2, pt1[1] + dy/2, dx/comprimento, dy/comprimento)
+    for f in [fator_original, 0.5, 0.3, 0.7, 0.2, 0.8]:
+        px, py = pt1[0] + dx * f, pt1[1] + dy * f
+        if ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
+            return (px, py, dx / comprimento, dy / comprimento)
+    return (pt1[0] + dx * fator_original, pt1[1] + dy * fator_original, dx / comprimento, dy / comprimento)
+
+# ============================================================
+# PROCESSAMENTO DO DXF E GERAÇÃO DO CAD
+# ============================================================
+
+def processar_dxf(caminho_arquivo):
+    doc = ezdxf.readfile(caminho_arquivo)
+    msp = doc.modelspace()
+    
+    contagem_camadas = {'IA_AMBIENTES': 0, 'IA_TEXTOS': 0, 'IA_PORTAS': 0, 'IA_SOLEIRAS': 0}
+    for entity in msp:
+        if hasattr(entity.dxf, 'layer'):
+            l = str(entity.dxf.layer).upper().strip()
+            if l in contagem_camadas: contagem_camadas[l] += 1
+                
+    camadas_vazias = [cam for cam, qtd in contagem_camadas.items() if qtd == 0]
+    if camadas_vazias:
+        raise ValueError(f"❌ Erro de Validação do DXF: Camada(s) obrigatória(s) vazia(s): {', '.join(camadas_vazias)}.")
+
+    polilinhas, textos = [], []
+    for entity in msp:
+        tipo = entity.dxftype()
+        layer = str(entity.dxf.layer).upper().strip()
+        if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
+            try:
+                pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+                if pontos: polilinhas.append(pontos)
+            except: pass
+        elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
+            try:
+                texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
+                if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+            except: pass
+            
+    resultados, ambientes_processados = [], {}
+    for polilinha in polilinhas:
+        xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        area = (max_x - min_x) * (max_y - min_y)
+        perimetro = ((max_x - min_x) * 2) + ((max_y - min_y) * 2)
+        if area < 0.5: continue
         
-        is_molhado = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as", "área", "area"])
-        if is_molhado:
-            continue
+        nome_ambiente = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
+        if not nome_ambiente: continue
+        
+        if nome_ambiente in ambientes_processados:
+            ambientes_processados[nome_ambiente] += 1
+            nome_ambiente = f"{nome_ambiente} {ambientes_processados[nome_ambiente]}"
+        else: ambientes_processados[nome_ambiente] = 1
+                
+        cargas = dimensionar_cargas(nome_ambiente, area, perimetro)
+        resultados.append({
+            "Ambiente": nome_ambiente, "Centro_X": (min_x+max_x)/2, "Centro_Y": (min_y+max_y)/2, "Área (m²)": area, "Perímetro (m)": perimetro,
+            "Qtd Ilum.": int(cargas["Qtd Ilum."]), "Pot. Unit. Ilum (W)": int(cargas["Pot. Unit. Ilum (W)"]), "Carga Ilum. (W)": int(cargas["Carga Ilum. (W)"]),
+            "TUGs (Qtd)": int(cargas["TUGs (Qtd)"]), "Pot. Unit. TUG (W)": int(cargas["Pot. Unit. TUG (W)"]), "Carga TUGs (W)": int(cargas["Carga TUGs (W)"]),
+            "Equipamento TUE": cargas["Equipamento TUE"], "Qtd TUE": int(cargas["Qtd TUE"]), "Pot. Unit. TUE (W)": int(cargas["Pot. Unit. TUE (W)"]), "Carga TUE (W)": int(cargas["Carga TUE (W)"])
+        })
+    return resultados
+
+def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc, config_interruptores=None):
+    tmp_in_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
+            tmp_in.write(dxf_bytes)
+            tmp_in_path = tmp_in.name
+
+        doc = ezdxf.readfile(tmp_in_path)
+        msp = doc.modelspace()
+        
+        camadas = {
+            "PROJ_ELETRICA_LUZ": 2, "PROJ_ELETRICA_QDC": 1, "PROJ_ELETRICA_TEXTO": 2,
+            "PROJ_ELETRICA_TOMADA": 4, "PROJ_ELETRICA_INTERRUPTOR": 5, "PROJ_ELETRICA_DEBUG": 6
+        }
+        for nome_l, cor_l in camadas.items():
+            if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
+            else: doc.layers.get(nome_l).color = cor_l
+        
+        polilinhas, textos, portas_raw, soleiras_raw = [], [], [], []
+        for entity in msp:
+            tipo = entity.dxftype()
+            if not hasattr(entity.dxf, 'layer'): continue
+            layer = str(entity.dxf.layer).upper().strip()
+                
+            if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
+                try:
+                    pontos = [(p[0], p[1]) for p in entity.get_points(format='xy')] if tipo == 'LWPOLYLINE' else [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices]
+                    if pontos: polilinhas.append(pontos)
+                except: pass
+            elif tipo in ['TEXT', 'MTEXT'] and layer == 'IA_TEXTOS':
+                try:
+                    texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
+                    if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
+                except: pass
+            elif layer == 'IA_PORTAS':
+                if tipo == 'LINE': portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                    pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
+                    if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+            elif layer == 'IA_SOLEIRAS':
+                if tipo == 'LINE': soleiras_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                    pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
+                    if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
+
+        soleiras_com_porta = []
+        for s in soleiras_raw:
+            s_p1, s_p2 = s['p1'], s['p2']
+            melhor_porta, menor_distancia = None, float('inf')
+            for p in portas_raw:
+                pm_porta = ((p['p1'][0] + p['p2'][0]) / 2, (p['p1'][1] + p['p2'][1]) / 2)
+                d3 = point_seg_dist(pm_porta[0], pm_porta[1], s_p1, s_p2)
+                # Tolerância estendida para garantir associação com a soleira correta
+                if d3 <= 0.80 and d3 < menor_distancia:
+                    menor_distancia, melhor_porta = d3, p
+            if melhor_porta is not None:
+                soleiras_com_porta.append({'s': s, 'porta': melhor_porta})
+
+        # 1. PROCESSA INTERRUPTORES (CÍRCULOS)
+        ambientes_proc_int = {}
+        for polilinha in polilinhas:
+            xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
+            min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+            if (max_x - min_x) * (max_y - min_y) < 0.5: continue
+            nome_ambiente = next((t['nome'] for t in textos if min_x - 0.5 <= t['x'] <= max_x + 0.5 and min_y - 0.5 <= t['y'] <= max_y + 0.5), None)
+            if not nome_ambiente: continue
             
-        is_circulacao = any(x in nome_lower for x in ["hall", "corredor", "circula", "circ"])
-        if is_circulacao:
-            ambientes_recomendados_qdc.append(f"{nome_amb} (Recomendado - NBR 5410)")
-        else:
-            ambientes_validos_qdc.append(nome_amb)
+            if nome_ambiente in ambientes_proc_int:
+                ambientes_proc_int[nome_ambiente] += 1
+                nome_busca_int = f"{nome_ambiente} {ambientes_proc_int[nome_ambiente]}"
+            else:
+                ambientes_proc_int[nome_ambiente] = 1
+                nome_busca_int = nome_ambiente
+
+            processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_busca_int, polilinha, config_interruptores)
+
+        # 2. PROCESSA AMBIENTES (QDC, ILUMINAÇÃO, TOMADAS TUE E TUG)
+        ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
+
+        for polilinha in polilinhas:
+            xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
+            min_x, max_x = min(xs), max(xs)
+            min_y, max_y = min(ys), max(ys)
+            area = (max_x - min_x) * (max_y - min_y)
+            perimetro = ((max_x - min_x) * 2) + ((max_y - min_y) * 2)
+            if area < 0.5: continue
             
-    opcoes_qdc = ambientes_recomendados_qdc + ambientes_validos_qdc
-    
-    if not opcoes_qdc:
-        opcoes_qdc = [r["Ambiente"] for r in dados_ambientes]
+            nome = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), None)
+            if not nome: continue
+            
+            if nome in ambientes_processados:
+                ambientes_processados[nome] += 1
+                nome_busca = f"{nome} {ambientes_processados[nome]}"
+            else:
+                ambientes_processados[nome] = 1
+                nome_busca = nome
+            
+            row_data = dict_dados.get(nome_busca, dict_dados.get(nome, None))
+            if not row_data: continue
+            
+            centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            largura, comprimento = max_x - min_x, max_y - min_y
+            
+            segmentos_crus, comp_total = [], 0
+            poly = list(polilinha)
+            if poly[0] != poly[-1]: poly.append(poly[0])
+            for i in range(len(poly)-1):
+                dst = math.hypot(poly[i+1][0]-poly[i][0], poly[i+1][1]-poly[i][1])
+                if dst > 0.1:
+                    segmentos_crus.append((poly[i], poly[i+1], dst))
+                    comp_total += dst
 
-    local_qdc_selecionado = st.selectbox(
-        "⚡ Selecione o ambiente onde ficará instalado o Quadro de Distribuição de Cargas (QDC):",
-        opcoes_qdc
-    )
-    
-    local_qdc = local_qdc_selecionado.split(" (Recomendado")[0].strip()
+            logical_walls = []
+            for pt1, pt2, dst in segmentos_crus:
+                vx, vy = (pt2[0] - pt1[0]) / dst, (pt2[1] - pt1[1]) / dst
+                logical_walls.append({'p1': pt1, 'p2': pt2, 'length': dst, 'vx': vx, 'vy': vy})
 
-    # ====================================================
-    # CONFIGURAÇÃO DE INTERRUPTORES (FRONT-END)
-    # ====================================================
-    st.divider()
-    st.subheader("⚙️ Configuração de Interruptores nas Soleiras")
-    st.markdown("Personalize a quantidade de círculos de interruptores por ambiente:")
+            unique_portas = [p for p in portas_raw if (min_x - 0.8) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.8) and (min_y - 0.8) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.8)]
 
-    nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
-    config_interruptores_usuario = {}
-    for amb in nomes_ambientes:
-        with st.expander(f"Interruptores - {amb}"):
-            qtd_int = st.selectbox(f"Quantidade de círculos em {amb}", [0, 1, 2], key=f"int_qtd_{amb}")
-            if qtd_int == 1:
-                porta_num = st.number_input(f"Porta nº associada ({amb})", min_value=1, value=1, key=f"int_porta_{amb}")
-                config_interruptores_usuario[amb] = {"quantidade": 1, "porta": porta_num}
-            elif qtd_int == 2:
-                config_interruptores_usuario[amb] = {"quantidade": 2}
+            # ILUMINAÇÃO
+            qtd_ilum = int(row_data.get('Qtd Ilum.', 1))
+            pot_ilum_unit = int(row_data.get('Pot. Unit. Ilum (W)', 100))
+            if qtd_ilum > 0:
+                pontos_luz = [(centro_x, centro_y)] if qtd_ilum == 1 else [(min_x + (largura / (qtd_ilum + 1)) * i, centro_y) for i in range(1, qtd_ilum + 1)] if largura >= comprimento else [(centro_x, min_y + (comprimento / (qtd_ilum + 1)) * i) for i in range(1, qtd_ilum + 1)]
+                for lx, ly in pontos_luz:
+                    msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
+                    msp.add_text(f"{pot_ilum_unit}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
+                    msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-    # ====================================================
-    # TABELA QUANTITATIVA DE MATERIAIS
-    # ====================================================
-    st.divider()
-    st.subheader("📦 Tabela Quantitativa de Materiais")
+            # RENDERIZAÇÃO DO QDC
+            qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
+            if (nome.strip().upper() == qdc_formatado) and logical_walls:
+                qdc_w, qdc_d = 0.4, 0.15
+                maior_parede = max(logical_walls, key=lambda w: w['length'])
+                pt1, pt2 = maior_parede['p1'], maior_parede['p2']
+                is_vertical = abs(pt1[0] - pt2[0]) < abs(pt1[1] - pt2[1])
+                
+                cortes_portas = []
+                for p in unique_portas:
+                    d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], pt1, pt2)
+                    d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], pt1, pt2)
+                    if d_p1 < 0.6 or d_p2 < 0.6:
+                        if is_vertical:
+                            cortes_portas.append((min(p['p1'][1], p['p2'][1]), max(p['p1'][1], p['p2'][1])))
+                        else:
+                            cortes_portas.append((min(p['p1'][0], p['p2'][0]), max(p['p1'][0], p['p2'][0])))
+                
+                if is_vertical:
+                    parede_min, parede_max = min(pt1[1], pt2[1]), max(pt1[1], pt2[1])
+                    cortes_portas.sort(key=lambda x: x[0])
+                    trechos_livres, cursor = [], parede_min
+                    for c_inf, c_sup in cortes_portas:
+                        if c_inf > cursor + 0.1: trechos_livres.append((cursor, c_inf))
+                        cursor = max(cursor, c_sup)
+                    if cursor < parede_max - 0.1: trechos_livres.append((cursor, parede_max))
+                    
+                    if trechos_livres:
+                        melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
+                        mx, my = pt1[0], (melhor_trecho[0] + melhor_trecho[1]) / 2
+                    else:
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
+                else:
+                    parede_min, parede_max = min(pt1[0], pt2[0]), max(pt1[0], pt2[0])
+                    cortes_portas.sort(key=lambda x: x[0])
+                    trechos_livres, cursor = [], parede_min
+                    for c_inf, c_sup in cortes_portas:
+                        if c_inf > cursor + 0.1: trechos_livres.append((cursor, c_inf))
+                        cursor = max(cursor, c_sup)
+                    if cursor < parede_max - 0.1: trechos_livres.append((cursor, parede_max))
+                    
+                    if trechos_livres:
+                        melhor_trecho = max(trechos_livres, key=lambda t: t[1] - t[0])
+                        mx, my = (melhor_trecho[0] + melhor_trecho[1]) / 2, pt1[1]
+                    else:
+                        mx, my = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
 
-    total_caixas_luz = sum([r["Qtd Ilum."] for r in tabela_editada])
-    total_tugs_geral = sum([r["TUGs (Qtd)"] for r in tabela_editada])
-    total_tues_geral = sum([r["Qtd TUE"] for r in tabela_editada])
-    total_tomadas_geral = total_tugs_geral + total_tues_geral
+                vx, vy = maior_parede['vx'], maior_parede['vy']
+                nx, ny = get_inside_normal(vx, vy, mx, my, centro_x, centro_y)
+                out_nx, out_ny = -nx, -ny
+                
+                p1_qdc = (mx - vx * qdc_w/2, my - vy * qdc_w/2)
+                p2_qdc = (mx + vx * qdc_w/2, my + vy * qdc_w/2)
+                p3_qdc = (p2_qdc[0] + out_nx * qdc_d, p2_qdc[1] + out_ny * qdc_d)
+                p4_qdc = (p1_qdc[0] + out_nx * qdc_d, p1_qdc[1] + out_ny * qdc_d)
+                pts_qdc = [p1_qdc, p2_qdc, p3_qdc, p4_qdc]
 
-    materiais_df = pd.DataFrame([
-        {"Material": "Caixa Octogonal de Teto 4x4\" (Plástico)", "Unidade": "pç", "Quantidade": total_caixas_luz},
-        {"Material": "Caixa de Embutir de Parede 4x2\" (Plástico)", "Unidade": "pç", "Quantidade": total_tomadas_geral},
-        {"Material": "Eletroduto Corrugado Flexível Reforçado 3/4\"", "Unidade": "m", "Quantidade": 247},
-        {"Material": "Cabo Flex. 2,5 mm² - Fase", "Unidade": "m", "Quantidade": 180},
-        {"Material": "Cabo Flex. 2,5 mm² - Neutro", "Unidade": "m", "Quantidade": 180},
-        {"Material": "Cabo Flex. 4,0 ou 6,0 mm² - Verde (Terra TUEs)", "Unidade": "m", "Quantidade": 84}
-    ])
-    st.dataframe(materiais_df, use_container_width=True, hide_index=True)
+                msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
+                msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-    # ====================================================
-    # EXPORTAÇÃO E RELATÓRIOS
-    # ====================================================
-    st.divider()
-    st.subheader("🖨️ Exportação e Relatórios")
+            # TOMADAS TUE
+            qtd_tue = int(row_data.get('Qtd TUE', row_data.get('TUE', 0)))
+            eq_tue_nome = str(row_data.get('Equipamento TUE', '-'))
+            pot_tue_val = int(row_data.get('Pot. Unit. TUE (W)', 0))
+            if pot_tue_val == 0:
+                eq_lower = eq_tue_nome.lower()
+                pot_tue_val = 5500 if "chuveiro" in eq_lower else 1200 if "ar" in eq_lower else 2000 if "micro" in eq_lower or "forno" in eq_lower else 1000
 
-    col_e1, col_e2 = st.columns(2)
-    with col_e1:
-        if st.button("📊 Baixar Planilha (Excel)", use_container_width=True):
-            st.info("Exportação para Excel pronta.")
-    with col_e2:
-        if st.button("📄 Baixar Memorial (PDF)", use_container_width=True):
-            st.info("Memorial descritivo pronto.")
+            is_chuveiro_ou_ac = any(x in eq_tue_nome.lower() for x in ["chuveiro", "ar-condicionado", "ar condicionado"])
+            is_ambiente_molhado = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
 
-    # Botão de geração do projeto CAD em DXF
-    st.markdown("### Projeto Unifilar (DXF)")
-    if st.button("🚀 Gerar CAD (Atualizado)", type="primary", use_container_width=True):
-        try:
-            cad_bytes_out = motores.gerar_cad_unifilar(
-                dxf_bytes=dxf_bytes,
-                dados_editados=tabela_editada,
-                local_qdc=local_qdc,
-                config_interruptores=config_interruptores_usuario
-            )
+            if qtd_tue > 0 and logical_walls:
+                paredes_candidatas = sorted(logical_walls, key=lambda w: w['length'])
+                paredes_sem_porta = [w for w in paredes_candidatas if not any(point_seg_dist((p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2, w['p1'], w['p2']) < 0.6 for p in unique_portas)]
+                paredes_finais = paredes_sem_porta if paredes_sem_porta else paredes_candidatas
+                
+                for idx_tue in range(qtd_tue):
+                    p_alvo = paredes_finais[idx_tue % len(paredes_finais)]
+                    fator = 0.5 if qtd_tue == 1 else (idx_tue + 1) / (qtd_tue + 1)
+                    res_tue = procurar_ponto_valido_na_parede(p_alvo['p1'], p_alvo['p2'], fator, polilinha, portas_raw, soleiras_raw)
+                    if not res_tue: continue
+                    px, py, vx, vy = res_tue
+                    
+                    nx, ny = get_inside_normal(vx, vy, px, py, centro_x, centro_y)
+                    ponto_b1, ponto_b2, ponto_pt = (px - vx * 0.10, py - vy * 0.10), (px + vx * 0.10, py + vy * 0.10), (px + nx * 0.20, py + ny * 0.20)
+                    
+                    msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    if is_chuveiro_ou_ac:
+                        msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    elif is_ambiente_molhado:
+                        msp.add_solid([ponto_b1, (px, py), ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-            st.success("✅ Projeto CAD gerado com sucesso!")
-            st.download_button(
-                label="📥 Baixar Projeto DXF Atualizado",
-                data=cad_bytes_out,
-                file_name="Projeto_Eletrico_NBR5410.dxf",
-                mime="application/dxf",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"❌ Erro ao gerar o arquivo CAD: {e}")
-else:
-    st.info("👆 Envie um arquivo `.dxf` válido na opção acima para carregar o projeto e iniciar o dimensionamento.")
+            # TOMADAS TUG
+            qtd_tugs = int(row_data.get('TUGs (Qtd)', row_data.get('TUGs', 0)))
+            if qtd_tugs > 0 and comp_total > 0:
+                margem_inicial = 0.20
+                comprimento_util = comp_total - (2 * margem_inicial)
+                passo = (comprimento_util / qtd_tugs) if comprimento_util > 0 else (comp_total / qtd_tugs)
+                inicio_offset = (margem_inicial + passo / 2) if comprimento_util > 0 else (passo / 2)
+
+                for i in range(qtd_tugs):
+                    dist_desejada = inicio_offset + (i * passo)
+                    res_ponto = procurar_ponto_valido_perimetro(dist_desejada, comp_total, segmentos_crus, polilinha, portas_raw, soleiras_raw)
+                    if not res_ponto: continue
+                    px, py, seg_vx, seg_vy = res_ponto
+
+                    nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
+                    ponto_b1, ponto_b2, ponto_pt = (px - seg_vx * 0.10, py - seg_vy * 0.10), (px + seg_vx * 0.10, py + seg_vy * 0.10), (px + nx * 0.20, py + ny * 0.20)
+                    
+                    msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    if is_ambiente_molhado:
+                        msp.add_solid([ponto_b1, (px, py), ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+
+        doc.saveas(tmp_in_path)
+        with open(tmp_in_path, "rb") as f:
+            out_bytes = f.read()
+        return out_bytes
+    except Exception as e:
+        raise e
+    finally:
+        if tmp_in_path and os.path.exists(tmp_in_path):
+            os.remove(tmp_in_path)
