@@ -71,22 +71,24 @@ def dimensionar_cargas(nome, area, perimetro):
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
-    polilinhas, textos = [], []
     
-    camadas_encontradas = set()
+    # Contagem de entidades reais por camada obrigatória
+    contagem_camadas = {'IA_AMBIENTES': 0, 'IA_TEXTOS': 0, 'IA_PORTAS': 0, 'IA_SOLEIRAS': 0}
+    
     for entity in msp:
         if hasattr(entity.dxf, 'layer'):
-            camadas_encontradas.add(str(entity.dxf.layer).upper().strip())
-            
-    # Validação preventiva de camadas obrigatórias com mensagem orientativa
-    camadas_obrigatorias = ['IA_AMBIENTES', 'IA_TEXTOS', 'IA_PORTAS', 'IA_SOLEIRAS']
-    faltando = [c for c in camadas_obrigatorias if c not in camadas_encontradas]
-    if faltando:
+            l = str(entity.dxf.layer).upper().strip()
+            if l in contagem_camadas:
+                contagem_camadas[l] += 1
+                
+    camadas_vazias = [cam for cam, qtd in contagem_camadas.items() if qtd == 0]
+    if camadas_vazias:
         raise ValueError(
-            f"⚠️ Atenção ao importar o DXF: As seguintes camadas obrigatórias não foram encontradas no arquivo: {', '.join(faltando)}. "
-            f"Certifique-se de que todos os ambientes, textos, portas e soleiras estejam devidamente posicionados em suas respectivas camadas (IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, IA_SOLEIRAS) antes de gerar o projeto."
+            f"❌ Erro de Validação do DXF: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
+            f"Certifique-se de desenhar os elementos nos respectivos layers (IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, IA_SOLEIRAS) antes de gerar o projeto."
         )
-    
+
+    polilinhas, textos = [], []
     for entity in msp:
         tipo = entity.dxftype()
         layer = str(entity.dxf.layer).upper().strip()
@@ -157,6 +159,21 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         doc = ezdxf.readfile(tmp_in_path)
         msp = doc.modelspace()
+        
+        # Validação estrita de conteúdo na geração também
+        contagem_camadas = {'IA_AMBIENTES': 0, 'IA_TEXTOS': 0, 'IA_PORTAS': 0, 'IA_SOLEIRAS': 0}
+        for entity in msp:
+            if hasattr(entity.dxf, 'layer'):
+                l = str(entity.dxf.layer).upper().strip()
+                if l in contagem_camadas:
+                    contagem_camadas[l] += 1
+                    
+        camadas_vazias = [cam for cam, qtd in contagem_camadas.items() if qtd == 0]
+        if camadas_vazias:
+            raise ValueError(
+                f"❌ Erro de Geração do CAD: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
+                f"Verifique se os elementos estão corretamente posicionados em suas camadas antes de processar."
+            )
         
         camadas = {
             "PROJ_ELETRICA_LUZ": 2,          # Amarelo
