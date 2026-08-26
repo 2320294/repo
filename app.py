@@ -16,11 +16,12 @@ st.set_page_config(
 )
 
 # ============================================================
-# CONEXÃO RESILIENTE COM O SUPABASE
+# CONEXÃO COM O SUPABASE
 # ============================================================
 SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
+@st.cache_resource
 def get_supabase_client():
     try:
         return create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -63,7 +64,7 @@ with st.sidebar:
                 else:
                     client_db = get_supabase_client()
                     if client_db is None:
-                        st.error("❌ Erro de conexão com o Supabase. Verifique sua rede.")
+                        st.error("❌ Erro de conexão com o Supabase.")
                     else:
                         try:
                             response = client_db.table("usuarios").select("*").eq("email", login_email.strip()).execute()
@@ -79,7 +80,7 @@ with st.sidebar:
                             else:
                                 st.error("E-mail ou senha incorretos.")
                         except Exception as e:
-                            st.error(f"Erro ao autenticar no banco: {e}")
+                            st.error(f"Erro ao autenticar: {e}")
 
         else:
             st.subheader("📝 Novo Cadastro")
@@ -107,7 +108,7 @@ with st.sidebar:
                                 }).execute()
                                 st.success("Conta criada com sucesso! Faça login ao lado.")
                         except Exception as e:
-                            st.error(f"Erro ao cadastrar no banco: {e}")
+                            st.error(f"Erro ao cadastrar: {e}")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
@@ -140,12 +141,12 @@ with st.sidebar:
                                 "nome_projeto": novo_proj_nome.strip()
                             }).execute()
                             st.session_state.projeto_ativo = novo_proj_nome.strip()
-                            st.success("Projeto cadastrado no banco com sucesso!")
+                            st.success("Projeto cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao cadastrar projeto no banco: {e}")
+                            st.error(f"Erro ao cadastrar projeto: {e}")
 
-        # Busca projetos salvos diretamente no Supabase
+        # Busca projetos salvos no Supabase
         lista_projetos = []
         client_db = get_supabase_client()
         if client_db is not None:
@@ -153,7 +154,7 @@ with st.sidebar:
                 res_proj = client_db.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
                 lista_projetos = res_proj.data if res_proj.data else []
             except Exception as e:
-                st.warning(f"Aviso de conexão com o banco: {e}")
+                st.error(f"Erro ao buscar projetos: {e}")
 
         st.markdown("### 📋 Seus Projetos Salvos:")
         if lista_projetos:
@@ -182,12 +183,12 @@ with st.sidebar:
                         client_db.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
                         client_db.table("dados_projetos").delete().eq("user_email", st.session_state.user_email).eq("nome_projeto", projeto_selecionado).execute()
                         st.session_state.projeto_ativo = "Selecione um projeto..."
-                        st.success(f"Projeto '{projeto_selecionado}' apagado do banco!")
+                        st.success(f"Projeto '{projeto_selecionado}' apagado!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao apagar projeto do banco: {e}")
+                        st.error(f"Erro ao apagar projeto: {e}")
         else:
-            st.info("Nenhum projeto cadastrado no banco.")
+            st.info("Nenhum projeto cadastrado ainda.")
             st.session_state.projeto_ativo = "Selecione um projeto..."
 
 # ============================================================
@@ -208,7 +209,7 @@ if st.session_state.projeto_ativo == "Selecione um projeto...":
 
 st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
 
-# Busca dados salvos do projeto diretamente no Supabase
+# Busca dados salvos do projeto no Supabase
 dados_salvos_db = None
 client_db = get_supabase_client()
 if client_db is not None:
@@ -217,7 +218,7 @@ if client_db is not None:
         if res_dados.data:
             dados_salvos_db = res_dados.data[0]
     except Exception as e:
-        st.warning(f"Erro ao consultar dados no banco: {e}")
+        st.error(f"Erro ao consultar dados no banco: {e}")
 
 dxf_bytes = None
 dados_ambientes = []
