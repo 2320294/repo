@@ -206,7 +206,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # IDENTIFICA APENAS AS SOLEIRAS QUE POSSUEM PORTA ASSOCIADA (tolerância de até 1.5m)
+        # SOLEIRAS COM PORTA: Filtra soleiras que possuem porta associada num raio de até 1.5m
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -223,37 +223,31 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
         
-        # 1. LOOP BLINDADO: INSERE O CÍRCULO NO PONTO DA SOLEIRA QUE ESTÁ DENTRO DO AMBIENTE
+        # 1. LOOP ROBUSTO: INSERE O CÍRCULO NA EXTREMIDADE CORRETA DA SOLEIRA VOLTADA PARA O INTERIOR DO AMBIENTE
         for s in soleiras_com_porta:
             s_p1, s_p2 = s['p1'], s['p2']
+            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            ponto_interno = None
+            # Encontra o ambiente adjacente onde a soleira está conectada
+            ambiente_alvo = None
             for polilinha in polilinhas:
-                in_1 = ponto_em_poligono(s_p1[0], s_p1[1], polilinha)
-                in_2 = ponto_em_poligono(s_p2[0], s_p2[1], polilinha)
+                xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
+                if min(xs) - 0.8 <= sm_x <= max(xs) + 0.8 and min(ys) - 0.8 <= sm_y <= max(ys) + 0.8:
+                    ambiente_alvo = polilinha
+                    break
+            
+            if ambiente_alvo:
+                cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
+                cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 
-                # Se exatamente uma das pontas está dentro do ambiente e a outra está na parede/fora, essa é a ponta interna!
-                if in_1 and not in_2:
-                    ponto_interno = s_p1
-                    break
-                elif in_2 and not in_1:
-                    ponto_interno = s_p2
-                    break
-            
-            if not ponto_interno:
-                # Se ambas estiverem na bordinha, verifica qual aponta para o interior do ambiente mais próximo
-                sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
-                for polilinha in polilinhas:
-                    xs, ys = [pt[0] for pt in polilinha], [pt[1] for pt in polilinha]
-                    if min(xs) - 1.0 <= sm_x <= max(xs) + 1.0 and min(ys) - 1.0 <= sm_y <= max(ys) + 1.0:
-                        cx, cy = sum(xs)/len(xs), sum(ys)/len(ys)
-                        d1 = math.hypot(s_p1[0] - cx, s_p1[1] - cy)
-                        d2 = math.hypot(s_p2[0] - cx, s_p2[1] - cy)
-                        ponto_interno = s_p1 if d1 < d2 else s_p2
-                        break
-            
-            if ponto_interno:
-                msp.add_circle(center=ponto_interno, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                # Escolhe a extremidade da soleira (p1 ou p2) que está mais direcionada para o interior (centroide) do ambiente
+                d1 = math.hypot(s_p1[0] - cx, s_p1[1] - cy)
+                d2 = math.hypot(s_p2[0] - cx, s_p2[1] - cy)
+                
+                # Queremos o ponto oposto ao alinhamento externo, ou seja, a ponta que avança para dentro
+                ponto_escolhido = s_p1 if d1 < d2 else s_p2
+                
+                msp.add_circle(center=ponto_escolhido, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES
         for polilinha in polilinhas:
