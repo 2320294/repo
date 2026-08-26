@@ -251,7 +251,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA
+        # 2. PROCESSA CADA SOLEIRA COM PORTA USANDO O ESQUEMA DE PONTOS P1, P2, P3 e P4
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -276,38 +276,56 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             dobradiça_pt = p_porta['p1'] if min(d_p1_s1, d_p1_s2) < min(d_p2_s1, d_p2_s2) else p_porta['p2']
             
-            # Extremidade oposta à dobradiça na soleira
+            # p1 = Extremidade oposta à dobradiça na soleira
             d_s1_dob = math.hypot(s_p1[0] - dobradiça_pt[0], s_p1[1] - dobradiça_pt[1])
             d_s2_dob = math.hypot(s_p2[0] - dobradiça_pt[0], s_p2[1] - dobradiça_pt[1])
             
-            ponto_ancora_1 = s_p1 if d_s1_dob > d_s2_dob else s_p2
-            ponto_ancora_2 = s_p2 if d_s1_dob > d_s2_dob else s_p1
+            p1 = s_p1 if d_s1_dob > d_s2_dob else s_p2
+            # p4 = A outra extremidade da soleira
+            p4 = s_p2 if d_s1_dob > d_s2_dob else s_p1
             
             if len(ambientes_adjacentes) >= 2:
-                ancoras = [ponto_ancora_1, ponto_ancora_2]
-                for idx, poly in enumerate(ambientes_adjacentes[:2]):
-                    p_anc = ancoras[idx]
-                    cx = sum([pt[0] for pt in poly]) / len(poly)
-                    cy = sum([pt[1] for pt in poly]) / len(poly)
+                # Ordena os dois ambientes adjacentes com base na posição relativa à soleira para associar corretamente p2 e p3
+                poly_direita = ambientes_adjacentes[0]
+                poly_esquerda = ambientes_adjacentes[1]
+                
+                cx_0 = sum([pt[0] for pt in poly_direita]) / len(poly_direita)
+                cx_1 = sum([pt[0] for pt in poly_esquerda]) / len(poly_direita) # apenas referência
+                
+                # Vamos calcular a normal para cada lado a partir de p1 (para p2) e p4 (para p3)
+                # p2 tangencia em p1 voltado para o ambiente correspondente
+                cx_d = sum([pt[0] for pt in poly_direita]) / len(poly_direita)
+                cy_d = sum([pt[1] for pt in poly_direita]) / len(poly_direita)
+                nx_d, ny_d = get_inside_normal(vx, vy, p1[0], p1[1], cx_d, cy_d)
+                p2_x = p1[0] + nx_d * raio_circulo
+                p2_y = p1[1] + ny_d * raio_circulo
+                
+                # Identifica qual ambiente engloba p2 e qual engloba p3
+                poly_p2 = poly_direita if ponto_em_poligono(p2_x, p2_y, poly_direita) else poly_esquerda
+                poly_p3 = poly_esquerda if poly_p2 == poly_direita else poly_direita
+                
+                # Recalcula p2 e p3 perfeitamente tangenciando p1 e p4 nos respectivos ambientes
+                nx_2, ny_2 = get_inside_normal(vx, vy, p1[0], p1[1], sum(pt[0] for pt in poly_p2)/len(poly_p2), sum(pt[1] for pt in poly_p2)/len(poly_p2))
+                p2 = (p1[0] + nx_2 * raio_circulo, p1[1] + ny_2 * raio_circulo)
+                
+                nx_3, ny_3 = get_inside_normal(vx, vy, p4[0], p4[1], sum(pt[0] for pt in poly_p3)/len(poly_p3), sum(pt[1] for pt in poly_p3)/len(poly_p3))
+                p3 = (p4[0] + nx_3 * raio_circulo, p4[1] + ny_3 * raio_circulo)
+                
+                if ponto_em_poligono(p2[0], p2[1], poly_p2):
+                    msp.add_circle(center=p2, radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                if ponto_em_poligono(p3[0], p3[1], poly_p3):
+                    msp.add_circle(center=p3, radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
                     
-                    # Cada círculo usa sua respectiva âncora (extremidade oposta) e tangencia a parede do seu ambiente
-                    nx, ny = get_inside_normal(vx, vy, p_anc[0], p_anc[1], cx, cy)
-                    final_x = p_anc[0] + nx * raio_circulo
-                    final_y = p_anc[1] + ny * raio_circulo
-                    
-                    if ponto_em_poligono(final_x, final_y, poly):
-                        msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
             elif len(ambientes_adjacentes) == 1:
                 poly = ambientes_adjacentes[0]
                 cx = sum([pt[0] for pt in poly]) / len(poly)
                 cy = sum([pt[1] for pt in poly]) / len(poly)
                 
-                nx, ny = get_inside_normal(vx, vy, ponto_ancora_1[0], ponto_ancora_1[1], cx, cy)
-                final_x = ponto_ancora_1[0] + nx * raio_circulo
-                final_y = ponto_ancora_1[1] + ny * raio_circulo
+                nx, ny = get_inside_normal(vx, vy, p1[0], p1[1], cx, cy)
+                p2 = (p1[0] + nx * raio_circulo, p1[1] + ny * raio_circulo)
                 
-                if ponto_em_poligono(final_x, final_y, poly):
-                    msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                if ponto_em_poligono(p2[0], p2[1], poly):
+                    msp.add_circle(center=p2, radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
