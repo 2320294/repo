@@ -102,13 +102,10 @@ def processar_dxf(caminho_arquivo):
             f"Certifique-se de desenhar os elementos nos respectivos layers (IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, IA_SOLEIRAS) antes de gerar o projeto."
         )
 
-    polilinhas, textos, portas_raw, soleiras_raw = [], [], [], []
+    polilinhas, textos = [], []
     for entity in msp:
         tipo = entity.dxftype()
-        if hasattr(entity.dxf, 'layer'):
-            layer = str(entity.dxf.layer).upper().strip()
-        else:
-            continue
+        layer = str(entity.dxf.layer).upper().strip()
             
         if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
             try:
@@ -120,18 +117,6 @@ def processar_dxf(caminho_arquivo):
                 texto_str = (entity.text if tipo == 'MTEXT' else entity.dxf.text).strip()
                 if texto_str: textos.append({'nome': texto_str, 'x': entity.dxf.insert.x, 'y': entity.dxf.insert.y})
             except: pass
-        elif layer == 'IA_PORTAS':
-            if tipo == 'LINE':
-                portas_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
-            elif tipo in ['LWPOLYLINE', 'POLYLINE']:
-                pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
-        elif layer == 'IA_SOLEIRAS':
-            if tipo == 'LINE':
-                soleiras_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
-            elif tipo in ['LWPOLYLINE', 'POLYLINE']:
-                pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
-                if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
             
     resultados, ambientes_processados = [], {}
     for polilinha in polilinhas:
@@ -328,13 +313,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        pontos_proibidos = []
-        for p in portas_raw:
-            pontos_proibidos.append(((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2))
-        for s in soleiras_raw:
-            pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
-
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (EVITANDO CANTOS DE PAREDE E VÃOS DE PORTAS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (GARANTINDO CONTAGEM EXATA IGUAL AO QUADRO DE CARGAS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -505,28 +484,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    # Margem de segurança de 0.60m nas extremidades para evitar cantos de paredes
-                    margem = 0.60
-                    comprimento_util = comp_total - (2 * margem)
-                    
-                    if comprimento_util > 0 and total_tugs > 0:
-                        passo = comprimento_util / total_tugs
-                        inicio_offset = margem + (passo / 2)
-                    else:
-                        passo = comp_total / total_tugs
-                        inicio_offset = passo / 2
+                    passo = comp_total / total_tugs
+                    inicio_offset = passo / 2
 
                     for i in range(total_tugs):
                         dist_atual = inicio_offset + (i * passo)
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(dist_atual, segmentos_crus)
-                        
-                        # Verifica se está perto de vãos de portas/soleiras (< 0.50m) ou perto dos cantos/vértices do ambiente (< 0.50m)
-                        perto_de_vao = any(math.hypot(px - v[0], py - v[1]) < 0.50 for v in pontos_proibidos)
-                        perto_de_canto = any(math.hypot(px - v[0], py - v[1]) < 0.50 for v in polilinha[:-1])
-                        
-                        if perto_de_vao or perto_de_canto:
-                            continue
-
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
                         
                         ponto_b1 = (px - seg_vx * 0.10, py - seg_vy * 0.10)
