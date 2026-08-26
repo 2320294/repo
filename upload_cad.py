@@ -1,0 +1,243 @@
+import os
+import tempfile
+
+import streamlit as st
+
+import motores
+
+from database import (
+    salvar_dados_projeto
+)
+
+
+def renderizar_upload_dxf(
+    dxf_bytes,
+    dados_ambientes,
+    config_salva
+):
+    """
+    Renderiza upload inicial ou substituição da planta.
+    Retorna True se houve rerun/alteração e False caso contrário.
+    """
+    tem_dxf_salvo = (
+        dxf_bytes is not None
+        and len(dados_ambientes) > 0
+    )
+
+    if not tem_dxf_salvo:
+        st.subheader(
+            "📁 Enviar Planta Base (Formato DXF)"
+        )
+
+        uploaded_file = st.file_uploader(
+            "Envie o arquivo DXF para iniciar "
+            "o dimensionamento:",
+            type=["dxf"],
+            key="upload_inicial"
+        )
+
+        if uploaded_file is not None:
+            novo_dxf = uploaded_file.read()
+
+            try:
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=".dxf"
+                ) as tmp:
+                    tmp.write(novo_dxf)
+                    tmp_path = tmp.name
+
+                try:
+                    novos_dados = (
+                        motores.processar_dxf(
+                            tmp_path
+                        )
+                    )
+                finally:
+                    if os.path.exists(
+                        tmp_path
+                    ):
+                        os.remove(tmp_path)
+
+                salvar_dados_projeto(
+                    st.session_state.user_email,
+                    st.session_state.projeto_ativo,
+                    dxf_bytes=novo_dxf,
+                    tabela_editada=novos_dados,
+                    config_interruptores=config_salva
+                )
+
+                st.success(
+                    "✅ Planta baixa processada e "
+                    "salva no Supabase!"
+                )
+
+                st.rerun()
+
+            except Exception as e:
+                st.error(
+                    f"❌ Erro ao processar/salvar "
+                    f"o DXF: {e}"
+                )
+
+        return False
+
+    with st.expander(
+        "🔄 Reenviar / Substituir Planta Baixa (DXF)"
+    ):
+        st.markdown(
+            "Envie um novo DXF caso a geometria "
+            "tenha sido alterada."
+        )
+
+        novo_uploaded_file = st.file_uploader(
+            "Envie a nova planta base (.dxf):",
+            type=["dxf"],
+            key="upload_substituicao"
+        )
+
+        if novo_uploaded_file is not None:
+            novo_dxf = (
+                novo_uploaded_file.read()
+            )
+
+            try:
+                with tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=".dxf"
+                ) as tmp:
+                    tmp.write(novo_dxf)
+                    tmp_path = tmp.name
+
+                try:
+                    novos_dados = (
+                        motores.processar_dxf(
+                            tmp_path
+                        )
+                    )
+                finally:
+                    if os.path.exists(
+                        tmp_path
+                    ):
+                        os.remove(tmp_path)
+
+                salvar_dados_projeto(
+                    st.session_state.user_email,
+                    st.session_state.projeto_ativo,
+                    dxf_bytes=novo_dxf,
+                    tabela_editada=novos_dados,
+                    config_interruptores=config_salva
+                )
+
+                st.success(
+                    "✅ Nova planta baixa "
+                    "substituída no Supabase!"
+                )
+
+                st.rerun()
+
+            except Exception as e:
+                st.error(
+                    f"❌ Erro ao substituir "
+                    f"o DXF: {e}"
+                )
+
+    return True
+
+
+def renderizar_salvar_e_gerar_cad(
+    dxf_bytes,
+    tabela_editada,
+    local_qdc,
+    config_interruptores_usuario
+):
+    st.divider()
+
+    st.subheader(
+        "🖨️ Exportação e Relatórios"
+    )
+
+    if st.button(
+        "💾 Salvar Alterações do Projeto",
+        use_container_width=True
+    ):
+        try:
+            salvar_dados_projeto(
+                st.session_state.user_email,
+                st.session_state.projeto_ativo,
+                tabela_editada=tabela_editada,
+                local_qdc=local_qdc,
+                config_interruptores=(
+                    config_interruptores_usuario
+                )
+            )
+
+            st.success(
+                "✅ Alterações salvas no "
+                "Supabase com sucesso!"
+            )
+
+            st.rerun()
+
+        except Exception as e:
+            st.error(
+                f"❌ Erro ao salvar alterações: {e}"
+            )
+
+    st.markdown(
+        "### Projeto Unifilar (DXF)"
+    )
+
+    if st.button(
+        "🚀 Gerar CAD (Atualizado)",
+        type="primary",
+        use_container_width=True
+    ):
+        if not dxf_bytes:
+            st.error(
+                "❌ Nenhum arquivo DXF associado."
+            )
+
+        else:
+            try:
+                salvar_dados_projeto(
+                    st.session_state.user_email,
+                    st.session_state.projeto_ativo,
+                    tabela_editada=tabela_editada,
+                    local_qdc=local_qdc,
+                    config_interruptores=(
+                        config_interruptores_usuario
+                    )
+                )
+
+                cad_bytes_out = (
+                    motores.gerar_cad_unifilar(
+                        dxf_bytes=dxf_bytes,
+                        dados_editados=tabela_editada,
+                        local_qdc=local_qdc,
+                        config_interruptores=(
+                            config_interruptores_usuario
+                        )
+                    )
+                )
+
+                st.success(
+                    "✅ Projeto CAD gerado com sucesso!"
+                )
+
+                st.download_button(
+                    label=
+                        "📥 Baixar Projeto DXF Atualizado",
+                    data=
+                        cad_bytes_out,
+                    file_name=
+                        "Projeto_Eletrico.dxf",
+                    mime=
+                        "application/dxf",
+                    use_container_width=True
+                )
+
+            except Exception as e:
+                st.error(
+                    f"❌ Erro ao gerar o arquivo CAD: {e}"
+                )
