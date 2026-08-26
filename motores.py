@@ -60,7 +60,7 @@ def dimensionar_cargas(nome, area, perimetro):
         "Pot. Unit. Ilum (VA)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
         "Carga Ilum. (VA)": carga_ilum, 
         "TUGs (Qtd)": qtd_tugs, 
-        "Pot. Unit. TUG (VA)": round(carga_tugs / qtd_tugs) if qtd_tugs > 0 else 0,
+        "Pot. Unit. TUG (VA)": 600 if is_umida else 100, 
         "Carga TUGs (VA)": carga_tugs,
         "Equipamento TUE": tue_nome,
         "Qtd TUE": qtd_tue,
@@ -319,7 +319,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         for s in soleiras_raw:
             pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (BLINDAGEM CONTRA VÉRTICES E VÃOS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (LEITURA DINÂMICA 100% FIEL AO DIRETÓRIO DE DADOS EDITADOS / TABELA)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -338,6 +338,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 ambientes_processados[nome] = 1
                 nome_busca = nome
             
+            # Pega exatamente os dados dinâmicos enviados pela tabela de quantificação da planta atual
             row_data = dict_dados.get(nome_busca, dict_dados.get(nome, None))
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
@@ -451,8 +452,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
             if row_data:
-                qtd_tugs = int(row_data.get('TUGs (Qtd)', 0))
-                qtd_tue = int(row_data.get('TUE', row_data.get('Qtd TUE', 0)))
+                # Leitura totalmente dinâmica direto da tabela gerada/editada
+                qtd_tugs = int(row_data.get('TUGs (Qtd)', row_data.get('TUGs', 0)))
+                qtd_tue = int(row_data.get('Qtd TUE', row_data.get('TUE', 0)))
                 eq_tue_nome = str(row_data.get('Equipamento TUE', '-'))
                 pot_tue_val = int(row_data.get('Pot. Unit. TUE (VA)', 0))
                 
@@ -470,7 +472,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
-                # 1. DISTRIBUIÇÃO EXATA DAS TUEs NAS MENORES PAREDES SEM PORTA
+                # 1. DISTRIBUIÇÃO DINÂMICA DAS TUEs BASEADA DIRETAMENTE NA TABELA (qtd_tue)
                 if qtd_tue > 0 and logical_walls:
                     paredes_candidatas = sorted(logical_walls, key=lambda w: w['length'])
                     paredes_sem_porta = [w for w in paredes_candidatas if not any(point_seg_dist((p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2, w['p1'], w['p2']) < 0.6 for p in unique_portas)]
@@ -501,10 +503,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             
                         msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-                # 2. DISTRIBUIÇÃO DAS TUGs COM FILTRO RIGOROSO DE VÉRTICES (ANTIVERTEX > 0.35m)
+                # 2. DISTRIBUIÇÃO DINÂMICA DAS TUGs (qtd_tugs exata da tabela, com blindagem contra vértices < 0.40m)
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    margem_inicial = 0.35  # Afastamento mínimo absoluto de 35cm de qualquer canto/vértice
+                    margem_inicial = 0.40  # Folga estrita antivertex de 40cm
                     comprimento_util = comp_total - (2 * margem_inicial)
                     
                     if comprimento_util > 0 and total_tugs > 0:
@@ -518,14 +520,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         dist_atual = inicio_offset + (i * passo)
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(dist_atual, segmentos_crus)
                         
-                        # Filtro duplo: Proibido perto de vãos/portas E proibido perto de vértices/cantos (< 0.35m)
                         perto_de_vao = any(math.hypot(px - v[0], py - v[1]) < 0.40 for v in pontos_proibidos)
-                        perto_de_vertice = any(math.hypot(px - v[0], py - v[1]) < 0.35 for v in polilinha[:-1])
+                        perto_de_vertice = any(math.hypot(px - v[0], py - v[1]) < 0.40 for v in polilinha[:-1])
                         
                         if perto_de_vao or perto_de_vertice:
-                            # Se caiu num vértice, desloca em direção ao centro do segmento para salvar a contagem exata
-                            px += seg_vx * 0.40
-                            py += seg_vy * 0.40
+                            px += seg_vx * 0.45
+                            py += seg_vy * 0.45
 
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
                         
