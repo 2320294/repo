@@ -200,7 +200,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if nome_l not in doc.layers: doc.layers.add(name=nome_l, color=cor_l)
             else: doc.layers.get(nome_l).color = cor_l
         
-        polilinhas, textos, portas_raw = [], [], []
+        polilinhas, textos, portas_raw, soleiras_raw = [], [], [], []
         for entity in msp:
             tipo = entity.dxftype()
             if hasattr(entity.dxf, 'layer'):
@@ -224,51 +224,87 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 elif tipo in ['LWPOLYLINE', 'POLYLINE']:
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: portas_raw.append({'p1': pts[0], 'p2': pts[-1]})
+            elif layer == 'IA_SOLEIRAS':
+                if tipo == 'LINE':
+                    soleiras_raw.append({'p1': (entity.dxf.start.x, entity.dxf.start.y), 'p2': (entity.dxf.end.x, entity.dxf.end.y)})
+                elif tipo in ['LWPOLYLINE', 'POLYLINE']:
+                    pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
+                    if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
+
+        # 1. IGNORA SOLEIRAS SEM PORTAS (Tolerância estrita a 0.15m)
+        soleiras_com_porta = []
+        for s in soleiras_raw:
+            s_p1, s_p2 = s['p1'], s['p2']
+            porta_encostada = None
+            for p in portas_raw:
+                d1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
+                d2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
+                pm_porta_x = (p['p1'][0] + p['p2'][0]) / 2
+                pm_porta_y = (p['p1'][1] + p['p2'][1]) / 2
+                d3 = point_seg_dist(pm_porta_x, pm_porta_y, s_p1, s_p2)
+                
+                if d1 < 0.15 or d2 < 0.15 or d3 < 0.15:
+                    porta_encostada = p
+                    break
+            if porta_encostada is not None:
+                soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
         raio_circulo = 0.15
 
-        # GERAÇÃO DOS CÍRCULOS BASEADA DIRETAMENTE NAS PORTAS (MAIS PRECISA E ALINHADA)
-        for p in portas_raw:
-            p1, p2 = p['p1'], p['p2']
-            pm_x = (p1[0] + p2[0]) / 2
-            pm_y = (p1[1] + p2[1]) / 2
+        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA
+        for item in soleiras_com_porta:
+            s = item['s']
+            p_porta = item['porta']
+            s_p1, s_p2 = s['p1'], s['p2']
+            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            p_len = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
-            if p_len == 0: continue
-            vx, vy = (p2[0] - p1[0]) / p_len, (p2[1] - p1[1]) / p_len
+            s_len = math.hypot(s_p2[0] - s_p1[0], s_p2[1] - s_p1[1])
+            if s_len == 0: continue
+            vx, vy = (s_p2[0] - s_p1[0]) / s_len, (s_p2[1] - s_p1[1]) / s_len
             
-            # Encontra quais ambientes encostam na posição da porta
-            adjacentes = []
+            ambientes_adjacentes = []
             for poly in polilinhas:
-                poly_closed = list(poly) + [poly[0]]
-                tocou = False
-                for i in range(len(poly)):
-                    if point_seg_dist(pm_x, pm_y, poly_closed[i], poly_closed[i+1]) < 0.3:
-                        tocou = True
-                        break
-                if tocou and poly not in adjacentes:
-                    adjacentes.append(poly)
+                xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
+                if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
+                    ambientes_adjacentes.append(poly)
             
-            if len(adjacentes) >= 2:
-                # Divisa entre dois ambientes: gera um círculo em cada lado, perfeitamente lado a lado
-                for poly in adjacentes[:2]:
+            # Identifica a dobradiça (ponto da porta mais próximo da soleira)
+            d_p1_s1 = math.hypot(p_porta['p1'][0] - s_p1[0], p_porta['p1'][1] - s_p1[1])
+            d_p1_s2 = math.hypot(p_porta['p1'][0] - s_p2[0], p_porta['p1'][1] - s_p2[1])
+            d_p2_s1 = math.hypot(p_porta['p2'][0] - s_p1[0], p_porta['p2'][1] - s_p1[1])
+            d_p2_s2 = math.hypot(p_porta['p2'][0] - s_p2[0], p_porta['p2'][1] - s_p2[1])
+            
+            dobradiça_pt = p_porta['p1'] if min(d_p1_s1, d_p1_s2) < min(d_p2_s1, d_p2_s2) else p_porta['p2']
+            
+            # Extremidade oposta à dobradiça na soleira
+            d_s1_dob = math.hypot(s_p1[0] - dobradiça_pt[0], s_p1[1] - dobradiça_pt[1])
+            d_s2_dob = math.hypot(s_p2[0] - dobradiça_pt[0], s_p2[1] - dobradiça_pt[1])
+            
+            ponto_ancora_1 = s_p1 if d_s1_dob > d_s2_dob else s_p2
+            ponto_ancora_2 = s_p2 if d_s1_dob > d_s2_dob else s_p1
+            
+            if len(ambientes_adjacentes) >= 2:
+                ancoras = [ponto_ancora_1, ponto_ancora_2]
+                for idx, poly in enumerate(ambientes_adjacentes[:2]):
+                    p_anc = ancoras[idx]
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
                     
-                    nx, ny = get_inside_normal(vx, vy, pm_x, pm_y, cx, cy)
-                    final_x = pm_x + nx * raio_circulo
-                    final_y = pm_y + ny * raio_circulo
+                    # Cada círculo usa sua respectiva âncora (extremidade oposta) e tangencia a parede do seu ambiente
+                    nx, ny = get_inside_normal(vx, vy, p_anc[0], p_anc[1], cx, cy)
+                    final_x = p_anc[0] + nx * raio_circulo
+                    final_y = p_anc[1] + ny * raio_circulo
                     
                     if ponto_em_poligono(final_x, final_y, poly):
                         msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
-            elif len(adjacentes) == 1:
-                poly = adjacentes[0]
+            elif len(ambientes_adjacentes) == 1:
+                poly = ambientes_adjacentes[0]
                 cx = sum([pt[0] for pt in poly]) / len(poly)
                 cy = sum([pt[1] for pt in poly]) / len(poly)
                 
-                nx, ny = get_inside_normal(vx, vy, pm_x, pm_y, cx, cy)
-                final_x = pm_x + nx * raio_circulo
-                final_y = pm_y + ny * raio_circulo
+                nx, ny = get_inside_normal(vx, vy, ponto_ancora_1[0], ponto_ancora_1[1], cx, cy)
+                final_x = ponto_ancora_1[0] + nx * raio_circulo
+                final_y = ponto_ancora_1[1] + ny * raio_circulo
                 
                 if ponto_em_poligono(final_x, final_y, poly):
                     msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
