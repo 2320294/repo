@@ -228,22 +228,73 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    # Cria o DataFrame e oculta colunas técnicas (Centro_X, Centro_X, e todas as potências) + hide_index=True
+    # Cria o DataFrame consolidado
     df_consolidado = pd.DataFrame(tabela_editada)
+    
     colunas_para_ocultar = [
         "Centro_X", "Centro_Y", 
         "Pot. Unit. Ilum (W)", "Carga Ilum. (W)", 
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns])
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns]).copy()
 
-    st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
+    # Formata Área e Perímetro para 2 casas decimais no DataFrame
+    df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
+    df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
-    # Seleção do QDC
+    # Cria a linha de Total Geral
+    linha_total = {
+        "Ambiente": "TOTAL GERAL",
+        "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
+        "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
+        "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
+        "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
+        "Equipamento TUE": "-",
+        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
+    }
+    df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
+
+    st.dataframe(df_exibicao_com_total, use_container_width=True, hide_index=True)
+
+    # ====================================================
+    # SELEÇÃO DO QDC (CONFORME NBR 5410)
+    # ====================================================
     st.divider()
-    nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
-    local_qdc = st.selectbox("⚡ Selecione o ambiente onde ficará instalado o Quadro de Distribuição de Cargas (QDC):", nomes_ambientes)
+    
+    # Filtra áreas molhadas / não permitidas segundo a norma
+    ambientes_validos_qdc = []
+    ambientes_recomendados_qdc = []
+    
+    for r in dados_ambientes:
+        nome_amb = r["Ambiente"]
+        nome_lower = nome_amb.lower()
+        
+        # Exclui áreas molhadas/úmidas
+        is_molhado = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as", "área", "area"])
+        if is_molhado:
+            continue
+            
+        # Identifica áreas recomendadas de circulação (hall, corredor, circulação)
+        is_circulacao = any(x in nome_lower for x in ["hall", "corredor", "circula", "circ"])
+        if is_circulacao:
+            ambientes_recomendados_qdc.append(f"{nome_amb} (Recomendado - NBR 5410)")
+        else:
+            ambientes_validos_qdc.append(nome_amb)
+            
+    opcoes_qdc = ambientes_recomendados_qdc + ambientes_validos_qdc
+    
+    # Fallback caso todos os ambientes sejam considerados áreas úmidas
+    if not opcoes_qdc:
+        opcoes_qdc = [r["Ambiente"] for r in dados_ambientes]
+
+    local_qdc_selecionado = st.selectbox(
+        "⚡ Selecione o ambiente onde ficará instalado o Quadro de Distribuição de Cargas (QDC):",
+        opcoes_qdc
+    )
+    
+    # Limpa a string de recomendação para passar ao motor CAD
+    local_qdc = local_qdc_selecionado.split(" (Recomendado")[0].strip()
 
     # ====================================================
     # CONFIGURAÇÃO DE INTERRUPTORES (FRONT-END)
@@ -252,6 +303,7 @@ if dados_ambientes:
     st.subheader("⚙️ Configuração de Interruptores nas Soleiras")
     st.markdown("Personalize a quantidade de círculos de interruptores por ambiente:")
 
+    nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
     for amb in nomes_ambientes:
         with st.expander(f"Interruptores - {amb}"):
