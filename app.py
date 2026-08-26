@@ -306,7 +306,7 @@ if dados_ambientes:
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_exibicao.columns]).copy()
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns])
 
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
@@ -368,11 +368,19 @@ if dados_ambientes:
 
     nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
+    
+    # Tenta recuperar configurações salvas se houver
+    config_salva = dados_salvos_db.get("config_interruptores", {}) if dados_salvos_db else {}
+
     for amb in nomes_ambientes:
         with st.expander(f"Interruptores - {amb}"):
-            qtd_int = st.selectbox(f"Quantidade de círculos em {amb}", [0, 1, 2], key=f"int_qtd_{amb}")
+            cfg_atual = config_salva.get(amb, {})
+            val_qtd_padrao = int(cfg_atual.get("quantidade", 0))
+            
+            qtd_int = st.selectbox(f"Quantidade de círculos em {amb}", [0, 1, 2], index=val_qtd_padrao, key=f"int_qtd_{amb}")
             if qtd_int == 1:
-                porta_num = st.number_input(f"Porta nº associada ({amb})", min_value=1, value=1, key=f"int_porta_{amb}")
+                val_porta_padrao = int(cfg_atual.get("porta", 1)) - 1
+                porta_num = st.number_input(f"Porta nº associada ({amb})", min_value=1, value=val_porta_padrao + 1, key=f"int_porta_{amb}")
                 config_interruptores_usuario[amb] = {"quantidade": 1, "porta": porta_num}
             elif qtd_int == 2:
                 config_interruptores_usuario[amb] = {"quantidade": 2}
@@ -389,7 +397,7 @@ if dados_ambientes:
     total_tomadas_geral = total_tugs_geral + total_tues_geral
 
     materiais_df = pd.DataFrame([
-        {"Material": "Caixa Octogonal de Teto 4x4\" (Plástico)", "Unidade": "pç", "Quantidade": total_caixas_luz},
+        {"Material": "Caixa Octogonal de teto 4x4\" (Plástico)", "Unidade": "pç", "Quantidade": total_caixas_luz},
         {"Material": "Caixa de Embutir de Parede 4x2\" (Plástico)", "Unidade": "pç", "Quantidade": total_tomadas_geral},
         {"Material": "Eletroduto Corrugado Flexível Reforçado 3/4\"", "Unidade": "m", "Quantidade": 247},
         {"Material": "Cabo Flex. 2,5 mm² - Fase", "Unidade": "m", "Quantidade": 180},
