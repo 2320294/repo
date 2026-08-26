@@ -107,7 +107,6 @@ with st.sidebar:
         st.divider()
         st.markdown("### 📂 Gerenciador de Obras")
         
-        # Formulário para criar novo projeto dinamicamente
         with st.form("form_novo_projeto", clear_on_submit=True):
             novo_proj_nome = st.text_input("Nome do Novo Projeto / Pavimento")
             btn_criar_proj = st.form_submit_button("➕ Cadastrar Projeto")
@@ -126,7 +125,6 @@ with st.sidebar:
                 else:
                     st.warning("Digite o nome do projeto.")
 
-        # Busca projetos salvos do usuário no Supabase
         try:
             res_proj = supabase.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
             lista_projetos = res_proj.data
@@ -138,7 +136,6 @@ with st.sidebar:
             nomes_projetos = [p["nome_projeto"] for p in lista_projetos]
             projeto_selecionado = st.selectbox("Selecione o projeto ativo:", nomes_projetos)
             
-            # Botão para apagar o projeto selecionado
             if st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
                 proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
                 if proj_alvo:
@@ -192,7 +189,8 @@ if dados_ambientes:
     tabela_editada = []
     for row in dados_ambientes:
         with st.container():
-            st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']}m*")
+            # AQUI ESTÁ A ALTERAÇÃO: formatando área e perímetro com 2 casas decimais
+            st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']:.2f}m*")
             c1, c2, c3, c4, c5 = st.columns(5)
 
             with c1:
