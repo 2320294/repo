@@ -251,7 +251,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (USANDO EXTREMIDADE OPOSTA À DOBRADIÇA COMO ÂNCORA)
+        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (IDENTIFICANDO A DOBRADIÇA CORRETAMENTE POR PROXIMIDADE)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -268,14 +268,23 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
                     ambientes_adjacentes.append(poly)
             
-            # Descobre qual extremidade da porta está mais próxima de cada ponta da soleira
-            # A extremidade da porta mais próxima de uma ponta da soleira indica a dobradiça naquele lado
-            d_p1_s1 = math.hypot(p_porta['p1'][0] - s_p1[0], p_porta['p1'][1] - s_p1[1])
-            d_p1_s2 = math.hypot(p_porta['p1'][0] - s_p2[0], p_porta['p1'][1] - s_p2[1])
+            # Identifica qual extremidade da porta é a dobradiça (a que está fisicamente mais próxima da soleira)
+            dist_p1_s1 = math.hypot(p_porta['p1'][0] - s_p1[0], p_porta['p1'][1] - s_p1[1])
+            dist_p1_s2 = math.hypot(p_porta['p1'][0] - s_p2[0], p_porta['p1'][1] - s_p2[1])
+            dist_p2_s1 = math.hypot(p_porta['p2'][0] - s_p1[0], p_porta['p2'][1] - s_p1[1])
+            dist_p2_s2 = math.hypot(p_porta['p2'][0] - s_p2[0], p_porta['p2'][1] - s_p2[1])
             
-            # A extremidade OPSTA à dobradiça é a ponta da soleira mais distante da dobradiça da porta
-            ponto_ancora_1 = s_p2 if d_p1_s1 < d_p1_s2 else s_p1
-            ponto_ancora_2 = s_p1 if d_p1_s1 < d_p1_s2 else s_p2
+            min_p1 = min(dist_p1_s1, dist_p1_s2)
+            min_p2 = min(dist_p2_s1, dist_p2_s2)
+            
+            dobradiça_pt = p_porta['p1'] if min_p1 < min_p2 else p_porta['p2']
+            
+            # A extremidade oposta da soleira é a que fica mais distante da dobradiça da porta
+            d_s1_dob = math.hypot(s_p1[0] - dobradiça_pt[0], s_p1[1] - dobradiça_pt[1])
+            d_s2_dob = math.hypot(s_p2[0] - dobradiça_pt[0], s_p2[1] - dobradiça_pt[1])
+            
+            ponto_ancora_1 = s_p1 if d_s1_dob > d_s2_dob else s_p2
+            ponto_ancora_2 = s_p2 if d_s1_dob > d_s2_dob else s_p1
             
             if len(ambientes_adjacentes) >= 2:
                 ancoras = [ponto_ancora_1, ponto_ancora_2]
