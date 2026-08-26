@@ -231,7 +231,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # Mapeia cada polilinha de ambiente ao seu nome correspondente
+        # Mapeia cada polilinha de ambiente ao seu nome
         ambientes_nomes = {}
         for poly in polilinhas:
             xs, ys = [p[0] for p in poly], [p[1] for p in poly]
@@ -255,17 +255,20 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if tem_porta:
                 soleiras_com_porta.append(s)
 
-        # 1. INSERE O CÍRCULO MAGENTA ESTRICTAMENTE NO AMBIENTE PRINCIPAL (Excluindo corredores)
+        # 1. INSERE O CÍRCULO MAGENTA NO INTERIOR DO AMBIENTE PRINCIPAL ADJACENTE À SOLEIRA COM PORTA
         for s in soleiras_com_porta:
             s_p1, s_p2 = s['p1'], s['p2']
+            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
+            # Encontra os ambientes adjacentes à soleira
             ambientes_adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
-                if ponto_em_poligono(s_p1[0], s_p1[1], poly) or ponto_em_poligono(s_p2[0], s_p2[1], poly):
+                xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
+                if min(xs) - 0.6 <= sm_x <= max(xs) + 0.6 and min(ys) - 0.6 <= sm_y <= max(ys) + 0.6:
                     ambientes_adjacentes.append((poly, nome_amb))
             
-            # Prioriza estritamente o ambiente que NÃO é corredor/circulação
+            # Prioriza o ambiente que NÃO seja corredor/circulação
             ambiente_alvo = None
             for poly, nome_amb in ambientes_adjacentes:
                 if not any(w in nome_amb.lower() for w in ["circula", "corredor", "hall"]):
@@ -278,10 +281,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if ambiente_alvo:
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
-                d1 = math.hypot(s_p1[0] - cx, s_p1[1] - cy)
-                d2 = math.hypot(s_p2[0] - cx, s_p2[1] - cy)
-                ponto_interno = s_p1 if d1 < d2 else s_p2
-                msp.add_circle(center=ponto_interno, radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                
+                # Ponto médio da soleira deslocado 15cm na direção do centroide do ambiente principal
+                d_tot = math.hypot(cx - sm_x, cy - sm_y)
+                if d_tot > 0:
+                    dir_x, dir_y = (cx - sm_x) / d_tot, (cy - sm_y) / d_tot
+                    circ_x = sm_x + dir_x * 0.15
+                    circ_y = sm_y + dir_y * 0.15
+                    msp.add_circle(center=(circ_x, circ_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
