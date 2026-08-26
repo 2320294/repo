@@ -6,7 +6,7 @@ import os
 RAIO_CIRCULO_INTERRUPT = 0.15
 
 # ============================================================
-# DIMENSIONAMENTO DAS CARGAS (DINÂMICO EM WATTS)
+# DIMENSIONAMENTO DAS CARGAS (EM WATTS)
 # ============================================================
 
 def dimensionar_cargas(nome, area, perimetro):
@@ -153,11 +153,11 @@ def encontrar_portas_do_ambiente(polilinha, portas_raw):
     portas_ambiente = []
     for porta in portas_raw:
         cx, cy = (porta['p1'][0] + porta['p2'][0]) / 2, (porta['p1'][1] + porta['p2'][1]) / 2
-        if min_x - 0.8 <= cx <= max_x + 0.8 and min_y - 0.8 <= cy <= max_y + 0.8:
+        if min_x - 1.2 <= cx <= max_x + 1.2 and min_y - 1.2 <= cy <= max_y + 1.2:
             portas_ambiente.append(porta)
     return portas_ambiente
 
-def criar_geometria_circulo_soleira(soleira, porta, polilinha, polilinhas):
+def criar_geometria_circulo_soleira(soleira, porta, polilinha):
     s_p1, s_p2 = soleira['p1'], soleira['p2']
     d_porta_1 = point_seg_dist(porta['p1'][0], porta['p1'][1], s_p1, s_p2)
     d_porta_2 = point_seg_dist(porta['p2'][0], porta['p2'][1], s_p1, s_p2)
@@ -217,14 +217,14 @@ def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_
         if 0 <= porta_escolhida < len(portas_com_soleira):
             item_porta = portas_com_soleira[porta_escolhida]
             soleira = item_porta['soleiras'][0]
-            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha, polilinhas)
+            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha)
             if geom:
                 ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
                 desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
     elif quantidade == 2:
         for item_porta in portas_com_soleira[:2]:
             soleira = item_porta['soleiras'][0]
-            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha, polilinhas)
+            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha)
             if geom:
                 ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
                 desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
@@ -383,7 +383,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc, config_interruptore
             for p in portas_raw:
                 pm_porta = ((p['p1'][0] + p['p2'][0]) / 2, (p['p1'][1] + p['p2'][1]) / 2)
                 d3 = point_seg_dist(pm_porta[0], pm_porta[1], s_p1, s_p2)
-                if d3 <= 0.30 and d3 < menor_distancia:
+                if d3 <= 0.80 and d3 < menor_distancia:
                     menor_distancia, melhor_porta = d3, p
             if melhor_porta is not None:
                 soleiras_com_porta.append({'s': s, 'porta': melhor_porta})
