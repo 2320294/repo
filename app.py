@@ -394,7 +394,16 @@ if dados_ambientes:
 
     nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
-    config_salva = dados_salvos_db.get("config_interruptores", {}) if dados_salvos_db else {}
+    
+    # Tratamento seguro para garantir que config_salva seja um dicionário
+    raw_config = dados_salvos_db.get("config_interruptores", {}) if dados_salvos_db else {}
+    if isinstance(raw_config, str):
+        try:
+            config_salva = json.loads(raw_config)
+        except:
+            config_salva = {}
+    else:
+        config_salva = raw_config if isinstance(raw_config, dict) else {}
 
     for amb in nomes_ambientes:
         with st.expander(f"Interruptores - {amb}"):
