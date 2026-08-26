@@ -231,15 +231,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        ambientes_nomes = {}
-        for poly in polilinhas:
-            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
-            min_x, max_x = min(xs), max(xs)
-            min_y, max_y = min(ys), max(ys)
-            nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
-            ambientes_nomes[tuple(poly)] = nome_achado
-
-        # Mapeia soleiras que possuem porta encostada (< 0.4m)
+        # 1. IGNORA SOLEIRAS SEM PORTAS (Distância < 0.4m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -256,42 +248,52 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. PROCESSA TODAS AS SOLEIRAS COM PORTA: Cria o círculo na extremidade oposta para cada ambiente adjacente válido
+        # 2. PARA CADA SOLEIRA COM PORTA, VERIFICA SE TOCA EM DOIS AMBIENTES E DESENHA OS CÍRCULOS NAS EXTREMIDADES OPOSTAS
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
+            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
-            pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
-            
-            d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
-            d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
-            
-            # Extremidade oposta à porta na soleira
-            ponto_oposto = s_p2 if d1 < d2 else s_p1
-            
-            # Encontra todos os ambientes adjacentes a esta soleira e insere o círculo dentro deles
+            # Encontra todos os ambientes que encostam/tocam nesta soleira
+            ambientes_adjacentes = []
             for poly in polilinhas:
                 xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
+                if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
+                    ambientes_adjacentes.append(poly)
+            
+            # Regra: A não ser que esta soleira não esteja encostando em dois ambientes (exige exatamente ou pelo menos 2 ambientes)
+            if len(ambientes_adjacentes) >= 2:
+                pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
+                pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
                 
-                if min(xs) - 0.6 <= sm_x <= max(xs) + 0.6 and min(ys) - 0.6 <= sm_y <= max(ys) + 0.6:
-                    cx = sum(xs) / len(xs)
-                    cy = sum(ys) / len(ys)
+                d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
+                d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
+                
+                # As duas extremidades opostas à porta na soleira
+                ponto_oposto_1 = s_p2 if d1 < d2 else s_p1
+                ponto_oposto_2 = s_p1 if d1 < d2 else s_p2
+                
+                pontos_opostos = [ponto_oposto_1, ponto_oposto_2]
+                
+                # Desenha o círculo em cada extremidade oposta voltado para dentro do respectivo ambiente adjacente
+                for idx, poly in enumerate(ambientes_adjacentes[:2]):
+                    p_op = pontos_opostos[idx]
+                    cx = sum([pt[0] for pt in poly]) / len(poly)
+                    cy = sum([pt[1] for pt in poly]) / len(poly)
                     
-                    d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
+                    d_tot = math.hypot(cx - p_op[0], cy - p_op[1])
                     if d_tot > 0:
-                        dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
-                        final_x = ponto_oposto[0] + dir_x * 0.18
-                        final_y = ponto_oposto[1] + dir_y * 0.18
+                        dir_x, dir_y = (cx - p_op[0]) / d_tot, (cy - p_op[1]) / d_tot
+                        final_x = p_op[0] + dir_x * 0.18
+                        final_y = p_op[1] + dir_y * 0.18
                         
                         if ponto_em_poligono(final_x, final_y, poly):
                             msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 2. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
