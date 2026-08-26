@@ -238,7 +238,6 @@ with st.sidebar:
 
         if aba_auth == "Entrar (Login)":
             st.subheader("🔐 Fazer Login")
-            # Envolvido em st.form para suportar o envio ao pressionar Enter
             with st.form("form_login"):
                 login_email = st.text_input("E-mail / Login")
                 login_senha = st.text_input("Senha", type="password")
@@ -264,7 +263,6 @@ with st.sidebar:
 
         else:
             st.subheader("📝 Novo Cadastro")
-            # Envolvido em st.form para suportar o envio ao pressionar Enter
             with st.form("form_cadastro"):
                 cad_nome = st.text_input("Nome Completo")
                 cad_email = st.text_input("E-mail (Login)")
@@ -508,7 +506,6 @@ if dados_ambientes:
 
     df_consolidado = pd.DataFrame(tabela_editada)
     
-    # Mantém as colunas de potências unitárias e totais visíveis
     colunas_mantidas = [
         "Ambiente", "Área (m²)", "Perímetro (m)",
         "Qtd Ilum.", "Pot. Unit. Ilum (VA)", "Carga Ilum. (VA)",
@@ -522,7 +519,6 @@ if dados_ambientes:
     if "Perímetro (m)" in df_exibicao.columns:
         df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
-    # Linha de Totais Geral calculada e estilizada
     linha_total = {
         "Ambiente": "TOTAL GERAL",
         "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
