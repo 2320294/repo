@@ -44,8 +44,8 @@ def dimensionar_cargas(nome, area, perimetro):
         carga_tue = 5500
     elif any(x in nome_lower for x in ["coz"]):
         tue_nome = "Micro-ondas/Forno"
-        qtd_tue = 2  # Cozinha prevê TUE para Geladeira/Micro-ondas conforme padrão
-        carga_tue = 3500
+        qtd_tue = 1
+        carga_tue = 2000
     elif any(x in nome_lower for x in ["quarto", "dorm", "suite"]):
         tue_nome = "Ar-Condicionado"
         qtd_tue = 1
@@ -153,16 +153,6 @@ def point_seg_dist(px, py, pt1, pt2):
     if l2 == 0: return math.hypot(px - pt1[0], py - pt1[1])
     t = max(0, min(1, ((px - pt1[0])*(pt2[0] - pt1[0]) + (py - pt1[1])*(pt2[1] - pt1[1])) / l2))
     return math.hypot(px - (pt1[0] + t * (pt2[0] - pt1[0])), py - (pt1[1] + t * (pt2[1] - pt1[1])))
-
-def get_ponto_perimetro(d, segs):
-    acumulado = 0
-    for pt1, pt2, dst in segs:
-        if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
-            ratio = (d - acumulado) / dst
-            return pt1[0] + (pt2[0] - pt1[0]) * ratio, pt1[1] + (pt2[1] - pt1[1]) * ratio, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
-        acumulado += dst
-    pt1, pt2, dst = segs[-1]
-    return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
 
 def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
     tmp_in_path = ""
@@ -319,7 +309,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         for s in soleiras_raw:
             pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (DISTRIBUIÇÃO PRECISA: TUEs NAS MENORES PAREDES SEM PORTA E TUGs COM 15cm DE FOLGA DOS CANTOS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (LEITURA EXATA DA TABELA DE DADOS EDITADOS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -333,9 +323,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             if nome in ambientes_processados:
                 ambientes_processados[nome] += 1
-                nome = f"{nome} {ambientes_processados[nome]}"
+                nome_busca = f"{nome} {ambientes_processados[nome]}"
             else:
                 ambientes_processados[nome] = 1
+                nome_busca = nome
+            
+            # Garante que acha os dados na tabela editada (mesmo com sufixo numérico opcional)
+            row_data = dict_dados.get(nome_busca, dict_dados.get(nome, None))
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
             largura = max_x - min_x
@@ -356,9 +350,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
             unique_portas = [p for p in portas_raw if (min_x - 0.8) <= (p['p1'][0]+p['p2'][0])/2 <= (max_x + 0.8) and (min_y - 0.8) <= (p['p1'][1]+p['p2'][1])/2 <= (max_y + 0.8)]
 
-            if nome in dict_dados:
-                qtd_ilum = int(dict_dados[nome]['Qtd Ilum.'])
-                pot_ilum_unit = int(dict_dados[nome]['Pot. Unit. Ilum (VA)'])
+            if row_data:
+                qtd_ilum = int(row_data.get('Qtd Ilum.', 1))
+                pot_ilum_unit = int(row_data.get('Pot. Unit. Ilum (VA)', 100))
                 
                 if qtd_ilum > 0:
                     pontos_luz = []
@@ -447,11 +441,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 msp.add_lwpolyline(pts_qdc + [pts_qdc[0]], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
                 msp.add_solid(pts_qdc[:3], dxfattribs={'layer': 'PROJ_ELETRICA_QDC'})
 
-            if nome in dict_dados:
-                qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
-                qtd_tue = int(dict_dados[nome]['TUE']) if 'TUE' in dict_dados[nome] else int(dict_dados[nome]['Qtd TUE'])
-                eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
-                pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)']) if 'Pot. Unit. TUE (VA)' in dict_dados[nome] else 0
+            if row_data:
+                qtd_tugs = int(row_data.get('TUGs (Qtd)', 0))
+                qtd_tue = int(row_data.get('TUE', row_data.get('Qtd TUE', 0)))
+                eq_tue_nome = str(row_data.get('Equipamento TUE', '-'))
+                pot_tue_val = int(row_data.get('Pot. Unit. TUE (VA)', 0))
                 
                 if pot_tue_val == 0:
                     eq_lower = eq_tue_nome.lower()
@@ -467,7 +461,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
-                # DISTRIBUIÇÃO DAS TUEs (Exatamente qtd_tue nas menores paredes sem portas)
+                # 1. DISTRIBUIÇÃO EXATA DAS TUEs NAS MENORES PAREDES SEM PORTA
                 if qtd_tue > 0 and logical_walls:
                     paredes_candidatas = sorted(logical_walls, key=lambda w: w['length'])
                     paredes_sem_porta = [w for w in paredes_candidatas if not any(point_seg_dist((p['p1'][0]+p['p2'][0])/2, (p['p1'][1]+p['p2'][1])/2, w['p1'], w['p2']) < 0.6 for p in unique_portas)]
@@ -477,8 +471,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         p_alvo = paredes_finais[idx_tue % len(paredes_finais)]
                         pt1, pt2 = p_alvo['p1'], p_alvo['p2']
                         
-                        # Se houver mais de uma TUE na mesma parede, distribui ao longo dela; senão centraliza
-                        fator = (idx_tue + 1) / (qtd_tue + 1)
+                        fator = 0.5 if qtd_tue == 1 else (idx_tue + 1) / (qtd_tue + 1)
                         px = pt1[0] + (pt2[0] - pt1[0]) * fator
                         py = pt1[1] + (pt2[1] - pt1[1]) * fator
                         
@@ -499,10 +492,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             
                         msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-                # DISTRIBUIÇÃO DAS TUGs (Exatamente qtd_tugs com afastamento de 15cm dos cantos e sem vãos)
+                # 2. DISTRIBUIÇÃO EXATA DAS TUGs COM 15cm DE AFASTAMENTO DOS CANTOS E LIVRES DE VÃOS
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    margem = 0.15  # Exatamente 15cm (0.15m) de afastamento dos vértices/cantos
+                    margem = 0.15  # Exatamente 15cm (0.15m) de folga dos vértices/cantos
                     comprimento_util = comp_total - (2 * margem)
                     
                     if comprimento_util > 0 and total_tugs > 0:
