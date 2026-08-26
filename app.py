@@ -216,12 +216,9 @@ dxf_bytes = None
 dados_ambientes = []
 
 if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
-    st.success("📂 Dados carregados do projeto salvo anteriormente!")
     dados_ambientes = dados_salvos_db["tabela_editada"]
     
-    # Recupera o DXF salvo se houver
     if dados_salvos_db.get("dxf_bytes"):
-        # Se estiver armazenado como hex ou bytes
         try:
             dxf_bytes = bytes.fromhex(dados_salvos_db["dxf_bytes"]) if isinstance(dados_salvos_db["dxf_bytes"], str) else bytes(dados_salvos_db["dxf_bytes"])
         except:
@@ -307,9 +304,7 @@ if dados_ambientes:
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_exibicao.columns if col in df_exibicao.columns]).copy()
-    if "Centro_X" in df_exibicao.columns: df_exibicao = df_exibicao.drop(columns=["Centro_X"])
-    if "Centro_Y" in df_exibicao.columns: df_exibicao = df_exibicao.drop(columns=["Centro_Y"])
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns]).copy()
 
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
@@ -421,7 +416,6 @@ if dados_ambientes:
                 if dxf_bytes:
                     payload["dxf_bytes"] = dxf_bytes.hex()
 
-                # Verifica se já existe registro
                 res_check = supabase.table("dados_projetos").select("id").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
                 if res_check.data:
                     supabase.table("dados_projetos").update(payload).eq("id", res_check.data[0]["id"]).execute()
