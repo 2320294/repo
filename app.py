@@ -220,11 +220,14 @@ if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
     
     if dados_salvos_db.get("dxf_bytes"):
         try:
-            dxf_bytes = bytes.fromhex(dados_salvos_db["dxf_bytes"]) if isinstance(dados_salvos_db["dxf_bytes"], str) else bytes(dados_salvos_db["dxf_bytes"])
+            val_dxf = dados_salvos_db["dxf_bytes"]
+            if isinstance(val_dxf, str):
+                dxf_bytes = bytes.fromhex(val_dxf)
+            else:
+                dxf_bytes = bytes(val_dxf)
         except:
             dxf_bytes = None
             
-    # Opção para reenviar / substituir o arquivo DXF
     with st.expander("🔄 Reenviar / Substituir Arquivo DXF (Planta Base)"):
         uploaded_file = st.file_uploader("Envie a nova planta base (formato DXF):", type=["dxf"], key="novo_dxf_upload")
         if uploaded_file is not None:
@@ -235,7 +238,22 @@ if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
                     tmp_path = tmp.name
                 dados_ambientes = motores.processar_dxf(tmp_path)
                 os.remove(tmp_path)
-                st.success("✅ Novo arquivo DXF processado com sucesso! Clique em 'Salvar Alterações' abaixo.")
+                
+                # Salva imediatamente no banco para vincular o novo DXF
+                if supabase is not None:
+                    payload = {
+                        "user_email": st.session_state.user_email,
+                        "nome_projeto": st.session_state.projeto_ativo,
+                        "tabela_editada": dados_ambientes,
+                        "dxf_bytes": dxf_bytes.hex()
+                    }
+                    res_check = supabase.table("dados_projetos").select("id").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
+                    if res_check.data:
+                        supabase.table("dados_projetos").update(payload).eq("id", res_check.data[0]["id"]).execute()
+                    else:
+                        supabase.table("dados_projetos").insert(payload).execute()
+                
+                st.success("✅ Novo arquivo DXF processado e salvo com sucesso!")
             except Exception as e:
                 st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 else:
@@ -250,6 +268,16 @@ else:
                 tmp_path = tmp.name
             dados_ambientes = motores.processar_dxf(tmp_path)
             os.remove(tmp_path)
+            
+            # Salva o DXF inicial na nuvem automaticamente
+            if supabase is not None:
+                payload = {
+                    "user_email": st.session_state.user_email,
+                    "nome_projeto": st.session_state.projeto_ativo,
+                    "tabela_editada": dados_ambientes,
+                    "dxf_bytes": dxf_bytes.hex()
+                }
+                supabase.table("dados_projetos").insert(payload).execute()
         except Exception as e:
             st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 
@@ -306,7 +334,7 @@ if dados_ambientes:
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns])
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_exibicao.columns])
 
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
@@ -368,8 +396,6 @@ if dados_ambientes:
 
     nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
-    
-    # Tenta recuperar configurações salvas se houver
     config_salva = dados_salvos_db.get("config_interruptores", {}) if dados_salvos_db else {}
 
     for amb in nomes_ambientes:
@@ -412,7 +438,6 @@ if dados_ambientes:
     st.divider()
     st.subheader("🖨️ Exportação e Relatórios")
 
-    # Botão para salvar o progresso atual no Supabase
     if st.button("💾 Salvar Alterações do Projeto na Nuvem", use_container_width=True):
         if supabase is not None:
             try:
@@ -448,7 +473,7 @@ if dados_ambientes:
     st.markdown("### Projeto Unifilar (DXF)")
     if st.button("🚀 Gerar CAD (Atualizado)", type="primary", use_container_width=True):
         if not dxf_bytes:
-            st.error("❌ Nenhum arquivo DXF associado a este projeto. Por favor, envie um arquivo DXF.")
+            st.error("❌ Nenhum arquivo DXF associado a este projeto. Por favor, utilize o campo 'Reenviar / Substituir Arquivo DXF' acima para enviar a planta base.")
         else:
             try:
                 cad_bytes_out = motores.gerar_cad_unifilar(
