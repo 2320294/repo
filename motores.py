@@ -313,7 +313,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS COM MARGEM ANTICANTOS E TUE ALTA)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TUE COM POTÊNCIA EM WATTS E ALTURA CONDICIONAL)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -445,14 +445,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 qtd_tugs = int(dict_dados[nome]['TUGs (Qtd)'])
                 qtd_tue = int(dict_dados[nome]['TUE']) if 'TUE' in dict_dados[nome] else int(dict_dados[nome]['Qtd TUE'])
                 eq_tue_nome = str(dict_dados[nome]['Equipamento TUE'])
-                pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
-                is_ac = "ar" in eq_tue_nome.lower()
+                pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)']) if 'Pot. Unit. TUE (VA)' in dict_dados[nome] else 0
+                
+                # Se não veio a potência na linha, define conforme o equipamento TUE
+                if pot_tue_val == 0:
+                    eq_lower = eq_tue_nome.lower()
+                    if "chuveiro" in eq_lower: pot_tue_val = 5500
+                    elif "ar" in eq_lower: pot_tue_val = 1200
+                    elif "micro" in eq_lower or "forno" in eq_lower: pot_tue_val = 2000
+                    elif "máquina" in eq_lower or "lavar" in eq_lower: pot_tue_val = 1000
+                    else: pot_tue_val = 1000
+
+                eq_lower = eq_tue_nome.lower()
+                is_chuveiro_ou_ac = any(x in eq_lower for x in ["chuveiro", "ar-condicionado", "ar condicionado"])
                 
                 nome_lower_env = nome.lower().strip()
                 is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                 
-                # TUEs (Chuveiro, Ar-condicionado, etc.) geram Tomada Alta (inteiramente preenchida)
-                if is_ac and qtd_tue > 0 and logical_walls:
+                # TUEs específicas (Chuveiro e Ar-Condicionado geram tomada alta; outras TUEs seguem a regra do ambiente)
+                if qtd_tue > 0 and logical_walls:
                     menor_parede = min(logical_walls, key=lambda w: w['length'])
                     pt1, pt2 = menor_parede['p1'], menor_parede['p2']
                     px, py = (pt1[0] + pt2[0]) / 2, (pt1[1] + pt2[1]) / 2
@@ -464,12 +475,20 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     ponto_pt = (px + nx * 0.20, py + ny * 0.20)
                     
                     msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                    msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'}) # Tomada Alta preenchida inteira
+                    
+                    if is_chuveiro_ou_ac:
+                        # Tomada Alta (inteiramente preenchida)
+                        msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                    elif is_ambiente_molhado:
+                        # Tomada Média (metade preenchida)
+                        ponto_medio_base = (px, py)
+                        msp.add_solid([ponto_b1, ponto_medio_base, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
+                        
+                    # Potência em Watts obrigatória para TUEs
                     msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-                total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
+                total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    # Margem de segurança de 0.40m nas extremidades para evitar cantos de paredes
                     margem = 0.40
                     comprimento_util = comp_total - (2 * margem)
                     
