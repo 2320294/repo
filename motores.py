@@ -262,23 +262,46 @@ def get_inside_normal(
 # VERIFICA SE UMA TOMADA ESTÁ EM LOCAL PROIBIDO
 # ============================================================
 
+# ============================================================
+# REGRAS DE SEGURANÇA PARA TOMADAS
+# ============================================================
+
+# Distância mínima entre o ponto da tomada e qualquer vértice
+# (canto) do ambiente.
+#
+# 0.50 m = 50 cm.
+#
+# Isso impede que TUG/TUE sejam desenhadas exatamente nos
+# cantos ou muito próximas deles.
+DISTANCIA_MINIMA_CANTO_TOMADA = 0.50
+
+# Distâncias mínimas de outros elementos.
+DISTANCIA_MINIMA_PORTA_TOMADA = 0.40
+DISTANCIA_MINIMA_SOLEIRA_TOMADA = 0.40
+
+
+# ============================================================
+# VERIFICA SE UMA TOMADA ESTÁ EM LOCAL PROIBIDO
+# ============================================================
+
 def ponto_tomada_valido(
     px,
     py,
     polilinha,
     portas_raw,
     soleiras_raw,
-    distancia_canto=0.35,
-    distancia_porta=0.40,
-    distancia_soleira=0.40
+    distancia_canto=DISTANCIA_MINIMA_CANTO_TOMADA,
+    distancia_porta=DISTANCIA_MINIMA_PORTA_TOMADA,
+    distancia_soleira=DISTANCIA_MINIMA_SOLEIRA_TOMADA
 ):
     """
     Retorna True somente quando o ponto está em uma posição segura.
 
-    Evita:
-      1. vértices/cantos do ambiente;
-      2. segmento de porta;
-      3. segmento de soleira.
+    A tomada NÃO pode:
+      1. ficar sobre um vértice/canto;
+      2. ficar a menos de 0.50 m de qualquer vértice/canto;
+      3. ficar sobre ou muito perto de uma porta;
+      4. ficar sobre ou muito perto de uma soleira.
     """
 
     # --------------------------------------------------------
@@ -286,6 +309,7 @@ def ponto_tomada_valido(
     # --------------------------------------------------------
 
     for vx, vy in polilinha:
+
         distancia = math.hypot(
             px - vx,
             py - vy
@@ -342,17 +366,21 @@ def procurar_ponto_valido_perimetro(
     soleiras_raw
 ):
     """
-    Procura primeiro na posição desejada.
+    Procura uma posição válida ao longo do perímetro.
 
-    Se estiver em canto, porta ou soleira,
-    procura progressivamente para os dois lados.
+    Regra importante:
+    mesmo que a posição calculada originalmente caia exatamente
+    em um vértice, ela é rejeitada e o algoritmo procura uma nova
+    posição afastada do canto.
+
+    A busca é feita para os dois lados da posição desejada.
     """
 
     if comp_total <= 0:
         return None
 
     # --------------------------------------------------------
-    # Primeiro testa exatamente onde deveria ficar
+    # 1. TESTA A POSIÇÃO ORIGINAL
     # --------------------------------------------------------
 
     px, py, vx, vy = get_ponto_perimetro(
@@ -370,16 +398,21 @@ def procurar_ponto_valido_perimetro(
         return px, py, vx, vy
 
     # --------------------------------------------------------
-    # Depois procura para os dois lados
+    # 2. SE NÃO FOR VÁLIDA, AFASTA DO PONTO ORIGINAL
+    #
+    # O passo é de no máximo 10 cm.
+    # Assim, se a posição original cair em um vértice,
+    # a busca continuará até encontrar pelo menos 50 cm
+    # de afastamento do canto.
     # --------------------------------------------------------
 
-    passo_busca = min(
-        max(comp_total * 0.01, 0.10),
-        0.50
-    )
+    passo_busca = 0.10
 
+    # Nunca precisamos procurar indefinidamente.
+    # 2,00 m é suficiente para contornar cantos, portas e soleiras
+    # na maioria dos ambientes.
     max_busca = min(
-        comp_total * 0.20,
+        comp_total * 0.25,
         2.00
     )
 
@@ -387,6 +420,7 @@ def procurar_ponto_valido_perimetro(
 
     while deslocamento <= max_busca:
 
+        # Primeiro tenta para um lado e depois para o outro.
         distancias_teste = [
             distancia_original - deslocamento,
             distancia_original + deslocamento
@@ -394,7 +428,7 @@ def procurar_ponto_valido_perimetro(
 
         for distancia_teste in distancias_teste:
 
-            # Não deixa sair do perímetro
+            # Não deixa sair do perímetro.
             if distancia_teste <= 0:
                 continue
 
@@ -416,6 +450,143 @@ def procurar_ponto_valido_perimetro(
                 return tx, ty, tvx, tvy
 
         deslocamento += passo_busca
+
+    return None
+
+
+# ============================================================
+# PROCURA UMA POSIÇÃO VÁLIDA DENTRO DE UMA PAREDE
+# ============================================================
+
+def procurar_ponto_valido_na_parede(
+    pt1,
+    pt2,
+    fator_original,
+    polilinha,
+    portas_raw,
+    soleiras_raw,
+    distancia_canto=DISTANCIA_MINIMA_CANTO_TOMADA
+):
+    """
+    Procura uma posição válida em uma parede específica.
+
+    Usada principalmente para TUE.
+
+    A posição nunca é aceita se estiver próxima de um dos
+    extremos da parede. Isso evita que uma tomada TUE seja
+    desenhada no vértice do ambiente.
+
+    Também procura outras posições da mesma parede caso a posição
+    inicial esteja ocupada por porta, soleira ou esteja muito
+    próxima de um canto.
+    """
+
+    dx = pt2[0] - pt1[0]
+    dy = pt2[1] - pt1[1]
+
+    comprimento = math.hypot(
+        dx,
+        dy
+    )
+
+    if comprimento <= 2 * distancia_canto:
+        return None
+
+    # --------------------------------------------------------
+    # LIMITES FÍSICOS DA PAREDE
+    #
+    # A tomada precisa ficar pelo menos 0.50 m de cada extremo.
+    # --------------------------------------------------------
+
+    fator_min = (
+        distancia_canto / comprimento
+    )
+
+    fator_max = (
+        1.0 -
+        distancia_canto / comprimento
+    )
+
+    fator_original = max(
+        fator_min,
+        min(
+            fator_max,
+            fator_original
+        )
+    )
+
+    # --------------------------------------------------------
+    # MONTA UMA LISTA DE FATORES A TESTAR.
+    #
+    # Começa pelo ponto desejado e vai se afastando dele.
+    # --------------------------------------------------------
+
+    fatores = [fator_original]
+
+    passo_fator = 0.10 / comprimento
+    deslocamento = passo_fator
+
+    while (
+        deslocamento <= 0.50
+        and
+        deslocamento < 1.0
+    ):
+
+        fator_esquerda = (
+            fator_original -
+            deslocamento
+        )
+
+        fator_direita = (
+            fator_original +
+            deslocamento
+        )
+
+        if fator_esquerda >= fator_min:
+            fatores.append(
+                fator_esquerda
+            )
+
+        if fator_direita <= fator_max:
+            fatores.append(
+                fator_direita
+            )
+
+        deslocamento += passo_fator
+
+    # --------------------------------------------------------
+    # TESTA CADA POSIÇÃO
+    # --------------------------------------------------------
+
+    for fator in fatores:
+
+        px = (
+            pt1[0] +
+            dx * fator
+        )
+
+        py = (
+            pt1[1] +
+            dy * fator
+        )
+
+        if ponto_tomada_valido(
+            px,
+            py,
+            polilinha,
+            portas_raw,
+            soleiras_raw,
+            distancia_canto=distancia_canto
+        ):
+            vx = dx / comprimento
+            vy = dy / comprimento
+
+            return (
+                px,
+                py,
+                vx,
+                vy
+            )
 
     return None
 
@@ -2037,7 +2208,11 @@ def gerar_cad_unifilar(
                         pt2 = p_alvo['p2']
 
                         # -----------------------------------------
-                        # TENTA PRIMEIRO O CENTRO DA PAREDE
+                        # POSIÇÃO DESEJADA
+                        #
+                        # Para uma única TUE, começa no centro.
+                        # Para várias TUEs, distribui ao longo da
+                        # parede.
                         # -----------------------------------------
 
                         fator = (
@@ -2052,92 +2227,37 @@ def gerar_cad_unifilar(
                             )
                         )
 
-                        px = (
-                            pt1[0] +
-                            (
-                                pt2[0] -
-                                pt1[0]
-                            ) * fator
-                        )
-
-                        py = (
-                            pt1[1] +
-                            (
-                                pt2[1] -
-                                pt1[1]
-                            ) * fator
-                        )
-
                         # -----------------------------------------
-                        # VALIDA TUE
+                        # PROCURA UMA POSIÇÃO REALMENTE VÁLIDA
+                        #
+                        # Esta função garante afastamento mínimo
+                        # de 50 cm dos cantos da parede.
                         # -----------------------------------------
 
-                        if not ponto_tomada_valido(
+                        resultado_tue = (
+                            procurar_ponto_valido_na_parede(
+                                pt1,
+                                pt2,
+                                fator,
+                                polilinha,
+                                portas_raw,
+                                soleiras_raw
+                            )
+                        )
+
+                        if resultado_tue is None:
+                            continue
+
+                        (
                             px,
                             py,
-                            polilinha,
-                            portas_raw,
-                            soleiras_raw
-                        ):
+                            vx,
+                            vy
+                        ) = resultado_tue
 
-                            # tenta pontos alternativos
-                            dst_parede = (
-                                p_alvo['length']
-                            )
-
-                            tentativas = [
-                                0.25,
-                                0.35,
-                                0.65,
-                                0.75
-                            ]
-
-                            encontrado = None
-
-                            for fator_alt in tentativas:
-
-                                tx = (
-                                    pt1[0] +
-                                    (
-                                        pt2[0] -
-                                        pt1[0]
-                                    ) *
-                                    fator_alt
-                                )
-
-                                ty = (
-                                    pt1[1] +
-                                    (
-                                        pt2[1] -
-                                        pt1[1]
-                                    ) *
-                                    fator_alt
-                                )
-
-                                if ponto_tomada_valido(
-                                    tx,
-                                    ty,
-                                    polilinha,
-                                    portas_raw,
-                                    soleiras_raw
-                                ):
-
-                                    encontrado = (
-                                        tx,
-                                        ty
-                                    )
-
-                                    break
-
-                            if encontrado:
-
-                                px, py = encontrado
-
-                            else:
-                                continue
-
-                        vx = p_alvo['vx']
-                        vy = p_alvo['vy']
+                        # -----------------------------------------
+                        # NORMAL PARA DENTRO DO AMBIENTE
+                        # -----------------------------------------
 
                         nx, ny = get_inside_normal(
                             vx,
@@ -2223,6 +2343,7 @@ def gerar_cad_unifilar(
                                 )
                             }
                         )
+
 
                 # =================================================
                 # TUGs
