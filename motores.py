@@ -328,14 +328,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # Coleta pontos proibidos (vãos de portas e soleiras) para evitar colocar tomadas neles
         pontos_proibidos = []
         for p in portas_raw:
             pontos_proibidos.append(((p['p1'][0] + p['p2'][0])/2, (p['p1'][1] + p['p2'][1])/2))
         for s in soleiras_raw:
             pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS EVITANDO VÃOS DE PORTAS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (EVITANDO CANTOS DE PAREDE E VÃOS DE PORTAS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -506,7 +505,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    margem = 0.40
+                    # Margem de segurança de 0.60m nas extremidades para evitar cantos de paredes
+                    margem = 0.60
                     comprimento_util = comp_total - (2 * margem)
                     
                     if comprimento_util > 0 and total_tugs > 0:
@@ -520,9 +520,11 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         dist_atual = inicio_offset + (i * passo)
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(dist_atual, segmentos_crus)
                         
-                        # Validação rigorosa: ignora o ponto se ele estiver em cima de um vão de porta/soleira (raio < 0.50m)
+                        # Verifica se está perto de vãos de portas/soleiras (< 0.50m) ou perto dos cantos/vértices do ambiente (< 0.50m)
                         perto_de_vao = any(math.hypot(px - v[0], py - v[1]) < 0.50 for v in pontos_proibidos)
-                        if perto_de_vao:
+                        perto_de_canto = any(math.hypot(px - v[0], py - v[1]) < 0.50 for v in polilinha[:-1])
+                        
+                        if perto_de_vao or perto_de_canto:
                             continue
 
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
