@@ -17,7 +17,7 @@ st.set_page_config(
 # ============================================================
 # CREDENCIAIS DO SUPABASE
 # ============================================================
-SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
+SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
 @st.cache_resource
@@ -189,33 +189,39 @@ if dados_ambientes:
     tabela_editada = []
     for row in dados_ambientes:
         with st.container():
-            # Perímetro e Área formatados com 2 casas decimais
             st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']:.2f}m*")
-            c1, c2, c3, c4, c5 = st.columns(5)
+            
+            # Organizado em colunas para Iluminação, TUGs e TUEs com os novos inputs em Watts
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
 
             with c1:
-                q_ilum = st.number_input(f"Qtd Ilum ({row['Ambiente']})", min_value=0, value=row["Qtd Ilum."], key=f"ilum_{row['Ambiente']}")
+                q_ilum = st.number_input(f"Qtd Ilum", min_value=0, value=row["Qtd Ilum."], key=f"ilum_{row['Ambiente']}")
             with c2:
-                p_ilum = st.number_input(f"Pot Ilum W ({row['Ambiente']})", min_value=0, value=row["Pot. Unit. Ilum (W)"], key=f"pilum_{row['Ambiente']}")
+                p_ilum = st.number_input(f"Pot Ilum (W)", min_value=0, value=row["Pot. Unit. Ilum (W)"], key=f"pilum_{row['Ambiente']}")
             with c3:
-                qtd_tugs = st.number_input(f"TUGs Qtd ({row['Ambiente']})", min_value=0, value=row["TUGs (Qtd)"], key=f"tugs_{row['Ambiente']}")
+                qtd_tugs = st.number_input(f"Qtd TUGs", min_value=0, value=row["TUGs (Qtd)"], key=f"tugs_{row['Ambiente']}")
             with c4:
-                qtd_tue = st.number_input(f"TUEs Qtd ({row['Ambiente']})", min_value=0, value=row["Qtd TUE"], key=f"tue_{row['Ambiente']}")
+                pot_tug_unit = st.number_input(f"Pot TUG (W)", min_value=0, value=row["Pot. Unit. TUG (W)"], key=f"ptug_{row['Ambiente']}")
             with c5:
-                eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
+                qtd_tue = st.number_input(f"Qtd TUE", min_value=0, value=row["Qtd TUE"], key=f"tue_{row['Ambiente']}")
+            with c6:
+                pot_tue_unit = st.number_input(f"Pot TUE (W)", min_value=0, value=row["Pot. Unit. TUE (W)"], key=f"ptue_{row['Ambiente']}")
+
+            eq_tue_nome = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
 
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
             row_modificado["Pot. Unit. Ilum (W)"] = p_ilum
-            row_modificado["TUGs (Qtd)"] = qtd_tugs
-            row_modificado["Qtd TUE"] = qtd_tue
-            row_modificado["Equipamento TUE"] = eq_tue
-
             row_modificado["Carga Ilum. (W)"] = q_ilum * p_ilum
-            is_molhado = any(x in row['Ambiente'].lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
-            pot_tup_unit_calc = 600 if is_molhado else 100
-            row_modificado["Pot. Unit. TUG (W)"] = pot_tup_unit_calc
-            row_modificado["Carga TUGs (W)"] = qtd_tugs * pot_tup_unit_calc
+
+            row_modificado["TUGs (Qtd)"] = qtd_tugs
+            row_modificado["Pot. Unit. TUG (W)"] = pot_tug_unit
+            row_modificado["Carga TUGs (W)"] = qtd_tugs * pot_tug_unit
+
+            row_modificado["Qtd TUE"] = qtd_tue
+            row_modificado["Pot. Unit. TUE (W)"] = pot_tue_unit
+            row_modificado["Carga TUE (W)"] = qtd_tue * pot_tue_unit
+            row_modificado["Equipamento TUE"] = eq_tue
 
             tabela_editada.append(row_modificado)
             st.markdown("---")
