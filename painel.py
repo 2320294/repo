@@ -149,7 +149,8 @@ def renderizar_painel_principal():
 
     renderizar_materiais(
         tabela_editada,
-        config_interruptores_usuario
+        config_interruptores_usuario,
+        local_qdc
     )
 
     renderizar_salvar_e_gerar_cad(
