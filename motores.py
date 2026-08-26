@@ -319,7 +319,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         for s in soleiras_raw:
             pontos_proibidos.append(((s['p1'][0] + s['p2'][0])/2, (s['p1'][1] + s['p2'][1])/2))
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (LEITURA EXATA DA TABELA DE DADOS EDITADOS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (BLINDAGEM CONTRA VÉRTICES E VÃOS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -501,15 +501,15 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                             
                         msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-                # 2. DISTRIBUIÇÃO EXATA DAS TUGs COM 15cm DE AFASTAMENTO DOS CANTOS E LIVRES DE VÃOS
+                # 2. DISTRIBUIÇÃO DAS TUGs COM FILTRO RIGOROSO DE VÉRTICES (ANTIVERTEX > 0.35m)
                 total_tugs = qtd_tugs
                 if total_tugs > 0 and comp_total > 0:
-                    margem = 0.15  # Exatamente 15cm (0.15m) de folga dos vértices/cantos
-                    comprimento_util = comp_total - (2 * margem)
+                    margem_inicial = 0.35  # Afastamento mínimo absoluto de 35cm de qualquer canto/vértice
+                    comprimento_util = comp_total - (2 * margem_inicial)
                     
                     if comprimento_util > 0 and total_tugs > 0:
                         passo = comprimento_util / total_tugs
-                        inicio_offset = margem + (passo / 2)
+                        inicio_offset = margem_inicial + (passo / 2)
                     else:
                         passo = comp_total / total_tugs
                         inicio_offset = passo / 2
@@ -518,9 +518,14 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         dist_atual = inicio_offset + (i * passo)
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(dist_atual, segmentos_crus)
                         
+                        # Filtro duplo: Proibido perto de vãos/portas E proibido perto de vértices/cantos (< 0.35m)
                         perto_de_vao = any(math.hypot(px - v[0], py - v[1]) < 0.40 for v in pontos_proibidos)
-                        if perto_de_vao:
-                            continue
+                        perto_de_vertice = any(math.hypot(px - v[0], py - v[1]) < 0.35 for v in polilinha[:-1])
+                        
+                        if perto_de_vao or perto_de_vertice:
+                            # Se caiu num vértice, desloca em direção ao centro do segmento para salvar a contagem exata
+                            px += seg_vx * 0.40
+                            py += seg_vy * 0.40
 
                         nx, ny = get_inside_normal(seg_vx, seg_vy, px, py, centro_x, centro_y)
                         
