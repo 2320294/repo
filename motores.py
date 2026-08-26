@@ -231,7 +231,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # 1. IGNORA SOLEIRAS SEM PORTAS (Tolerância estrita a 0.15m)
+        # 1. IGNORA SOLEIRAS SEM PORTAS (Tolerância restrita a 0.15m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -251,7 +251,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (IDENTIFICANDO A DOBRADIÇA CORRETAMENTE POR PROXIMIDADE)
+        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (ANCORANDO INDEPENDENTEMENTE PARA CADA AMBIENTE)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -268,34 +268,29 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
                     ambientes_adjacentes.append(poly)
             
-            # Identifica qual extremidade da porta é a dobradiça (a que está fisicamente mais próxima da soleira)
-            dist_p1_s1 = math.hypot(p_porta['p1'][0] - s_p1[0], p_porta['p1'][1] - s_p1[1])
-            dist_p1_s2 = math.hypot(p_porta['p1'][0] - s_p2[0], p_porta['p1'][1] - s_p2[1])
-            dist_p2_s1 = math.hypot(p_porta['p2'][0] - s_p1[0], p_porta['p2'][1] - s_p1[1])
-            dist_p2_s2 = math.hypot(p_porta['p2'][0] - s_p2[0], p_porta['p2'][1] - s_p2[1])
+            # Identifica qual extremidade da porta é a dobradiça em relação a esta soleira
+            d_p1_s1 = math.hypot(p_porta['p1'][0] - s_p1[0], p_porta['p1'][1] - s_p1[1])
+            d_p1_s2 = math.hypot(p_porta['p1'][0] - s_p2[0], p_porta['p1'][1] - s_p2[1])
+            d_p2_s1 = math.hypot(p_porta['p2'][0] - s_p1[0], p_porta['p2'][1] - s_p1[1])
+            d_p2_s2 = math.hypot(p_porta['p2'][0] - s_p2[0], p_porta['p2'][1] - s_p2[1])
             
-            min_p1 = min(dist_p1_s1, dist_p1_s2)
-            min_p2 = min(dist_p2_s1, dist_p2_s2)
+            min_p1 = min(dist_p1_s1 := d_p1_s1, dist_p1_s2 := d_p1_s2) # Mantém compatibilidade limpa
+            dobradiça_pt = p_porta['p1'] if min(d_p1_s1, d_p1_s2) < min(d_p2_s1, d_p2_s2) else p_porta['p2']
             
-            dobradiça_pt = p_porta['p1'] if min_p1 < min_p2 else p_porta['p2']
-            
-            # A extremidade oposta da soleira é a que fica mais distante da dobradiça da porta
+            # A extremidade oposta à dobradiça na soleira
             d_s1_dob = math.hypot(s_p1[0] - dobradiça_pt[0], s_p1[1] - dobradiça_pt[1])
             d_s2_dob = math.hypot(s_p2[0] - dobradiça_pt[0], s_p2[1] - dobradiça_pt[1])
             
-            ponto_ancora_1 = s_p1 if d_s1_dob > d_s2_dob else s_p2
-            ponto_ancora_2 = s_p2 if d_s1_dob > d_s2_dob else s_p1
+            ponto_ancora_oposto = s_p1 if d_s1_dob > d_s2_dob else s_p2
             
             if len(ambientes_adjacentes) >= 2:
-                ancoras = [ponto_ancora_1, ponto_ancora_2]
-                for idx, poly in enumerate(ambientes_adjacentes[:2]):
-                    p_op = ancoras[idx]
+                for poly in ambientes_adjacentes[:2]:
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
                     
-                    nx, ny = get_inside_normal(vx, vy, p_op[0], p_op[1], cx, cy)
-                    final_x = p_op[0] + nx * raio_circulo
-                    final_y = p_op[1] + ny * raio_circulo
+                    nx, ny = get_inside_normal(vx, vy, ponto_ancora_oposto[0], ponto_ancora_oposto[1], cx, cy)
+                    final_x = ponto_ancora_oposto[0] + nx * raio_circulo
+                    final_y = ponto_ancora_oposto[1] + ny * raio_circulo
                     
                     if ponto_em_poligono(final_x, final_y, poly):
                         msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
@@ -304,9 +299,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 cx = sum([pt[0] for pt in poly]) / len(poly)
                 cy = sum([pt[1] for pt in poly]) / len(poly)
                 
-                nx, ny = get_inside_normal(vx, vy, ponto_ancora_1[0], ponto_ancora_1[1], cx, cy)
-                final_x = ponto_ancora_1[0] + nx * raio_circulo
-                final_y = ponto_ancora_1[1] + ny * raio_circulo
+                nx, ny = get_inside_normal(vx, vy, ponto_ancora_oposto[0], ponto_ancora_oposto[1], cx, cy)
+                final_x = ponto_ancora_oposto[0] + nx * raio_circulo
+                final_y = ponto_ancora_oposto[1] + ny * raio_circulo
                 
                 if ponto_em_poligono(final_x, final_y, poly):
                     msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
