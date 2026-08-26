@@ -14,33 +14,41 @@ st.set_page_config(
 )
 
 # ============================================================
-# CONTROLE DE SESSÃO / LOGIN
+# SISTEMA DE AUTENTICAÇÃO (E-MAIL E SENHA)
 # ============================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 
-# ============================================================
-# BARRA LATERAL (GERENCIADOR DE OBRAS E LOGIN)
-# ============================================================
+# Base de usuários simulada (Pode ser integrada a um banco de dados posteriormente)
+# Senha padrão para testes: 123456 (ou o usuário pode cadastrar/usar a padrão)
+USUARIOS_VALIDOS = {
+    "jrsebadelhe@gmail.com": "123456",
+    "admin@autoletrica.com": "admin123"
+}
+
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=50)
+    st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
     st.markdown("### AutoElétrica NBR 5410")
+    st.divider()
     
     if not st.session_state.logged_in:
-        st.subheader("Autenticação")
-        email_input = st.text_input("E-mail de acesso", value="jrsebadelhe@gmail.com")
-        if st.button("Entrar / Login", use_container_width=True):
-            if email_input:
+        st.subheader("🔐 Área Restrita - Login")
+        email_input = st.text_input("E-mail", value="jrsebadelhe@gmail.com")
+        senha_input = st.text_input("Senha", type="password", value="")
+        
+        if st.button("Entrar no Sistema", use_container_width=True):
+            if email_input in USUARIOS_VALIDOS and USUARIOS_VALIDOS[email_input] == senha_input:
                 st.session_state.logged_in = True
                 st.session_state.user_email = email_input
+                st.success("Login realizado com sucesso!")
                 st.rerun()
             else:
-                st.warning("Insira um e-mail válido.")
+                st.error("E-mail ou senha incorretos.")
     else:
-        st.markdown(f"**Logado como:**\n`{st.session_state.user_email}`")
-        if st.button("Sair / Logout", use_container_width=True):
+        st.markdown(f"👤 **Usuário:**\n`{st.session_state.user_email}`")
+        if st.button("🚪 Sair / Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user_email = ""
             st.rerun()
@@ -48,32 +56,32 @@ with st.sidebar:
         st.divider()
         st.markdown("### 📂 Gerenciador de Obras")
         if st.button("➕ Novo Projeto / Pavimento", use_container_width=True):
-            st.toast("Novo projeto inicializado.")
+            st.toast("Novo projeto inicializado com sucesso.")
             
         st.markdown("### 📋 Projetos Salvos:")
-        pavimento_ativo = st.selectbox(
-            "Selecione o pavimento para trabalhar:",
+        projeto_selecionado = st.selectbox(
+            "Selecione o pavimento:",
             ["Teste 01 - Térreo", "Teste 02 - Superior"]
         )
         
         if st.button("⚙️ Opções do Pavimento Atual", use_container_width=True):
-            st.info(f"Gerenciando o pavimento: {pavimento_ativo}")
+            st.info(f"Gerenciando propriedades de: {projeto_selecionado}")
 
 # ============================================================
-# VALIDAÇÃO DE ACESSO
+# BLOQUEIO DE SEGURANÇA PARA QUEM NÃO ESTÁ LOGADO
 # ============================================================
 if not st.session_state.logged_in:
-    st.warning("🔒 Por favor, efetue o login na barra lateral esquerda para acessar o sistema de projetos.")
+    st.warning("⚠️ Por favor, insira suas credenciais (e-mail e senha) na barra lateral para acessar o painel de projetos elétricos.")
     st.stop()
 
 # ============================================================
 # TELA PRINCIPAL DA APLICAÇÃO
 # ============================================================
 st.title("⚡ Gerador de Projetos Elétricos (NBR 5410)")
-st.markdown("Automação inteligente para dimensionamento, quantificação de materiais e geração de DXF.")
+st.markdown("Automação profissional para dimensionamento de cargas, previsão, quantificação de materiais e CAD.")
 
 # Upload do arquivo DXF da planta baixa
-st.subheader("📤 Envio da Planta Base")
+st.subheader("📁 Projeto Unifilar (DXF)")
 uploaded_file = st.file_uploader("Reenvie a planta base (formato DXF):", type=["dxf"])
 
 dados_ambientes = []
@@ -90,7 +98,7 @@ if uploaded_file is not None:
         dados_ambientes = motores.processar_dxf(tmp_path)
         os.remove(tmp_path)
     except Exception as e:
-        st.error(f"❌ Erro ao processar as camadas do DXF: {e}")
+        st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 
 if dados_ambientes:
     st.divider()
@@ -113,7 +121,7 @@ if dados_ambientes:
             with c5:
                 eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
             
-            # Constrói o dicionário atualizado por linha
+            # Sincroniza dados modificados
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
             row_modificado["Pot. Unit. Ilum (VA)"] = p_ilum
@@ -121,7 +129,7 @@ if dados_ambientes:
             row_modificado["Qtd TUE"] = qtd_tue
             row_modificado["Equipamento TUE"] = eq_tue
             
-            # Recálculos automáticos consistentes
+            # Recálculos consistentes
             row_modificado["Carga Ilum. (VA)"] = q_ilum * p_ilum
             is_molhado = any(x in row['Ambiente'].lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
             pot_tup_unit_calc = 600 if is_molhado else 100
@@ -131,7 +139,7 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    # Exibição da tabela consolidada via dataframe
+    # Exibição do DataFrame consolidado
     df_consolidado = pd.DataFrame(tabela_editada)
     st.dataframe(df_consolidado, use_container_width=True)
 
