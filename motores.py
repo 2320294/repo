@@ -251,20 +251,17 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSAMENTO COM OS CENTROS EM P2 E P3 TANGENCIANDO EM P1 E P4
+        # 2. PROCESSA CADA SOLEIRA COM PORTA (LOGICA MANTIDA INTACTA)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_pA, s_pB = s['p1'], s['p2']
             sm_x, sm_y = (s_pA[0] + s_pB[0]) / 2, (s_pA[1] + s_pB[1]) / 2
             
-            # Identifica a dobradiça (ponto da porta mais próximo da soleira)
             d_p1_sA = math.hypot(p_porta['p1'][0] - s_pA[0], p_porta['p1'][1] - s_pA[1])
             d_p1_sB = math.hypot(p_porta['p1'][0] - s_pB[0], p_porta['p1'][1] - s_pB[1])
             dobradiça_pt = p_porta['p1'] if d_p1_sA < d_p1_sB else p_porta['p2']
             
-            # p1 = Referência superior oposta à dobradiça
-            # p4 = A outra referência superior da soleira
             d_sA_dob = math.hypot(s_pA[0] - dobradiça_pt[0], s_pA[1] - dobradiça_pt[1])
             d_sB_dob = math.hypot(s_pB[0] - dobradiça_pt[0], s_pB[1] - dobradiça_pt[1])
             
@@ -287,19 +284,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 
                 cx_a, cy_a = sum(pt[0] for pt in poly_a)/len(poly_a), sum(pt[1] for pt in poly_a)/len(poly_a)
                 
-                # Descobre qual ambiente fica do lado de p1 e qual fica do lado de p4
                 nx_1, ny_1 = get_inside_normal(vx, vy, p1[0], p1[1], cx_a, cy_a)
                 c_test_p2 = (p1[0] + nx_1 * raio_circulo, p1[1] + ny_1 * raio_circulo)
                 
                 target_poly_p2 = poly_a if ponto_em_poligono(c_test_p2[0], c_test_p2[1], poly_a) else poly_b
                 target_poly_p3 = poly_b if target_poly_p2 == poly_a else poly_a
                 
-                # Centro do círculo P2 (deslocado para dentro do ambiente a partir de p1, de modo que o quadrante toque em p1)
                 cx_p2, cy_p2 = sum(pt[0] for pt in target_poly_p2)/len(target_poly_p2), sum(pt[1] for pt in target_poly_p2)/len(target_poly_p2)
                 nx_p2, ny_p2 = get_inside_normal(vx, vy, p1[0], p1[1], cx_p2, cy_p2)
                 center_p2 = (p1[0] + nx_p2 * raio_circulo, p1[1] + ny_p2 * raio_circulo)
                 
-                # Centro do círculo P3 (deslocado para dentro do ambiente a partir de p4, de modo que o quadrante toque em p4)
                 cx_p3, cy_p3 = sum(pt[0] for pt in target_poly_p3)/len(target_poly_p3), sum(pt[1] for pt in target_poly_p3)/len(target_poly_p3)
                 nx_p3, ny_p3 = get_inside_normal(vx, vy, p4[0], p4[1], cx_p3, cy_p3)
                 center_p3 = (p4[0] + nx_p3 * raio_circulo, p4[1] + ny_p3 * raio_circulo)
@@ -319,7 +313,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
-        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS)
+        # 3. LOOP DE PROCESSAMENTO DOS AMBIENTES (ILUMINAÇÃO, QDC, TOMADAS E APLICAÇÃO DE TOMADA MÉDIA EM AMBIENTES MOLHADOS)
         for polilinha in polilinhas:
             xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
             min_x, max_x = min(xs), max(xs)
@@ -454,6 +448,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 pot_tue_val = int(dict_dados[nome]['Pot. Unit. TUE (VA)'])
                 is_ac = "ar" in eq_tue_nome.lower()
                 
+                # Identifica se o ambiente é molhado (Cozinha, Banheiro, Lavanderia, Área de Serviço)
+                nome_lower_env = nome.lower().strip()
+                is_ambiente_molhado = any(x in nome_lower_env for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
+                
                 if is_ac and qtd_tue > 0 and logical_walls:
                     menor_parede = min(logical_walls, key=lambda w: w['length'])
                     pt1, pt2 = menor_parede['p1'], menor_parede['p2']
@@ -472,7 +470,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 total_tugs = qtd_tugs + (qtd_tue if not is_ac else 0)
                 if total_tugs > 0 and comp_total > 0:
                     passo = comp_total / total_tugs
-                    is_umida = any(x in nome.lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
                     
                     for i in range(total_tugs):
                         px, py, seg_vx, seg_vy = get_ponto_perimetro(passo * i, segmentos_crus)
@@ -486,7 +483,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         ponto_pt = (t_x + nx * 0.20, t_y + ny * 0.20)
                         
                         msp.add_lwpolyline([ponto_b1, ponto_b2, ponto_pt, ponto_b1], close=True, dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
-                        if is_umida:
+                        
+                        # Conforme norma técnica: em ambientes molhados, as TUGs ganham representação gráfica de tomada média (preenchida/solid)
+                        if is_ambiente_molhado:
                             msp.add_solid([ponto_b1, ponto_b2, ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
 
         doc.saveas(tmp_in_path)
