@@ -3,13 +3,6 @@ import math
 import tempfile
 import os
 
-# ============================================================
-# CONFIGURAÇÃO DOS INTERRUPTORES / CÍRCULOS
-# ============================================================
-CONFIG_INTERRUPTores = {
-    # Exemplo: "Sala": {"quantidade": 1, "porta": 1}
-}
-
 RAIO_CIRCULO_INTERRUPT = 0.15
 
 # ============================================================
@@ -142,9 +135,10 @@ def normalizar_nome_ambiente(nome):
     if nome is None: return ""
     return str(nome).strip().lower()
 
-def obter_config_interruptores(nome_ambiente):
+def obter_config_interruptores(nome_ambiente, config_interruptores):
+    if not config_interruptores: return None
     nome_normalizado = normalizar_nome_ambiente(nome_ambiente)
-    for nome_config, config in CONFIG_INTERRUPTores.items():
+    for nome_config, config in config_interruptores.items():
         if normalizar_nome_ambiente(nome_config) == nome_normalizado:
             return config
     return None
@@ -199,8 +193,8 @@ def desenhar_circulo_tangente_soleira(msp, ponto_tangencia, soleira_vx, soleira_
     msp.add_circle(center=centro, radius=raio, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR', 'color': 5})
     return True
 
-def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_ambiente, polilinha):
-    config = obter_config_interruptores(nome_ambiente)
+def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_ambiente, polilinha, config_interruptores):
+    config = obter_config_interruptores(nome_ambiente, config_interruptores)
     if not config: return
     quantidade = int(config.get('quantidade', 0))
     if quantidade not in [1, 2]: return
@@ -335,7 +329,7 @@ def processar_dxf(caminho_arquivo):
         })
     return resultados
 
-def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
+def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc, config_interruptores=None):
     tmp_in_path = ""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp_in:
@@ -408,7 +402,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 ambientes_proc_int[nome_ambiente] = 1
                 nome_busca_int = nome_ambiente
 
-            processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_busca_int, polilinha)
+            processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_busca_int, polilinha, config_interruptores)
 
         # 2. PROCESSA AMBIENTES (QDC, ILUMINAÇÃO, TOMADAS TUE E TUG)
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
@@ -463,7 +457,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-            # RENDERIZAÇÃO DO QDC (RESTAURADA COM SUCESSO)
+            # RENDERIZAÇÃO DO QDC
             qdc_formatado = str(local_qdc).replace(" (recomendado)", "").strip().upper()
             if (nome.strip().upper() == qdc_formatado) and logical_walls:
                 qdc_w, qdc_d = 0.4, 0.15
