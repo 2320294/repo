@@ -1127,63 +1127,62 @@ def gerar_cad_unifilar(
         # ====================================================
         # IDENTIFICA SOLEIRAS ASSOCIADAS A PORTAS
         # ====================================================
+        # Cada soleira deve ser associada à PORTA MAIS PRÓXIMA.
+        # Não usamos mais o primeiro encontro encontrado, pois isso
+        # podia associar uma soleira à porta errada e deixar outras
+        # portas (como algumas da cozinha) sem círculo.
+        #
+        # A associação considera as duas extremidades da porta e
+        # também o meio da porta. Uma tolerância um pouco maior
+        # permite pequenas folgas existentes no desenho CAD.
+        # ====================================================
 
         soleiras_com_porta = []
+        tolerancia_porta_soleira = 0.30
 
         for s in soleiras_raw:
 
             s_p1 = s['p1']
             s_p2 = s['p2']
 
-            porta_encostada = None
+            melhor_porta = None
+            menor_distancia = float('inf')
 
             for p in portas_raw:
 
                 d1 = point_seg_dist(
-                    p['p1'][0],
-                    p['p1'][1],
-                    s_p1,
-                    s_p2
+                    p['p1'][0], p['p1'][1],
+                    s_p1, s_p2
                 )
 
                 d2 = point_seg_dist(
-                    p['p2'][0],
-                    p['p2'][1],
-                    s_p1,
-                    s_p2
+                    p['p2'][0], p['p2'][1],
+                    s_p1, s_p2
                 )
 
-                pm_porta_x = (
-                    p['p1'][0] +
-                    p['p2'][0]
-                ) / 2
-
-                pm_porta_y = (
-                    p['p1'][1] +
-                    p['p2'][1]
-                ) / 2
+                pm_porta = (
+                    (p['p1'][0] + p['p2'][0]) / 2,
+                    (p['p1'][1] + p['p2'][1]) / 2
+                )
 
                 d3 = point_seg_dist(
-                    pm_porta_x,
-                    pm_porta_y,
-                    s_p1,
-                    s_p2
+                    pm_porta[0], pm_porta[1],
+                    s_p1, s_p2
                 )
 
+                distancia = min(d1, d2, d3)
+
                 if (
-                    d1 < 0.15
-                    or d2 < 0.15
-                    or d3 < 0.15
+                    distancia <= tolerancia_porta_soleira
+                    and distancia < menor_distancia
                 ):
+                    menor_distancia = distancia
+                    melhor_porta = p
 
-                    porta_encostada = p
-                    break
-
-            if porta_encostada is not None:
-
+            if melhor_porta is not None:
                 soleiras_com_porta.append({
                     's': s,
-                    'porta': porta_encostada
+                    'porta': melhor_porta
                 })
 
         # ====================================================
@@ -1239,34 +1238,51 @@ def gerar_cad_unifilar(
             s_p2 = s['p2']
 
             # ------------------------------------------------
-            # P1 = extremidade da porta que encosta na soleira.
-            # P4 = a outra extremidade da porta.
+            # P1 = projeção exata do extremo da porta que encosta
+            # na soleira. P4 = outro extremo da porta.
             # ------------------------------------------------
             d_porta_1 = point_seg_dist(
-                p_porta['p1'][0],
-                p_porta['p1'][1],
-                s_p1,
-                s_p2
+                p_porta['p1'][0], p_porta['p1'][1],
+                s_p1, s_p2
             )
 
             d_porta_2 = point_seg_dist(
-                p_porta['p2'][0],
-                p_porta['p2'][1],
-                s_p1,
-                s_p2
+                p_porta['p2'][0], p_porta['p2'][1],
+                s_p1, s_p2
             )
 
             if d_porta_1 <= d_porta_2:
-                p1 = p_porta['p1']
+                extremo_porta_encostado = p_porta['p1']
                 p4 = p_porta['p2']
             else:
-                p1 = p_porta['p2']
+                extremo_porta_encostado = p_porta['p2']
                 p4 = p_porta['p1']
 
+            # Projeta o ponto de encontro da porta exatamente na
+            # linha da soleira. Assim a geometria não depende de
+            # pequenas folgas existentes no DXF.
+            sx = s_p2[0] - s_p1[0]
+            sy = s_p2[1] - s_p1[1]
+            s2 = sx * sx + sy * sy
+
+            if s2 == 0:
+                continue
+
+            t = (
+                (extremo_porta_encostado[0] - s_p1[0]) * sx
+                +
+                (extremo_porta_encostado[1] - s_p1[1]) * sy
+            ) / s2
+
+            t = max(0.0, min(1.0, t))
+
+            p1 = (
+                s_p1[0] + t * sx,
+                s_p1[1] + t * sy
+            )
+
             # ------------------------------------------------
-            # P2 = a outra extremidade da SOLEIRA.
-            # Escolhemos a extremidade da soleira que não é
-            # a extremidade correspondente ao encontro em P1.
+            # P2 = outra extremidade da SOLEIRA.
             # ------------------------------------------------
             d_p1_s1 = math.hypot(
                 p1[0] - s_p1[0],
@@ -1284,18 +1300,8 @@ def gerar_cad_unifilar(
                 p2 = s_p1
 
             # ------------------------------------------------
-            # P3 = quarto ponto da geometria.
-            #
-            # O vetor P1 -> P2 é copiado a partir de P4.
-            # Assim:
-            #
-            #       P1 -------- P2
-            #       |            |
-            #       |            |
-            #       P4 -------- P3
-            #
-            # Isso mantém P1/P2 exatamente na SOLEIRA e
-            # P1/P4 exatamente na PORTA.
+            # P3 = quarto ponto. O vetor P1 -> P2 é copiado a
+            # partir de P4.
             # ------------------------------------------------
             vetor_x = p2[0] - p1[0]
             vetor_y = p2[1] - p1[1]
@@ -1319,16 +1325,27 @@ def gerar_cad_unifilar(
 
             ambientes_adjacentes = []
 
+            # A caixa delimitadora do centro da soleira podia falhar
+            # em portas localizadas na extremidade de um ambiente.
+            # Agora verificamos a proximidade do centro da soleira
+            # ao perímetro de cada ambiente.
             for poly in polilinhas:
 
-                xs = [pt[0] for pt in poly]
-                ys = [pt[1] for pt in poly]
+                distancia_poly = float('inf')
 
-                if (
-                    min(xs) - 0.5 <= sm_x <= max(xs) + 0.5
-                    and
-                    min(ys) - 0.5 <= sm_y <= max(ys) + 0.5
-                ):
+                for i in range(len(poly)):
+                    a = poly[i]
+                    b = poly[(i + 1) % len(poly)]
+
+                    d = point_seg_dist(
+                        sm_x, sm_y,
+                        a, b
+                    )
+
+                    if d < distancia_poly:
+                        distancia_poly = d
+
+                if distancia_poly <= 0.60:
                     ambientes_adjacentes.append(poly)
 
             # ------------------------------------------------
@@ -1386,6 +1403,19 @@ def gerar_cad_unifilar(
                     ponto[0] + nx * raio_circulo,
                     ponto[1] + ny * raio_circulo
                 )
+
+                # Se a normal escolhida não cair dentro do ambiente,
+                # tenta a normal oposta. Isso evita perder o círculo
+                # quando a orientação da polilinha estiver invertida.
+                if not ponto_em_poligono(
+                    centro[0],
+                    centro[1],
+                    poly
+                ):
+                    centro = (
+                        ponto[0] - nx * raio_circulo,
+                        ponto[1] - ny * raio_circulo
+                    )
 
                 if ponto_em_poligono(
                     centro[0],
