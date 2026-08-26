@@ -5,26 +5,10 @@ import os
 
 
 # ============================================================
-# CONFIGURAÇÕES DE SEGURANÇA PARA POSICIONAMENTO
-# ============================================================
-
-# Distância mínima entre uma tomada e o vértice/canto da parede
-MARGEM_CANTO = 0.35
-
-# Distância de segurança em torno de portas e soleiras
-MARGEM_VAO = 0.35
-
-# Distância mínima considerada para identificar um elemento
-# como pertencente a uma determinada parede
-TOLERANCIA_PAREDE = 0.60
-
-
-# ============================================================
 # DIMENSIONAMENTO DAS CARGAS
 # ============================================================
 
 def dimensionar_cargas(nome, area, perimetro):
-
     if area <= 0 or perimetro <= 0:
         return {
             "Qtd Ilum.": 0,
@@ -40,125 +24,67 @@ def dimensionar_cargas(nome, area, perimetro):
         }
 
     qtd_ilum = 1 if area <= 10 else math.ceil(area / 10)
-
-    carga_ilum = (
-        100
-        if area <= 6
-        else 100 + (((area - 6) // 4) * 60)
-    )
+    carga_ilum = 100 if area <= 6 else 100 + (((area - 6) // 4) * 60)
 
     nome_lower = nome.lower().strip()
     nome_words = nome_lower.replace('-', ' ').split()
 
     is_umida = (
-        any(
-            x in nome_lower
-            for x in [
-                "coz",
-                "serv",
-                "banh",
-                "lav",
-                "sanit",
-                "área",
-                "area"
-            ]
-        )
-        or any(
-            w in nome_words
-            for w in ["as", "wc", "bwc"]
-        )
+        any(x in nome_lower for x in [
+            "coz", "serv", "banh", "lav", "sanit", "área", "area"
+        ])
+        or any(w in nome_words for w in ["as", "wc", "bwc"])
     )
 
-    is_corredor = any(
-        x in nome_lower
-        for x in [
-            "hall",
-            "corredor",
-            "circulação",
-            "circulacao"
-        ]
-    )
+    is_corredor = any(x in nome_lower for x in [
+        "hall", "corredor", "circulação", "circulacao"
+    ])
 
     if is_umida:
-
         qtd_tugs = math.ceil(perimetro / 3.5)
-
-        if qtd_tugs <= 3:
-            carga_tugs = qtd_tugs * 600
-        else:
-            carga_tugs = (
-                (3 * 600)
-                + ((qtd_tugs - 3) * 100)
-            )
+        carga_tugs = (
+            qtd_tugs * 600
+            if qtd_tugs <= 3
+            else (3 * 600) + ((qtd_tugs - 3) * 100)
+        )
 
     elif is_corredor:
-
         comprimento_estimado = (perimetro / 2) - 1
 
         if comprimento_estimado <= 3:
             qtd_tugs = 1
         else:
-            qtd_tugs = max(
-                1,
-                math.ceil(comprimento_estimado / 3)
-            )
+            qtd_tugs = max(1, math.ceil(comprimento_estimado / 3))
 
         carga_tugs = qtd_tugs * 100
 
     else:
-
         qtd_tugs = math.ceil(perimetro / 5)
-
         carga_tugs = qtd_tugs * 100
 
     tue_nome = "-"
     qtd_tue = 0
     carga_tue = 0
 
-    if (
-        any(
-            x in nome_lower
-            for x in ["banh", "sanit"]
-        )
-        or any(
-            w in nome_words
-            for w in ["wc", "bwc"]
-        )
-    ):
+    if any(x in nome_lower for x in ["banh", "sanit"]) or \
+       any(w in nome_words for w in ["wc", "bwc"]):
 
         tue_nome = "Chuveiro Elétrico"
         qtd_tue = 1
         carga_tue = 5500
 
-    elif any(
-        x in nome_lower
-        for x in ["coz"]
-    ):
-
+    elif any(x in nome_lower for x in ["coz"]):
         tue_nome = "Micro-ondas/Forno"
         qtd_tue = 1
         carga_tue = 2000
 
-    elif any(
-        x in nome_lower
-        for x in [
-            "quarto",
-            "dorm",
-            "suite"
-        ]
-    ):
-
+    elif any(x in nome_lower for x in ["quarto", "dorm", "suite"]):
         tue_nome = "Ar-Condicionado"
         qtd_tue = 1
         carga_tue = 1200
 
-    elif (
-        any(
-            x in nome_lower
-            for x in ["serv", "lavand"]
-        )
-        or "as" in nome_words
-    ):
+    elif any(x in nome_lower for x in ["serv", "lavand"]) or \
+         "as" in nome_words:
 
         tue_nome = "Máquina de Lavar"
         qtd_tue = 1
@@ -166,73 +92,54 @@ def dimensionar_cargas(nome, area, perimetro):
 
     return {
         "Qtd Ilum.": qtd_ilum,
-
-        "Pot. Unit. Ilum (VA)":
-            round(carga_ilum / qtd_ilum)
+        "Pot. Unit. Ilum (VA)": round(carga_ilum / qtd_ilum)
             if qtd_ilum > 0 else 0,
-
         "Carga Ilum. (VA)": carga_ilum,
 
         "TUGs (Qtd)": qtd_tugs,
-
-        "Pot. Unit. TUG (VA)":
-            600 if is_umida else 100,
-
+        "Pot. Unit. TUG (VA)": 600 if is_umida else 100,
         "Carga TUGs (VA)": carga_tugs,
 
         "Equipamento TUE": tue_nome,
-
         "Qtd TUE": qtd_tue,
-
-        "Pot. Unit. TUE (VA)":
-            round(
-                carga_tue / max(1, qtd_tue)
-            ),
-
+        "Pot. Unit. TUE (VA)": round(
+            carga_tue / max(1, qtd_tue)
+        ),
         "Carga TUE (VA)": carga_tue
     }
 
 
 # ============================================================
-# PONTO DENTRO DE POLÍGONO
+# GEOMETRIA
 # ============================================================
 
 def ponto_em_poligono(x, y, polilinha):
-
-    n = len(polilinha)
-
-    if n < 3:
+    if not polilinha:
         return False
 
+    n = len(polilinha)
     dentro = False
 
     p1x, p1y = polilinha[0]
 
     for i in range(n + 1):
-
         p2x, p2y = polilinha[i % n]
 
         if y > min(p1y, p2y):
-
             if y <= max(p1y, p2y):
-
                 if x <= max(p1x, p2x):
 
+                    xinters = None
+
                     if p1y != p2y:
-
                         xinters = (
-                            (y - p1y)
-                            * (p2x - p1x)
-                            / (p2y - p1y)
-                            + p1x
-                        )
+                            (y - p1y) *
+                            (p2x - p1x) /
+                            (p2y - p1y)
+                        ) + p1x
 
-                    else:
-                        xinters = p1x
-
-                    if (
-                        p1x == p2x
-                        or x <= xinters
+                    if p1x == p2x or (
+                        xinters is not None and x <= xinters
                     ):
                         dentro = not dentro
 
@@ -241,106 +148,13 @@ def ponto_em_poligono(x, y, polilinha):
     return dentro
 
 
-# ============================================================
-# PONTO AO LONGO DO PERÍMETRO
-# ============================================================
-
-def get_ponto_perimetro(d, segs):
-
-    acumulado = 0
-
-    for pt1, pt2, dst in segs:
-
-        if (
-            acumulado + dst >= d
-            or math.isclose(
-                acumulado + dst,
-                d,
-                abs_tol=1e-5
-            )
-        ):
-
-            if dst == 0:
-                return (
-                    pt1[0],
-                    pt1[1],
-                    1,
-                    0
-                )
-
-            ratio = (
-                d - acumulado
-            ) / dst
-
-            return (
-                pt1[0]
-                + (pt2[0] - pt1[0]) * ratio,
-
-                pt1[1]
-                + (pt2[1] - pt1[1]) * ratio,
-
-                (pt2[0] - pt1[0]) / dst,
-
-                (pt2[1] - pt1[1]) / dst
-            )
-
-        acumulado += dst
-
-    pt1, pt2, dst = segs[-1]
-
-    return (
-        pt2[0],
-        pt2[1],
-        (pt2[0] - pt1[0]) / dst,
-        (pt2[1] - pt1[1]) / dst
-    )
-
-
-# ============================================================
-# NORMAL INTERNA DA PAREDE
-# ============================================================
-
-def get_inside_normal(
-    vx,
-    vy,
-    start_x,
-    start_y,
-    cx,
-    cy
-):
-
-    n1x, n1y = -vy, vx
-    n2x, n2y = vy, -vx
-
-    dist1 = math.hypot(
-        cx - (start_x + n1x),
-        cy - (start_y + n1y)
-    )
-
-    dist2 = math.hypot(
-        cx - (start_x + n2x),
-        cy - (start_y + n2y)
-    )
-
-    if dist1 < dist2:
-        return n1x, n1y
-
-    return n2x, n2y
-
-
-# ============================================================
-# DISTÂNCIA DE PONTO A SEGMENTO
-# ============================================================
-
 def point_seg_dist(px, py, pt1, pt2):
-
     l2 = (
-        (pt1[0] - pt2[0]) ** 2
-        + (pt1[1] - pt2[1]) ** 2
+        (pt1[0] - pt2[0]) ** 2 +
+        (pt1[1] - pt2[1]) ** 2
     )
 
     if l2 == 0:
-
         return math.hypot(
             px - pt1[0],
             py - pt1[1]
@@ -351,562 +165,259 @@ def point_seg_dist(px, py, pt1, pt2):
         min(
             1,
             (
-                (px - pt1[0])
-                * (pt2[0] - pt1[0])
-                +
-                (py - pt1[1])
-                * (pt2[1] - pt1[1])
+                (px - pt1[0]) * (pt2[0] - pt1[0]) +
+                (py - pt1[1]) * (pt2[1] - pt1[1])
             ) / l2
         )
     )
 
+    proj_x = pt1[0] + t * (pt2[0] - pt1[0])
+    proj_y = pt1[1] + t * (pt2[1] - pt1[1])
+
     return math.hypot(
-        px - (
-            pt1[0]
-            + t * (pt2[0] - pt1[0])
-        ),
-        py - (
-            pt1[1]
-            + t * (pt2[1] - pt1[1])
-        )
+        px - proj_x,
+        py - proj_y
     )
 
 
-# ============================================================
-# PROJEÇÃO DE PONTO EM PAREDE
-# ============================================================
-
-def projetar_ponto_na_parede(px, py, pt1, pt2):
-
-    vx = pt2[0] - pt1[0]
-    vy = pt2[1] - pt1[1]
-
-    comprimento = math.hypot(vx, vy)
-
-    if comprimento == 0:
-        return 0.0
-
-    return (
-        (
-            (px - pt1[0]) * vx
-            +
-            (py - pt1[1]) * vy
-        )
-        / (comprimento ** 2)
-    )
-
-
-# ============================================================
-# INTERVALOS LIVRES DE UMA PAREDE
-#
-# Aqui está a principal alteração.
-#
-# A parede é dividida em:
-#
-# [ canto ] [ trecho livre ] [ porta ] [ trecho livre ] [ canto ]
-#
-# As tomadas somente podem ser colocadas nos trechos livres.
-# ============================================================
-
-def obter_intervalos_livres_parede(
-    parede,
-    portas,
-    soleiras,
-    margem_canto=MARGEM_CANTO,
-    margem_vao=MARGEM_VAO
-):
-
-    pt1 = parede['p1']
-    pt2 = parede['p2']
-
-    comprimento = parede['length']
-
-    if comprimento <= (
-        2 * margem_canto
-    ):
-
-        return []
-
-    intervalos_proibidos = []
-
-    # --------------------------------------------------------
-    # CANTOS DA PAREDE
-    # --------------------------------------------------------
-
-    intervalos_proibidos.append(
-        (
-            0,
-            margem_canto
-        )
-    )
-
-    intervalos_proibidos.append(
-        (
-            comprimento - margem_canto,
-            comprimento
-        )
-    )
-
-    # --------------------------------------------------------
-    # PORTAS
-    # --------------------------------------------------------
-
-    for porta in portas:
-
-        d1 = point_seg_dist(
-            porta['p1'][0],
-            porta['p1'][1],
-            pt1,
-            pt2
-        )
-
-        d2 = point_seg_dist(
-            porta['p2'][0],
-            porta['p2'][1],
-            pt1,
-            pt2
-        )
-
-        distancia_porta = min(d1, d2)
-
-        if distancia_porta > TOLERANCIA_PAREDE:
-            continue
-
-        t1 = projetar_ponto_na_parede(
-            porta['p1'][0],
-            porta['p1'][1],
-            pt1,
-            pt2
-        )
-
-        t2 = projetar_ponto_na_parede(
-            porta['p2'][0],
-            porta['p2'][1],
-            pt1,
-            pt2
-        )
-
-        pos1 = max(
-            0,
-            min(
-                comprimento,
-                t1 * comprimento
-            )
-        )
-
-        pos2 = max(
-            0,
-            min(
-                comprimento,
-                t2 * comprimento
-            )
-        )
-
-        inicio = min(pos1, pos2)
-        fim = max(pos1, pos2)
-
-        # Expande a área proibida
-        inicio -= margem_vao
-        fim += margem_vao
-
-        inicio = max(0, inicio)
-        fim = min(comprimento, fim)
-
-        intervalos_proibidos.append(
-            (inicio, fim)
-        )
-
-    # --------------------------------------------------------
-    # SOLEIRAS
-    # --------------------------------------------------------
-
-    for soleira in soleiras:
-
-        d1 = point_seg_dist(
-            soleira['p1'][0],
-            soleira['p1'][1],
-            pt1,
-            pt2
-        )
-
-        d2 = point_seg_dist(
-            soleira['p2'][0],
-            soleira['p2'][1],
-            pt1,
-            pt2
-        )
-
-        distancia_soleira = min(d1, d2)
-
-        if distancia_soleira > TOLERANCIA_PAREDE:
-            continue
-
-        t1 = projetar_ponto_na_parede(
-            soleira['p1'][0],
-            soleira['p1'][1],
-            pt1,
-            pt2
-        )
-
-        t2 = projetar_ponto_na_parede(
-            soleira['p2'][0],
-            soleira['p2'][1],
-            pt1,
-            pt2
-        )
-
-        pos1 = max(
-            0,
-            min(
-                comprimento,
-                t1 * comprimento
-            )
-        )
-
-        pos2 = max(
-            0,
-            min(
-                comprimento,
-                t2 * comprimento
-            )
-        )
-
-        inicio = min(pos1, pos2)
-        fim = max(pos1, pos2)
-
-        inicio -= margem_vao
-        fim += margem_vao
-
-        inicio = max(0, inicio)
-        fim = min(comprimento, fim)
-
-        intervalos_proibidos.append(
-            (inicio, fim)
-        )
-
-    # --------------------------------------------------------
-    # ORDENA OS INTERVALOS PROIBIDOS
-    # --------------------------------------------------------
-
-    intervalos_proibidos.sort(
-        key=lambda x: x[0]
-    )
-
-    # --------------------------------------------------------
-    # UNE INTERVALOS SOBREPOSTOS
-    # --------------------------------------------------------
-
-    proibidos_unidos = []
-
-    for inicio, fim in intervalos_proibidos:
-
-        if not proibidos_unidos:
-
-            proibidos_unidos.append(
-                [inicio, fim]
-            )
-
-        else:
-
-            ultimo = proibidos_unidos[-1]
-
-            if inicio <= ultimo[1]:
-
-                ultimo[1] = max(
-                    ultimo[1],
-                    fim
-                )
-
-            else:
-
-                proibidos_unidos.append(
-                    [inicio, fim]
-                )
-
-    # --------------------------------------------------------
-    # CALCULA OS TRECHOS LIVRES
-    # --------------------------------------------------------
-
-    livres = []
-
-    cursor = 0
-
-    for inicio, fim in proibidos_unidos:
-
-        if inicio > cursor:
-
-            if (
-                inicio - cursor
-                >= 0.15
-            ):
-
-                livres.append(
-                    (
-                        cursor,
-                        inicio
-                    )
-                )
-
-        cursor = max(
-            cursor,
-            fim
-        )
-
-    if cursor < comprimento:
-
-        if (
-            comprimento - cursor
-            >= 0.15
+def get_ponto_perimetro(d, segs):
+    acumulado = 0
+
+    for pt1, pt2, dst in segs:
+
+        if acumulado + dst >= d or math.isclose(
+            acumulado + dst,
+            d,
+            abs_tol=1e-5
         ):
 
-            livres.append(
-                (
-                    cursor,
-                    comprimento
+            if dst == 0:
+                return (
+                    pt1[0],
+                    pt1[1],
+                    0,
+                    0
                 )
-            )
 
-    return livres
+            ratio = (d - acumulado) / dst
 
+            x = pt1[0] + (
+                pt2[0] - pt1[0]
+            ) * ratio
 
-# ============================================================
-# CONVERTE POSIÇÃO DA PAREDE EM COORDENADA
-# ============================================================
+            y = pt1[1] + (
+                pt2[1] - pt1[1]
+            ) * ratio
 
-def ponto_na_parede_por_distancia(
-    parede,
-    distancia
-):
+            vx = (pt2[0] - pt1[0]) / dst
+            vy = (pt2[1] - pt1[1]) / dst
 
-    pt1 = parede['p1']
+            return x, y, vx, vy
 
-    vx = parede['vx']
-    vy = parede['vy']
+        acumulado += dst
+
+    pt1, pt2, dst = segs[-1]
+
+    if dst == 0:
+        return pt2[0], pt2[1], 0, 0
 
     return (
-        pt1[0] + vx * distancia,
-        pt1[1] + vy * distancia
+        pt2[0],
+        pt2[1],
+        (pt2[0] - pt1[0]) / dst,
+        (pt2[1] - pt1[1]) / dst
+    )
+
+
+def get_inside_normal(
+    vx,
+    vy,
+    start_x,
+    start_y,
+    cx,
+    cy
+):
+    n1x, n1y = -vy, vx
+    n2x, n2y = vy, -vx
+
+    d1 = math.hypot(
+        cx - (start_x + n1x),
+        cy - (start_y + n1y)
+    )
+
+    d2 = math.hypot(
+        cx - (start_x + n2x),
+        cy - (start_y + n2y)
+    )
+
+    return (
+        (n1x, n1y)
+        if d1 < d2
+        else (n2x, n2y)
     )
 
 
 # ============================================================
-# GERA PONTOS DE TOMADAS EM UMA PAREDE
+# NOVA FUNÇÃO:
+# VERIFICA SE UMA TOMADA ESTÁ EM LOCAL PROIBIDO
 # ============================================================
 
-def gerar_pontos_em_intervalo(
-    parede,
-    intervalo,
-    quantidade
+def ponto_tomada_valido(
+    px,
+    py,
+    polilinha,
+    portas_raw,
+    soleiras_raw,
+    distancia_canto=0.35,
+    distancia_porta=0.40,
+    distancia_soleira=0.40
 ):
+    """
+    Retorna True somente quando o ponto está em uma posição segura.
 
-    if quantidade <= 0:
-        return []
+    Evita:
+      1. vértices/cantos do ambiente;
+      2. segmento de porta;
+      3. segmento de soleira.
+    """
 
-    inicio, fim = intervalo
+    # --------------------------------------------------------
+    # 1. NÃO PERMITIR PRÓXIMO DOS VÉRTICES
+    # --------------------------------------------------------
 
-    comprimento = fim - inicio
-
-    if comprimento <= 0:
-        return []
-
-    pontos = []
-
-    # Distribuição uniforme dentro do trecho.
-    # Nunca toca nas extremidades.
-    passo = comprimento / quantidade
-
-    for i in range(quantidade):
-
-        distancia = (
-            inicio
-            + passo * (i + 0.5)
+    for vx, vy in polilinha:
+        distancia = math.hypot(
+            px - vx,
+            py - vy
         )
 
-        pontos.append(
-            ponto_na_parede_por_distancia(
-                parede,
-                distancia
-            )
+        if distancia < distancia_canto:
+            return False
+
+    # --------------------------------------------------------
+    # 2. NÃO PERMITIR SOBRE / PERTO DE PORTAS
+    # --------------------------------------------------------
+
+    for porta in portas_raw:
+
+        d = point_seg_dist(
+            px,
+            py,
+            porta['p1'],
+            porta['p2']
         )
 
-    return pontos
+        if d < distancia_porta:
+            return False
+
+    # --------------------------------------------------------
+    # 3. NÃO PERMITIR SOBRE / PERTO DE SOLEIRAS
+    # --------------------------------------------------------
+
+    for soleira in soleiras_raw:
+
+        d = point_seg_dist(
+            px,
+            py,
+            soleira['p1'],
+            soleira['p2']
+        )
+
+        if d < distancia_soleira:
+            return False
+
+    return True
 
 
 # ============================================================
-# ESCOLHE PONTOS SEGUROS PARA UMA QUANTIDADE EXATA
-#
-# IMPORTANTE:
-# Esta função SEMPRE tenta retornar exatamente "quantidade".
+# PROCURA UMA NOVA POSIÇÃO VÁLIDA NO PERÍMETRO
 # ============================================================
 
-def escolher_pontos_tomadas(
-    paredes,
-    portas,
-    soleiras,
-    quantidade
+def procurar_ponto_valido_perimetro(
+    distancia_original,
+    comp_total,
+    segmentos_crus,
+    polilinha,
+    portas_raw,
+    soleiras_raw
 ):
+    """
+    Procura primeiro na posição desejada.
 
-    if quantidade <= 0:
-        return []
+    Se estiver em canto, porta ou soleira,
+    procura progressivamente para os dois lados.
+    """
 
-    candidatos = []
-
-    # --------------------------------------------------------
-    # MONTA TODOS OS TRECHOS LIVRES DAS PAREDES
-    # --------------------------------------------------------
-
-    for indice, parede in enumerate(paredes):
-
-        intervalos = obter_intervalos_livres_parede(
-            parede,
-            portas,
-            soleiras
-        )
-
-        for intervalo in intervalos:
-
-            inicio, fim = intervalo
-
-            comprimento = fim - inicio
-
-            if comprimento > 0.15:
-
-                candidatos.append(
-                    {
-                        'parede': parede,
-                        'intervalo': intervalo,
-                        'comprimento': comprimento,
-                        'indice_parede': indice
-                    }
-                )
-
-    if not candidatos:
-        return []
+    if comp_total <= 0:
+        return None
 
     # --------------------------------------------------------
-    # ORDENA PELOS TRECHOS MAIORES
+    # Primeiro testa exatamente onde deveria ficar
     # --------------------------------------------------------
 
-    candidatos.sort(
-        key=lambda x: x['comprimento'],
-        reverse=True
+    px, py, vx, vy = get_ponto_perimetro(
+        distancia_original,
+        segmentos_crus
     )
 
-    # --------------------------------------------------------
-    # PRIMEIRA DISTRIBUIÇÃO:
-    # UMA TOMADA POR TRECHO QUANDO POSSÍVEL
-    #
-    # Isso evita concentrar todas as tomadas em uma única parede.
-    # --------------------------------------------------------
-
-    pontos = []
-
-    quantidade_restante = quantidade
-
-    for candidato in candidatos:
-
-        if quantidade_restante <= 0:
-            break
-
-        ponto = gerar_pontos_em_intervalo(
-            candidato['parede'],
-            candidato['intervalo'],
-            1
-        )[0]
-
-        pontos.append(
-            {
-                'ponto': ponto,
-                'parede': candidato['parede'],
-                'intervalo': candidato['intervalo']
-            }
-        )
-
-        quantidade_restante -= 1
+    if ponto_tomada_valido(
+        px,
+        py,
+        polilinha,
+        portas_raw,
+        soleiras_raw
+    ):
+        return px, py, vx, vy
 
     # --------------------------------------------------------
-    # SE AINDA FALTAM TOMADAS:
-    # DISTRIBUI NOVAMENTE NOS TRECHOS
+    # Depois procura para os dois lados
     # --------------------------------------------------------
 
-    rodada = 0
+    passo_busca = min(
+        max(comp_total * 0.01, 0.10),
+        0.50
+    )
 
-    while quantidade_restante > 0:
+    max_busca = min(
+        comp_total * 0.20,
+        2.00
+    )
 
-        houve_insercao = False
+    deslocamento = passo_busca
 
-        for candidato in candidatos:
+    while deslocamento <= max_busca:
 
-            if quantidade_restante <= 0:
-                break
+        distancias_teste = [
+            distancia_original - deslocamento,
+            distancia_original + deslocamento
+        ]
 
-            # Verifica quantas tomadas já existem
-            # neste mesmo trecho
-            tomadas_no_trecho = [
-                p
-                for p in pontos
-                if (
-                    p['parede'] is candidato['parede']
-                    and p['intervalo']
-                    == candidato['intervalo']
-                )
-            ]
+        for distancia_teste in distancias_teste:
 
-            qtd_atual = len(
-                tomadas_no_trecho
+            # Não deixa sair do perímetro
+            if distancia_teste <= 0:
+                continue
+
+            if distancia_teste >= comp_total:
+                continue
+
+            tx, ty, tvx, tvy = get_ponto_perimetro(
+                distancia_teste,
+                segmentos_crus
             )
 
-            nova_qtd = qtd_atual + 1
+            if ponto_tomada_valido(
+                tx,
+                ty,
+                polilinha,
+                portas_raw,
+                soleiras_raw
+            ):
+                return tx, ty, tvx, tvy
 
-            novos_pontos = gerar_pontos_em_intervalo(
-                candidato['parede'],
-                candidato['intervalo'],
-                nova_qtd
-            )
+        deslocamento += passo_busca
 
-            # Remove os pontos antigos deste trecho
-            pontos = [
-                p
-                for p in pontos
-                if not (
-                    p['parede'] is candidato['parede']
-                    and p['intervalo']
-                    == candidato['intervalo']
-                )
-            ]
-
-            # Adiciona os novos pontos
-            for ponto in novos_pontos:
-
-                pontos.append(
-                    {
-                        'ponto': ponto,
-                        'parede': candidato['parede'],
-                        'intervalo': candidato['intervalo']
-                    }
-                )
-
-            quantidade_restante -= 1
-
-            houve_insercao = True
-
-        rodada += 1
-
-        if not houve_insercao:
-            break
-
-        # Segurança
-        if rodada > quantidade + 5:
-            break
-
-    # --------------------------------------------------------
-    # RETORNA SOMENTE COORDENADAS
-    # --------------------------------------------------------
-
-    return [
-        item['ponto']
-        for item in pontos
-    ][:quantidade]
+    return None
 
 
 # ============================================================
@@ -915,10 +426,7 @@ def escolher_pontos_tomadas(
 
 def processar_dxf(caminho_arquivo):
 
-    doc = ezdxf.readfile(
-        caminho_arquivo
-    )
-
+    doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
 
     contagem_camadas = {
@@ -937,24 +445,21 @@ def processar_dxf(caminho_arquivo):
             ).upper().strip()
 
             if l in contagem_camadas:
-
                 contagem_camadas[l] += 1
 
     camadas_vazias = [
         cam
-        for cam, qtd
-        in contagem_camadas.items()
+        for cam, qtd in contagem_camadas.items()
         if qtd == 0
     ]
 
     if camadas_vazias:
-
         raise ValueError(
             "❌ Erro de Validação do DXF: "
-            "A(s) seguinte(s) camada(s) obrigatória(s) "
-            "está(ão) vazia(s) ou ausente(s): "
-            + ", ".join(camadas_vazias)
-            + ". Certifique-se de desenhar os elementos "
+            f"A(s) seguinte(s) camada(s) obrigatória(s) "
+            f"está(ão) vazia(s) ou ausente(s): "
+            f"{', '.join(camadas_vazias)}. "
+            "Certifique-se de desenhar os elementos "
             "nos respectivos layers "
             "(IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, "
             "IA_SOLEIRAS) antes de gerar o projeto."
@@ -971,27 +476,21 @@ def processar_dxf(caminho_arquivo):
             entity.dxf.layer
         ).upper().strip()
 
-        if (
-            tipo in [
-                'LWPOLYLINE',
-                'POLYLINE'
-            ]
-            and layer == 'IA_AMBIENTES'
-        ):
+        if tipo in [
+            'LWPOLYLINE',
+            'POLYLINE'
+        ] and layer == 'IA_AMBIENTES':
 
             try:
 
                 if tipo == 'LWPOLYLINE':
-
                     pontos = [
                         (p[0], p[1])
                         for p in entity.get_points(
                             format='xy'
                         )
                     ]
-
                 else:
-
                     pontos = [
                         (
                             v.dxf.location.x,
@@ -1001,17 +500,15 @@ def processar_dxf(caminho_arquivo):
                     ]
 
                 if pontos:
-                    polilinhas.append(
-                        pontos
-                    )
+                    polilinhas.append(pontos)
 
             except:
                 pass
 
-        elif (
-            tipo in ['TEXT', 'MTEXT']
-            and layer == 'IA_TEXTOS'
-        ):
+        elif tipo in [
+            'TEXT',
+            'MTEXT'
+        ] and layer == 'IA_TEXTOS':
 
             try:
 
@@ -1023,13 +520,11 @@ def processar_dxf(caminho_arquivo):
 
                 if texto_str:
 
-                    textos.append(
-                        {
-                            'nome': texto_str,
-                            'x': entity.dxf.insert.x,
-                            'y': entity.dxf.insert.y
-                        }
-                    )
+                    textos.append({
+                        'nome': texto_str,
+                        'x': entity.dxf.insert.x,
+                        'y': entity.dxf.insert.y
+                    })
 
             except:
                 pass
@@ -1039,19 +534,11 @@ def processar_dxf(caminho_arquivo):
 
     for polilinha in polilinhas:
 
-        xs = [
-            p[0]
-            for p in polilinha
-        ]
-
-        ys = [
-            p[1]
-            for p in polilinha
-        ]
+        xs = [p[0] for p in polilinha]
+        ys = [p[1] for p in polilinha]
 
         min_x = min(xs)
         max_x = max(xs)
-
         min_y = min(ys)
         max_y = max(ys)
 
@@ -1102,7 +589,6 @@ def processar_dxf(caminho_arquivo):
             )
 
         else:
-
             ambientes_processados[
                 nome_ambiente
             ] = 1
@@ -1113,92 +599,56 @@ def processar_dxf(caminho_arquivo):
             perimetro
         )
 
-        resultados.append(
-            {
-                "Ambiente": nome_ambiente,
+        resultados.append({
 
-                "Centro_X":
-                    (min_x + max_x) / 2,
+            "Ambiente": nome_ambiente,
 
-                "Centro_Y":
-                    (min_y + max_y) / 2,
+            "Centro_X":
+                (min_x + max_x) / 2,
 
-                "Área (m²)": area,
+            "Centro_Y":
+                (min_y + max_y) / 2,
 
-                "Perímetro (m)":
-                    perimetro,
+            "Área (m²)": area,
 
-                "Qtd Ilum.":
-                    int(cargas["Qtd Ilum."]),
+            "Perímetro (m)": perimetro,
 
-                "Pot. Unit. Ilum (VA)":
-                    int(
-                        cargas[
-                            "Pot. Unit. Ilum (VA)"
-                        ]
-                    ),
+            "Qtd Ilum.":
+                int(cargas["Qtd Ilum."]),
 
-                "Carga Ilum. (VA)":
-                    int(
-                        cargas[
-                            "Carga Ilum. (VA)"
-                        ]
-                    ),
+            "Pot. Unit. Ilum (VA)":
+                int(cargas["Pot. Unit. Ilum (VA)"]),
 
-                "TUGs (Qtd)":
-                    int(
-                        cargas[
-                            "TUGs (Qtd)"
-                        ]
-                    ),
+            "Carga Ilum. (VA)":
+                int(cargas["Carga Ilum. (VA)"]),
 
-                "Pot. Unit. TUG (VA)":
-                    int(
-                        cargas[
-                            "Pot. Unit. TUG (VA)"
-                        ]
-                    ),
+            "TUGs (Qtd)":
+                int(cargas["TUGs (Qtd)"]),
 
-                "Carga TUGs (VA)":
-                    int(
-                        cargas[
-                            "Carga TUGs (VA)"
-                        ]
-                    ),
+            "Pot. Unit. TUG (VA)":
+                int(cargas["Pot. Unit. TUG (VA)"]),
 
-                "Equipamento TUE":
-                    cargas[
-                        "Equipamento TUE"
-                    ],
+            "Carga TUGs (VA)":
+                int(cargas["Carga TUGs (VA)"]),
 
-                "Qtd TUE":
-                    int(
-                        cargas[
-                            "Qtd TUE"
-                        ]
-                    ),
+            "Equipamento TUE":
+                cargas["Equipamento TUE"],
 
-                "Pot. Unit. TUE (VA)":
-                    int(
-                        cargas[
-                            "Pot. Unit. TUE (VA)"
-                        ]
-                    ),
+            "Qtd TUE":
+                int(cargas["Qtd TUE"]),
 
-                "Carga TUE (VA)":
-                    int(
-                        cargas[
-                            "Carga TUE (VA)"
-                        ]
-                    )
-            }
-        )
+            "Pot. Unit. TUE (VA)":
+                int(cargas["Pot. Unit. TUE (VA)"]),
+
+            "Carga TUE (VA)":
+                int(cargas["Carga TUE (VA)"])
+        })
 
     return resultados
 
 
 # ============================================================
-# GERA CAD UNIFILAR
+# GERAÇÃO DO CAD
 # ============================================================
 
 def gerar_cad_unifilar(
@@ -1212,7 +662,7 @@ def gerar_cad_unifilar(
     try:
 
         # ----------------------------------------------------
-        # SALVA DXF TEMPORÁRIO
+        # CRIA ARQUIVO TEMPORÁRIO
         # ----------------------------------------------------
 
         with tempfile.NamedTemporaryFile(
@@ -1221,7 +671,6 @@ def gerar_cad_unifilar(
         ) as tmp_in:
 
             tmp_in.write(dxf_bytes)
-
             tmp_in_path = tmp_in.name
 
         doc = ezdxf.readfile(
@@ -1250,13 +699,11 @@ def gerar_cad_unifilar(
                 ).upper().strip()
 
                 if l in contagem_camadas:
-
                     contagem_camadas[l] += 1
 
         camadas_vazias = [
             cam
-            for cam, qtd
-            in contagem_camadas.items()
+            for cam, qtd in contagem_camadas.items()
             if qtd == 0
         ]
 
@@ -1264,13 +711,12 @@ def gerar_cad_unifilar(
 
             raise ValueError(
                 "❌ Erro de Geração do CAD: "
-                "A(s) seguinte(s) camada(s) "
-                "obrigatória(s) está(ão) vazia(s) "
-                "ou ausente(s): "
-                + ", ".join(camadas_vazias)
-                + ". Verifique se os elementos "
-                "estão corretamente posicionados "
-                "em suas camadas antes de processar."
+                f"A(s) seguinte(s) camada(s) obrigatória(s) "
+                f"está(ão) vazia(s) ou ausente(s): "
+                f"{', '.join(camadas_vazias)}. "
+                "Verifique se os elementos estão "
+                "corretamente posicionados em suas camadas "
+                "antes de processar."
             )
 
         # ----------------------------------------------------
@@ -1308,7 +754,7 @@ def gerar_cad_unifilar(
                 ).color = cor_l
 
         # ----------------------------------------------------
-        # LEITURA DOS ELEMENTOS DO DXF
+        # LEITURA DOS ELEMENTOS
         # ----------------------------------------------------
 
         polilinhas = []
@@ -1320,30 +766,23 @@ def gerar_cad_unifilar(
 
             tipo = entity.dxftype()
 
-            if hasattr(
-                entity.dxf,
-                'layer'
-            ):
+            if hasattr(entity.dxf, 'layer'):
 
                 layer = str(
                     entity.dxf.layer
                 ).upper().strip()
 
             else:
-
                 continue
 
-            # ------------------------------------------------
+            # -----------------------------------------------
             # AMBIENTES
-            # ------------------------------------------------
+            # -----------------------------------------------
 
-            if (
-                tipo in [
-                    'LWPOLYLINE',
-                    'POLYLINE'
-                ]
-                and layer == 'IA_AMBIENTES'
-            ):
+            if tipo in [
+                'LWPOLYLINE',
+                'POLYLINE'
+            ] and layer == 'IA_AMBIENTES':
 
                 try:
 
@@ -1367,23 +806,19 @@ def gerar_cad_unifilar(
                         ]
 
                     if pontos:
-
-                        polilinhas.append(
-                            pontos
-                        )
+                        polilinhas.append(pontos)
 
                 except:
-
                     pass
 
-            # ------------------------------------------------
+            # -----------------------------------------------
             # TEXTOS
-            # ------------------------------------------------
+            # -----------------------------------------------
 
-            elif (
-                tipo in ['TEXT', 'MTEXT']
-                and layer == 'IA_TEXTOS'
-            ):
+            elif tipo in [
+                'TEXT',
+                'MTEXT'
+            ] and layer == 'IA_TEXTOS':
 
                 try:
 
@@ -1395,39 +830,35 @@ def gerar_cad_unifilar(
 
                     if texto_str:
 
-                        textos.append(
-                            {
-                                'nome': texto_str,
-                                'x': entity.dxf.insert.x,
-                                'y': entity.dxf.insert.y
-                            }
-                        )
+                        textos.append({
+                            'nome': texto_str,
+                            'x': entity.dxf.insert.x,
+                            'y': entity.dxf.insert.y
+                        })
 
                 except:
-
                     pass
 
-            # ------------------------------------------------
+            # -----------------------------------------------
             # PORTAS
-            # ------------------------------------------------
+            # -----------------------------------------------
 
             elif layer == 'IA_PORTAS':
 
                 if tipo == 'LINE':
 
-                    portas_raw.append(
-                        {
-                            'p1': (
-                                entity.dxf.start.x,
-                                entity.dxf.start.y
-                            ),
+                    portas_raw.append({
 
-                            'p2': (
-                                entity.dxf.end.x,
-                                entity.dxf.end.y
-                            )
-                        }
-                    )
+                        'p1': (
+                            entity.dxf.start.x,
+                            entity.dxf.start.y
+                        ),
+
+                        'p2': (
+                            entity.dxf.end.x,
+                            entity.dxf.end.y
+                        )
+                    })
 
                 elif tipo in [
                     'LWPOLYLINE',
@@ -1436,47 +867,55 @@ def gerar_cad_unifilar(
 
                     try:
 
-                        pts = [
-                            (p[0], p[1])
-                            for p in entity.get_points(
-                                format='xy'
-                            )
-                        ]
+                        if tipo == 'LWPOLYLINE':
+
+                            pts = [
+                                (p[0], p[1])
+                                for p in entity.get_points(
+                                    format='xy'
+                                )
+                            ]
+
+                        else:
+
+                            pts = [
+                                (
+                                    v.dxf.location.x,
+                                    v.dxf.location.y
+                                )
+                                for v in entity.vertices
+                            ]
 
                         if len(pts) >= 2:
 
-                            portas_raw.append(
-                                {
-                                    'p1': pts[0],
-                                    'p2': pts[-1]
-                                }
-                            )
+                            portas_raw.append({
+                                'p1': pts[0],
+                                'p2': pts[-1]
+                            })
 
                     except:
-
                         pass
 
-            # ------------------------------------------------
+            # -----------------------------------------------
             # SOLEIRAS
-            # ------------------------------------------------
+            # -----------------------------------------------
 
             elif layer == 'IA_SOLEIRAS':
 
                 if tipo == 'LINE':
 
-                    soleiras_raw.append(
-                        {
-                            'p1': (
-                                entity.dxf.start.x,
-                                entity.dxf.start.y
-                            ),
+                    soleiras_raw.append({
 
-                            'p2': (
-                                entity.dxf.end.x,
-                                entity.dxf.end.y
-                            )
-                        }
-                    )
+                        'p1': (
+                            entity.dxf.start.x,
+                            entity.dxf.start.y
+                        ),
+
+                        'p2': (
+                            entity.dxf.end.x,
+                            entity.dxf.end.y
+                        )
+                    })
 
                 elif tipo in [
                     'LWPOLYLINE',
@@ -1485,31 +924,38 @@ def gerar_cad_unifilar(
 
                     try:
 
-                        pts = [
-                            (p[0], p[1])
-                            for p in entity.get_points(
-                                format='xy'
-                            )
-                        ]
+                        if tipo == 'LWPOLYLINE':
+
+                            pts = [
+                                (p[0], p[1])
+                                for p in entity.get_points(
+                                    format='xy'
+                                )
+                            ]
+
+                        else:
+
+                            pts = [
+                                (
+                                    v.dxf.location.x,
+                                    v.dxf.location.y
+                                )
+                                for v in entity.vertices
+                            ]
 
                         if len(pts) >= 2:
 
-                            soleiras_raw.append(
-                                {
-                                    'p1': pts[0],
-                                    'p2': pts[-1]
-                                }
-                            )
+                            soleiras_raw.append({
+                                'p1': pts[0],
+                                'p2': pts[-1]
+                            })
 
                     except:
-
                         pass
 
         # ====================================================
-        # DEBUG DAS SOLEIRAS COM PORTAS
+        # IDENTIFICA SOLEIRAS ASSOCIADAS A PORTAS
         # ====================================================
-
-        raio_circulo = 0.15
 
         soleiras_com_porta = []
 
@@ -1537,13 +983,13 @@ def gerar_cad_unifilar(
                 )
 
                 pm_porta_x = (
-                    p['p1'][0]
-                    + p['p2'][0]
+                    p['p1'][0] +
+                    p['p2'][0]
                 ) / 2
 
                 pm_porta_y = (
-                    p['p1'][1]
-                    + p['p2'][1]
+                    p['p1'][1] +
+                    p['p2'][1]
                 ) / 2
 
                 d3 = point_seg_dist(
@@ -1564,16 +1010,16 @@ def gerar_cad_unifilar(
 
             if porta_encostada is not None:
 
-                soleiras_com_porta.append(
-                    {
-                        's': s,
-                        'porta': porta_encostada
-                    }
-                )
+                soleiras_com_porta.append({
+                    's': s,
+                    'porta': porta_encostada
+                })
 
         # ====================================================
-        # PROCESSAMENTO VISUAL DAS SOLEIRAS
+        # DESENHO DOS PONTOS DEBUG DAS SOLEIRAS
         # ====================================================
+
+        raio_circulo = 0.15
 
         for item in soleiras_com_porta:
 
@@ -1584,11 +1030,13 @@ def gerar_cad_unifilar(
             s_pB = s['p2']
 
             sm_x = (
-                s_pA[0] + s_pB[0]
+                s_pA[0] +
+                s_pB[0]
             ) / 2
 
             sm_y = (
-                s_pA[1] + s_pB[1]
+                s_pA[1] +
+                s_pB[1]
             ) / 2
 
             d_p1_sA = math.hypot(
@@ -1649,50 +1097,29 @@ def gerar_cad_unifilar(
 
             for poly in polilinhas:
 
-                xs = [
-                    pt[0]
-                    for pt in poly
-                ]
-
-                ys = [
-                    pt[1]
-                    for pt in poly
-                ]
+                xs = [pt[0] for pt in poly]
+                ys = [pt[1] for pt in poly]
 
                 if (
-                    min(xs) - 0.5
-                    <= sm_x
-                    <= max(xs) + 0.5
+                    min(xs) - 0.5 <= sm_x <= max(xs) + 0.5
                     and
-                    min(ys) - 0.5
-                    <= sm_y
-                    <= max(ys) + 0.5
+                    min(ys) - 0.5 <= sm_y <= max(ys) + 0.5
                 ):
 
-                    ambientes_adjacentes.append(
-                        poly
-                    )
+                    ambientes_adjacentes.append(poly)
 
             if len(ambientes_adjacentes) >= 2:
 
                 poly_a = ambientes_adjacentes[0]
                 poly_b = ambientes_adjacentes[1]
 
-                cx_a = (
-                    sum(
-                        pt[0]
-                        for pt in poly_a
-                    )
-                    / len(poly_a)
-                )
+                cx_a = sum(
+                    pt[0] for pt in poly_a
+                ) / len(poly_a)
 
-                cy_a = (
-                    sum(
-                        pt[1]
-                        for pt in poly_a
-                    )
-                    / len(poly_a)
-                )
+                cy_a = sum(
+                    pt[1] for pt in poly_a
+                ) / len(poly_a)
 
                 nx_1, ny_1 = get_inside_normal(
                     vx,
@@ -1724,21 +1151,15 @@ def gerar_cad_unifilar(
                     else poly_a
                 )
 
-                cx_p2 = (
-                    sum(
-                        pt[0]
-                        for pt in target_poly_p2
-                    )
-                    / len(target_poly_p2)
-                )
+                cx_p2 = sum(
+                    pt[0]
+                    for pt in target_poly_p2
+                ) / len(target_poly_p2)
 
-                cy_p2 = (
-                    sum(
-                        pt[1]
-                        for pt in target_poly_p2
-                    )
-                    / len(target_poly_p2)
-                )
+                cy_p2 = sum(
+                    pt[1]
+                    for pt in target_poly_p2
+                ) / len(target_poly_p2)
 
                 nx_p2, ny_p2 = get_inside_normal(
                     vx,
@@ -1754,21 +1175,15 @@ def gerar_cad_unifilar(
                     p1[1] + ny_p2 * raio_circulo
                 )
 
-                cx_p3 = (
-                    sum(
-                        pt[0]
-                        for pt in target_poly_p3
-                    )
-                    / len(target_poly_p3)
-                )
+                cx_p3 = sum(
+                    pt[0]
+                    for pt in target_poly_p3
+                ) / len(target_poly_p3)
 
-                cy_p3 = (
-                    sum(
-                        pt[1]
-                        for pt in target_poly_p3
-                    )
-                    / len(target_poly_p3)
-                )
+                cy_p3 = sum(
+                    pt[1]
+                    for pt in target_poly_p3
+                ) / len(target_poly_p3)
 
                 nx_p3, ny_p3 = get_inside_normal(
                     vx,
@@ -1820,21 +1235,15 @@ def gerar_cad_unifilar(
 
                 poly = ambientes_adjacentes[0]
 
-                cx = (
-                    sum(
-                        pt[0]
-                        for pt in poly
-                    )
-                    / len(poly)
-                )
+                cx = sum(
+                    pt[0]
+                    for pt in poly
+                ) / len(poly)
 
-                cy = (
-                    sum(
-                        pt[1]
-                        for pt in poly
-                    )
-                    / len(poly)
-                )
+                cy = sum(
+                    pt[1]
+                    for pt in poly
+                ) / len(poly)
 
                 nx, ny = get_inside_normal(
                     vx,
@@ -1878,24 +1287,16 @@ def gerar_cad_unifilar(
         }
 
         # ====================================================
-        # PROCESSA CADA AMBIENTE
+        # PROCESSAMENTO DOS AMBIENTES
         # ====================================================
 
         for polilinha in polilinhas:
 
-            xs = [
-                p[0]
-                for p in polilinha
-            ]
-
-            ys = [
-                p[1]
-                for p in polilinha
-            ]
+            xs = [p[0] for p in polilinha]
+            ys = [p[1] for p in polilinha]
 
             min_x = min(xs)
             max_x = max(xs)
-
             min_y = min(ys)
             max_y = max(ys)
 
@@ -1946,15 +1347,11 @@ def gerar_cad_unifilar(
             else:
 
                 ambientes_processados[nome] = 1
-
                 nome_busca = nome
 
             row_data = dict_dados.get(
                 nome_busca,
-                dict_dados.get(
-                    nome,
-                    None
-                )
+                dict_dados.get(nome, None)
             )
 
             centro_x = (
@@ -1969,7 +1366,7 @@ def gerar_cad_unifilar(
             comprimento = max_y - min_y
 
             # =================================================
-            # PAREDES DO AMBIENTE
+            # SEGMENTOS DA PAREDE
             # =================================================
 
             segmentos_crus = []
@@ -1977,24 +1374,16 @@ def gerar_cad_unifilar(
 
             poly = list(polilinha)
 
-            if (
-                len(poly) > 1
-                and poly[0] != poly[-1]
-            ):
-                poly.append(
-                    poly[0]
-                )
+            if poly[0] != poly[-1]:
+                poly.append(poly[0])
 
             for i in range(
                 len(poly) - 1
             ):
 
                 dst = math.hypot(
-                    poly[i + 1][0]
-                    - poly[i][0],
-
-                    poly[i + 1][1]
-                    - poly[i][1]
+                    poly[i + 1][0] - poly[i][0],
+                    poly[i + 1][1] - poly[i][1]
                 )
 
                 if dst > 0.1:
@@ -2009,6 +1398,10 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
+            # =================================================
+            # PAREDES LÓGICAS
+            # =================================================
+
             logical_walls = []
 
             for pt1, pt2, dst in segmentos_crus:
@@ -2021,59 +1414,41 @@ def gerar_cad_unifilar(
                     pt2[1] - pt1[1]
                 ) / dst
 
-                logical_walls.append(
-                    {
-                        'p1': pt1,
-                        'p2': pt2,
-                        'length': dst,
-                        'vx': vx,
-                        'vy': vy
-                    }
-                )
+                logical_walls.append({
+
+                    'p1': pt1,
+
+                    'p2': pt2,
+
+                    'length': dst,
+
+                    'vx': vx,
+
+                    'vy': vy
+                })
 
             # =================================================
-            # PORTAS DESTE AMBIENTE
+            # PORTAS DO AMBIENTE
             # =================================================
 
             unique_portas = [
-                p
-                for p in portas_raw
+
+                p for p in portas_raw
+
                 if (
                     min_x - 0.8
                     <= (
-                        p['p1'][0]
-                        + p['p2'][0]
+                        p['p1'][0] +
+                        p['p2'][0]
                     ) / 2
                     <= max_x + 0.8
+
                     and
+
                     min_y - 0.8
                     <= (
-                        p['p1'][1]
-                        + p['p2'][1]
-                    ) / 2
-                    <= max_y + 0.8
-                )
-            ]
-
-            # =================================================
-            # SOLEIRAS DESTE AMBIENTE
-            # =================================================
-
-            unique_soleiras = [
-                s
-                for s in soleiras_raw
-                if (
-                    min_x - 0.8
-                    <= (
-                        s['p1'][0]
-                        + s['p2'][0]
-                    ) / 2
-                    <= max_x + 0.8
-                    and
-                    min_y - 0.8
-                    <= (
-                        s['p1'][1]
-                        + s['p2'][1]
+                        p['p1'][1] +
+                        p['p2'][1]
                     ) / 2
                     <= max_y + 0.8
                 )
@@ -2087,14 +1462,14 @@ def gerar_cad_unifilar(
 
                 qtd_ilum = int(
                     row_data.get(
-                        "Qtd Ilum.",
+                        'Qtd Ilum.',
                         1
                     )
                 )
 
                 pot_ilum_unit = int(
                     row_data.get(
-                        "Pot. Unit. Ilum (VA)",
+                        'Pot. Unit. Ilum (VA)',
                         100
                     )
                 )
@@ -2117,10 +1492,8 @@ def gerar_cad_unifilar(
                         else:
 
                             step = (
-                                largura
-                                / (
-                                    qtd_ilum + 1
-                                )
+                                largura /
+                                (qtd_ilum + 1)
                             )
 
                             for i in range(
@@ -2130,8 +1503,8 @@ def gerar_cad_unifilar(
 
                                 pontos_luz.append(
                                     (
-                                        min_x
-                                        + step * i,
+                                        min_x +
+                                        step * i,
                                         centro_y
                                     )
                                 )
@@ -2150,10 +1523,8 @@ def gerar_cad_unifilar(
                         else:
 
                             step = (
-                                comprimento
-                                / (
-                                    qtd_ilum + 1
-                                )
+                                comprimento /
+                                (qtd_ilum + 1)
                             )
 
                             for i in range(
@@ -2164,18 +1535,15 @@ def gerar_cad_unifilar(
                                 pontos_luz.append(
                                     (
                                         centro_x,
-                                        min_y
-                                        + step * i
+                                        min_y +
+                                        step * i
                                     )
                                 )
 
                     for lx, ly in pontos_luz:
 
                         msp.add_circle(
-                            center=(
-                                lx,
-                                ly
-                            ),
+                            center=(lx, ly),
                             radius=0.25,
                             dxfattribs={
                                 'layer':
@@ -2214,29 +1582,25 @@ def gerar_cad_unifilar(
             # QDC
             # =================================================
 
-            qdc_formatado = (
-                str(local_qdc)
-                .replace(
-                    " (recomendado)",
-                    ""
-                )
-                .strip()
-                .upper()
-            )
+            qdc_formatado = str(
+                local_qdc
+            ).replace(
+                " (recomendado)",
+                ""
+            ).strip().upper()
 
             nome_atual_upper = (
                 nome.strip().upper()
+                if nome
+                else ""
             )
 
             is_ambiente_qdc = (
-                nome_atual_upper
-                == qdc_formatado
+                nome_atual_upper ==
+                qdc_formatado
             )
 
-            if (
-                is_ambiente_qdc
-                and logical_walls
-            ):
+            if is_ambiente_qdc and logical_walls:
 
                 qdc_w = 0.4
                 qdc_d = 0.15
@@ -2250,13 +1614,9 @@ def gerar_cad_unifilar(
                 pt2 = maior_parede['p2']
 
                 is_vertical = (
-                    abs(
-                        pt1[0] - pt2[0]
-                    )
+                    abs(pt1[0] - pt2[0])
                     <
-                    abs(
-                        pt1[1] - pt2[1]
-                    )
+                    abs(pt1[1] - pt2[1])
                 )
 
                 cortes_portas = []
@@ -2277,10 +1637,7 @@ def gerar_cad_unifilar(
                         pt2
                     )
 
-                    if (
-                        d_p1 < 0.6
-                        or d_p2 < 0.6
-                    ):
+                    if d_p1 < 0.6 or d_p2 < 0.6:
 
                         if is_vertical:
 
@@ -2333,10 +1690,7 @@ def gerar_cad_unifilar(
 
                     for c_inf, c_sup in cortes_portas:
 
-                        if (
-                            c_inf
-                            > cursor + 0.1
-                        ):
+                        if c_inf > cursor + 0.1:
 
                             trechos_livres.append(
                                 (
@@ -2350,10 +1704,7 @@ def gerar_cad_unifilar(
                             c_sup
                         )
 
-                    if (
-                        cursor
-                        < parede_max - 0.1
-                    ):
+                    if cursor < parede_max - 0.1:
 
                         trechos_livres.append(
                             (
@@ -2367,12 +1718,12 @@ def gerar_cad_unifilar(
                         melhor_trecho = max(
                             trechos_livres,
                             key=lambda t:
-                                t[1] - t[0]
+                            t[1] - t[0]
                         )
 
                         mid_y = (
-                            melhor_trecho[0]
-                            + melhor_trecho[1]
+                            melhor_trecho[0] +
+                            melhor_trecho[1]
                         ) / 2
 
                         mx = pt1[0]
@@ -2381,13 +1732,13 @@ def gerar_cad_unifilar(
                     else:
 
                         mx = (
-                            pt1[0]
-                            + pt2[0]
+                            pt1[0] +
+                            pt2[0]
                         ) / 2
 
                         my = (
-                            pt1[1]
-                            + pt2[1]
+                            pt1[1] +
+                            pt2[1]
                         ) / 2
 
                 else:
@@ -2411,10 +1762,7 @@ def gerar_cad_unifilar(
 
                     for c_inf, c_sup in cortes_portas:
 
-                        if (
-                            c_inf
-                            > cursor + 0.1
-                        ):
+                        if c_inf > cursor + 0.1:
 
                             trechos_livres.append(
                                 (
@@ -2428,10 +1776,7 @@ def gerar_cad_unifilar(
                             c_sup
                         )
 
-                    if (
-                        cursor
-                        < parede_max - 0.1
-                    ):
+                    if cursor < parede_max - 0.1:
 
                         trechos_livres.append(
                             (
@@ -2445,12 +1790,12 @@ def gerar_cad_unifilar(
                         melhor_trecho = max(
                             trechos_livres,
                             key=lambda t:
-                                t[1] - t[0]
+                            t[1] - t[0]
                         )
 
                         mid_x = (
-                            melhor_trecho[0]
-                            + melhor_trecho[1]
+                            melhor_trecho[0] +
+                            melhor_trecho[1]
                         ) / 2
 
                         mx = mid_x
@@ -2459,13 +1804,13 @@ def gerar_cad_unifilar(
                     else:
 
                         mx = (
-                            pt1[0]
-                            + pt2[0]
+                            pt1[0] +
+                            pt2[0]
                         ) / 2
 
                         my = (
-                            pt1[1]
-                            + pt2[1]
+                            pt1[1] +
+                            pt2[1]
                         ) / 2
 
                 vx = maior_parede['vx']
@@ -2494,17 +1839,19 @@ def gerar_cad_unifilar(
                 )
 
                 p3_qdc = (
-                    p2_qdc[0]
-                    + out_nx * qdc_d,
-                    p2_qdc[1]
-                    + out_ny * qdc_d
+                    p2_qdc[0] +
+                    out_nx * qdc_d,
+
+                    p2_qdc[1] +
+                    out_ny * qdc_d
                 )
 
                 p4_qdc = (
-                    p1_qdc[0]
-                    + out_nx * qdc_d,
-                    p1_qdc[1]
-                    + out_ny * qdc_d
+                    p1_qdc[0] +
+                    out_nx * qdc_d,
+
+                    p1_qdc[1] +
+                    out_ny * qdc_d
                 )
 
                 pts_qdc = [
@@ -2577,29 +1924,26 @@ def gerar_cad_unifilar(
                     )
 
                     if "chuveiro" in eq_lower:
-
                         pot_tue_val = 5500
 
                     elif "ar" in eq_lower:
-
                         pot_tue_val = 1200
 
                     elif (
                         "micro" in eq_lower
-                        or "forno" in eq_lower
+                        or
+                        "forno" in eq_lower
                     ):
-
                         pot_tue_val = 2000
 
                     elif (
                         "máquina" in eq_lower
-                        or "lavar" in eq_lower
+                        or
+                        "lavar" in eq_lower
                     ):
-
                         pot_tue_val = 1000
 
                     else:
-
                         pot_tue_val = 1000
 
                 eq_lower = (
@@ -2633,150 +1977,167 @@ def gerar_cad_unifilar(
                 )
 
                 # =================================================
-                # TUEs
-                #
-                # AGORA TAMBÉM UTILIZAM OS TRECHOS SEGUROS.
+                # TUE
                 # =================================================
 
-                if qtd_tue > 0:
+                if qtd_tue > 0 and logical_walls:
 
-                    pontos_tue = escolher_pontos_tomadas(
+                    paredes_candidatas = sorted(
                         logical_walls,
-                        unique_portas,
-                        unique_soleiras,
-                        qtd_tue
+                        key=lambda w: w['length']
                     )
 
-                    # -------------------------------------------------
-                    # GARANTIA EXTRA DE QUANTIDADE
-                    #
-                    # Se por alguma geometria extremamente pequena
-                    # a função retornar menos pontos, usamos uma
-                    # distribuição alternativa nas paredes.
-                    # -------------------------------------------------
+                    # ---------------------------------------------
+                    # PRIMEIRO TENTA PAREDES SEM PORTA
+                    # ---------------------------------------------
 
-                    if len(pontos_tue) < qtd_tue:
+                    paredes_sem_porta = [
 
-                        pontos_tue = []
+                        w for w in paredes_candidatas
 
-                        paredes_ordenadas = sorted(
-                            logical_walls,
-                            key=lambda w: w['length'],
-                            reverse=True
+                        if not any(
+
+                            point_seg_dist(
+
+                                (
+                                    p['p1'][0] +
+                                    p['p2'][0]
+                                ) / 2,
+
+                                (
+                                    p['p1'][1] +
+                                    p['p2'][1]
+                                ) / 2,
+
+                                w['p1'],
+                                w['p2']
+
+                            ) < 0.6
+
+                            for p in unique_portas
+                        )
+                    ]
+
+                    paredes_finais = (
+                        paredes_sem_porta
+                        if paredes_sem_porta
+                        else paredes_candidatas
+                    )
+
+                    for idx_tue in range(
+                        qtd_tue
+                    ):
+
+                        p_alvo = paredes_finais[
+                            idx_tue %
+                            len(paredes_finais)
+                        ]
+
+                        pt1 = p_alvo['p1']
+                        pt2 = p_alvo['p2']
+
+                        # -----------------------------------------
+                        # TENTA PRIMEIRO O CENTRO DA PAREDE
+                        # -----------------------------------------
+
+                        fator = (
+                            0.5
+                            if qtd_tue == 1
+                            else
+                            (
+                                idx_tue + 1
+                            ) /
+                            (
+                                qtd_tue + 1
+                            )
                         )
 
-                        for parede in paredes_ordenadas:
+                        px = (
+                            pt1[0] +
+                            (
+                                pt2[0] -
+                                pt1[0]
+                            ) * fator
+                        )
 
-                            if len(pontos_tue) >= qtd_tue:
-                                break
+                        py = (
+                            pt1[1] +
+                            (
+                                pt2[1] -
+                                pt1[1]
+                            ) * fator
+                        )
 
-                            intervalo = (
-                                MARGEM_CANTO,
-                                parede['length']
-                                - MARGEM_CANTO
-                            )
+                        # -----------------------------------------
+                        # VALIDA TUE
+                        # -----------------------------------------
 
-                            if (
-                                intervalo[1]
-                                > intervalo[0]
-                            ):
-
-                                ponto = (
-                                    gerar_pontos_em_intervalo(
-                                        parede,
-                                        intervalo,
-                                        1
-                                    )[0]
-                                )
-
-                                pontos_tue.append(
-                                    ponto
-                                )
-
-                        # Se ainda faltar, repete nas paredes
-                        # mantendo a margem dos cantos.
-                        indice = 0
-
-                        while (
-                            len(pontos_tue)
-                            < qtd_tue
-                            and paredes_ordenadas
+                        if not ponto_tomada_valido(
+                            px,
+                            py,
+                            polilinha,
+                            portas_raw,
+                            soleiras_raw
                         ):
 
-                            parede = (
-                                paredes_ordenadas[
-                                    indice
-                                    % len(
-                                        paredes_ordenadas
-                                    )
-                                ]
+                            # tenta pontos alternativos
+                            dst_parede = (
+                                p_alvo['length']
                             )
 
-                            intervalo = (
-                                MARGEM_CANTO,
-                                parede['length']
-                                - MARGEM_CANTO
-                            )
+                            tentativas = [
+                                0.25,
+                                0.35,
+                                0.65,
+                                0.75
+                            ]
 
-                            if (
-                                intervalo[1]
-                                > intervalo[0]
-                            ):
+                            encontrado = None
 
-                                qtd_local = 2 + (
-                                    indice
-                                    // len(
-                                        paredes_ordenadas
-                                    )
+                            for fator_alt in tentativas:
+
+                                tx = (
+                                    pt1[0] +
+                                    (
+                                        pt2[0] -
+                                        pt1[0]
+                                    ) *
+                                    fator_alt
                                 )
 
-                                pts = (
-                                    gerar_pontos_em_intervalo(
-                                        parede,
-                                        intervalo,
-                                        qtd_local
-                                    )
+                                ty = (
+                                    pt1[1] +
+                                    (
+                                        pt2[1] -
+                                        pt1[1]
+                                    ) *
+                                    fator_alt
                                 )
 
-                                for pt in pts:
+                                if ponto_tomada_valido(
+                                    tx,
+                                    ty,
+                                    polilinha,
+                                    portas_raw,
+                                    soleiras_raw
+                                ):
 
-                                    if (
-                                        len(pontos_tue)
-                                        >= qtd_tue
-                                    ):
-                                        break
-
-                                    pontos_tue.append(
-                                        pt
+                                    encontrado = (
+                                        tx,
+                                        ty
                                     )
 
-                            indice += 1
+                                    break
 
-                            if indice > (
-                                qtd_tue * 10
-                            ):
-                                break
+                            if encontrado:
 
-                    # -------------------------------------------------
-                    # DESENHA TUE
-                    # -------------------------------------------------
+                                px, py = encontrado
 
-                    for px, py in pontos_tue:
+                            else:
+                                continue
 
-                        # Descobre parede mais próxima
-                        parede = min(
-                            logical_walls,
-                            key=lambda w:
-                                point_seg_dist(
-                                    px,
-                                    py,
-                                    w['p1'],
-                                    w['p2']
-                                )
-                        )
-
-                        vx = parede['vx']
-                        vy = parede['vy']
+                        vx = p_alvo['vx']
+                        vy = p_alvo['vy']
 
                         nx, ny = get_inside_normal(
                             vx,
@@ -2865,145 +2226,220 @@ def gerar_cad_unifilar(
 
                 # =================================================
                 # TUGs
-                #
-                # ESTA É A PRINCIPAL ALTERAÇÃO.
                 # =================================================
 
-                if qtd_tugs > 0:
+                total_tugs = qtd_tugs
 
-                    pontos_tug = escolher_pontos_tomadas(
-                        logical_walls,
-                        unique_portas,
-                        unique_soleiras,
-                        qtd_tugs
+                if total_tugs > 0 and comp_total > 0:
+
+                    # -------------------------------------------------
+                    # MARGEM MAIOR NOS CANTOS
+                    # -------------------------------------------------
+
+                    margem_inicial = 0.35
+
+                    comprimento_util = (
+                        comp_total -
+                        (
+                            2 *
+                            margem_inicial
+                        )
                     )
 
-                    # -------------------------------------------------
-                    # GARANTIA EXTRA DE QUANTIDADE
-                    # -------------------------------------------------
+                    if comprimento_util > 0:
 
-                    if len(pontos_tug) < qtd_tugs:
-
-                        pontos_tug = []
-
-                        paredes_ordenadas = sorted(
-                            logical_walls,
-                            key=lambda w: w['length'],
-                            reverse=True
+                        passo = (
+                            comprimento_util /
+                            total_tugs
                         )
 
-                        # Primeiro tenta uma tomada em cada parede
-                        for parede in paredes_ordenadas:
+                        inicio_offset = (
+                            margem_inicial +
+                            passo / 2
+                        )
 
-                            if len(pontos_tug) >= qtd_tugs:
-                                break
+                    else:
 
-                            intervalo = (
-                                MARGEM_CANTO,
-                                parede['length']
-                                - MARGEM_CANTO
-                            )
+                        passo = (
+                            comp_total /
+                            total_tugs
+                        )
 
-                            if (
-                                intervalo[1]
-                                > intervalo[0]
-                            ):
+                        inicio_offset = (
+                            passo / 2
+                        )
 
-                                ponto = (
-                                    gerar_pontos_em_intervalo(
-                                        parede,
-                                        intervalo,
-                                        1
-                                    )[0]
-                                )
-
-                                pontos_tug.append(
-                                    ponto
-                                )
-
-                        # Depois completa a quantidade
-                        indice = 0
-
-                        while (
-                            len(pontos_tug)
-                            < qtd_tugs
-                            and paredes_ordenadas
-                        ):
-
-                            parede = (
-                                paredes_ordenadas[
-                                    indice
-                                    % len(
-                                        paredes_ordenadas
-                                    )
-                                ]
-                            )
-
-                            intervalo = (
-                                MARGEM_CANTO,
-                                parede['length']
-                                - MARGEM_CANTO
-                            )
-
-                            if (
-                                intervalo[1]
-                                > intervalo[0]
-                            ):
-
-                                qtd_local = 2 + (
-                                    indice
-                                    // len(
-                                        paredes_ordenadas
-                                    )
-                                )
-
-                                pts = (
-                                    gerar_pontos_em_intervalo(
-                                        parede,
-                                        intervalo,
-                                        qtd_local
-                                    )
-                                )
-
-                                for pt in pts:
-
-                                    if (
-                                        len(pontos_tug)
-                                        >= qtd_tugs
-                                    ):
-                                        break
-
-                                    pontos_tug.append(
-                                        pt
-                                    )
-
-                            indice += 1
-
-                            if indice > (
-                                qtd_tugs * 10
-                            ):
-                                break
+                    tomadas_colocadas = 0
 
                     # -------------------------------------------------
-                    # DESENHA TODAS AS TUGs
+                    # REGISTRA AS DISTÂNCIAS JÁ UTILIZADAS
                     # -------------------------------------------------
 
-                    for px, py in pontos_tug:
+                    distancias_usadas = []
 
-                        # Identifica a parede onde o ponto foi criado
-                        parede = min(
-                            logical_walls,
-                            key=lambda w:
-                                point_seg_dist(
+                    for i in range(total_tugs):
+
+                        distancia_desejada = (
+                            inicio_offset +
+                            i * passo
+                        )
+
+                        if distancia_desejada <= 0:
+                            continue
+
+                        if distancia_desejada >= comp_total:
+                            continue
+
+                        # -------------------------------------------------
+                        # PROCURA UMA POSIÇÃO REALMENTE LIVRE
+                        # -------------------------------------------------
+
+                        resultado_ponto = (
+                            procurar_ponto_valido_perimetro(
+
+                                distancia_desejada,
+
+                                comp_total,
+
+                                segmentos_crus,
+
+                                polilinha,
+
+                                portas_raw,
+
+                                soleiras_raw
+                            )
+                        )
+
+                        if resultado_ponto is None:
+                            continue
+
+                        px, py, seg_vx, seg_vy = (
+                            resultado_ponto
+                        )
+
+                        # -------------------------------------------------
+                        # NÃO DEIXA DUAS TOMADAS MUITO PRÓXIMAS
+                        # -------------------------------------------------
+
+                        distancia_muito_proxima = False
+
+                        for d_usada in distancias_usadas:
+
+                            diferenca = abs(
+                                distancia_desejada -
+                                d_usada
+                            )
+
+                            if diferenca < 0.60:
+
+                                distancia_muito_proxima = True
+                                break
+
+                        if distancia_muito_proxima:
+
+                            # tenta outros pontos
+                            alternativas = [
+                                distancia_desejada - 0.75,
+                                distancia_desejada + 0.75,
+                                distancia_desejada - 1.00,
+                                distancia_desejada + 1.00
+                            ]
+
+                            alternativa_encontrada = None
+
+                            for dist_alt in alternativas:
+
+                                if (
+                                    dist_alt <= 0
+                                    or
+                                    dist_alt >= comp_total
+                                ):
+                                    continue
+
+                                alt_result = (
+                                    procurar_ponto_valido_perimetro(
+
+                                        dist_alt,
+
+                                        comp_total,
+
+                                        segmentos_crus,
+
+                                        polilinha,
+
+                                        portas_raw,
+
+                                        soleiras_raw
+                                    )
+                                )
+
+                                if alt_result is None:
+                                    continue
+
+                                ax, ay, avx, avy = (
+                                    alt_result
+                                )
+
+                                muito_perto = any(
+                                    abs(
+                                        dist_alt -
+                                        d
+                                    ) < 0.60
+                                    for d in distancias_usadas
+                                )
+
+                                if not muito_perto:
+
+                                    alternativa_encontrada = (
+                                        dist_alt,
+                                        ax,
+                                        ay,
+                                        avx,
+                                        avy
+                                    )
+
+                                    break
+
+                            if alternativa_encontrada:
+
+                                (
+                                    distancia_desejada,
                                     px,
                                     py,
-                                    w['p1'],
-                                    w['p2']
-                                )
+                                    seg_vx,
+                                    seg_vy
+                                ) = alternativa_encontrada
+
+                            else:
+                                continue
+
+                        # -------------------------------------------------
+                        # VALIDAÇÃO FINAL
+                        # -------------------------------------------------
+
+                        if not ponto_tomada_valido(
+                            px,
+                            py,
+                            polilinha,
+                            portas_raw,
+                            soleiras_raw
+                        ):
+                            continue
+
+                        # -------------------------------------------------
+                        # GUARDA A POSIÇÃO
+                        # -------------------------------------------------
+
+                        distancias_usadas.append(
+                            distancia_desejada
                         )
 
-                        seg_vx = parede['vx']
-                        seg_vy = parede['vy']
+                        tomadas_colocadas += 1
+
+                        # -------------------------------------------------
+                        # NORMAL PARA DENTRO DO AMBIENTE
+                        # -------------------------------------------------
 
                         nx, ny = get_inside_normal(
                             seg_vx,
@@ -3030,7 +2466,7 @@ def gerar_cad_unifilar(
                         )
 
                         # -------------------------------------------------
-                        # SÍMBOLO DA TUG
+                        # DESENHA TUG
                         # -------------------------------------------------
 
                         msp.add_lwpolyline(
@@ -3048,7 +2484,7 @@ def gerar_cad_unifilar(
                         )
 
                         # -------------------------------------------------
-                        # TOMADA EM AMBIENTE MOLHADO
+                        # TUG EM ÁREA MOLHADA
                         # -------------------------------------------------
 
                         if is_ambiente_molhado:
@@ -3095,9 +2531,8 @@ def gerar_cad_unifilar(
 
         if (
             tmp_in_path
-            and os.path.exists(
-                tmp_in_path
-            )
+            and
+            os.path.exists(tmp_in_path)
         ):
 
             os.remove(
