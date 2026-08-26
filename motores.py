@@ -73,12 +73,23 @@ def processar_dxf(caminho_arquivo):
     msp = doc.modelspace()
     polilinhas, textos = [], []
     
+    camadas_encontradas = set()
+    for entity in msp:
+        if hasattr(entity.dxf, 'layer'):
+            camadas_encontradas.add(str(entity.dxf.layer).upper().strip())
+            
+    # Validação preventiva de camadas obrigatórias com mensagem orientativa
+    camadas_obrigatorias = ['IA_AMBIENTES', 'IA_TEXTOS', 'IA_PORTAS', 'IA_SOLEIRAS']
+    faltando = [c for c in camadas_obrigatorias if c not in camadas_encontradas]
+    if faltando:
+        raise ValueError(
+            f"⚠️ Atenção ao importar o DXF: As seguintes camadas obrigatórias não foram encontradas no arquivo: {', '.join(faltando)}. "
+            f"Certifique-se de que todos os ambientes, textos, portas e soleiras estejam devidamente posicionados em suas respectivas camadas (IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, IA_SOLEIRAS) antes de gerar o projeto."
+        )
+    
     for entity in msp:
         tipo = entity.dxftype()
-        if hasattr(entity.dxf, 'layer'):
-            layer = str(entity.dxf.layer).upper().strip()
-        else:
-            continue
+        layer = str(entity.dxf.layer).upper().strip()
             
         if tipo in ['LWPOLYLINE', 'POLYLINE'] and layer == 'IA_AMBIENTES':
             try:
@@ -205,7 +216,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if tem_porta:
                 soleiras_com_porta.append(s)
 
-        # 1. INSERE O CÍRCULO MAGENTA DE DEPURO NA EXTREMIDADE INTERNA DA SOLEIRA COM PORTA
+        # 1. INSERE O CÍRCULO MAGENTA DE DEPURAÇÃO NA EXTREMIDADE INTERNA DA SOLEIRA COM PORTA
         for s in soleiras_com_porta:
             s_p1, s_p2 = s['p1'], s['p2']
             sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
