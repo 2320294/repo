@@ -140,13 +140,13 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Erro ao criar projeto: {e}")
 
-        # Busca projetos salvos
+        # Busca projetos salvos diretamente no Supabase
         lista_projetos = []
         if supabase is not None:
             try:
                 res_proj = supabase.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
                 lista_projetos = res_proj.data if res_proj.data else []
-            except Exception:
+            except:
                 lista_projetos = []
 
         st.markdown("### 📋 Seus Projetos Salvos:")
@@ -202,15 +202,15 @@ if st.session_state.projeto_ativo == "Selecione um projeto...":
 
 st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
 
-# Busca dados salvos do projeto no Supabase
+# Busca dados salvos do projeto diretamente no Supabase
 dados_salvos_db = None
 if supabase is not None:
     try:
         res_dados = supabase.table("dados_projetos").select("*").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
         if res_dados.data:
             dados_salvos_db = res_dados.data[0]
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao consultar banco de dados: {e}")
 
 dxf_bytes = None
 dados_ambientes = []
@@ -252,7 +252,7 @@ if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
                     else:
                         supabase.table("dados_projetos").insert(payload).execute()
                 
-                st.success("✅ Novo arquivo DXF processado e salvo com sucesso!")
+                st.success("✅ Novo arquivo DXF processado e salvo no banco de dados!")
             except Exception as e:
                 st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 else:
@@ -395,7 +395,6 @@ if dados_ambientes:
     nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
     
-    # Tratamento seguro para garantir que config_salva seja um dicionário
     raw_config = dados_salvos_db.get("config_interruptores", {}) if dados_salvos_db else {}
     if isinstance(raw_config, str):
         try:
@@ -445,7 +444,7 @@ if dados_ambientes:
     st.divider()
     st.subheader("🖨️ Exportação e Relatórios")
 
-    if st.button("💾 Salvar Alterações do Projeto na Nuvem", use_container_width=True):
+    if st.button("💾 Salvar Alterações do Projeto no Banco de Dados", use_container_width=True):
         if supabase is not None:
             try:
                 payload = {
@@ -464,9 +463,11 @@ if dados_ambientes:
                 else:
                     supabase.table("dados_projetos").insert(payload).execute()
                 
-                st.success("✅ Projeto salvo com sucesso na nuvem!")
+                st.success("✅ Alterações salvas com sucesso no banco de dados!")
             except Exception as e:
-                st.error(f"❌ Erro ao salvar dados: {e}")
+                st.error(f"❌ Erro ao salvar no banco: {e}")
+        else:
+            st.error("❌ Conexão com o banco de dados indisponível.")
 
     col_e1, col_e2 = st.columns(2)
     with col_e1:
@@ -480,7 +481,7 @@ if dados_ambientes:
     st.markdown("### Projeto Unifilar (DXF)")
     if st.button("🚀 Gerar CAD (Atualizado)", type="primary", use_container_width=True):
         if not dxf_bytes:
-            st.error("❌ Nenhum arquivo DXF associado a este projeto. Por favor, utilize o campo 'Reenviar / Substituir Arquivo DXF' acima para enviar a planta base.")
+            st.error("❌ Nenhum arquivo DXF associado a este projeto no banco. Utilize o campo 'Reenviar / Substituir Arquivo DXF' acima.")
         else:
             try:
                 cad_bytes_out = motores.gerar_cad_unifilar(
