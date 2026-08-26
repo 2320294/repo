@@ -239,7 +239,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # Identifica soleiras com porta encostada (< 0.4m)
+        # 1. MAPEIA SOLEIRAS QUE POSSUEM PORTA ENCOSTADA (< 0.4m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -256,13 +256,16 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. PROCESSA CADA SOLEIRA VÁLIDA POSICIONANDO OS CÍRCULOS PERFEITAMENTE DENTRO DOS AMBIENTES CORRESPONDENTES
+        # Controle para restringir circulação/corredores a no máximo uma soleira/porta processada
+        corredores_processados = set()
+
         for item in soleiras_com_porta:
             s = item['s']
+            p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
             sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            # Encontra todos os ambientes que fazem divisa com esta soleira
+            # Descobre os ambientes adjacentes à soleira
             adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
@@ -270,31 +273,50 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
                     adjacentes.append((poly, nome_amb))
             
-            corredores = [adj for adj in adjacentes if any(w in adj[1].lower() for w in ["circula", "corredor", "hall"])]
-            funcionais = [adj for adj in adjacentes if not any(w in adj[1].lower() for w in ["circula", "corredor", "hall"])]
+            # Verifica se envolve corredor / circulação
+            tem_corredor = any(any(w in adj[1].lower() for w in ["circula", "corredor", "hall"]) for adj in adjacentes)
             
-            if corredores and funcionais:
-                # Se é divisa entre corredor e cômodo: o círculo vai estritamente para o cômodo funcional
+            if tem_corredor:
+                # Restringe corredores/circulação a processar apenas a primeira soleira encontrada
+                corredor_nome = next(adj[1] for adj in adjacentes if any(w in adj[1].lower() for w in ["circula", "corredor", "hall"]))
+                if corredor_nome in corredores_processados:
+                    continue  # Pula soleiras extras de corredores
+                corredores_processados.add(corredor_nome)
+                
+                # Cria o círculo apenas no ambiente funcional adjacente
+                funcionais = [adj for adj in adjacentes if not any(w in adj[1].lower() for w in ["circula", "corredor", "hall"])]
                 for poly, nome_amb in funcionais:
+                    pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
+                    pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+                    d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
+                    d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
+                    ponto_oposto = s_p2 if d1 < d2 else s_p1
+                    
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
-                    d_tot = math.hypot(cx - sm_x, cy - sm_y)
+                    d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
                     if d_tot > 0:
-                        dir_x, dir_y = (cx - sm_x) / d_tot, (cy - sm_y) / d_tot
-                        final_x = sm_x + dir_x * 0.18
-                        final_y = sm_y + dir_y * 0.18
+                        dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
+                        final_x = ponto_oposto[0] + dir_x * 0.15
+                        final_y = ponto_oposto[1] + dir_y * 0.15
                         if ponto_em_poligono(final_x, final_y, poly):
                             msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
             else:
-                # Se é divisa entre dois cômodos funcionais (ex: Cozinha e AS): gera um círculo em cada ambiente
+                # Divisa entre dois ambientes funcionais (ex: Cozinha e AS): cria dois círculos (um em cada extremidade oposta)
+                pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
+                pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+                d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
+                d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
+                ponto_oposto = s_p2 if d1 < d2 else s_p1
+                
                 for poly, nome_amb in adjacentes:
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
-                    d_tot = math.hypot(cx - sm_x, cy - sm_y)
+                    d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
                     if d_tot > 0:
-                        dir_x, dir_y = (cx - sm_x) / d_tot, (cy - sm_y) / d_tot
-                        final_x = sm_x + dir_x * 0.18
-                        final_y = sm_y + dir_y * 0.18
+                        dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
+                        final_x = ponto_oposto[0] + dir_x * 0.15
+                        final_y = ponto_oposto[1] + dir_y * 0.15
                         if ponto_em_poligono(final_x, final_y, poly):
                             msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
