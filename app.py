@@ -189,14 +189,14 @@ if dados_ambientes:
     tabela_editada = []
     for row in dados_ambientes:
         with st.container():
-            # AQUI ESTÁ A ALTERAÇÃO: formatando área e perímetro com 2 casas decimais
+            # Perímetro e Área formatados com 2 casas decimais
             st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']:.2f}m*")
             c1, c2, c3, c4, c5 = st.columns(5)
 
             with c1:
                 q_ilum = st.number_input(f"Qtd Ilum ({row['Ambiente']})", min_value=0, value=row["Qtd Ilum."], key=f"ilum_{row['Ambiente']}")
             with c2:
-                p_ilum = st.number_input(f"Pot Ilum VA ({row['Ambiente']})", min_value=0, value=row["Pot. Unit. Ilum (VA)"], key=f"pilum_{row['Ambiente']}")
+                p_ilum = st.number_input(f"Pot Ilum W ({row['Ambiente']})", min_value=0, value=row["Pot. Unit. Ilum (W)"], key=f"pilum_{row['Ambiente']}")
             with c3:
                 qtd_tugs = st.number_input(f"TUGs Qtd ({row['Ambiente']})", min_value=0, value=row["TUGs (Qtd)"], key=f"tugs_{row['Ambiente']}")
             with c4:
@@ -206,16 +206,16 @@ if dados_ambientes:
 
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
-            row_modificado["Pot. Unit. Ilum (VA)"] = p_ilum
+            row_modificado["Pot. Unit. Ilum (W)"] = p_ilum
             row_modificado["TUGs (Qtd)"] = qtd_tugs
             row_modificado["Qtd TUE"] = qtd_tue
             row_modificado["Equipamento TUE"] = eq_tue
 
-            row_modificado["Carga Ilum. (VA)"] = q_ilum * p_ilum
+            row_modificado["Carga Ilum. (W)"] = q_ilum * p_ilum
             is_molhado = any(x in row['Ambiente'].lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
             pot_tup_unit_calc = 600 if is_molhado else 100
-            row_modificado["Pot. Unit. TUG (VA)"] = pot_tup_unit_calc
-            row_modificado["Carga TUGs (VA)"] = qtd_tugs * pot_tup_unit_calc
+            row_modificado["Pot. Unit. TUG (W)"] = pot_tup_unit_calc
+            row_modificado["Carga TUGs (W)"] = qtd_tugs * pot_tup_unit_calc
 
             tabela_editada.append(row_modificado)
             st.markdown("---")
