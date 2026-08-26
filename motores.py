@@ -184,8 +184,8 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         camadas_vazias = [cam for cam, qtd in contagem_camadas.items() if qtd == 0]
         if camadas_vazias:
             raise ValueError(
-                f"❌ Erro de Geração do CAD: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
-                f"Verifique se os elementos estão corretamente posicionados em suas camadas antes de processar."
+                f"❌ Erro de Validação do DXF: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
+                f"Certifique-se de desenhar os elementos nos respectivos layers (IA_AMBIENTES, IA_TEXTOS, IA_PORTAS, IA_SOLEIRAS) antes de gerar o projeto."
             )
         
         camadas = {
@@ -256,35 +256,51 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. PROCESSA CADA SOLEIRA VÁLIDA GARANTINDO O POSICIONAMENTO ESTRITAMENTE INTERNO
+        # 1. PROCESSA CADA SOLEIRA COM PORTA RESPEITANDO A REGRA DE CORREDORES E AMBIENTES FUNCIONAIS
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
+            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
-            pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
-            
-            d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
-            d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
-            ponto_oposto = s_p2 if d1 < d2 else s_p1
-            
-            # Varre todos os ambientes adjacentes para garantir que cômodos como a AS e o Quarto 2 recebam seus círculos corretamente
+            # Encontra todos os ambientes que encostam nesta soleira
+            adjacentes = []
             for poly in polilinhas:
-                xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
-                
-                if min(xs) - 0.8 <= sm_x <= max(xs) + 0.8 and min(ys) - 0.8 <= sm_y <= max(ys) + 0.8:
-                    cx = sum(xs) / len(xs)
-                    cy = sum(ys) / len(ys)
-                    
-                    d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
+                nome_amb = ambientes_nomes.get(tuple(poly), "")
+                poly_closed = list(poly) + [poly[0]]
+                tocou = False
+                for i in range(len(poly)):
+                    if point_seg_dist(sm_x, sm_y, poly_closed[i], poly_closed[i+1]) < 0.3:
+                        tocou = True
+                        break
+                if tocou:
+                    adjacentes.append((poly, nome_amb))
+            
+            corredores = [adj for adj in adjacentes if any(w in adj[1].lower() for w in ["circula", "corredor", "hall"])]
+            quartos_salas = [adj for adj in adjacentes if not any(w in adj[1].lower() for w in ["circula", "corredor", "hall"])]
+            
+            if corredores and quartos_salas:
+                # Regra de Corredor: O círculo vai APENAS para dentro do cômodo/quarto/sala
+                for poly, nome_amb in quartos_salas:
+                    cx = sum([pt[0] for pt in poly]) / len(poly)
+                    cy = sum([pt[1] for pt in poly]) / len(poly)
+                    d_tot = math.hypot(cx - sm_x, cy - sm_y)
                     if d_tot > 0:
-                        dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
-                        # Desloca estritamente 18cm para dentro do ambiente em direção ao centroide
-                        final_x = ponto_oposto[0] + dir_x * 0.18
-                        final_y = ponto_oposto[1] + dir_y * 0.18
-                        
+                        dir_x, dir_y = (cx - sm_x) / d_tot, (cy - sm_y) / d_tot
+                        final_x = sm_x + dir_x * 0.20
+                        final_y = sm_y + dir_y * 0.20
+                        if ponto_em_poligono(final_x, final_y, poly):
+                            msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+            else:
+                # Regra entre Ambientes Funcionais (ex: Cozinha e AS, ou Quarto e WC): Um círculo em cada ambiente
+                for poly, nome_amb in adjacentes:
+                    cx = sum([pt[0] for pt in poly]) / len(poly)
+                    cy = sum([pt[1] for pt in poly]) / len(poly)
+                    d_tot = math.hypot(cx - sm_x, cy - sm_y)
+                    if d_tot > 0:
+                        dir_x, dir_y = (cx - sm_x) / d_tot, (cy - sm_y) / d_tot
+                        final_x = sm_x + dir_x * 0.20
+                        final_y = sm_y + dir_y * 0.20
                         if ponto_em_poligono(final_x, final_y, poly):
                             msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
