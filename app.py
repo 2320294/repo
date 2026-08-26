@@ -18,16 +18,6 @@ st.set_page_config(
 # SUPABASE
 # ============================================================
 def obter_credenciais_supabase():
-    """
-    Lê primeiro o formato usado no Streamlit Cloud:
-
-    [supabase]
-    url = "..."
-    key = "..."
-
-    Também aceita, como alternativa, variáveis de ambiente
-    SUPABASE_URL / SUPABASE_KEY / SUPABASE_ANON_KEY.
-    """
     url = ""
     key = ""
 
@@ -248,44 +238,51 @@ with st.sidebar:
 
         if aba_auth == "Entrar (Login)":
             st.subheader("🔐 Fazer Login")
-            login_email = st.text_input("E-mail / Login", key="login_email")
-            login_senha = st.text_input("Senha", type="password", key="login_senha")
+            # Envolvido em st.form para suportar o envio ao pressionar Enter
+            with st.form("form_login"):
+                login_email = st.text_input("E-mail / Login")
+                login_senha = st.text_input("Senha", type="password")
+                btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
 
-            if st.button("Entrar", use_container_width=True):
-                if not login_email or not login_senha:
-                    st.warning("Preencha o e-mail e a senha.")
-                else:
-                    try:
-                        usuario = buscar_usuario(login_email, login_senha)
-                        if usuario:
-                            st.session_state.logged_in = True
-                            st.session_state.user_email = usuario["email"]
-                            st.session_state.user_name = usuario["nome"]
-                            st.session_state.projeto_ativo = "Selecione um projeto..."
-                            st.rerun()
-                        else:
-                            st.error("E-mail ou senha incorretos.")
-                    except Exception as e:
-                        st.error(f"❌ Erro ao consultar o Supabase: {e}")
+                if btn_entrar:
+                    if not login_email or not login_senha:
+                        st.warning("Preencha o e-mail e a senha.")
+                    else:
+                        try:
+                            usuario = buscar_usuario(login_email, login_senha)
+                            if usuario:
+                                st.session_state.logged_in = True
+                                st.session_state.user_email = usuario["email"]
+                                st.session_state.user_name = usuario["nome"]
+                                st.session_state.projeto_ativo = "Selecione um projeto..."
+                                st.success(f"Bem-vindo, {st.session_state.user_name}!")
+                                st.rerun()
+                            else:
+                                st.error("E-mail ou senha incorretos.")
+                        except Exception as e:
+                            st.error(f"❌ Erro ao consultar o Supabase: {e}")
 
         else:
             st.subheader("📝 Novo Cadastro")
-            cad_nome = st.text_input("Nome Completo", key="cad_nome")
-            cad_email = st.text_input("E-mail (Login)", key="cad_email")
-            cad_senha = st.text_input("Senha", type="password", key="cad_senha")
+            # Envolvido em st.form para suportar o envio ao pressionar Enter
+            with st.form("form_cadastro"):
+                cad_nome = st.text_input("Nome Completo")
+                cad_email = st.text_input("E-mail (Login)")
+                cad_senha = st.text_input("Senha", type="password")
+                btn_cadastrar = st.form_submit_button("Criar Conta", use_container_width=True)
 
-            if st.button("Criar Conta", use_container_width=True):
-                if not cad_nome or not cad_email or not cad_senha:
-                    st.warning("Preencha todos os campos.")
-                else:
-                    try:
-                        ok, mensagem = cadastrar_usuario(cad_nome, cad_email, cad_senha)
-                        if ok:
-                            st.success(mensagem)
-                        else:
-                            st.error(mensagem)
-                    except Exception as e:
-                        st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
+                if btn_cadastrar:
+                    if not cad_nome or not cad_email or not cad_senha:
+                        st.warning("Preencha todos os campos.")
+                    else:
+                        try:
+                            ok, mensagem = cadastrar_usuario(cad_nome, cad_email, cad_senha)
+                            if ok:
+                                st.success(mensagem)
+                            else:
+                                st.error(mensagem)
+                        except Exception as e:
+                            st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
 
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
@@ -465,10 +462,11 @@ else:
                 st.error(f"❌ Erro ao substituir o DXF: {e}")
 
 # ============================================================
-# QUADRO DE CARGAS
+# QUADRO DE CARGAS CONSOLIDADO
 # ============================================================
 if dados_ambientes:
-    dados_ambientes = sorted(dados_ambientes, key=lambda x: x.get("Ambiente", ""))
+    # Ordenação estritamente alfabética por ambiente
+    dados_ambientes = sorted(dados_ambientes, key=lambda x: str(x.get("Ambiente", "")).strip().lower())
 
     st.divider()
     st.subheader("📊 Quadro de Previsão de Cargas Consolidado")
@@ -509,28 +507,46 @@ if dados_ambientes:
             st.markdown("---")
 
     df_consolidado = pd.DataFrame(tabela_editada)
-    colunas_para_ocultar = [
-        "Centro_X", "Centro_Y",
-        "Pot. Unit. Ilum (VA)", "Carga Ilum. (VA)",
-        "Pot. Unit. TUG (VA)", "Carga TUGs (VA)",
-        "Pot. Unit. TUE (VA)", "Carga TUE (VA)"
+    
+    # Mantém as colunas de potências unitárias e totais visíveis
+    colunas_mantidas = [
+        "Ambiente", "Área (m²)", "Perímetro (m)",
+        "Qtd Ilum.", "Pot. Unit. Ilum (VA)", "Carga Ilum. (VA)",
+        "TUGs (Qtd)", "Pot. Unit. TUG (VA)", "Carga TUGs (VA)",
+        "Equipamento TUE", "Qtd TUE", "Pot. Unit. TUE (VA)", "Carga TUE (VA)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[c for c in colunas_para_ocultar if c in df_consolidado.columns], errors="ignore")
+    df_exibicao = df_consolidado[[col for col in colunas_mantidas if col in df_consolidado.columns]].copy()
+
     if "Área (m²)" in df_exibicao.columns:
         df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     if "Perímetro (m)" in df_exibicao.columns:
         df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
+    # Linha de Totais Geral calculada e estilizada
     linha_total = {
         "Ambiente": "TOTAL GERAL",
         "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
         "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
         "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
+        "Pot. Unit. Ilum (VA)": "-",
+        "Carga Ilum. (VA)": int(df_exibicao["Carga Ilum. (VA)"].sum()),
         "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
+        "Pot. Unit. TUG (VA)": "-",
+        "Carga TUGs (VA)": int(df_exibicao["Carga TUGs (VA)"].sum()),
         "Equipamento TUE": "-",
-        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
+        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum()),
+        "Pot. Unit. TUE (VA)": "-",
+        "Carga TUE (VA)": int(df_exibicao["Carga TUE (VA)"].sum())
     }
-    st.dataframe(pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True), use_container_width=True, hide_index=True)
+    
+    df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
+
+    def destacar_total(row):
+        if row["Ambiente"] == "TOTAL GERAL":
+            return ['background-color: #f0f2f6; font-weight: bold; color: #000000'] * len(row)
+        return [''] * len(row)
+
+    st.dataframe(df_exibicao_com_total.style.apply(destacar_total, axis=1), use_container_width=True, hide_index=True)
 
     # ========================================================
     # QDC
@@ -671,7 +687,6 @@ if dados_ambientes:
             st.error("❌ Nenhum arquivo DXF associado.")
         else:
             try:
-                # Salva as configurações atuais antes de gerar o CAD.
                 salvar_dados_projeto(
                     st.session_state.user_email,
                     st.session_state.projeto_ativo,
