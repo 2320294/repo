@@ -18,6 +18,16 @@ st.set_page_config(
 # SUPABASE
 # ============================================================
 def obter_credenciais_supabase():
+    """
+    Lê primeiro o formato usado no Streamlit Cloud:
+
+    [supabase]
+    url = "..."
+    key = "..."
+
+    Também aceita, como alternativa, variáveis de ambiente
+    SUPABASE_URL / SUPABASE_KEY / SUPABASE_ANON_KEY.
+    """
     url = ""
     key = ""
 
@@ -238,49 +248,44 @@ with st.sidebar:
 
         if aba_auth == "Entrar (Login)":
             st.subheader("🔐 Fazer Login")
-            with st.form("form_login"):
-                login_email = st.text_input("E-mail / Login")
-                login_senha = st.text_input("Senha", type="password")
-                btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
+            login_email = st.text_input("E-mail / Login", key="login_email")
+            login_senha = st.text_input("Senha", type="password", key="login_senha")
 
-                if btn_entrar:
-                    if not login_email or not login_senha:
-                        st.warning("Preencha o e-mail e a senha.")
-                    else:
-                        try:
-                            usuario = buscar_usuario(login_email, login_senha)
-                            if usuario:
-                                st.session_state.logged_in = True
-                                st.session_state.user_email = usuario["email"]
-                                st.session_state.user_name = usuario["nome"]
-                                st.session_state.projeto_ativo = "Selecione um projeto..."
-                                st.success(f"Bem-vindo, {st.session_state.user_name}!")
-                                st.rerun()
-                            else:
-                                st.error("E-mail ou senha incorretos.")
-                        except Exception as e:
-                            st.error(f"❌ Erro ao consultar o Supabase: {e}")
+            if st.button("Entrar", use_container_width=True):
+                if not login_email or not login_senha:
+                    st.warning("Preencha o e-mail e a senha.")
+                else:
+                    try:
+                        usuario = buscar_usuario(login_email, login_senha)
+                        if usuario:
+                            st.session_state.logged_in = True
+                            st.session_state.user_email = usuario["email"]
+                            st.session_state.user_name = usuario["nome"]
+                            st.session_state.projeto_ativo = "Selecione um projeto..."
+                            st.rerun()
+                        else:
+                            st.error("E-mail ou senha incorretos.")
+                    except Exception as e:
+                        st.error(f"❌ Erro ao consultar o Supabase: {e}")
 
         else:
             st.subheader("📝 Novo Cadastro")
-            with st.form("form_cadastro"):
-                cad_nome = st.text_input("Nome Completo")
-                cad_email = st.text_input("E-mail (Login)")
-                cad_senha = st.text_input("Senha", type="password")
-                btn_cadastrar = st.form_submit_button("Criar Conta", use_container_width=True)
+            cad_nome = st.text_input("Nome Completo", key="cad_nome")
+            cad_email = st.text_input("E-mail (Login)", key="cad_email")
+            cad_senha = st.text_input("Senha", type="password", key="cad_senha")
 
-                if btn_cadastrar:
-                    if not cad_nome or not cad_email or not cad_senha:
-                        st.warning("Preencha todos os campos.")
-                    else:
-                        try:
-                            ok, mensagem = cadastrar_usuario(cad_nome, cad_email, cad_senha)
-                            if ok:
-                                st.success(mensagem)
-                            else:
-                                st.error(mensagem)
-                        except Exception as e:
-                            st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
+            if st.button("Criar Conta", use_container_width=True):
+                if not cad_nome or not cad_email or not cad_senha:
+                    st.warning("Preencha todos os campos.")
+                else:
+                    try:
+                        ok, mensagem = cadastrar_usuario(cad_nome, cad_email, cad_senha)
+                        if ok:
+                            st.success(mensagem)
+                        else:
+                            st.error(mensagem)
+                    except Exception as e:
+                        st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
 
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
@@ -460,11 +465,10 @@ else:
                 st.error(f"❌ Erro ao substituir o DXF: {e}")
 
 # ============================================================
-# QUADRO DE CARGAS CONSOLIDADO
+# QUADRO DE CARGAS
 # ============================================================
 if dados_ambientes:
-    # Ordenação estritamente alfabética por ambiente
-    dados_ambientes = sorted(dados_ambientes, key=lambda x: str(x.get("Ambiente", "")).strip().lower())
+    dados_ambientes = sorted(dados_ambientes, key=lambda x: x.get("Ambiente", ""))
 
     st.divider()
     st.subheader("📊 Quadro de Previsão de Cargas Consolidado")
@@ -504,45 +508,148 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
+    # ========================================================
+    # TABELA CONSOLIDADA
+    # ========================================================
+
+    # Mantém os ambientes em ordem crescente de nome.
+    tabela_editada = sorted(
+        tabela_editada,
+        key=lambda x: str(x.get("Ambiente", "")).strip().casefold()
+    )
+
     df_consolidado = pd.DataFrame(tabela_editada)
-    
-    colunas_mantidas = [
-        "Ambiente", "Área (m²)", "Perímetro (m)",
-        "Qtd Ilum.", "Pot. Unit. Ilum (VA)", "Carga Ilum. (VA)",
-        "TUGs (Qtd)", "Pot. Unit. TUG (VA)", "Carga TUGs (VA)",
-        "Equipamento TUE", "Qtd TUE", "Pot. Unit. TUE (VA)", "Carga TUE (VA)"
+
+    # Colunas exibidas no quadro consolidado.
+    # Agora mostramos quantidade, potência unitária e carga total
+    # de iluminação, TUG e TUE.
+    colunas_exibicao = [
+        "Ambiente",
+        "Área (m²)",
+        "Perímetro (m)",
+        "Qtd Ilum.",
+        "Pot. Unit. Ilum (VA)",
+        "Carga Ilum. (VA)",
+        "TUGs (Qtd)",
+        "Pot. Unit. TUG (VA)",
+        "Carga TUGs (VA)",
+        "Equipamento TUE",
+        "Qtd TUE",
+        "Pot. Unit. TUE (VA)",
+        "Carga TUE (VA)"
     ]
-    df_exibicao = df_consolidado[[col for col in colunas_mantidas if col in df_consolidado.columns]].copy()
+
+    colunas_existentes = [
+        c for c in colunas_exibicao
+        if c in df_consolidado.columns
+    ]
+
+    df_exibicao = df_consolidado[colunas_existentes].copy()
+
+    # Garante novamente a ordem alfabética no DataFrame.
+    if "Ambiente" in df_exibicao.columns:
+        df_exibicao = (
+            df_exibicao
+            .sort_values(
+                by="Ambiente",
+                key=lambda serie: serie.astype(str).str.casefold(),
+                ascending=True
+            )
+            .reset_index(drop=True)
+        )
 
     if "Área (m²)" in df_exibicao.columns:
         df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
+
     if "Perímetro (m)" in df_exibicao.columns:
         df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
-    linha_total = {
-        "Ambiente": "TOTAL GERAL",
-        "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
-        "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
-        "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
-        "Pot. Unit. Ilum (VA)": "-",
-        "Carga Ilum. (VA)": int(df_exibicao["Carga Ilum. (VA)"].sum()),
-        "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
-        "Pot. Unit. TUG (VA)": "-",
-        "Carga TUGs (VA)": int(df_exibicao["Carga TUGs (VA)"].sum()),
-        "Equipamento TUE": "-",
-        "Qtd TUE": int(df_exibicao["Qtd TUE"].sum()),
-        "Pot. Unit. TUE (VA)": "-",
-        "Carga TUE (VA)": int(df_exibicao["Carga TUE (VA)"].sum())
-    }
-    
-    df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
+    # --------------------------------------------------------
+    # LINHA DE TOTAL GERAL
+    # --------------------------------------------------------
+    # Quantidades e cargas totais são somadas.
+    # Potências unitárias recebem "—", pois não faz sentido
+    # somar potências unitárias de equipamentos diferentes.
+
+    linha_total = {c: "" for c in df_exibicao.columns}
+    linha_total["Ambiente"] = "TOTAL GERAL"
+
+    if "Área (m²)" in df_exibicao.columns:
+        linha_total["Área (m²)"] = round(
+            pd.to_numeric(df_exibicao["Área (m²)"], errors="coerce").fillna(0).sum(),
+            2
+        )
+
+    if "Perímetro (m)" in df_exibicao.columns:
+        linha_total["Perímetro (m)"] = round(
+            pd.to_numeric(df_exibicao["Perímetro (m)"], errors="coerce").fillna(0).sum(),
+            2
+        )
+
+    for coluna in ["Qtd Ilum.", "TUGs (Qtd)", "Qtd TUE"]:
+        if coluna in df_exibicao.columns:
+            linha_total[coluna] = int(
+                pd.to_numeric(df_exibicao[coluna], errors="coerce").fillna(0).sum()
+            )
+
+    for coluna in [
+        "Carga Ilum. (VA)",
+        "Carga TUGs (VA)",
+        "Carga TUE (VA)"
+    ]:
+        if coluna in df_exibicao.columns:
+            linha_total[coluna] = int(
+                pd.to_numeric(df_exibicao[coluna], errors="coerce").fillna(0).sum()
+            )
+
+    for coluna in [
+        "Pot. Unit. Ilum (VA)",
+        "Pot. Unit. TUG (VA)",
+        "Pot. Unit. TUE (VA)"
+    ]:
+        if coluna in df_exibicao.columns:
+            linha_total[coluna] = "—"
+
+    if "Equipamento TUE" in df_exibicao.columns:
+        linha_total["Equipamento TUE"] = "—"
+
+    df_exibicao_com_total = pd.concat(
+        [
+            df_exibicao,
+            pd.DataFrame([linha_total])
+        ],
+        ignore_index=True
+    )
+
+    # --------------------------------------------------------
+    # DESTAQUE DA LINHA TOTAL
+    # --------------------------------------------------------
+    # Streamlit usa normalmente #f0f2f6 no cabeçalho da tabela
+    # em tema claro. Aplicamos a mesma tonalidade à última linha.
 
     def destacar_total(row):
-        if row["Ambiente"] == "TOTAL GERAL":
-            return ['background-color: #f0f2f6; font-weight: bold; color: #000000'] * len(row)
-        return [''] * len(row)
+        if str(row.get("Ambiente", "")).strip().upper() == "TOTAL GERAL":
+            return [
+                "background-color: #f0f2f6; "
+                "font-weight: 700; "
+                "border-top: 2px solid #d0d3d8"
+            ] * len(row)
+        return [""] * len(row)
 
-    st.dataframe(df_exibicao_com_total.style.apply(destacar_total, axis=1), use_container_width=True, hide_index=True)
+    tabela_estilizada = (
+        df_exibicao_com_total.style
+        .apply(destacar_total, axis=1)
+        .format({
+            "Área (m²)": lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x,
+            "Perímetro (m)": lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x
+        })
+    )
+
+    st.dataframe(
+        tabela_estilizada,
+        use_container_width=True,
+        hide_index=True
+    )
 
     # ========================================================
     # QDC
@@ -683,6 +790,7 @@ if dados_ambientes:
             st.error("❌ Nenhum arquivo DXF associado.")
         else:
             try:
+                # Salva as configurações atuais antes de gerar o CAD.
                 salvar_dados_projeto(
                     st.session_state.user_email,
                     st.session_state.projeto_ativo,
