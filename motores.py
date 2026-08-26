@@ -231,15 +231,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        ambientes_nomes = {}
-        for poly in polilinhas:
-            xs, ys = [p[0] for p in poly], [p[1] for p in poly]
-            min_x, max_x = min(xs), max(xs)
-            min_y, max_y = min(ys), max(ys)
-            nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
-            ambientes_nomes[tuple(poly)] = nome_achado
-
-        # Identifica soleiras com porta encostada (< 0.3m)
+        # Identifica unicamente soleiras que possuem porta encostada (< 0.3m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -256,7 +248,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. PROCESSA CADA SOLEIRA VÁLIDA GERANDO CÍRCULO EM **TODOS** OS AMBIENTES ADJACENTES VÁLIDOS
+        # 1. INSERE EXATAMENTE UM CÍRCULO POR SOLEIRA VÁLIDA NA EXTREMIDADE OPOSTA
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -267,25 +259,29 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
             d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
+            
+            # Ponto oposto exato (lado interno do cômodo)
             ponto_oposto = s_p2 if d1 < d2 else s_p1
             
-            # Encontra todos os ambientes adjacentes à soleira que estão na layer IA_AMBIENTES
+            # Encontra o ambiente correspondente mais próximo
+            ambiente_alvo = None
             for poly in polilinhas:
                 xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                
-                # Verifica se o ponto da soleira está próximo ao contorno deste ambiente
                 if min(xs) - 0.8 <= ponto_oposto[0] <= max(xs) + 0.8 and min(ys) - 0.8 <= ponto_oposto[1] <= max(ys) + 0.8:
-                    cx = sum([pt[0] for pt in poly]) / len(poly)
-                    cy = sum([pt[1] for pt in poly]) / len(poly)
+                    ambiente_alvo = poly
+                    break
+            
+            if ambiente_alvo:
+                cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
+                cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
+                
+                d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
+                if d_tot > 0:
+                    dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
+                    final_x = ponto_oposto[0] + dir_x * 0.15
+                    final_y = ponto_oposto[1] + dir_y * 0.15
                     
-                    d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
-                    if d_tot > 0:
-                        dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
-                        # Força o círculo a ser inserido a 20cm para dentro em direção ao centroide do ambiente
-                        final_x = ponto_oposto[0] + dir_x * 0.20
-                        final_y = ponto_oposto[1] + dir_y * 0.20
-                        
-                        msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
