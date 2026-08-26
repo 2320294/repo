@@ -68,6 +68,22 @@ def dimensionar_cargas(nome, area, perimetro):
         "Carga TUE (VA)": carga_tue
     }
 
+def ponto_em_poligono(x, y, polilinha):
+    n = len(polilinha)
+    dentro = False
+    p1x, p1y = polilinha[0]
+    for i in range(n + 1):
+        p2x, p2y = polilinha[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        dentro = not dentro
+        p1x, p1y = p2x, p2y
+    return dentro
+
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
@@ -223,58 +239,51 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # REGRA SIMPLES E DIRETA: Tem porta encostada na soleira? (< 0.25m). Se sim, armazena com a porta. Se não, descarta.
+        # REGRA SIMPLES: Soleira tem porta encostada (< 0.3m)? Se sim, processa. Se não, ignora.
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
             
             porta_encostada = None
             for p in portas_raw:
-                # Verifica se as pontas da porta ou o segmento da porta encostam na soleira
                 d1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
                 d2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
                 d3 = point_seg_dist(s_p1[0], s_p1[1], p['p1'], p['p2'])
                 d4 = point_seg_dist(s_p2[0], s_p2[1], p['p1'], p['p2'])
                 
-                if d1 < 0.25 or d2 < 0.25 or d3 < 0.25 or d4 < 0.25:
+                if d1 < 0.3 or d2 < 0.3 or d3 < 0.3 or d4 < 0.3:
                     porta_encostada = p
                     break
             
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. CRIA O CÍRCULO NA EXTREMIDADE OPOSTA DA SOLEIRA QUE TEM PORTA ENCOSTADA
+        # 1. INSERE O CÍRCULO NA EXTREMIDADE OPOSTA DA SOLEIRA COM PORTA
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
             
-            # Descobre qual ponta da soleira está mais próxima da porta encostada
             pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
             d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
             d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
             
-            # Ponto oposto (o lado livre da soleira, que fica para dentro do ambiente)
+            # Ponto oposto à porta na soleira
             ponto_oposto = s_p2 if d1 < d2 else s_p1
             
-            # Encontra o ambiente adjacente (priorizando o ambiente que não é corredor)
-            ambientes_adjacentes = []
-            for poly in polilinhas:
-                nome_amb = ambientes_nomes.get(tuple(poly), "")
-                xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                if min(xs) - 0.5 <= ponto_oposto[0] <= max(xs) + 0.5 and min(ys) - 0.5 <= ponto_oposto[1] <= max(ys) + 0.5:
-                    ambientes_adjacentes.append((poly, nome_amb))
-            
+            # Encontra qualquer ambiente cujas extremidades ou centroide estejam em contato/proximidade com a soleira
             ambiente_alvo = None
-            for poly, nome_amb in ambientes_adjacentes:
-                if not any(w in nome_amb.lower() for w in ["circula", "corredor", "hall"]):
+            for poly in polilinhas:
+                xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
+                sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
+                if min(xs) - 0.8 <= sm_x <= max(xs) + 0.8 and min(ys) - 0.8 <= sm_y <= max(ys) + 0.8:
                     ambiente_alvo = poly
                     break
             
-            if not ambiente_alvo and ambientes_adjacentes:
-                ambiente_alvo = ambientes_adjacentes[0][0]
+            if not ambiente_alvo and polilinhas:
+                ambiente_alvo = polilinhas[0]
             
             if ambiente_alvo:
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
