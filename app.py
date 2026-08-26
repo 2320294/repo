@@ -17,7 +17,7 @@ st.set_page_config(
 # ============================================================
 # CREDENCIAIS DO SUPABASE
 # ============================================================
-SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
+SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
 @st.cache_resource
@@ -69,7 +69,7 @@ with st.sidebar:
                         else:
                             st.error("E-mail ou senha incorretos.")
                     except Exception as e:
-                        st.error(f"Erro ao logar: {e}")
+                        st.error("Falha de conexão com a rede/banco. Verifique sua conexão com a internet.")
 
         else:
             st.subheader("📝 Novo Cadastro")
@@ -93,7 +93,7 @@ with st.sidebar:
                             }).execute()
                             st.success("Conta criada! Faça login ao lado.")
                     except Exception as e:
-                        st.error(f"Erro ao cadastrar: {e}")
+                        st.error("Erro ao conectar com o banco de dados.")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
@@ -121,7 +121,7 @@ with st.sidebar:
                         st.success("Projeto cadastrado com sucesso!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao criar projeto: {e}")
+                        st.error("Erro ao criar projeto.")
                 else:
                     st.warning("Digite o nome do projeto.")
 
@@ -144,7 +144,7 @@ with st.sidebar:
                         st.success(f"Projeto '{projeto_selecionado}' apagado!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao apagar: {e}")
+                        st.error("Erro ao apagar.")
         else:
             st.info("Nenhum projeto cadastrado ainda.")
             projeto_selecionado = "Nenhum"
@@ -183,7 +183,6 @@ if uploaded_file is not None:
         st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 
 if dados_ambientes:
-    # Ordena os ambientes em ordem alfabética
     dados_ambientes = sorted(dados_ambientes, key=lambda x: x['Ambiente'])
 
     st.divider()
@@ -228,7 +227,6 @@ if dados_ambientes:
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
-    # Cria o DataFrame consolidado
     df_consolidado = pd.DataFrame(tabela_editada)
     
     colunas_para_ocultar = [
@@ -239,14 +237,12 @@ if dados_ambientes:
     ]
     df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns]).copy()
 
-    # Formata Área e Perímetro para 2 casas decimais no DataFrame
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
-    # Cria a linha de Total Geral
     linha_total = {
         "Ambiente": "TOTAL GERAL",
-        "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
+        "Área (m²)"] : round(df_exibicao["Área (m²)"].sum(), 2),
         "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
         "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
         "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
@@ -262,7 +258,6 @@ if dados_ambientes:
     # ====================================================
     st.divider()
     
-    # Filtra áreas molhadas / não permitidas segundo a norma
     ambientes_validos_qdc = []
     ambientes_recomendados_qdc = []
     
@@ -270,12 +265,10 @@ if dados_ambientes:
         nome_amb = r["Ambiente"]
         nome_lower = nome_amb.lower()
         
-        # Exclui áreas molhadas/úmidas
         is_molhado = any(x in nome_lower for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as", "área", "area"])
         if is_molhado:
             continue
             
-        # Identifica áreas recomendadas de circulação (hall, corredor, circulação)
         is_circulacao = any(x in nome_lower for x in ["hall", "corredor", "circula", "circ"])
         if is_circulacao:
             ambientes_recomendados_qdc.append(f"{nome_amb} (Recomendado - NBR 5410)")
@@ -284,7 +277,6 @@ if dados_ambientes:
             
     opcoes_qdc = ambientes_recomendados_qdc + ambientes_validos_qdc
     
-    # Fallback caso todos os ambientes sejam considerados áreas úmidas
     if not opcoes_qdc:
         opcoes_qdc = [r["Ambiente"] for r in dados_ambientes]
 
@@ -293,7 +285,6 @@ if dados_ambientes:
         opcoes_qdc
     )
     
-    # Limpa a string de recomendação para passar ao motor CAD
     local_qdc = local_qdc_selecionado.split(" (Recomendado")[0].strip()
 
     # ====================================================
