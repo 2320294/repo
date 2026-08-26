@@ -132,6 +132,21 @@ def renderizar_painel_principal():
         )
     )
 
+    # ========================================================
+    # PARÂMETROS GERAIS DO PROJETO
+    # ========================================================
+    # Esta seção aparece SEMPRE que um projeto estiver ativo,
+    # mesmo antes de existir uma planta DXF processada.
+    parametros_projeto = (
+        renderizar_parametros_projeto(
+            tensao_projeto_salva,
+            pe_direito_salvo
+        )
+    )
+
+    # ========================================================
+    # UPLOAD / REENVIO DO DXF
+    # ========================================================
     renderizar_upload_dxf(
         dxf_bytes=dxf_bytes,
         dados_ambientes=dados_ambientes,
@@ -139,6 +154,10 @@ def renderizar_painel_principal():
     )
 
     if not dados_ambientes:
+        st.info(
+            "Envie/processse uma planta DXF para liberar "
+            "o quadro de cargas, QDC, interruptores e materiais."
+        )
         return
 
     tabela_editada = (
@@ -149,13 +168,6 @@ def renderizar_painel_principal():
 
     renderizar_tabela_consolidada(
         tabela_editada
-    )
-
-    parametros_projeto = (
-        renderizar_parametros_projeto(
-            tensao_projeto_salva,
-            pe_direito_salvo
-        )
     )
 
     local_qdc = renderizar_qdc(
