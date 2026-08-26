@@ -239,7 +239,6 @@ if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
                 dados_ambientes = motores.processar_dxf(tmp_path)
                 os.remove(tmp_path)
                 
-                # Salva imediatamente no banco para vincular o novo DXF
                 if supabase is not None:
                     payload = {
                         "user_email": st.session_state.user_email,
@@ -269,7 +268,6 @@ else:
             dados_ambientes = motores.processar_dxf(tmp_path)
             os.remove(tmp_path)
             
-            # Salva o DXF inicial na nuvem automaticamente
             if supabase is not None:
                 payload = {
                     "user_email": st.session_state.user_email,
@@ -334,7 +332,7 @@ if dados_ambientes:
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_exibicao.columns])
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns])
 
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
