@@ -249,7 +249,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-         raio_circulo = 0.15
+        raio_circulo = 0.15
 
         # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (QUADRANTE ENCOSTANDO NA PAREDE)
         for item in soleiras_com_porta:
@@ -289,7 +289,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     if d_tot > 0:
                         dir_x = (cx - p_op[0]) / d_tot
                         dir_y = (cy - p_op[1]) / d_tot
-                        # Desloca exatamente o valor do raio (0.15m) para que o quadrante toque a parede
                         final_x = p_op[0] + dir_x * raio_circulo
                         final_y = p_op[1] + dir_y * raio_circulo
                         if ponto_em_poligono(final_x, final_y, poly):
