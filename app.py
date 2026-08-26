@@ -145,29 +145,16 @@ def obter_config_interruptores(nome_ambiente, config_interruptores):
             return config
     return None
 
-def encontrar_portas_do_ambiente(polilinha, portas_raw, todas_polilinhas):
+def encontrar_portas_do_ambiente(polilinha, portas_raw):
     if not polilinha: return []
     xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
     min_x, max_x = min(xs), max(xs)
     min_y, max_y = min(ys), max(ys)
     portas_ambiente = []
-    
     for porta in portas_raw:
         cx, cy = (porta['p1'][0] + porta['p2'][0]) / 2, (porta['p1'][1] + porta['p2'][1]) / 2
         if min_x - 0.8 <= cx <= max_x + 0.8 and min_y - 0.8 <= cy <= max_y + 0.8:
-            # Verifica quantos ambientes contêm o ponto médio desta porta (se toca mais de um ambiente, é divisória interna)
-            ambientes_tocados = 0
-            for poly in todas_polilinhas:
-                if ponto_em_poligono(cx, cy, poly) or any(point_seg_dist(pt[0], pt[1], porta['p1'], porta['p2']) < 0.2 for pt in poly):
-                    ambientes_tocados += 1
-            
-            porta_info = porta.copy()
-            # Prioridade de ordenação: portas que dividem com menos ambientes (ex: exterior ou circulação) vêm primeiro
-            porta_info['peso_divisao'] = ambientes_tocados
-            portas_ambiente.append(porta_info)
-            
-    # Ordena as portas: prioriza as que não fazem divisa direta com outros ambientes internos (peso menor)
-    portas_ambiente.sort(key=lambda p: p['peso_divisao'])
+            portas_ambiente.append(porta)
     return portas_ambiente
 
 def criar_geometria_circulo_soleira(soleira, porta, polilinha):
@@ -214,7 +201,7 @@ def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_
     quantidade = int(config.get('quantidade', 0))
     if quantidade not in [1, 2]: return
 
-    portas_ambiente = encontrar_portas_do_ambiente(polilinha, portas_raw, polilinhas)
+    portas_ambiente = encontrar_portas_do_ambiente(polilinha, portas_raw)
     if not portas_ambiente: return
 
     portas_com_soleira = []
