@@ -246,29 +246,44 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             s_p1, s_p2 = s['p1'], s['p2']
             sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
             
-            tem_porta = any(
-                math.hypot(sm_x - ((p['p1'][0] + p['p2'][0])/2), sm_y - ((p['p1'][1] + p['p2'][1])/2)) < 1.5 or
-                point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2) < 0.8 or
-                point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2) < 0.8
-                for p in portas_raw
-            )
-            if tem_porta:
-                soleiras_com_porta.append(s)
-
-        # 1. INSERE O CÍRCULO MAGENTA NO INTERIOR DO AMBIENTE PRINCIPAL ADJACENTE À SOLEIRA COM PORTA
-        for s in soleiras_com_porta:
-            s_p1, s_p2 = s['p1'], s['p2']
-            sm_x, sm_y = (s_p1[0] + s_p2[0]) / 2, (s_p1[1] + s_p2[1]) / 2
+            # Encontra a porta associada mais próxima desta soleira
+            porta_mais_proxima = None
+            menor_dist = 999.0
+            for p in portas_raw:
+                pm_x = (p['p1'][0] + p['p2'][0]) / 2
+                pm_y = (p['p1'][1] + p['p2'][1]) / 2
+                d = math.hypot(sm_x - pm_x, sm_y - pm_y)
+                if d < menor_dist:
+                    menor_dist = d
+                    porta_mais_proxima = p
             
-            # Encontra os ambientes adjacentes à soleira
+            if menor_dist < 1.5 and porta_mais_proxima is not None:
+                soleiras_com_porta.append({'s': s, 'porta': porta_mais_proxima})
+
+        # 1. INSERE O CÍRCULO MAGENTA NA EXTREMIDADE OPOSTA DA SOLEIRA (Longe da porta, dentro do ambiente principal)
+        for item in soleiras_com_porta:
+            s = item['s']
+            p_porta = item['porta']
+            s_p1, s_p2 = s['p1'], s['p2']
+            
+            # Determina qual ponta da soleira está mais próxima da porta (junção porta + soleira)
+            pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
+            pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+            
+            d1_porta = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
+            d2_porta = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
+            
+            # A extremidade oposta é a que está MAIS LONGE da porta
+            ponto_oposto = s_p2 if d1_porta < d2_porta else s_p1
+            
+            # Encontra o ambiente principal adjacente (excluindo corredores)
             ambientes_adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
                 xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
-                if min(xs) - 0.6 <= sm_x <= max(xs) + 0.6 and min(ys) - 0.6 <= sm_y <= max(ys) + 0.6:
+                if min(xs) - 0.6 <= ponto_oposto[0] <= max(xs) + 0.6 and min(ys) - 0.6 <= ponto_oposto[1] <= max(ys) + 0.6:
                     ambientes_adjacentes.append((poly, nome_amb))
             
-            # Prioriza o ambiente que NÃO seja corredor/circulação
             ambiente_alvo = None
             for poly, nome_amb in ambientes_adjacentes:
                 if not any(w in nome_amb.lower() for w in ["circula", "corredor", "hall"]):
@@ -282,13 +297,13 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 
-                # Ponto médio da soleira deslocado 15cm na direção do centroide do ambiente principal
-                d_tot = math.hypot(cx - sm_x, cy - sm_y)
+                # Desloca 12cm a partir do ponto oposto na direção do centro do ambiente para garantir que fique interno
+                d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
                 if d_tot > 0:
-                    dir_x, dir_y = (cx - sm_x) / d_tot, (cy - sm_y) / d_tot
-                    circ_x = sm_x + dir_x * 0.15
-                    circ_y = sm_y + dir_y * 0.15
-                    msp.add_circle(center=(circ_x, circ_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                    dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
+                    final_x = ponto_oposto[0] + dir_x * 0.12
+                    final_y = ponto_oposto[1] + dir_y * 0.12
+                    msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
