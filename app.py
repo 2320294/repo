@@ -8,6 +8,7 @@ import motores
 # ============================================================
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================================
+
 st.set_page_config(
     page_title="AutoElétrica Profissional",
     page_icon="⚡",
@@ -17,35 +18,80 @@ st.set_page_config(
 # ============================================================
 # SUPABASE
 # ============================================================
-def obter_credencial(nome):
+
+def obter_credenciais_supabase():
+
     try:
-        valor = st.secrets.get(nome)
-        if valor:
-            return str(valor)
+        bloco = st.secrets["supabase"]
+
+        url = str(
+            bloco.get("url", "")
+        ).strip()
+
+        key = str(
+            bloco.get("key", "")
+        ).strip()
+
+        if url and key:
+            return url, key
+
     except Exception:
         pass
-    return os.getenv(nome, "").strip()
+
+    url = os.getenv(
+        "SUPABASE_URL",
+        ""
+    ).strip()
+
+    key = (
+        os.getenv(
+            "SUPABASE_SERVICE_ROLE_KEY",
+            ""
+        ).strip()
+
+        or
+
+        os.getenv(
+            "SUPABASE_KEY",
+            ""
+        ).strip()
+
+        or
+
+        os.getenv(
+            "SUPABASE_ANON_KEY",
+            ""
+        ).strip()
+    )
+
+    return url, key
 
 
-SUPABASE_URL = obter_credencial("SUPABASE_URL")
-SUPABASE_KEY = obter_credencial("SUPABASE_SERVICE_ROLE_KEY") or obter_credencial("SUPABASE_KEY") or obter_credencial("SUPABASE_ANON_KEY")
+SUPABASE_URL, SUPABASE_KEY = (
+    obter_credenciais_supabase()
+)
+
 
 if not SUPABASE_URL or not SUPABASE_KEY:
+
     st.error(
-        "❌ As credenciais do Supabase não foram configuradas. "
-        "Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY "
-        "nos Secrets do Streamlit ou nas variáveis de ambiente."
+        "❌ As credenciais do Supabase não foram encontradas. "
+        "Confira o bloco [supabase] nos Secrets do Streamlit."
     )
+
     st.stop()
 
 
 @st.cache_resource
 def obter_supabase() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    return create_client(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
 
 
 supabase = obter_supabase()
-
 # ============================================================
 # FUNÇÕES DE BANCO
 # ============================================================
