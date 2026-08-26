@@ -84,6 +84,16 @@ def ponto_em_poligono(x, y, polilinha):
         p1x, p1y = p2x, p2y
     return dentro
 
+def get_ponto_perimetro(d, segs):
+    acumulado = 0
+    for pt1, pt2, dst in segs:
+        if acumulado + dst >= d or math.isclose(acumulado + dst, d, abs_tol=1e-5):
+            ratio = (d - acumulado) / dst
+            return pt1[0] + (pt2[0] - pt1[0]) * ratio, pt1[1] + (pt2[1] - pt1[1]) * ratio, (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+        acumulado += dst
+    pt1, pt2, dst = segs[-1]
+    return pt2[0], pt2[1], (pt2[0]-pt1[0])/dst, (pt2[1]-pt1[1])/dst
+
 def processar_dxf(caminho_arquivo):
     doc = ezdxf.readfile(caminho_arquivo)
     msp = doc.modelspace()
@@ -328,7 +338,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 ambientes_processados[nome] = 1
                 nome_busca = nome
             
-            # Garante que acha os dados na tabela editada (mesmo com sufixo numérico opcional)
             row_data = dict_dados.get(nome_busca, dict_dados.get(nome, None))
             
             centro_x, centro_y = (min_x + max_x) / 2, (min_y + max_y) / 2
