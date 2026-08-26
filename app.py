@@ -224,8 +224,9 @@ if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
         except:
             dxf_bytes = None
             
-    if st.checkbox("🔄 Deseja enviar um novo arquivo DXF para substituir a planta base?"):
-        uploaded_file = st.file_uploader("Envie a nova planta base (formato DXF):", type=["dxf"])
+    # Opção para reenviar / substituir o arquivo DXF
+    with st.expander("🔄 Reenviar / Substituir Arquivo DXF (Planta Base)"):
+        uploaded_file = st.file_uploader("Envie a nova planta base (formato DXF):", type=["dxf"], key="novo_dxf_upload")
         if uploaded_file is not None:
             dxf_bytes = uploaded_file.read()
             try:
@@ -234,6 +235,7 @@ if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
                     tmp_path = tmp.name
                 dados_ambientes = motores.processar_dxf(tmp_path)
                 os.remove(tmp_path)
+                st.success("✅ Novo arquivo DXF processado com sucesso! Clique em 'Salvar Alterações' abaixo.")
             except Exception as e:
                 st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 else:
@@ -304,7 +306,7 @@ if dados_ambientes:
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns]).copy()
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_exibicao.columns]).copy()
 
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
