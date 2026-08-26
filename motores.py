@@ -239,44 +239,42 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             nome_achado = next((t['nome'] for t in textos if (min_x - 0.5) <= t['x'] <= (max_x + 0.5) and (min_y - 0.5) <= t['y'] <= (max_y + 0.5)), "DESCONHECIDO")
             ambientes_nomes[tuple(poly)] = nome_achado
 
-        # FILTRAGEM RESTRITA: A soleira SÓ é válida se houver uma porta FISICAMENTE SOBREPOSTA ou EXTREMAMENTE PRÓXIMA (< 0.4m) de sua extensão
+        # FILTRAGEM INDIVIDUAL ESTRITA: Cada soleira só é aceita se houver uma porta a menos de 0.6m DELA PRÓPRIA (sempre checando individualmente cada soleira do ambiente)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
             
-            porta_associada = None
+            porta_direta = None
             for p in portas_raw:
-                # Verifica a distância mínima entre o segmento da soleira e as pontas da porta
-                d1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
-                d2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
+                # Distância exata da porta até o segmento desta soleira específica
+                d_p1 = point_seg_dist(p['p1'][0], p['p1'][1], s_p1, s_p2)
+                d_p2 = point_seg_dist(p['p2'][0], p['p2'][1], s_p1, s_p2)
                 pm_porta_x = (p['p1'][0] + p['p2'][0]) / 2
                 pm_porta_y = (p['p1'][1] + p['p2'][1]) / 2
                 d_mid = point_seg_dist(pm_porta_x, pm_porta_y, s_p1, s_p2)
                 
-                if d1 < 0.4 or d2 < 0.4 or d_mid < 0.4:
-                    porta_associada = p
+                if d_p1 < 0.6 or d_p2 < 0.6 or d_mid < 0.6:
+                    porta_direta = p
                     break
             
-            if porta_associada is not None:
-                soleiras_com_porta.append({'s': s, 'porta': porta_associada})
+            if porta_direta is not None:
+                soleiras_com_porta.append({'s': s, 'porta': porta_direta})
 
-        # 1. INSERE O CÍRCULO MAGENTA EXATAMENTE NA EXTREMIDADE OPOSTA DA SOLEIRA COM PORTA
+        # 1. INSERE O CÍRCULO MAGENTA EXATAMENTE NA EXTREMIDADE OPOSTA DA SOLEIRA VÁLIDA
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
             s_p1, s_p2 = s['p1'], s['p2']
             
-            # Identifica qual ponta da soleira está mais próxima da porta (junção com a porta)
             pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
             pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
             
             d1_porta = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
             d2_porta = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
             
-            # A extremidade oposta é a que está MAIS LONGE da porta
+            # Ponto oposto (longe da porta)
             ponto_oposto = s_p2 if d1_porta < d2_porta else s_p1
             
-            # Encontra o ambiente principal adjacente (excluindo corredores/circulação)
             ambientes_adjacentes = []
             for poly in polilinhas:
                 nome_amb = ambientes_nomes.get(tuple(poly), "")
@@ -297,7 +295,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 cx = sum([pt[0] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 cy = sum([pt[1] for pt in ambiente_alvo]) / len(ambiente_alvo)
                 
-                # Desloca 12cm para dentro do ambiente a partir do ponto oposto da soleira
                 d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
                 if d_tot > 0:
                     dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
