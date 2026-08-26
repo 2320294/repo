@@ -256,7 +256,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             if porta_encostada is not None:
                 soleiras_com_porta.append({'s': s, 'porta': porta_encostada})
 
-        # 1. PROCESSA CADA SOLEIRA VÁLIDA GERANDO CÍRCULO EM **TODOS** OS AMBIENTES ADJACENTES VÁLIDOS (SUPORTANDO MÚLTIPLAS PORTAS E DIVISAS ENTRE AMBIENTES FUNCIONAIS)
+        # 1. PROCESSA CADA SOLEIRA VÁLIDA GERANDO CÍRCULO EM **TODOS** OS AMBIENTES ADJACENTES VÁLIDOS
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -271,22 +271,21 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
             
             # Encontra todos os ambientes adjacentes à soleira que estão na layer IA_AMBIENTES
             for poly in polilinhas:
-                nome_amb = ambientes_nomes.get(tuple(poly), "")
                 xs, ys = [pt[0] for pt in poly], [pt[1] for pt in poly]
                 
-                # Se o ponto oposto ou o miolo da soleira está próximo/dentro da polilinha do ambiente
-                if min(xs) - 0.6 <= ponto_oposto[0] <= max(xs) + 0.6 and min(ys) - 0.6 <= ponto_oposto[1] <= max(ys) + 0.6:
+                # Verifica se o ponto da soleira está próximo ao contorno deste ambiente
+                if min(xs) - 0.8 <= ponto_oposto[0] <= max(xs) + 0.8 and min(ys) - 0.8 <= ponto_oposto[1] <= max(ys) + 0.8:
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
                     
                     d_tot = math.hypot(cx - ponto_oposto[0], cy - ponto_oposto[1])
                     if d_tot > 0:
                         dir_x, dir_y = (cx - ponto_oposto[0]) / d_tot, (cy - ponto_oposto[1]) / d_tot
-                        final_x = ponto_oposto[0] + dir_x * 0.12
-                        final_y = ponto_oposto[1] + dir_y * 0.12
+                        # Força o círculo a ser inserido a 20cm para dentro em direção ao centroide do ambiente
+                        final_x = ponto_oposto[0] + dir_x * 0.20
+                        final_y = ponto_oposto[1] + dir_y * 0.20
                         
-                        if ponto_em_poligono(final_x, final_y, poly):
-                            msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
+                        msp.add_circle(center=(final_x, final_y), radius=0.15, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
 
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
