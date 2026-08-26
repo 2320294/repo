@@ -7,7 +7,7 @@ import os
 # CONFIGURAÇÃO DOS INTERRUPTORES / CÍRCULOS
 # ============================================================
 CONFIG_INTERRUPTores = {
-    # "Sala": {"quantidade": 1, "porta": 1},
+    # Exemplo: "Sala": {"quantidade": 1, "porta": 1}
 }
 
 RAIO_CIRCULO_INTERRUPT = 0.15
@@ -135,23 +135,120 @@ def get_inside_normal(vx, vy, start_x, start_y, cx, cy):
     return (n1x, n1y) if d1 < d2 else (n2x, n2y)
 
 # ============================================================
-# REGRAS DE SEGURANÇA E VALIDAÇÃO GEOMÉTRICA
+# LÓGICA DE INTERRUPTORES (CÍRCULOS NAS SOLEIRAS)
 # ============================================================
 
-DISTANCIA_MINIMA_CANTO_TOMADA = 0.20  # Ajustado para 20cm para garantir espaço sem perder pontos
+def normalizar_nome_ambiente(nome):
+    if nome is None: return ""
+    return str(nome).strip().lower()
+
+def obter_config_interruptores(nome_ambiente):
+    nome_normalizado = normalizar_nome_ambiente(nome_ambiente)
+    for nome_config, config in CONFIG_INTERRUPTores.items():
+        if normalizar_nome_ambiente(nome_config) == nome_normalizado:
+            return config
+    return None
+
+def encontrar_portas_do_ambiente(polilinha, portas_raw):
+    if not polilinha: return []
+    xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    portas_ambiente = []
+    for porta in portas_raw:
+        cx, cy = (porta['p1'][0] + porta['p2'][0]) / 2, (porta['p1'][1] + porta['p2'][1]) / 2
+        if min_x - 0.8 <= cx <= max_x + 0.8 and min_y - 0.8 <= cy <= max_y + 0.8:
+            portas_ambiente.append(porta)
+    return portas_ambiente
+
+def criar_geometria_circulo_soleira(soleira, porta, polilinha, polilinhas):
+    s_p1, s_p2 = soleira['p1'], soleira['p2']
+    d_porta_1 = point_seg_dist(porta['p1'][0], porta['p1'][1], s_p1, s_p2)
+    d_porta_2 = point_seg_dist(porta['p2'][0], porta['p2'][1], s_p1, s_p2)
+    extremo_porta_encostado = porta['p1'] if d_porta_1 <= d_porta_2 else porta['p2']
+    p4 = porta['p2'] if d_porta_1 <= d_porta_2 else porta['p1']
+
+    sx, sy = s_p2[0] - s_p1[0], s_p2[1] - s_p1[1]
+    s2 = sx * sx + sy * sy
+    if s2 == 0: return None
+    t = max(0.0, min(1.0, ((extremo_porta_encostado[0] - s_p1[0]) * sx + (extremo_porta_encostado[1] - s_p1[1]) * sy) / s2))
+    p1 = (s_p1[0] + t * sx, s_p1[1] + t * sy)
+    p2 = s_p2 if math.hypot(p1[0]-s_p1[0], p1[1]-s_p1[1]) <= math.hypot(p1[0]-s_p2[0], p1[1]-s_p2[1]) else s_p1
+    
+    vetor_x, vetor_y = p2[0] - p1[0], p2[1] - p1[1]
+    p3 = (p4[0] + vetor_x, p4[1] + vetor_y)
+    
+    soleira_len = math.hypot(vetor_x, vetor_y)
+    if soleira_len == 0: return None
+    
+    return {
+        'p1': p1, 'p2': p2, 'p3': p3, 'p4': p4,
+        'soleira_vx': vetor_x / soleira_len, 'soleira_vy': vetor_y / soleira_len
+    }
+
+def desenhar_circulo_tangente_soleira(msp, ponto_tangencia, soleira_vx, soleira_vy, polilinha, raio=RAIO_CIRCULO_INTERRUPT):
+    cx_ambiente = sum(pt[0] for pt in polilinha) / len(polilinha)
+    cy_ambiente = sum(pt[1] for pt in polilinha) / len(polilinha)
+    nx, ny = get_inside_normal(soleira_vx, soleira_vy, ponto_tangencia[0], ponto_tangencia[1], cx_ambiente, cy_ambiente)
+    
+    centro = (ponto_tangencia[0] + nx * raio, ponto_tangencia[1] + ny * raio)
+    if not ponto_em_poligono(centro[0], centro[1], polilinha):
+        centro = (ponto_tangencia[0] - nx * raio, ponto_tangencia[1] - ny * raio)
+    if not ponto_em_poligono(centro[0], centro[1], polilinha): return False
+
+    msp.add_circle(center=centro, radius=raio, dxfattribs={'layer': 'PROJ_ELETRICA_INTERRUPTOR', 'color': 5})
+    return True
+
+def processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_ambiente, polilinha):
+    config = obter_config_interruptores(nome_ambiente)
+    if not config: return
+    quantidade = int(config.get('quantidade', 0))
+    if quantidade not in [1, 2]: return
+
+    portas_ambiente = encontrar_portas_do_ambiente(polilinha, portas_raw)
+    if not portas_ambiente: return
+
+    portas_com_soleira = []
+    for porta in portas_ambiente:
+        soleiras_porta = [item['s'] for item in soleiras_com_porta if item['porta'] is porta]
+        if soleiras_porta:
+            portas_com_soleira.append({'porta': porta, 'soleiras': soleiras_porta})
+
+    if not portas_com_soleira: return
+
+    if quantidade == 1:
+        porta_escolhida = int(config.get('porta', 1)) - 1
+        if 0 <= porta_escolhida < len(portas_com_soleira):
+            item_porta = portas_com_soleira[porta_escolhida]
+            soleira = item_porta['soleiras'][0]
+            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha, polilinhas)
+            if geom:
+                cx, cy = sum(pt[0] for pt in polilinha)/len(polilinha), sum(pt[1] for pt in polilinha)/len(polilinha)
+                ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
+                desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
+    elif quantidade == 2:
+        for item_porta in portas_com_soleira[:2]:
+            soleira = item_porta['soleiras'][0]
+            geom = criar_geometria_circulo_soleira(soleira, item_porta['porta'], polilinha, polilinhas)
+            if geom:
+                ponto_tangencia = geom['p2'] if ponto_em_poligono(geom['p2'][0]+geom['soleira_vx']*RAIO_CIRCULO_INTERRUPT, geom['p2'][1]+geom['soleira_vy']*RAIO_CIRCULO_INTERRUPT, polilinha) else geom['p3']
+                desenhar_circulo_tangente_soleira(msp, ponto_tangencia, geom['soleira_vx'], geom['soleira_vy'], polilinha)
+
+# ============================================================
+# REGRAS DE SEGURANÇA PARA TOMADAS
+# ============================================================
+
+DISTANCIA_MINIMA_CANTO_TOMADA = 0.20
 DISTANCIA_MINIMA_PORTA_TOMADA = 0.30
 DISTANCIA_MINIMA_SOLEIRA_TOMADA = 0.30
 
 def ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
-    # Verifica distância dos vértices (cantos)
     for vx, vy in polilinha:
         if math.hypot(px - vx, py - vy) < DISTANCIA_MINIMA_CANTO_TOMADA:
             return False
-    # Verifica portas
     for porta in portas_raw:
         if point_seg_dist(px, py, porta['p1'], porta['p2']) < DISTANCIA_MINIMA_PORTA_TOMADA:
             return False
-    # Verifica soleiras
     for soleira in soleiras_raw:
         if point_seg_dist(px, py, soleira['p1'], soleira['p2']) < DISTANCIA_MINIMA_SOLEIRA_TOMADA:
             return False
@@ -159,38 +256,25 @@ def ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
 
 def procurar_ponto_valido_perimetro(distancia_original, comp_total, segmentos_crus, polilinha, portas_raw, soleiras_raw):
     if comp_total <= 0: return None
-    
-    # Tenta a posição original calculada
     px, py, vx, vy = get_ponto_perimetro(distancia_original, segmentos_crus)
     if ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
         return (px, py, vx, vy)
-    
-    # Se falhou, varre pequenas variações ao redor para encontrar um ponto seguro sem perder a tomada
     for deslocamento in [0.05, 0.10, 0.20, 0.35, 0.50, -0.05, -0.10, -0.20, -0.35, -0.50]:
         dt = distancia_original + deslocamento
         if 0 < dt < comp_total:
             tx, ty, tvx, tvy = get_ponto_perimetro(dt, segmentos_crus)
             if ponto_tomada_valido(tx, ty, polilinha, portas_raw, soleiras_raw):
                 return (tx, ty, tvx, tvy)
-                
-    return (px, py, vx, vy)  # Retorna o original forçado caso os arredores estejam bloqueados, garantindo a contagem da tabela
+    return (px, py, vx, vy)
 
 def procurar_ponto_valido_na_parede(pt1, pt2, fator_original, polilinha, portas_raw, soleiras_raw):
-    dx = pt2[0] - pt1[0]
-    dy = pt2[1] - pt1[1]
+    dx, dy = pt2[0] - pt1[0], pt2[1] - pt1[1]
     comprimento = math.hypot(dx, dy)
     if comprimento <= 0.4: return (pt1[0] + dx/2, pt1[1] + dy/2, dx/comprimento, dy/comprimento)
-
-    fator_min = 0.20 / comprimento
-    fator_max = 1.0 - (0.20 / comprimento)
-    fator_original = max(fator_min, min(fator_max, fator_original))
-
     for f in [fator_original, 0.5, 0.3, 0.7, 0.2, 0.8]:
-        px = pt1[0] + dx * f
-        py = pt1[1] + dy * f
+        px, py = pt1[0] + dx * f, pt1[1] + dy * f
         if ponto_tomada_valido(px, py, polilinha, portas_raw, soleiras_raw):
             return (px, py, dx / comprimento, dy / comprimento)
-
     return (pt1[0] + dx * fator_original, pt1[1] + dy * fator_original, dx / comprimento, dy / comprimento)
 
 # ============================================================
@@ -297,6 +381,37 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
+        soleiras_com_porta = []
+        for s in soleiras_raw:
+            s_p1, s_p2 = s['p1'], s['p2']
+            melhor_porta, menor_distancia = None, float('inf')
+            for p in portas_raw:
+                pm_porta = ((p['p1'][0] + p['p2'][0]) / 2, (p['p1'][1] + p['p2'][1]) / 2)
+                d3 = point_seg_dist(pm_porta[0], pm_porta[1], s_p1, s_p2)
+                if d3 <= 0.30 and d3 < menor_distancia:
+                    menor_distancia, melhor_porta = d3, p
+            if melhor_porta is not None:
+                soleiras_com_porta.append({'s': s, 'porta': melhor_porta})
+
+        # PROCESSA INTERRUPTORES (CÍRCULOS)
+        ambientes_proc_int = {}
+        for polilinha in polilinhas:
+            xs, ys = [p[0] for p in polilinha], [p[1] for p in polilinha]
+            min_x, max_x, min_y, max_y = min(xs), max(xs), min(ys), max(ys)
+            if (max_x - min_x) * (max_y - min_y) < 0.5: continue
+            nome_ambiente = next((t['nome'] for t in textos if min_x - 0.5 <= t['x'] <= max_x + 0.5 and min_y - 0.5 <= t['y'] <= max_y + 0.5), None)
+            if not nome_ambiente: continue
+            
+            if nome_ambiente in ambientes_proc_int:
+                ambientes_proc_int[nome_ambiente] += 1
+                nome_busca_int = f"{nome_ambiente} {ambientes_proc_int[nome_ambiente]}"
+            else:
+                ambientes_proc_int[nome_ambiente] = 1
+                nome_busca_int = nome_ambiente
+
+            processar_interruptores(msp, polilinhas, portas_raw, soleiras_raw, soleiras_com_porta, nome_busca_int, polilinha)
+
+        # PROCESSA TOMADAS E ILUMINAÇÃO (DINÂMICO DA TABELA)
         ambientes_processados, dict_dados = {}, {row['Ambiente']: row for row in dados_editados}
 
         for polilinha in polilinhas:
@@ -317,7 +432,6 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 ambientes_processados[nome] = 1
                 nome_busca = nome
             
-            # LÊ DIRETAMENTE DA TABELA DE QUANTIFICAÇÃO DA INTERFACE (DINÂMICO)
             row_data = dict_dados.get(nome_busca, dict_dados.get(nome, None))
             if not row_data: continue
             
@@ -350,7 +464,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
-            # TOMADAS TUE (Dinâmicas da Tabela)
+            # TOMADAS TUE
             qtd_tue = int(row_data.get('Qtd TUE', row_data.get('TUE', 0)))
             eq_tue_nome = str(row_data.get('Equipamento TUE', '-'))
             pot_tue_val = int(row_data.get('Pot. Unit. TUE (VA)', 0))
@@ -383,7 +497,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                         msp.add_solid([ponto_b1, (px, py), ponto_pt], dxfattribs={'layer': 'PROJ_ELETRICA_TOMADA'})
                     msp.add_text(f"{pot_tue_val}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.12, 'color': 2, 'insert': (px + nx * 0.35, py + ny * 0.35)})
 
-            # TOMADAS TUG (Dinâmicas da Tabela, garantindo contagem exata e sem perdas)
+            # TOMADAS TUG
             qtd_tugs = int(row_data.get('TUGs (Qtd)', row_data.get('TUGs', 0)))
             if qtd_tugs > 0 and comp_total > 0:
                 margem_inicial = 0.20
