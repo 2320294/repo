@@ -43,7 +43,7 @@ if "projeto_ativo" not in st.session_state:
     st.session_state.projeto_ativo = "Selecione um projeto..."
 
 # ============================================================
-# BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DE OBRAS)
+# BARRA LATERAL (AUTENTICAÇÃO COM SUPORTE A ENTER E GERENCIADOR DE OBRAS)
 # ============================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
@@ -55,56 +55,61 @@ with st.sidebar:
 
         if aba_auth == "Entrar (Login)":
             st.subheader("🔐 Fazer Login")
-            login_email = st.text_input("E-mail / Login", key="login_email")
-            login_senha = st.text_input("Senha", type="password", key="login_senha")
+            # Envolvido em st.form para permitir envio ao pressionar Enter em qualquer campo
+            with st.form("form_login"):
+                login_email = st.text_input("E-mail / Login")
+                login_senha = st.text_input("Senha", type="password")
+                btn_entrar = st.form_submit_button("Entrar", use_container_width=True)
 
-            if st.button("Entrar", use_container_width=True):
-                if not login_email or not login_senha:
-                    st.warning("Preencha o e-mail e a senha.")
-                elif supabase is None:
-                    st.error("Erro de conexão com o banco de dados.")
-                else:
-                    try:
-                        response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
-                        dados_usuario = response.data
+                if btn_entrar:
+                    if not login_email or not login_senha:
+                        st.warning("Preencha o e-mail e a senha.")
+                    elif supabase is None:
+                        st.error("Erro de conexão com o banco de dados.")
+                    else:
+                        try:
+                            response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
+                            dados_usuario = response.data
 
-                        if dados_usuario and dados_usuario[0]["senha"] == login_senha:
-                            st.session_state.logged_in = True
-                            st.session_state.user_email = dados_usuario[0]["email"]
-                            st.session_state.user_name = dados_usuario[0]["nome"]
-                            st.session_state.projeto_ativo = "Selecione um projeto..."
-                            st.success(f"Bem-vindo, {st.session_state.user_name}!")
-                            st.rerun()
-                        else:
-                            st.error("E-mail ou senha incorretos.")
-                    except Exception as e:
-                        st.error(f"Erro ao autenticar: {e}")
+                            if dados_usuario and dados_usuario[0]["senha"] == login_senha:
+                                st.session_state.logged_in = True
+                                st.session_state.user_email = dados_usuario[0]["email"]
+                                st.session_state.user_name = dados_usuario[0]["nome"]
+                                st.session_state.projeto_ativo = "Selecione um projeto..."
+                                st.success(f"Bem-vindo, {st.session_state.user_name}!")
+                                st.rerun()
+                            else:
+                                st.error("E-mail ou senha incorretos.")
+                        except Exception as e:
+                            st.error(f"Erro ao autenticar: {e}")
 
         else:
             st.subheader("📝 Novo Cadastro")
-            cad_nome = st.text_input("Nome Completo", key="cad_nome")
-            cad_email = st.text_input("E-mail (Login)", key="cad_email")
-            cad_senha = st.text_input("Senha", type="password", key="cad_senha")
+            with st.form("form_cadastro"):
+                cad_nome = st.text_input("Nome Completo")
+                cad_email = st.text_input("E-mail (Login)")
+                cad_senha = st.text_input("Senha", type="password")
+                btn_cadastrar = st.form_submit_button("Criar Conta", use_container_width=True)
 
-            if st.button("Criar Conta", use_container_width=True):
-                if not cad_nome or not cad_email or not cad_senha:
-                    st.warning("Preencha todos os campos.")
-                elif supabase is None:
-                    st.error("Erro de conexão com o banco de dados.")
-                else:
-                    try:
-                        check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
-                        if check.data:
-                            st.error("E-mail já cadastrado.")
-                        else:
-                            supabase.table("usuarios").insert({
-                                "nome": cad_nome.strip(),
-                                "email": cad_email.strip(),
-                                "senha": cad_senha
-                            }).execute()
-                            st.success("Conta criada! Faça login ao lado.")
-                    except Exception as e:
-                        st.error(f"Erro ao cadastrar: {e}")
+                if btn_cadastrar:
+                    if not cad_nome or not cad_email or not cad_senha:
+                        st.warning("Preencha todos os campos.")
+                    elif supabase is None:
+                        st.error("Erro de conexão com o banco de dados.")
+                    else:
+                        try:
+                            check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
+                            if check.data:
+                                st.error("E-mail já cadastrado.")
+                            else:
+                                supabase.table("usuarios").insert({
+                                    "nome": cad_nome.strip(),
+                                    "email": cad_email.strip(),
+                                    "senha": cad_senha
+                                }).execute()
+                                st.success("Conta criada! Faça login ao lado.")
+                        except Exception as e:
+                            st.error(f"Erro ao cadastrar: {e}")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
@@ -330,7 +335,6 @@ if dados_ambientes:
 
     df_consolidado = pd.DataFrame(tabela_editada)
     
-    # Exibe todas as colunas relevantes de potências unitárias e totais
     colunas_mantidas = [
         "Ambiente", "Área (m²)", "Perímetro (m)", 
         "Qtd Ilum.", "Pot. Unit. Ilum (W)", "Carga Ilum. (W)", 
@@ -342,7 +346,6 @@ if dados_ambientes:
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
 
-    # Linha de Totais Geral
     linha_total = {
         "Ambiente": "TOTAL GERAL",
         "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
@@ -361,7 +364,6 @@ if dados_ambientes:
     
     df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
 
-    # Função para destacar a linha de total com fundo cinza clarinho
     def destacar_total(row):
         if row["Ambiente"] == "TOTAL GERAL":
             return ['background-color: #f0f2f6; font-weight: bold; color: #000000'] * len(row)
