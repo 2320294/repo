@@ -143,7 +143,7 @@ def ponto_em_poligono(x, y, polilinha):
                     ):
                         dentro = not dentro
 
-        p1x, p1y = p2x, p2y
+        p1x, p1y = p2[0], p2[1]
 
     return dentro
 
@@ -281,11 +281,8 @@ def ponto_tomada_valido(
       3. segmento de soleira.
     """
 
-    # --------------------------------------------------------
-    # 1. NÃO PERMITIR PRÓXIMO DOS VÉRTICES
-    # --------------------------------------------------------
-
     for vx, vy in polilinha:
+
         distancia = math.hypot(
             px - vx,
             py - vy
@@ -293,10 +290,6 @@ def ponto_tomada_valido(
 
         if distancia < distancia_canto:
             return False
-
-    # --------------------------------------------------------
-    # 2. NÃO PERMITIR SOBRE / PERTO DE PORTAS
-    # --------------------------------------------------------
 
     for porta in portas_raw:
 
@@ -309,10 +302,6 @@ def ponto_tomada_valido(
 
         if d < distancia_porta:
             return False
-
-    # --------------------------------------------------------
-    # 3. NÃO PERMITIR SOBRE / PERTO DE SOLEIRAS
-    # --------------------------------------------------------
 
     for soleira in soleiras_raw:
 
@@ -341,19 +330,9 @@ def procurar_ponto_valido_perimetro(
     portas_raw,
     soleiras_raw
 ):
-    """
-    Procura primeiro na posição desejada.
-
-    Se estiver em canto, porta ou soleira,
-    procura progressivamente para os dois lados.
-    """
 
     if comp_total <= 0:
         return None
-
-    # --------------------------------------------------------
-    # Primeiro testa exatamente onde deveria ficar
-    # --------------------------------------------------------
 
     px, py, vx, vy = get_ponto_perimetro(
         distancia_original,
@@ -368,10 +347,6 @@ def procurar_ponto_valido_perimetro(
         soleiras_raw
     ):
         return px, py, vx, vy
-
-    # --------------------------------------------------------
-    # Depois procura para os dois lados
-    # --------------------------------------------------------
 
     passo_busca = min(
         max(comp_total * 0.01, 0.10),
@@ -394,7 +369,6 @@ def procurar_ponto_valido_perimetro(
 
         for distancia_teste in distancias_teste:
 
-            # Não deixa sair do perímetro
             if distancia_teste <= 0:
                 continue
 
@@ -662,10 +636,6 @@ def gerar_cad_unifilar(
 
     try:
 
-        # ----------------------------------------------------
-        # CRIA ARQUIVO TEMPORÁRIO
-        # ----------------------------------------------------
-
         with tempfile.NamedTemporaryFile(
             delete=False,
             suffix=".dxf"
@@ -776,10 +746,6 @@ def gerar_cad_unifilar(
             else:
                 continue
 
-            # -----------------------------------------------
-            # AMBIENTES
-            # -----------------------------------------------
-
             if tipo in [
                 'LWPOLYLINE',
                 'POLYLINE'
@@ -812,10 +778,6 @@ def gerar_cad_unifilar(
                 except:
                     pass
 
-            # -----------------------------------------------
-            # TEXTOS
-            # -----------------------------------------------
-
             elif tipo in [
                 'TEXT',
                 'MTEXT'
@@ -840,21 +802,15 @@ def gerar_cad_unifilar(
                 except:
                     pass
 
-            # -----------------------------------------------
-            # PORTAS
-            # -----------------------------------------------
-
             elif layer == 'IA_PORTAS':
 
                 if tipo == 'LINE':
 
                     portas_raw.append({
-
                         'p1': (
                             entity.dxf.start.x,
                             entity.dxf.start.y
                         ),
-
                         'p2': (
                             entity.dxf.end.x,
                             entity.dxf.end.y
@@ -897,21 +853,15 @@ def gerar_cad_unifilar(
                     except:
                         pass
 
-            # -----------------------------------------------
-            # SOLEIRAS
-            # -----------------------------------------------
-
             elif layer == 'IA_SOLEIRAS':
 
                 if tipo == 'LINE':
 
                     soleiras_raw.append({
-
                         'p1': (
                             entity.dxf.start.x,
                             entity.dxf.start.y
                         ),
-
                         'p2': (
                             entity.dxf.end.x,
                             entity.dxf.end.y
@@ -1019,26 +969,18 @@ def gerar_cad_unifilar(
         # ====================================================
         # INTERRUPTORES NAS SOLEIRAS
         # ====================================================
-        # A configuração vem do app.py no formato:
-        # {
-        #   "Sala": {"quantidade": 2},
-        #   "Quarto": {"quantidade": 1, "porta": 2}
-        # }
-        #
-        # NÃO são desenhados arcos. Cada interruptor é representado
-        # somente por um círculo cujo CENTRO é afastado da extremidade
-        # da soleira exatamente pelo valor do próprio raio.
+
         config_interruptores = config_interruptores or {}
         raio_circulo = 0.15
 
-        # --------------------------------------------------------
-        # Funções auxiliares locais
-        # --------------------------------------------------------
         def nome_ambiente_da_poligonal(poly):
+
             xs = [pt[0] for pt in poly]
             ys = [pt[1] for pt in poly]
+
             min_x, max_x = min(xs), max(xs)
             min_y, max_y = min(ys), max(ys)
+
             return next(
                 (
                     t['nome'] for t in textos
@@ -1049,49 +991,78 @@ def gerar_cad_unifilar(
             )
 
         def centro_poligono(poly):
+
             return (
                 sum(pt[0] for pt in poly) / len(poly),
                 sum(pt[1] for pt in poly) / len(poly)
             )
 
-        def desenhar_interruptor_tangente(ponto_soleira, normal, nome_ambiente):
-            cx = ponto_soleira[0] + normal[0] * raio_circulo
-            cy = ponto_soleira[1] + normal[1] * raio_circulo
-            # O centro fica exatamente a R da soleira, portanto o círculo
-            # encosta geometricamente na soleira sem necessidade de arco.
+        def desenhar_interruptor_tangente(
+            ponto_soleira,
+            normal,
+            nome_ambiente
+        ):
+
+            cx = (
+                ponto_soleira[0] +
+                normal[0] * raio_circulo
+            )
+
+            cy = (
+                ponto_soleira[1] +
+                normal[1] * raio_circulo
+            )
+
             msp.add_circle(
                 center=(cx, cy),
                 radius=raio_circulo,
                 dxfattribs={
-                    'layer': 'PROJ_ELETRICA_INTERRUPTOR'
+                    'layer':
+                        'PROJ_ELETRICA_INTERRUPTOR'
                 }
             )
+
             return (cx, cy)
 
-        # --------------------------------------------------------
-        # Identifica cada soleira, suas portas e os ambientes vizinhos.
-        # --------------------------------------------------------
         for item in soleiras_com_porta:
+
             s = item['s']
             p_porta = item['porta']
 
             s_a = s['p1']
             s_b = s['p2']
 
-            sm_x = (s_a[0] + s_b[0]) / 2
-            sm_y = (s_a[1] + s_b[1]) / 2
+            sm_x = (
+                s_a[0] +
+                s_b[0]
+            ) / 2
 
-            # Ambientes cuja caixa envolve o ponto médio da soleira.
+            sm_y = (
+                s_a[1] +
+                s_b[1]
+            ) / 2
+
             ambientes_adjacentes = []
+
             for poly in polilinhas:
+
                 xs = [pt[0] for pt in poly]
                 ys = [pt[1] for pt in poly]
+
                 if (
                     min(xs) - 0.5 <= sm_x <= max(xs) + 0.5
-                    and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5
+                    and
+                    min(ys) - 0.5 <= sm_y <= max(ys) + 0.5
                 ):
-                    nome_poly = nome_ambiente_da_poligonal(poly)
+
+                    nome_poly = (
+                        nome_ambiente_da_poligonal(
+                            poly
+                        )
+                    )
+
                     if nome_poly:
+
                         ambientes_adjacentes.append({
                             'poly': poly,
                             'nome': nome_poly
@@ -1100,149 +1071,189 @@ def gerar_cad_unifilar(
             if not ambientes_adjacentes:
                 continue
 
-            # ----------------------------------------------------
-            # Define P1/P2/P3/P4 de maneira geométrica.
-            # A soleira é a faixa entre os dois lados da porta.
-            # Para a representação dos interruptores usamos os DOIS
-            # pontos da extremidade oposta à dobradiça como P2 e P3.
-            # ----------------------------------------------------
             d_a_hinge = min(
-                math.hypot(s_a[0] - p_porta['p1'][0], s_a[1] - p_porta['p1'][1]),
-                math.hypot(s_a[0] - p_porta['p2'][0], s_a[1] - p_porta['p2'][1])
-            )
-            d_b_hinge = min(
-                math.hypot(s_b[0] - p_porta['p1'][0], s_b[1] - p_porta['p1'][1]),
-                math.hypot(s_b[0] - p_porta['p2'][0], s_b[1] - p_porta['p2'][1])
+                math.hypot(
+                    s_a[0] - p_porta['p1'][0],
+                    s_a[1] - p_porta['p1'][1]
+                ),
+                math.hypot(
+                    s_a[0] - p_porta['p2'][0],
+                    s_a[1] - p_porta['p2'][1]
+                )
             )
 
-            # O extremo mais distante da dobradiça é o lado externo da
-            # folha. Mantemos os dois pontos da seção transversal como
-            # P2 e P3, conforme a lógica solicitada.
+            d_b_hinge = min(
+                math.hypot(
+                    s_b[0] - p_porta['p1'][0],
+                    s_b[1] - p_porta['p1'][1]
+                ),
+                math.hypot(
+                    s_b[0] - p_porta['p2'][0],
+                    s_b[1] - p_porta['p2'][1]
+                )
+            )
+
             if d_a_hinge >= d_b_hinge:
+
                 p2 = s_a
                 p3 = s_b
+
             else:
+
                 p2 = s_b
                 p3 = s_a
 
-            # ----------------------------------------------------
-            # Descobre os dois ambientes e a normal para dentro de cada um.
-            # ----------------------------------------------------
             ambientes = ambientes_adjacentes[:2]
 
-            def normal_para_ambiente(ponto):
-                if len(ambientes) == 1:
-                    poly = ambientes[0]['poly']
-                    cx, cy = centro_poligono(poly)
-                else:
-                    # Para cada ponto da soleira, escolhe o ambiente no qual
-                    # um pequeno deslocamento normal realmente entra.
-                    poly_a = ambientes[0]['poly']
-                    poly_b = ambientes[1]['poly']
-                    cx_a, cy_a = centro_poligono(poly_a)
-                    cx_b, cy_b = centro_poligono(poly_b)
+            nomes_amb = [
+                a['nome']
+                for a in ambientes
+            ]
 
-                    dx = p3[0] - p2[0]
-                    dy = p3[1] - p2[1]
-                    comprimento = math.hypot(dx, dy)
-                    if comprimento == 0:
-                        return (0.0, 0.0), None
-
-                    vx = dx / comprimento
-                    vy = dy / comprimento
-                    n1 = (-vy, vx)
-                    n2 = (vy, -vx)
-
-                    teste1 = (ponto[0] + n1[0] * raio_circulo,
-                              ponto[1] + n1[1] * raio_circulo)
-                    teste2 = (ponto[0] + n2[0] * raio_circulo,
-                              ponto[1] + n2[1] * raio_circulo)
-
-                    if ponto_em_poligono(teste1[0], teste1[1], poly_a):
-                        return n1, ambientes[0]
-                    if ponto_em_poligono(teste1[0], teste1[1], poly_b):
-                        return n1, ambientes[1]
-                    if ponto_em_poligono(teste2[0], teste2[1], poly_a):
-                        return n2, ambientes[0]
-                    if ponto_em_poligono(teste2[0], teste2[1], poly_b):
-                        return n2, ambientes[1]
-
-                    # Fallback pela normal geométrica para o centro do ambiente.
-                    da = math.hypot(cx_a - ponto[0], cy_a - ponto[1])
-                    db = math.hypot(cx_b - ponto[0], cy_b - ponto[1])
-                    alvo = ambientes[0] if da <= db else ambientes[1]
-                    cx, cy = centro_poligono(alvo['poly'])
-
-                dx = cx - ponto[0]
-                dy = cy - ponto[1]
-                d = math.hypot(dx, dy)
-                if d == 0:
-                    return (0.0, 0.0), ambientes[0] if ambientes else None
-                return (dx / d, dy / d), (ambientes[0] if len(ambientes) == 1 else None)
-
-            # ----------------------------------------------------
-            # Mapeia a soleira para o(s) ambiente(s) selecionado(s).
-            # ----------------------------------------------------
-            nomes_amb = [a['nome'] for a in ambientes]
             cfg_encontradas = []
-            for nome in nomes_amb:
-                cfg = config_interruptores.get(nome, {})
-                if isinstance(cfg, dict) and int(cfg.get('quantidade', 0)) > 0:
-                    cfg_encontradas.append((nome, cfg))
 
-            # Quando existem dois ambientes na mesma soleira, a configuração
-            # de cada ambiente é independente. Assim o usuário pode escolher
-            # interruptor somente em um lado, nos dois, ou em nenhum.
+            for nome in nomes_amb:
+
+                cfg = config_interruptores.get(
+                    nome,
+                    {}
+                )
+
+                if (
+                    isinstance(cfg, dict)
+                    and
+                    int(
+                        cfg.get(
+                            'quantidade',
+                            0
+                        )
+                    ) > 0
+                ):
+
+                    cfg_encontradas.append(
+                        (
+                            nome,
+                            cfg
+                        )
+                    )
+
             for nome_cfg, cfg in cfg_encontradas:
-                qtd = max(0, min(2, int(cfg.get('quantidade', 0))))
+
+                qtd = max(
+                    0,
+                    min(
+                        2,
+                        int(
+                            cfg.get(
+                                'quantidade',
+                                0
+                            )
+                        )
+                    )
+                )
+
                 if qtd == 0:
                     continue
 
-                ambiente_cfg = next((a for a in ambientes if a['nome'] == nome_cfg), None)
+                ambiente_cfg = next(
+                    (
+                        a for a in ambientes
+                        if a['nome'] == nome_cfg
+                    ),
+                    None
+                )
+
                 if ambiente_cfg is None:
                     continue
 
                 poly_cfg = ambiente_cfg['poly']
-                cx_cfg, cy_cfg = centro_poligono(poly_cfg)
 
-                # Vetor da soleira p2 -> p3.
-                dx = p3[0] - p2[0]
-                dy = p3[1] - p2[1]
-                comp = math.hypot(dx, dy)
+                cx_cfg, cy_cfg = (
+                    centro_poligono(
+                        poly_cfg
+                    )
+                )
+
+                dx = (
+                    p3[0] -
+                    p2[0]
+                )
+
+                dy = (
+                    p3[1] -
+                    p2[1]
+                )
+
+                comp = math.hypot(
+                    dx,
+                    dy
+                )
+
                 if comp == 0:
                     continue
+
                 vx = dx / comp
                 vy = dy / comp
 
-                # Normal para dentro do ambiente configurado.
                 normal_cfg = get_inside_normal(
-                    vx, vy,
-                    p2[0], p2[1],
-                    cx_cfg, cy_cfg
+                    vx,
+                    vy,
+                    p2[0],
+                    p2[1],
+                    cx_cfg,
+                    cy_cfg
                 )
 
                 pontos_interruptores = []
-                if qtd == 2:
-                    pontos_interruptores = [p2, p3]
-                elif qtd == 1:
-                    porta_escolhida = max(1, min(2, int(cfg.get('porta', 1))))
-                    pontos_interruptores = [p2 if porta_escolhida == 1 else p3]
 
-                for ponto_base in pontos_interruptores:
-                    centro = desenhar_interruptor_tangente(
-                        ponto_base,
-                        normal_cfg,
-                        nome_cfg
+                if qtd == 2:
+
+                    pontos_interruptores = [
+                        p2,
+                        p3
+                    ]
+
+                elif qtd == 1:
+
+                    porta_escolhida = max(
+                        1,
+                        min(
+                            2,
+                            int(
+                                cfg.get(
+                                    'porta',
+                                    1
+                                )
+                            )
+                        )
                     )
 
-                    # Texto discreto apenas para debug/identificação; não há
-                    # arco nem outra geometria adicional.
+                    pontos_interruptores = [
+                        p2
+                        if porta_escolhida == 1
+                        else p3
+                    ]
+
+                for ponto_base in pontos_interruptores:
+
+                    centro = (
+                        desenhar_interruptor_tangente(
+                            ponto_base,
+                            normal_cfg,
+                            nome_cfg
+                        )
+                    )
+
                     msp.add_text(
                         "INT",
                         dxfattribs={
-                            'layer': 'PROJ_ELETRICA_TEXTO',
+                            'layer':
+                                'PROJ_ELETRICA_TEXTO',
                             'height': 0.10,
-                            'insert': (centro[0] + 0.18, centro[1] - 0.04)
+                            'insert': (
+                                centro[0] + 0.18,
+                                centro[1] - 0.04
+                            )
                         }
                     )
 
@@ -1268,6 +1279,7 @@ def gerar_cad_unifilar(
 
             min_x = min(xs)
             max_x = max(xs)
+
             min_y = min(ys)
             max_y = max(ys)
 
@@ -1322,7 +1334,10 @@ def gerar_cad_unifilar(
 
             row_data = dict_dados.get(
                 nome_busca,
-                dict_dados.get(nome, None)
+                dict_dados.get(
+                    nome,
+                    None
+                )
             )
 
             centro_x = (
@@ -1378,11 +1393,13 @@ def gerar_cad_unifilar(
             for pt1, pt2, dst in segmentos_crus:
 
                 vx = (
-                    pt2[0] - pt1[0]
+                    pt2[0] -
+                    pt1[0]
                 ) / dst
 
                 vy = (
-                    pt2[1] - pt1[1]
+                    pt2[1] -
+                    pt1[1]
                 ) / dst
 
                 logical_walls.append({
@@ -1464,7 +1481,9 @@ def gerar_cad_unifilar(
 
                             step = (
                                 largura /
-                                (qtd_ilum + 1)
+                                (
+                                    qtd_ilum + 1
+                                )
                             )
 
                             for i in range(
@@ -1495,7 +1514,9 @@ def gerar_cad_unifilar(
 
                             step = (
                                 comprimento /
-                                (qtd_ilum + 1)
+                                (
+                                    qtd_ilum + 1
+                                )
                             )
 
                             for i in range(
@@ -1514,7 +1535,10 @@ def gerar_cad_unifilar(
                     for lx, ly in pontos_luz:
 
                         msp.add_circle(
-                            center=(lx, ly),
+                            center=(
+                                lx,
+                                ly
+                            ),
                             radius=0.25,
                             dxfattribs={
                                 'layer':
@@ -1578,16 +1602,23 @@ def gerar_cad_unifilar(
 
                 maior_parede = max(
                     logical_walls,
-                    key=lambda w: w['length']
+                    key=lambda w:
+                    w['length']
                 )
 
                 pt1 = maior_parede['p1']
                 pt2 = maior_parede['p2']
 
                 is_vertical = (
-                    abs(pt1[0] - pt2[0])
+                    abs(
+                        pt1[0] -
+                        pt2[0]
+                    )
                     <
-                    abs(pt1[1] - pt2[1])
+                    abs(
+                        pt1[1] -
+                        pt2[1]
+                    )
                 )
 
                 cortes_portas = []
@@ -1608,7 +1639,11 @@ def gerar_cad_unifilar(
                         pt2
                     )
 
-                    if d_p1 < 0.6 or d_p2 < 0.6:
+                    if (
+                        d_p1 < 0.6
+                        or
+                        d_p2 < 0.6
+                    ):
 
                         if is_vertical:
 
@@ -1653,7 +1688,8 @@ def gerar_cad_unifilar(
                     )
 
                     cortes_portas.sort(
-                        key=lambda x: x[0]
+                        key=lambda x:
+                        x[0]
                     )
 
                     trechos_livres = []
@@ -1675,7 +1711,10 @@ def gerar_cad_unifilar(
                             c_sup
                         )
 
-                    if cursor < parede_max - 0.1:
+                    if (
+                        cursor <
+                        parede_max - 0.1
+                    ):
 
                         trechos_livres.append(
                             (
@@ -1725,7 +1764,8 @@ def gerar_cad_unifilar(
                     )
 
                     cortes_portas.sort(
-                        key=lambda x: x[0]
+                        key=lambda x:
+                        x[0]
                     )
 
                     trechos_livres = []
@@ -1747,7 +1787,10 @@ def gerar_cad_unifilar(
                             c_sup
                         )
 
-                    if cursor < parede_max - 0.1:
+                    if (
+                        cursor <
+                        parede_max - 0.1
+                    ):
 
                         trechos_livres.append(
                             (
@@ -1812,7 +1855,6 @@ def gerar_cad_unifilar(
                 p3_qdc = (
                     p2_qdc[0] +
                     out_nx * qdc_d,
-
                     p2_qdc[1] +
                     out_ny * qdc_d
                 )
@@ -1820,7 +1862,6 @@ def gerar_cad_unifilar(
                 p4_qdc = (
                     p1_qdc[0] +
                     out_nx * qdc_d,
-
                     p1_qdc[1] +
                     out_ny * qdc_d
                 )
@@ -1833,7 +1874,9 @@ def gerar_cad_unifilar(
                 ]
 
                 msp.add_lwpolyline(
-                    pts_qdc + [pts_qdc[0]],
+                    pts_qdc + [
+                        pts_qdc[0]
+                    ],
                     dxfattribs={
                         'layer':
                             'PROJ_ELETRICA_QDC'
@@ -1955,12 +1998,9 @@ def gerar_cad_unifilar(
 
                     paredes_candidatas = sorted(
                         logical_walls,
-                        key=lambda w: w['length']
+                        key=lambda w:
+                        w['length']
                     )
-
-                    # ---------------------------------------------
-                    # PRIMEIRO TENTA PAREDES SEM PORTA
-                    # ---------------------------------------------
 
                     paredes_sem_porta = [
 
@@ -2007,10 +2047,6 @@ def gerar_cad_unifilar(
                         pt1 = p_alvo['p1']
                         pt2 = p_alvo['p2']
 
-                        # -----------------------------------------
-                        # TENTA PRIMEIRO O CENTRO DA PAREDE
-                        # -----------------------------------------
-
                         fator = (
                             0.5
                             if qtd_tue == 1
@@ -2039,10 +2075,6 @@ def gerar_cad_unifilar(
                             ) * fator
                         )
 
-                        # -----------------------------------------
-                        # VALIDA TUE
-                        # -----------------------------------------
-
                         if not ponto_tomada_valido(
                             px,
                             py,
@@ -2050,11 +2082,6 @@ def gerar_cad_unifilar(
                             portas_raw,
                             soleiras_raw
                         ):
-
-                            # tenta pontos alternativos
-                            dst_parede = (
-                                p_alvo['length']
-                            )
 
                             tentativas = [
                                 0.25,
@@ -2203,10 +2230,6 @@ def gerar_cad_unifilar(
 
                 if total_tugs > 0 and comp_total > 0:
 
-                    # -------------------------------------------------
-                    # MARGEM MAIOR NOS CANTOS
-                    # -------------------------------------------------
-
                     margem_inicial = 0.35
 
                     comprimento_util = (
@@ -2242,13 +2265,11 @@ def gerar_cad_unifilar(
 
                     tomadas_colocadas = 0
 
-                    # -------------------------------------------------
-                    # REGISTRA AS DISTÂNCIAS JÁ UTILIZADAS
-                    # -------------------------------------------------
-
                     distancias_usadas = []
 
-                    for i in range(total_tugs):
+                    for i in range(
+                        total_tugs
+                    ):
 
                         distancia_desejada = (
                             inicio_offset +
@@ -2260,10 +2281,6 @@ def gerar_cad_unifilar(
 
                         if distancia_desejada >= comp_total:
                             continue
-
-                        # -------------------------------------------------
-                        # PROCURA UMA POSIÇÃO REALMENTE LIVRE
-                        # -------------------------------------------------
 
                         resultado_ponto = (
                             procurar_ponto_valido_perimetro(
@@ -2289,10 +2306,6 @@ def gerar_cad_unifilar(
                             resultado_ponto
                         )
 
-                        # -------------------------------------------------
-                        # NÃO DEIXA DUAS TOMADAS MUITO PRÓXIMAS
-                        # -------------------------------------------------
-
                         distancia_muito_proxima = False
 
                         for d_usada in distancias_usadas:
@@ -2309,7 +2322,6 @@ def gerar_cad_unifilar(
 
                         if distancia_muito_proxima:
 
-                            # tenta outros pontos
                             alternativas = [
                                 distancia_desejada - 0.75,
                                 distancia_desejada + 0.75,
@@ -2380,14 +2392,12 @@ def gerar_cad_unifilar(
                                     py,
                                     seg_vx,
                                     seg_vy
-                                ) = alternativa_encontrada
+                                ) = (
+                                    alternativa_encontrada
+                                )
 
                             else:
                                 continue
-
-                        # -------------------------------------------------
-                        # VALIDAÇÃO FINAL
-                        # -------------------------------------------------
 
                         if not ponto_tomada_valido(
                             px,
@@ -2398,19 +2408,11 @@ def gerar_cad_unifilar(
                         ):
                             continue
 
-                        # -------------------------------------------------
-                        # GUARDA A POSIÇÃO
-                        # -------------------------------------------------
-
                         distancias_usadas.append(
                             distancia_desejada
                         )
 
                         tomadas_colocadas += 1
-
-                        # -------------------------------------------------
-                        # NORMAL PARA DENTRO DO AMBIENTE
-                        # -------------------------------------------------
 
                         nx, ny = get_inside_normal(
                             seg_vx,
@@ -2436,10 +2438,6 @@ def gerar_cad_unifilar(
                             py + ny * 0.20
                         )
 
-                        # -------------------------------------------------
-                        # DESENHA TUG
-                        # -------------------------------------------------
-
                         msp.add_lwpolyline(
                             [
                                 ponto_b1,
@@ -2453,10 +2451,6 @@ def gerar_cad_unifilar(
                                     'PROJ_ELETRICA_TOMADA'
                             }
                         )
-
-                        # -------------------------------------------------
-                        # TUG EM ÁREA MOLHADA
-                        # -------------------------------------------------
 
                         if is_ambiente_molhado:
 
@@ -2503,7 +2497,9 @@ def gerar_cad_unifilar(
         if (
             tmp_in_path
             and
-            os.path.exists(tmp_in_path)
+            os.path.exists(
+                tmp_in_path
+            )
         ):
 
             os.remove(
