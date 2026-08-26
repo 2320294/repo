@@ -17,7 +17,7 @@ st.set_page_config(
 # ============================================================
 # CONEXÃO COM O SUPABASE
 # ============================================================
-SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
+SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
 @st.cache_resource
@@ -38,6 +38,8 @@ if "user_email" not in st.session_state:
     st.session_state.user_email = ""
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
+if "projeto_ativo" not in st.session_state:
+    st.session_state.projeto_ativo = "Nenhum"
 
 # ============================================================
 # BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DE PROJETOS)
@@ -109,6 +111,7 @@ with st.sidebar:
             st.session_state.logged_in = False
             st.session_state.user_email = ""
             st.session_state.user_name = ""
+            st.session_state.projeto_ativo = "Nenhum"
             st.rerun()
 
         st.divider()
@@ -146,20 +149,36 @@ with st.sidebar:
         st.markdown("### 📋 Seus Projetos Salvos:")
         if lista_projetos:
             nomes_projetos = [p["nome_projeto"] for p in lista_projetos]
-            projeto_selecionado = st.selectbox("Selecione o projeto ativo:", nomes_projetos)
+            
+            # Garante que o índice selecionado é válido no estado atual
+            indice_atual = 0
+            if st.session_state.projeto_ativo in nomes_projetos:
+                indice_atual = nomes_projetos.index(st.session_state.projeto_ativo)
+
+            projeto_selecionado = st.selectbox(
+                "Selecione o projeto ativo:", 
+                nomes_projetos, 
+                index=indice_atual,
+                key="selectbox_projeto_ativo"
+            )
+            
+            if projeto_selecionado != st.session_state.projeto_ativo:
+                st.session_state.projeto_ativo = projeto_selecionado
+                st.rerun()
             
             if st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
                 proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
                 if proj_alvo and supabase is not None:
                     try:
                         supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
+                        st.session_state.projeto_ativo = "Nenhum"
                         st.success(f"Projeto '{projeto_selecionado}' apagado!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao apagar projeto: {e}")
         else:
             st.info("Nenhum projeto cadastrado ainda.")
-            projeto_selecionado = "Nenhum"
+            st.session_state.projeto_ativo = "Nenhum"
 
 # ============================================================
 # BLOQUEIO DE SEGURANÇA
@@ -172,8 +191,10 @@ if not st.session_state.logged_in:
 # TELA PRINCIPAL DA APLICAÇÃO
 # ============================================================
 st.title(f"⚡ Painel de Projetos Elétricos — Olá, {st.session_state.user_name}!")
-if 'projeto_selecionado' in locals() and projeto_selecionado != "Nenhum":
-    st.info(f"📁 **Projeto Ativo:** {projeto_selecionado}")
+if st.session_state.projeto_ativo != "Nenhum":
+    st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
+else:
+    st.warning("⚠️ Nenhum projeto ativo selecionado. Crie ou selecione um projeto na barra lateral.")
 
 # Upload do arquivo DXF da planta baixa
 st.subheader("📁 Projeto Unifilar (DXF)")
@@ -255,12 +276,16 @@ if dados_ambientes:
     linha_total = {
         "Ambiente": "TOTAL GERAL",
         "Área (m²)": round(df_exibicao["Área (m²)"].sum(), 2),
-        "Perímetro (m)": round(df_exibicao["Perímetro (m)"].sum(), 2),
+        "Perímetro (m)": round(df_exibicao["Períperimetro (m)"].sum() if "Perímetro (m)" in df_exibicao.columns else df_exibicao["Perímetro (m)"].sum(), 2),
         "Qtd Ilum.": int(df_exibicao["Qtd Ilum."].sum()),
         "TUGs (Qtd)": int(df_exibicao["TUGs (Qtd)"].sum()),
         "Equipamento TUE": "-",
         "Qtd TUE": int(df_exibicao["Qtd TUE"].sum())
     }
+    
+    # Ajuste correto da chave de perímetro na linha de total
+    linha_total["Perímetro (m)"] = round(df_exibicao["Perímetro (m)"].sum(), 2)
+
     df_exibicao_com_total = pd.concat([df_exibicao, pd.DataFrame([linha_total])], ignore_index=True)
 
     st.dataframe(df_exibicao_com_total, use_container_width=True, hide_index=True)
