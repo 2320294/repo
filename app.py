@@ -17,24 +17,48 @@ st.set_page_config(
 # ============================================================
 # SUPABASE
 # ============================================================
-def obter_credencial(nome):
+def obter_credenciais_supabase():
+    """
+    Lê primeiro o formato usado no Streamlit Cloud:
+
+    [supabase]
+    url = "..."
+    key = "..."
+
+    Também aceita, como alternativa, variáveis de ambiente
+    SUPABASE_URL / SUPABASE_KEY / SUPABASE_ANON_KEY.
+    """
+    url = ""
+    key = ""
+
     try:
-        valor = st.secrets.get(nome)
-        if valor:
-            return str(valor)
+        if "supabase" in st.secrets:
+            bloco = st.secrets["supabase"]
+            url = str(bloco.get("url", "")).strip()
+            key = str(bloco.get("key", "")).strip()
     except Exception:
         pass
-    return os.getenv(nome, "").strip()
+
+    if not url:
+        url = os.getenv("SUPABASE_URL", "").strip()
+
+    if not key:
+        key = (
+            os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+            or os.getenv("SUPABASE_KEY", "").strip()
+            or os.getenv("SUPABASE_ANON_KEY", "").strip()
+        )
+
+    return url, key
 
 
-SUPABASE_URL = obter_credencial("SUPABASE_URL")
-SUPABASE_KEY = obter_credencial("SUPABASE_SERVICE_ROLE_KEY") or obter_credencial("SUPABASE_KEY") or obter_credencial("SUPABASE_ANON_KEY")
+SUPABASE_URL, SUPABASE_KEY = obter_credenciais_supabase()
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     st.error(
-        "❌ As credenciais do Supabase não foram configuradas. "
-        "Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY "
-        "nos Secrets do Streamlit ou nas variáveis de ambiente."
+        "❌ As credenciais do Supabase não foram encontradas. "
+        "No Streamlit Cloud, use o bloco [supabase] com "
+        "url e key, exatamente como configurado nos Secrets."
     )
     st.stop()
 
