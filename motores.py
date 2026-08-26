@@ -184,7 +184,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         camadas_vazias = [cam for cam, qtd in contagem_camadas.items() if qtd == 0]
         if camadas_vazias:
             raise ValueError(
-                f"❌ Erro de Validação do CAD: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
+                f"❌ Erro de Geração du CAD: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
                 f"Verifique se os elementos estão corretamente posicionados em suas camadas antes de processar."
             )
         
@@ -251,7 +251,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (QUADRANTE TANGENTE À PAREDE)
+        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (USANDO O PONTO MÉDIO DA SOLEIRA PARA ALINHAMENTO PERFEITO)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -284,9 +284,10 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
                     
-                    nx, ny = get_inside_normal(vx, vy, p_op[0], p_op[1], cx, cy)
-                    final_x = p_op[0] + nx * raio_circulo
-                    final_y = p_op[1] + ny * raio_circulo
+                    # Baseia o deslocamento no ponto médio da soleira se afastando da porta, garantindo que caiba no ambiente
+                    nx, ny = get_inside_normal(vx, vy, sm_x, sm_y, cx, cy)
+                    final_x = sm_x + nx * raio_circulo
+                    final_y = sm_y + ny * raio_circulo
                     
                     if ponto_em_poligono(final_x, final_y, poly):
                         msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
@@ -295,9 +296,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 cx = sum([pt[0] for pt in poly]) / len(poly)
                 cy = sum([pt[1] for pt in poly]) / len(poly)
                 
-                nx, ny = get_inside_normal(vx, vy, ponto_oposto_1[0], ponto_oposto_1[1], cx, cy)
-                final_x = ponto_oposto_1[0] + nx * raio_circulo
-                final_y = ponto_oposto_1[1] + ny * raio_circulo
+                nx, ny = get_inside_normal(vx, vy, sm_x, sm_y, cx, cy)
+                final_x = sm_x + nx * raio_circulo
+                final_y = sm_y + ny * raio_circulo
                 
                 if ponto_em_poligono(final_x, final_y, poly):
                     msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
