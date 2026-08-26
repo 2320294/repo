@@ -258,24 +258,10 @@ def get_inside_normal(
 
 
 # ============================================================
-# NOVA FUNÇÃO:
-# VERIFICA SE UMA TOMADA ESTÁ EM LOCAL PROIBIDO
-# ============================================================
-
-# ============================================================
 # REGRAS DE SEGURANÇA PARA TOMADAS
 # ============================================================
 
-# Distância mínima entre o ponto da tomada e qualquer vértice
-# (canto) do ambiente.
-#
-# 0.50 m = 50 cm.
-#
-# Isso impede que TUG/TUE sejam desenhadas exatamente nos
-# cantos ou muito próximas deles.
 DISTANCIA_MINIMA_CANTO_TOMADA = 0.50
-
-# Distâncias mínimas de outros elementos.
 DISTANCIA_MINIMA_PORTA_TOMADA = 0.40
 DISTANCIA_MINIMA_SOLEIRA_TOMADA = 0.40
 
@@ -304,10 +290,6 @@ def ponto_tomada_valido(
       4. ficar sobre ou muito perto de uma soleira.
     """
 
-    # --------------------------------------------------------
-    # 1. NÃO PERMITIR PRÓXIMO DOS VÉRTICES
-    # --------------------------------------------------------
-
     for vx, vy in polilinha:
 
         distancia = math.hypot(
@@ -317,10 +299,6 @@ def ponto_tomada_valido(
 
         if distancia < distancia_canto:
             return False
-
-    # --------------------------------------------------------
-    # 2. NÃO PERMITIR SOBRE / PERTO DE PORTAS
-    # --------------------------------------------------------
 
     for porta in portas_raw:
 
@@ -333,10 +311,6 @@ def ponto_tomada_valido(
 
         if d < distancia_porta:
             return False
-
-    # --------------------------------------------------------
-    # 3. NÃO PERMITIR SOBRE / PERTO DE SOLEIRAS
-    # --------------------------------------------------------
 
     for soleira in soleiras_raw:
 
@@ -367,21 +341,10 @@ def procurar_ponto_valido_perimetro(
 ):
     """
     Procura uma posição válida ao longo do perímetro.
-
-    Regra importante:
-    mesmo que a posição calculada originalmente caia exatamente
-    em um vértice, ela é rejeitada e o algoritmo procura uma nova
-    posição afastada do canto.
-
-    A busca é feita para os dois lados da posição desejada.
     """
 
     if comp_total <= 0:
         return None
-
-    # --------------------------------------------------------
-    # 1. TESTA A POSIÇÃO ORIGINAL
-    # --------------------------------------------------------
 
     px, py, vx, vy = get_ponto_perimetro(
         distancia_original,
@@ -397,20 +360,8 @@ def procurar_ponto_valido_perimetro(
     ):
         return px, py, vx, vy
 
-    # --------------------------------------------------------
-    # 2. SE NÃO FOR VÁLIDA, AFASTA DO PONTO ORIGINAL
-    #
-    # O passo é de no máximo 10 cm.
-    # Assim, se a posição original cair em um vértice,
-    # a busca continuará até encontrar pelo menos 50 cm
-    # de afastamento do canto.
-    # --------------------------------------------------------
-
     passo_busca = 0.10
 
-    # Nunca precisamos procurar indefinidamente.
-    # 2,00 m é suficiente para contornar cantos, portas e soleiras
-    # na maioria dos ambientes.
     max_busca = min(
         comp_total * 0.25,
         2.00
@@ -420,7 +371,6 @@ def procurar_ponto_valido_perimetro(
 
     while deslocamento <= max_busca:
 
-        # Primeiro tenta para um lado e depois para o outro.
         distancias_teste = [
             distancia_original - deslocamento,
             distancia_original + deslocamento
@@ -428,7 +378,6 @@ def procurar_ponto_valido_perimetro(
 
         for distancia_teste in distancias_teste:
 
-            # Não deixa sair do perímetro.
             if distancia_teste <= 0:
                 continue
 
@@ -469,16 +418,6 @@ def procurar_ponto_valido_na_parede(
 ):
     """
     Procura uma posição válida em uma parede específica.
-
-    Usada principalmente para TUE.
-
-    A posição nunca é aceita se estiver próxima de um dos
-    extremos da parede. Isso evita que uma tomada TUE seja
-    desenhada no vértice do ambiente.
-
-    Também procura outras posições da mesma parede caso a posição
-    inicial esteja ocupada por porta, soleira ou esteja muito
-    próxima de um canto.
     """
 
     dx = pt2[0] - pt1[0]
@@ -491,12 +430,6 @@ def procurar_ponto_valido_na_parede(
 
     if comprimento <= 2 * distancia_canto:
         return None
-
-    # --------------------------------------------------------
-    # LIMITES FÍSICOS DA PAREDE
-    #
-    # A tomada precisa ficar pelo menos 0.50 m de cada extremo.
-    # --------------------------------------------------------
 
     fator_min = (
         distancia_canto / comprimento
@@ -514,12 +447,6 @@ def procurar_ponto_valido_na_parede(
             fator_original
         )
     )
-
-    # --------------------------------------------------------
-    # MONTA UMA LISTA DE FATORES A TESTAR.
-    #
-    # Começa pelo ponto desejado e vai se afastando dele.
-    # --------------------------------------------------------
 
     fatores = [fator_original]
 
@@ -553,10 +480,6 @@ def procurar_ponto_valido_na_parede(
             )
 
         deslocamento += passo_fator
-
-    # --------------------------------------------------------
-    # TESTA CADA POSIÇÃO
-    # --------------------------------------------------------
 
     for fator in fatores:
 
@@ -1127,15 +1050,6 @@ def gerar_cad_unifilar(
         # ====================================================
         # IDENTIFICA SOLEIRAS ASSOCIADAS A PORTAS
         # ====================================================
-        # Cada soleira deve ser associada à PORTA MAIS PRÓXIMA.
-        # Não usamos mais o primeiro encontro encontrado, pois isso
-        # podia associar uma soleira à porta errada e deixar outras
-        # portas (como algumas da cozinha) sem círculo.
-        #
-        # A associação considera as duas extremidades da porta e
-        # também o meio da porta. Uma tolerância um pouco maior
-        # permite pequenas folgas existentes no desenho CAD.
-        # ====================================================
 
         soleiras_com_porta = []
         tolerancia_porta_soleira = 0.30
@@ -1188,14 +1102,7 @@ def gerar_cad_unifilar(
         # ====================================================
         # LIMPA DEBUG ANTIGO
         # ====================================================
-        # O usuário pode executar o script sobre um DXF que já foi
-        # gerado anteriormente. Nesse caso, os círculos magenta
-        # antigos continuam dentro do arquivo e podem dar a impressão
-        # de que P1 e P4 também estão sendo desenhados.
-        #
-        # Antes de gerar os novos pontos, remove TODOS os elementos
-        # existentes no layer de DEBUG. Assim, somente P2 e P3 da
-        # execução atual permanecerão no desenho.
+
         for entidade_debug in list(msp):
             try:
                 if (
@@ -1209,25 +1116,380 @@ def gerar_cad_unifilar(
                 pass
 
         # ====================================================
-        # DESENHO DOS PONTOS DEBUG DAS SOLEIRAS
+        # DESENHO DOS QUADRANTES DEBUG DAS SOLEIRAS
         # ====================================================
-        # REGRA GEOMÉTRICA DEFINIDA PARA PORTA + SOLEIRA:
         #
-        #                 P1 ───────── P2
-        #                 │   SOLEIRA  │
-        #                 │            │
-        #                 P4 ───────── P3
+        # NOVA LÓGICA:
         #
-        # P1 = ponto onde a porta encosta na soleira
-        # P2 = outra extremidade da soleira
-        # P4 = outra extremidade da porta
-        # P3 = quarto ponto, calculado por paralelogramo
+        #                  QUADRANTE
+        #                      ◯
+        #                     ╱
+        #                    ╱
+        # P1 ─────────────── P2
+        # │       SOLEIRA    │
+        # P4 ─────────────── P3
+        #                    ╲
+        #                     ╲
+        #                      ◯
+        #                  QUADRANTE
         #
-        # CÍRCULOS DEBUG SOMENTE EM P2 E P3.
-        # NUNCA desenhar círculo em P1 ou P4.
+        # P2 é o ponto EXATO de tangência do primeiro quadrante.
+        #
+        # P3 é o ponto EXATO de tangência do segundo quadrante.
+        #
+        # Os quadrantes ficam voltados para dentro dos respectivos
+        # ambientes.
+        #
+        # P1 e P4 NÃO recebem círculos/arcos.
+        #
         # ====================================================
 
         raio_circulo = 0.15
+
+        def desenhar_quadrante_debug(
+            ponto_tangencia,
+            poly,
+            soleira_vx,
+            soleira_vy
+        ):
+            """
+            Desenha um quadrante de 90 graus.
+
+            O ponto_tangencia é exatamente P2 ou P3.
+
+            O centro do quadrante fica a uma distância igual
+            ao raio, perpendicularmente à soleira, para dentro
+            do ambiente.
+
+            Dessa forma, a soleira é tangente ao quadrante
+            exatamente no ponto P2/P3.
+            """
+
+            # ------------------------------------------------
+            # CENTRO GEOMÉTRICO DO AMBIENTE
+            # ------------------------------------------------
+
+            cx = sum(
+                pt[0]
+                for pt in poly
+            ) / len(poly)
+
+            cy = sum(
+                pt[1]
+                for pt in poly
+            ) / len(poly)
+
+            # ------------------------------------------------
+            # NORMAL PARA DENTRO DO AMBIENTE
+            # ------------------------------------------------
+
+            nx, ny = get_inside_normal(
+                soleira_vx,
+                soleira_vy,
+                ponto_tangencia[0],
+                ponto_tangencia[1],
+                cx,
+                cy
+            )
+
+            # ------------------------------------------------
+            # CENTRO DO QUADRANTE
+            #
+            # O centro está exatamente a 0.15 m de P2/P3.
+            # ------------------------------------------------
+
+            centro_x = (
+                ponto_tangencia[0]
+                +
+                nx * raio_circulo
+            )
+
+            centro_y = (
+                ponto_tangencia[1]
+                +
+                ny * raio_circulo
+            )
+
+            # ------------------------------------------------
+            # CONFIRMA QUE O CENTRO FICOU DENTRO DO AMBIENTE
+            # ------------------------------------------------
+
+            if not ponto_em_poligono(
+                centro_x,
+                centro_y,
+                poly
+            ):
+
+                nx = -nx
+                ny = -ny
+
+                centro_x = (
+                    ponto_tangencia[0]
+                    +
+                    nx * raio_circulo
+                )
+
+                centro_y = (
+                    ponto_tangencia[1]
+                    +
+                    ny * raio_circulo
+                )
+
+            # ------------------------------------------------
+            # RAIO DO CENTRO ATÉ O PONTO DE TANGÊNCIA
+            # ------------------------------------------------
+
+            raio_vx = (
+                ponto_tangencia[0]
+                -
+                centro_x
+            )
+
+            raio_vy = (
+                ponto_tangencia[1]
+                -
+                centro_y
+            )
+
+            ang_tangencia = math.atan2(
+                raio_vy,
+                raio_vx
+            )
+
+            # ------------------------------------------------
+            # TESTA OS DOIS SENTIDOS POSSÍVEIS DO QUADRANTE
+            # ------------------------------------------------
+
+            ang_final_1 = (
+                ang_tangencia
+                +
+                math.pi / 2
+            )
+
+            ang_final_2 = (
+                ang_tangencia
+                -
+                math.pi / 2
+            )
+
+            # ------------------------------------------------
+            # TESTE DO PRIMEIRO QUADRANTE
+            # ------------------------------------------------
+
+            ang_meio_1 = (
+                ang_tangencia
+                +
+                math.pi / 4
+            )
+
+            teste_1 = (
+                centro_x
+                +
+                raio_circulo *
+                math.cos(ang_meio_1),
+
+                centro_y
+                +
+                raio_circulo *
+                math.sin(ang_meio_1)
+            )
+
+            # ------------------------------------------------
+            # TESTE DO SEGUNDO QUADRANTE
+            # ------------------------------------------------
+
+            ang_meio_2 = (
+                ang_tangencia
+                -
+                math.pi / 4
+            )
+
+            teste_2 = (
+                centro_x
+                +
+                raio_circulo *
+                math.cos(ang_meio_2),
+
+                centro_y
+                +
+                raio_circulo *
+                math.sin(ang_meio_2)
+            )
+
+            dentro_1 = ponto_em_poligono(
+                teste_1[0],
+                teste_1[1],
+                poly
+            )
+
+            dentro_2 = ponto_em_poligono(
+                teste_2[0],
+                teste_2[1],
+                poly
+            )
+
+            # ------------------------------------------------
+            # ESCOLHE O QUADRANTE QUE FICA DENTRO DO AMBIENTE
+            # ------------------------------------------------
+
+            if dentro_1 and not dentro_2:
+
+                ang_final = ang_final_1
+
+            elif dentro_2 and not dentro_1:
+
+                ang_final = ang_final_2
+
+            elif dentro_1 and dentro_2:
+
+                ang_final = ang_final_1
+
+            else:
+
+                # --------------------------------------------
+                # ÚLTIMA TENTATIVA:
+                # INVERTE A NORMAL
+                # --------------------------------------------
+
+                nx = -nx
+                ny = -ny
+
+                centro_x = (
+                    ponto_tangencia[0]
+                    +
+                    nx * raio_circulo
+                )
+
+                centro_y = (
+                    ponto_tangencia[1]
+                    +
+                    ny * raio_circulo
+                )
+
+                raio_vx = (
+                    ponto_tangencia[0]
+                    -
+                    centro_x
+                )
+
+                raio_vy = (
+                    ponto_tangencia[1]
+                    -
+                    centro_y
+                )
+
+                ang_tangencia = math.atan2(
+                    raio_vy,
+                    raio_vx
+                )
+
+                ang_final_1 = (
+                    ang_tangencia
+                    +
+                    math.pi / 2
+                )
+
+                ang_final_2 = (
+                    ang_tangencia
+                    -
+                    math.pi / 2
+                )
+
+                ang_meio_1 = (
+                    ang_tangencia
+                    +
+                    math.pi / 4
+                )
+
+                ang_meio_2 = (
+                    ang_tangencia
+                    -
+                    math.pi / 4
+                )
+
+                teste_1 = (
+                    centro_x
+                    +
+                    raio_circulo *
+                    math.cos(ang_meio_1),
+
+                    centro_y
+                    +
+                    raio_circulo *
+                    math.sin(ang_meio_1)
+                )
+
+                teste_2 = (
+                    centro_x
+                    +
+                    raio_circulo *
+                    math.cos(ang_meio_2),
+
+                    centro_y
+                    +
+                    raio_circulo *
+                    math.sin(ang_meio_2)
+                )
+
+                dentro_1 = ponto_em_poligono(
+                    teste_1[0],
+                    teste_1[1],
+                    poly
+                )
+
+                dentro_2 = ponto_em_poligono(
+                    teste_2[0],
+                    teste_2[1],
+                    poly
+                )
+
+                if dentro_2:
+                    ang_final = ang_final_2
+                else:
+                    ang_final = ang_final_1
+
+            # ------------------------------------------------
+            # CONVERTE PARA GRAUS
+            # ------------------------------------------------
+
+            ang_inicio_graus = math.degrees(
+                ang_tangencia
+            )
+
+            ang_final_graus = math.degrees(
+                ang_final
+            )
+
+            # ------------------------------------------------
+            # DESENHA O ARCO DE 90 GRAUS
+            #
+            # O início do arco é EXATAMENTE P2 ou P3.
+            #
+            # Portanto:
+            #
+            # P2/P3 = ponto de tangência
+            #
+            # e não o centro do arco.
+            # ------------------------------------------------
+
+            msp.add_arc(
+                center=(
+                    centro_x,
+                    centro_y
+                ),
+                radius=raio_circulo,
+                start_angle=ang_inicio_graus,
+                end_angle=ang_final_graus,
+                dxfattribs={
+                    'layer':
+                        'PROJ_ELETRICA_DEBUG',
+                    'color': 6
+                }
+            )
+
+        # ====================================================
+        # PROCESSA CADA SOLEIRA
+        # ====================================================
 
         for item in soleiras_com_porta:
 
@@ -1238,132 +1500,206 @@ def gerar_cad_unifilar(
             s_p2 = s['p2']
 
             # ------------------------------------------------
-            # P1 = projeção exata do extremo da porta que encosta
-            # na soleira. P4 = outro extremo da porta.
+            # IDENTIFICA P1 E P4
             # ------------------------------------------------
+
             d_porta_1 = point_seg_dist(
-                p_porta['p1'][0], p_porta['p1'][1],
-                s_p1, s_p2
+                p_porta['p1'][0],
+                p_porta['p1'][1],
+                s_p1,
+                s_p2
             )
 
             d_porta_2 = point_seg_dist(
-                p_porta['p2'][0], p_porta['p2'][1],
-                s_p1, s_p2
+                p_porta['p2'][0],
+                p_porta['p2'][1],
+                s_p1,
+                s_p2
             )
 
             if d_porta_1 <= d_porta_2:
-                extremo_porta_encostado = p_porta['p1']
+
+                extremo_porta_encostado = (
+                    p_porta['p1']
+                )
+
                 p4 = p_porta['p2']
+
             else:
-                extremo_porta_encostado = p_porta['p2']
+
+                extremo_porta_encostado = (
+                    p_porta['p2']
+                )
+
                 p4 = p_porta['p1']
 
-            # Projeta o ponto de encontro da porta exatamente na
-            # linha da soleira. Assim a geometria não depende de
-            # pequenas folgas existentes no DXF.
-            sx = s_p2[0] - s_p1[0]
-            sy = s_p2[1] - s_p1[1]
-            s2 = sx * sx + sy * sy
+            # ------------------------------------------------
+            # PROJEÇÃO EXATA DE P1 SOBRE A SOLEIRA
+            # ------------------------------------------------
+
+            sx = (
+                s_p2[0] -
+                s_p1[0]
+            )
+
+            sy = (
+                s_p2[1] -
+                s_p1[1]
+            )
+
+            s2 = (
+                sx * sx +
+                sy * sy
+            )
 
             if s2 == 0:
                 continue
 
             t = (
-                (extremo_porta_encostado[0] - s_p1[0]) * sx
+                (
+                    extremo_porta_encostado[0]
+                    -
+                    s_p1[0]
+                ) * sx
                 +
-                (extremo_porta_encostado[1] - s_p1[1]) * sy
+                (
+                    extremo_porta_encostado[1]
+                    -
+                    s_p1[1]
+                ) * sy
             ) / s2
 
-            t = max(0.0, min(1.0, t))
+            t = max(
+                0.0,
+                min(
+                    1.0,
+                    t
+                )
+            )
 
             p1 = (
-                s_p1[0] + t * sx,
-                s_p1[1] + t * sy
+                s_p1[0] +
+                t * sx,
+
+                s_p1[1] +
+                t * sy
             )
 
             # ------------------------------------------------
-            # P2 = outra extremidade da SOLEIRA.
+            # P2 = OUTRA EXTREMIDADE DA SOLEIRA
             # ------------------------------------------------
+
             d_p1_s1 = math.hypot(
-                p1[0] - s_p1[0],
-                p1[1] - s_p1[1]
+                p1[0] -
+                s_p1[0],
+
+                p1[1] -
+                s_p1[1]
             )
 
             d_p1_s2 = math.hypot(
-                p1[0] - s_p2[0],
-                p1[1] - s_p2[1]
+                p1[0] -
+                s_p2[0],
+
+                p1[1] -
+                s_p2[1]
             )
 
             if d_p1_s1 <= d_p1_s2:
+
                 p2 = s_p2
+
             else:
+
                 p2 = s_p1
 
             # ------------------------------------------------
-            # P3 = quarto ponto. O vetor P1 -> P2 é copiado a
-            # partir de P4.
+            # P3 = QUARTO PONTO DO PARALELOGRAMO
             # ------------------------------------------------
-            vetor_x = p2[0] - p1[0]
-            vetor_y = p2[1] - p1[1]
+
+            vetor_x = (
+                p2[0] -
+                p1[0]
+            )
+
+            vetor_y = (
+                p2[1] -
+                p1[1]
+            )
 
             p3 = (
-                p4[0] + vetor_x,
-                p4[1] + vetor_y
+                p4[0] +
+                vetor_x,
+
+                p4[1] +
+                vetor_y
             )
 
             # ------------------------------------------------
-            # Centro da soleira para localizar os ambientes
-            # adjacentes.
+            # CENTRO DA SOLEIRA
             # ------------------------------------------------
+
             sm_x = (
-                s_p1[0] + s_p2[0]
+                s_p1[0] +
+                s_p2[0]
             ) / 2
 
             sm_y = (
-                s_p1[1] + s_p2[1]
+                s_p1[1] +
+                s_p2[1]
             ) / 2
+
+            # ------------------------------------------------
+            # IDENTIFICA OS AMBIENTES ADJACENTES
+            # ------------------------------------------------
 
             ambientes_adjacentes = []
 
-            # A caixa delimitadora do centro da soleira podia falhar
-            # em portas localizadas na extremidade de um ambiente.
-            # Agora verificamos a proximidade do centro da soleira
-            # ao perímetro de cada ambiente.
             for poly in polilinhas:
 
-                distancia_poly = float('inf')
+                distancia_poly = float(
+                    'inf'
+                )
 
-                for i in range(len(poly)):
+                for i in range(
+                    len(poly)
+                ):
+
                     a = poly[i]
-                    b = poly[(i + 1) % len(poly)]
+
+                    b = poly[
+                        (i + 1) % len(poly)
+                    ]
 
                     d = point_seg_dist(
-                        sm_x, sm_y,
-                        a, b
+                        sm_x,
+                        sm_y,
+                        a,
+                        b
                     )
 
                     if d < distancia_poly:
                         distancia_poly = d
 
                 if distancia_poly <= 0.60:
-                    ambientes_adjacentes.append(poly)
+
+                    ambientes_adjacentes.append(
+                        poly
+                    )
 
             # ------------------------------------------------
-            # VETOR DA SOLEIRA: P1 -> P2
-            #
-            # IMPORTANTE:
-            # Os círculos devem ficar TANGENTES exatamente nos
-            # pontos P2 e P3 e avançar para dentro de cada
-            # ambiente. Portanto, a normal usada para deslocar
-            # o centro do círculo deve ser PERPENDICULAR À
-            # SOLEIRA (P1 -> P2), e não perpendicular a P2 -> P3.
-            #
-            # Era justamente isso que fazia os dois círculos
-            # aparecerem alinhados pelo mesmo P3 na versão
-            # anterior.
+            # VETOR DA SOLEIRA P1 -> P2
             # ------------------------------------------------
-            soleira_vx = p2[0] - p1[0]
-            soleira_vy = p2[1] - p1[1]
+
+            soleira_vx = (
+                p2[0] -
+                p1[0]
+            )
+
+            soleira_vy = (
+                p2[1] -
+                p1[1]
+            )
 
             soleira_len = math.hypot(
                 soleira_vx,
@@ -1376,85 +1712,27 @@ def gerar_cad_unifilar(
             soleira_vx /= soleira_len
             soleira_vy /= soleira_len
 
-            # ------------------------------------------------
-            # Desenha círculo SOMENTE no ponto indicado e no
-            # ambiente correspondente.
-            # ------------------------------------------------
-            def desenhar_circulo_debug(ponto, poly):
+            # =================================================
+            # DOIS AMBIENTES
+            # =================================================
 
-                cx = sum(
-                    pt[0] for pt in poly
-                ) / len(poly)
-
-                cy = sum(
-                    pt[1] for pt in poly
-                ) / len(poly)
-
-                nx, ny = get_inside_normal(
-                    soleira_vx,
-                    soleira_vy,
-                    ponto[0],
-                    ponto[1],
-                    cx,
-                    cy
-                )
-
-                centro = (
-                    ponto[0] + nx * raio_circulo,
-                    ponto[1] + ny * raio_circulo
-                )
-
-                # Se a normal escolhida não cair dentro do ambiente,
-                # tenta a normal oposta. Isso evita perder o círculo
-                # quando a orientação da polilinha estiver invertida.
-                if not ponto_em_poligono(
-                    centro[0],
-                    centro[1],
-                    poly
-                ):
-                    centro = (
-                        ponto[0] - nx * raio_circulo,
-                        ponto[1] - ny * raio_circulo
-                    )
-
-                if ponto_em_poligono(
-                    centro[0],
-                    centro[1],
-                    poly
-                ):
-                    msp.add_circle(
-                        center=centro,
-                        radius=raio_circulo,
-                        dxfattribs={
-                            'layer':
-                                'PROJ_ELETRICA_DEBUG',
-                            'color': 6
-                        }
-                    )
-
-            # ------------------------------------------------
-            # Quando existem dois ambientes adjacentes:
-            #
-            # P2 recebe um círculo TANGENTE EM P2.
-            # P3 recebe outro círculo TANGENTE EM P3.
-            #
-            # O ponto de tangência fica exatamente em P2/P3;
-            # o centro é deslocado somente pelo raio, na normal
-            # da soleira para dentro do ambiente correspondente.
-            #
-            # P1 e P4 NÃO recebem círculo.
-            # ------------------------------------------------
             if len(ambientes_adjacentes) >= 2:
 
                 poly_a = ambientes_adjacentes[0]
                 poly_b = ambientes_adjacentes[1]
 
+                # ---------------------------------------------
+                # DESCOBRE QUAL AMBIENTE ESTÁ DO LADO DE P2
+                # ---------------------------------------------
+
                 cx_a = sum(
-                    pt[0] for pt in poly_a
+                    pt[0]
+                    for pt in poly_a
                 ) / len(poly_a)
 
                 cy_a = sum(
-                    pt[1] for pt in poly_a
+                    pt[1]
+                    for pt in poly_a
                 ) / len(poly_a)
 
                 nx_a, ny_a = get_inside_normal(
@@ -1466,40 +1744,61 @@ def gerar_cad_unifilar(
                     cy_a
                 )
 
-                teste_a = (
-                    p2[0] + nx_a * raio_circulo,
-                    p2[1] + ny_a * raio_circulo
+                teste_p2_a = (
+                    p2[0] +
+                    nx_a * raio_circulo,
+
+                    p2[1] +
+                    ny_a * raio_circulo
                 )
 
                 if ponto_em_poligono(
-                    teste_a[0],
-                    teste_a[1],
+                    teste_p2_a[0],
+                    teste_p2_a[1],
                     poly_a
                 ):
+
                     poly_p2 = poly_a
                     poly_p3 = poly_b
+
                 else:
+
                     poly_p2 = poly_b
                     poly_p3 = poly_a
 
-                desenhar_circulo_debug(
+                # ---------------------------------------------
+                # QUADRANTE TANGENTE EM P2
+                # ---------------------------------------------
+
+                desenhar_quadrante_debug(
                     p2,
-                    poly_p2
+                    poly_p2,
+                    soleira_vx,
+                    soleira_vy
                 )
 
-                desenhar_circulo_debug(
+                # ---------------------------------------------
+                # QUADRANTE TANGENTE EM P3
+                # ---------------------------------------------
+
+                desenhar_quadrante_debug(
                     p3,
-                    poly_p3
+                    poly_p3,
+                    soleira_vx,
+                    soleira_vy
                 )
+
+            # =================================================
+            # APENAS UM AMBIENTE
+            # =================================================
 
             elif len(ambientes_adjacentes) == 1:
 
-                # Em caso de apenas um ambiente detectado,
-                # desenha somente o ponto P2.
-                # P1, P3 e P4 nunca recebem círculo nesse caso.
-                desenhar_circulo_debug(
+                desenhar_quadrante_debug(
                     p2,
-                    ambientes_adjacentes[0]
+                    ambientes_adjacentes[0],
+                    soleira_vx,
+                    soleira_vy
                 )
 
         # ====================================================
@@ -2263,14 +2562,6 @@ def gerar_cad_unifilar(
                         pt1 = p_alvo['p1']
                         pt2 = p_alvo['p2']
 
-                        # -----------------------------------------
-                        # POSIÇÃO DESEJADA
-                        #
-                        # Para uma única TUE, começa no centro.
-                        # Para várias TUEs, distribui ao longo da
-                        # parede.
-                        # -----------------------------------------
-
                         fator = (
                             0.5
                             if qtd_tue == 1
@@ -2282,13 +2573,6 @@ def gerar_cad_unifilar(
                                 qtd_tue + 1
                             )
                         )
-
-                        # -----------------------------------------
-                        # PROCURA UMA POSIÇÃO REALMENTE VÁLIDA
-                        #
-                        # Esta função garante afastamento mínimo
-                        # de 50 cm dos cantos da parede.
-                        # -----------------------------------------
 
                         resultado_tue = (
                             procurar_ponto_valido_na_parede(
@@ -2310,10 +2594,6 @@ def gerar_cad_unifilar(
                             vx,
                             vy
                         ) = resultado_tue
-
-                        # -----------------------------------------
-                        # NORMAL PARA DENTRO DO AMBIENTE
-                        # -----------------------------------------
 
                         nx, ny = get_inside_normal(
                             vx,
@@ -2400,7 +2680,6 @@ def gerar_cad_unifilar(
                             }
                         )
 
-
                 # =================================================
                 # TUGs
                 # =================================================
@@ -2408,10 +2687,6 @@ def gerar_cad_unifilar(
                 total_tugs = qtd_tugs
 
                 if total_tugs > 0 and comp_total > 0:
-
-                    # -------------------------------------------------
-                    # MARGEM MAIOR NOS CANTOS
-                    # -------------------------------------------------
 
                     margem_inicial = 0.35
 
@@ -2448,10 +2723,6 @@ def gerar_cad_unifilar(
 
                     tomadas_colocadas = 0
 
-                    # -------------------------------------------------
-                    # REGISTRA AS DISTÂNCIAS JÁ UTILIZADAS
-                    # -------------------------------------------------
-
                     distancias_usadas = []
 
                     for i in range(total_tugs):
@@ -2466,10 +2737,6 @@ def gerar_cad_unifilar(
 
                         if distancia_desejada >= comp_total:
                             continue
-
-                        # -------------------------------------------------
-                        # PROCURA UMA POSIÇÃO REALMENTE LIVRE
-                        # -------------------------------------------------
 
                         resultado_ponto = (
                             procurar_ponto_valido_perimetro(
@@ -2495,10 +2762,6 @@ def gerar_cad_unifilar(
                             resultado_ponto
                         )
 
-                        # -------------------------------------------------
-                        # NÃO DEIXA DUAS TOMADAS MUITO PRÓXIMAS
-                        # -------------------------------------------------
-
                         distancia_muito_proxima = False
 
                         for d_usada in distancias_usadas:
@@ -2515,7 +2778,6 @@ def gerar_cad_unifilar(
 
                         if distancia_muito_proxima:
 
-                            # tenta outros pontos
                             alternativas = [
                                 distancia_desejada - 0.75,
                                 distancia_desejada + 0.75,
@@ -2591,10 +2853,6 @@ def gerar_cad_unifilar(
                             else:
                                 continue
 
-                        # -------------------------------------------------
-                        # VALIDAÇÃO FINAL
-                        # -------------------------------------------------
-
                         if not ponto_tomada_valido(
                             px,
                             py,
@@ -2604,19 +2862,11 @@ def gerar_cad_unifilar(
                         ):
                             continue
 
-                        # -------------------------------------------------
-                        # GUARDA A POSIÇÃO
-                        # -------------------------------------------------
-
                         distancias_usadas.append(
                             distancia_desejada
                         )
 
                         tomadas_colocadas += 1
-
-                        # -------------------------------------------------
-                        # NORMAL PARA DENTRO DO AMBIENTE
-                        # -------------------------------------------------
 
                         nx, ny = get_inside_normal(
                             seg_vx,
@@ -2642,10 +2892,6 @@ def gerar_cad_unifilar(
                             py + ny * 0.20
                         )
 
-                        # -------------------------------------------------
-                        # DESENHA TUG
-                        # -------------------------------------------------
-
                         msp.add_lwpolyline(
                             [
                                 ponto_b1,
@@ -2659,10 +2905,6 @@ def gerar_cad_unifilar(
                                     'PROJ_ELETRICA_TOMADA'
                             }
                         )
-
-                        # -------------------------------------------------
-                        # TUG EM ÁREA MOLHADA
-                        # -------------------------------------------------
 
                         if is_ambiente_molhado:
 
