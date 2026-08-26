@@ -1,8 +1,8 @@
 import streamlit as st
 import tempfile
 import os
-import json
 import pandas as pd
+from supabase import create_client, Client
 import motores
 
 # ============================================================
@@ -15,25 +15,20 @@ st.set_page_config(
 )
 
 # ============================================================
-# GERENCIAMENTO DE USUÁRIOS (JSON LOCAL SEGURO)
+# CREDENCIAIS OFICIAIS DO SUPABASE
 # ============================================================
-ARQUIVO_USUARIOS = "usuarios_db.json"
+SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
-def carregar_usuarios():
-    if os.path.exists(ARQUIVO_USUARIOS):
-        try:
-            with open(ARQUIVO_USUARIOS, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {
-        "jrsebadelhe@gmail.com": {"nome": "Roberto Sebadelhe", "senha": "123456"}
-    }
+@st.cache_resource
+def init_supabase() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def salvar_usuarios(usuarios):
-    with open(ARQUIVO_USUARIOS, "w", encoding="utf-8") as f:
-        json.dump(usuarios, f, ensure_ascii=False, indent=4)
+supabase = init_supabase()
 
+# ============================================================
+# ESTADO DE SESSÃO
+# ============================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "user_email" not in st.session_state:
@@ -42,69 +37,87 @@ if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 
 # ============================================================
-# BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR)
+# BARRA LATERAL (AUTENTICAÇÃO COM SUPABASE & GERENCIADOR)
 # ============================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
     st.markdown("### AutoElétrica NBR 5410")
     st.divider()
-    
-    db_usuarios = carregar_usuarios()
 
     if not st.session_state.logged_in:
         aba_auth = st.radio("Acesso ao Sistema", ["Entrar (Login)", "Cadastrar-se"], horizontal=True)
-        
+
         if aba_auth == "Entrar (Login)":
             st.subheader("🔐 Fazer Login")
             login_email = st.text_input("E-mail / Login", key="login_email")
             login_senha = st.text_input("Senha", type="password", key="login_senha")
-            
+
             if st.button("Entrar", use_container_width=True):
-                if login_email in db_usuarios and db_usuarios[login_email]["senha"] == login_senha:
-                    st.session_state.logged_in = True
-                    st.session_state.user_email = login_email
-                    st.session_state.user_name = db_usuarios[login_email]["nome"]
-                    st.success(f"Bem-vindo, {st.session_state.user_name}!")
-                    st.rerun()
+                if not login_email or not login_senha:
+                    st.warning("Preencha o e-mail e a senha.")
                 else:
-                    st.error("E-mail ou senha inválidos.")
-                    
+                    try:
+                        # Consulta na tabela 'usuarios' do Supabase
+                        response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
+                        dados_usuario = response.data
+
+                        if dados_usuario and dados_usuario[0]["senha"] == login_senha:
+                            st.session_state.logged_in = True
+                            st.session_state.user_email = dados_usuario[0]["email"]
+                            st.session_state.user_name = dados_usuario[0]["nome"]
+                            st.success(f"Bem-vindo de volta, {st.session_state.user_name}!")
+                            st.rerun()
+                        else:
+                            st.error("E-mail ou senha incorretos.")
+                    except Exception as e:
+                        st.error(f"Erro ao consultar banco de dados: {e}")
+
         else:
             st.subheader("📝 Novo Cadastro")
             cad_nome = st.text_input("Nome Completo", key="cad_nome")
             cad_email = st.text_input("E-mail (Login)", key="cad_email")
             cad_senha = st.text_input("Senha", type="password", key="cad_senha")
-            
+
             if st.button("Criar Conta", use_container_width=True):
                 if not cad_nome or not cad_email or not cad_senha:
-                    st.warning("Preencha Nome, E-mail e Senha.")
-                elif cad_email in db_usuarios:
-                    st.error("Este e-mail já está cadastrado.")
+                    st.warning("Preencha todos os campos (Nome, E-mail e Senha).")
                 else:
-                    db_usuarios[cad_email] = {"nome": cad_nome, "senha": cad_senha}
-                    salvar_usuarios(db_usuarios)
-                    st.success("Conta criada! Faça login na aba ao lado.")
+                    try:
+                        # Verifica se o e-mail já existe na tabela 'usuarios'
+                        check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
+                        if check.data:
+                            st.error("Este e-mail já está cadastrado no sistema.")
+                        else:
+                            # Insere diretamente na tabela 'usuarios' do Supabase
+                            supabase.table("usuarios").insert({
+                                "nome": cad_nome.strip(),
+                                "email": cad_email.strip(),
+                                "senha": cad_senha
+                            }).execute()
+                            st.success("Conta criada com sucesso! Faça login na aba ao lado.")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar no Supabase: {e}")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
-        
+
         if st.button("🚪 Sair / Logout", use_container_width=True):
             st.session_state.logged_in = False
             st.session_state.user_email = ""
             st.session_state.user_name = ""
             st.rerun()
-            
+
         st.divider()
         st.markdown("### 📂 Gerenciador de Obras")
         if st.button("➕ Novo Projeto / Pavimento", use_container_width=True):
             st.toast("Novo projeto inicializado.")
-            
+
         st.markdown("### 📋 Projetos Salvos:")
         projeto_selecionado = st.selectbox(
             "Selecione o pavimento:",
             ["Teste 01 - Térreo", "Teste 02 - Superior"]
         )
-        
+
         if st.button("⚙️ Opções do Pavimento Atual", use_container_width=True):
             st.info(f"Gerenciando propriedades de: {projeto_selecionado}")
 
@@ -112,7 +125,7 @@ with st.sidebar:
 # BLOQUEIO DE SEGURANÇA
 # ============================================================
 if not st.session_state.logged_in:
-    st.warning("⚠️ Faça login ou cadastre-se na barra lateral para acessar o painel de projetos elétricos.")
+    st.warning("⚠️ Por favor, faça login ou cadastre-se na barra lateral para acessar o painel de projetos elétricos.")
     st.stop()
 
 # ============================================================
@@ -129,12 +142,12 @@ dados_ambientes = []
 
 if uploaded_file is not None:
     dxf_bytes = uploaded_file.read()
-    
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
             tmp.write(dxf_bytes)
             tmp_path = tmp.name
-            
+
         dados_ambientes = motores.processar_dxf(tmp_path)
         os.remove(tmp_path)
     except Exception as e:
@@ -143,13 +156,13 @@ if uploaded_file is not None:
 if dados_ambientes:
     st.divider()
     st.subheader("📊 Quadro de Previsão de Cargas Consolidado")
-    
+
     tabela_editada = []
     for row in dados_ambientes:
         with st.container():
             st.markdown(f"**Ambiente: {row['Ambiente']}** — *Área: {row['Área (m²)']:.2f}m² | Perímetro: {row['Perímetro (m)']}m*")
             c1, c2, c3, c4, c5 = st.columns(5)
-            
+
             with c1:
                 q_ilum = st.number_input(f"Qtd Ilum ({row['Ambiente']})", min_value=0, value=row["Qtd Ilum."], key=f"ilum_{row['Ambiente']}")
             with c2:
@@ -160,20 +173,20 @@ if dados_ambientes:
                 qtd_tue = st.number_input(f"TUEs Qtd ({row['Ambiente']})", min_value=0, value=row["Qtd TUE"], key=f"tue_{row['Ambiente']}")
             with c5:
                 eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
-            
+
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
             row_modificado["Pot. Unit. Ilum (VA)"] = p_ilum
             row_modificado["TUGs (Qtd)"] = qtd_tugs
             row_modificado["Qtd TUE"] = qtd_tue
             row_modificado["Equipamento TUE"] = eq_tue
-            
+
             row_modificado["Carga Ilum. (VA)"] = q_ilum * p_ilum
             is_molhado = any(x in row['Ambiente'].lower() for x in ["coz", "serv", "banh", "lav", "sanit", "wc", "as"])
             pot_tup_unit_calc = 600 if is_molhado else 100
             row_modificado["Pot. Unit. TUG (VA)"] = pot_tup_unit_calc
             row_modificado["Carga TUGs (VA)"] = qtd_tugs * pot_tup_unit_calc
-            
+
             tabela_editada.append(row_modificado)
             st.markdown("---")
 
@@ -191,7 +204,7 @@ if dados_ambientes:
     st.divider()
     st.subheader("⚙️ Configuração de Interruptores nas Soleiras")
     st.markdown("Personalize a quantidade de círculos de interruptores por ambiente:")
-    
+
     config_interruptores_usuario = {}
     for amb in nomes_ambientes:
         with st.expander(f"Interruptores - {amb}"):
@@ -207,12 +220,12 @@ if dados_ambientes:
     # ====================================================
     st.divider()
     st.subheader("📦 Tabela Quantitativa de Materiais")
-    
+
     total_caixas_luz = sum([r["Qtd Ilum."] for r in tabela_editada])
     total_tugs_geral = sum([r["TUGs (Qtd)"] for r in tabela_editada])
     total_tues_geral = sum([r["Qtd TUE"] for r in tabela_editada])
     total_tomadas_geral = total_tugs_geral + total_tues_geral
-    
+
     materiais_df = pd.DataFrame([
         {"Material": "Caixa Octogonal de Teto 4x4\" (Plástico)", "Unidade": "pç", "Quantidade": total_caixas_luz},
         {"Material": "Caixa de Embutir de Parede 4x2\" (Plástico)", "Unidade": "pç", "Quantidade": total_tomadas_geral},
@@ -228,7 +241,7 @@ if dados_ambientes:
     # ====================================================
     st.divider()
     st.subheader("🖨️ Exportação e Relatórios")
-    
+
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         if st.button("📊 Baixar Planilha (Excel)", use_container_width=True):
@@ -247,7 +260,7 @@ if dados_ambientes:
                 local_qdc=local_qdc,
                 config_interruptores=config_interruptores_usuario
             )
-            
+
             st.success("✅ Projeto CAD gerado com sucesso!")
             st.download_button(
                 label="📥 Baixar Projeto DXF Atualizado",
