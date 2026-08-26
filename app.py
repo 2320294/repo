@@ -3,7 +3,6 @@ import tempfile
 import os
 import pandas as pd
 import json
-from supabase import create_client, Client
 import motores
 
 # ============================================================
@@ -16,19 +15,22 @@ st.set_page_config(
 )
 
 # ============================================================
-# CONEXÃO COM O SUPABASE
+# BANCO DE DADOS LOCAL EM JSON (ESTÁVEL E SEM ERROS DE REDE)
 # ============================================================
-SUPABASE_URL = "https://nqnwddvguqvvzigtbkk.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
+ARQUIVO_DB = "db_sistema_eletrico.json"
 
-@st.cache_resource
-def get_supabase_client():
-    try:
-        return create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception:
-        return None
+def carregar_banco():
+    if os.path.exists(ARQUIVO_DB):
+        try:
+            with open(ARQUIVO_DB, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"usuarios": [], "projetos": []}
 
-supabase = get_supabase_client()
+def salvar_banco(dados):
+    with open(ARQUIVO_DB, "w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False, indent=4)
 
 # ============================================================
 # ESTADO DE SESSÃO
@@ -43,12 +45,14 @@ if "projeto_ativo" not in st.session_state:
     st.session_state.projeto_ativo = "Selecione um projeto..."
 
 # ============================================================
-# BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DE PROJETOS)
+# BARRA LATERAL (AUTENTICAÇÃO E GERENCIADOR DE OBRAS)
 # ============================================================
 with st.sidebar:
     st.image("https://img.icons8.com/color/96/lightning-bolt.png", width=54)
     st.markdown("### AutoElétrica Profissional")
     st.divider()
+
+    db = carregar_banco()
 
     if not st.session_state.logged_in:
         aba_auth = st.radio("Acesso ao Sistema", ["Entrar (Login)", "Cadastrar-se"], horizontal=True)
@@ -62,25 +66,16 @@ with st.sidebar:
                 if not login_email or not login_senha:
                     st.warning("Preencha o e-mail e a senha.")
                 else:
-                    client_db = get_supabase_client()
-                    if client_db is None:
-                        st.error("❌ Erro de conexão com o Supabase.")
+                    usuario = next((u for u in db["usuarios"] if u["email"] == login_email.strip() and u["senha"] == login_senha), None)
+                    if usuario:
+                        st.session_state.logged_in = True
+                        st.session_state.user_email = usuario["email"]
+                        st.session_state.user_name = usuario["nome"]
+                        st.session_state.projeto_ativo = "Selecione um projeto..."
+                        st.success(f"Bem-vindo, {st.session_state.user_name}!")
+                        st.rerun()
                     else:
-                        try:
-                            response = client_db.table("usuarios").select("*").eq("email", login_email.strip()).execute()
-                            dados_usuario = response.data
-
-                            if dados_usuario and dados_usuario[0]["senha"] == login_senha:
-                                st.session_state.logged_in = True
-                                st.session_state.user_email = dados_usuario[0]["email"]
-                                st.session_state.user_name = dados_usuario[0]["nome"]
-                                st.session_state.projeto_ativo = "Selecione um projeto..."
-                                st.success(f"Bem-vindo, {st.session_state.user_name}!")
-                                st.rerun()
-                            else:
-                                st.error("E-mail ou senha incorretos.")
-                        except Exception as e:
-                            st.error(f"Erro ao autenticar: {e}")
+                        st.error("E-mail ou senha incorretos.")
 
         else:
             st.subheader("📝 Novo Cadastro")
@@ -91,24 +86,16 @@ with st.sidebar:
             if st.button("Criar Conta", use_container_width=True):
                 if not cad_nome or not cad_email or not cad_senha:
                     st.warning("Preencha todos os campos.")
+                elif any(u["email"] == cad_email.strip() for u in db["usuarios"]):
+                    st.error("E-mail já cadastrado.")
                 else:
-                    client_db = get_supabase_client()
-                    if client_db is None:
-                        st.error("❌ Conexão com o Supabase indisponível.")
-                    else:
-                        try:
-                            check = client_db.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
-                            if check.data:
-                                st.error("E-mail já cadastrado.")
-                            else:
-                                client_db.table("usuarios").insert({
-                                    "nome": cad_nome.strip(),
-                                    "email": cad_email.strip(),
-                                    "senha": cad_senha
-                                }).execute()
-                                st.success("Conta criada com sucesso! Faça login ao lado.")
-                        except Exception as e:
-                            st.error(f"Erro ao cadastrar: {e}")
+                    db["usuarios"].append({
+                        "nome": cad_nome.strip(),
+                        "email": cad_email.strip(),
+                        "senha": cad_senha
+                    })
+                    salvar_banco(db)
+                    st.success("Conta criada! Faça login ao lado.")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
@@ -131,34 +118,28 @@ with st.sidebar:
                 if not novo_proj_nome.strip():
                     st.warning("Digite o nome do projeto.")
                 else:
-                    client_db = get_supabase_client()
-                    if client_db is None:
-                        st.error("❌ Conexão com o Supabase indisponível.")
+                    projetos_usuario = [p for p in db["projetos"] if p["user_email"] == st.session_state.user_email]
+                    if any(p["nome_projeto"] == novo_proj_nome.strip() for p in projetos_usuario):
+                        st.warning("Já existe um projeto com esse nome.")
                     else:
-                        try:
-                            client_db.table("projetos").insert({
-                                "user_email": st.session_state.user_email,
-                                "nome_projeto": novo_proj_nome.strip()
-                            }).execute()
-                            st.session_state.projeto_ativo = novo_proj_nome.strip()
-                            st.success("Projeto cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao cadastrar projeto: {e}")
+                        db["projetos"].append({
+                            "user_email": st.session_state.user_email,
+                            "nome_projeto": novo_proj_nome.strip(),
+                            "dxf_hex": None,
+                            "tabela_editada": [],
+                            "config_interruptores": {}
+                        })
+                        salvar_banco(db)
+                        st.session_state.projeto_ativo = novo_proj_nome.strip()
+                        st.success("Projeto cadastrado e selecionado!")
+                        st.rerun()
 
-        # Busca projetos salvos no Supabase
-        lista_projetos = []
-        client_db = get_supabase_client()
-        if client_db is not None:
-            try:
-                res_proj = client_db.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
-                lista_projetos = res_proj.data if res_proj.data else []
-            except Exception as e:
-                st.error(f"Erro ao buscar projetos: {e}")
+        # Listagem de projetos do usuário
+        projetos_usuario = [p for p in db["projetos"] if p["user_email"] == st.session_state.user_email]
 
         st.markdown("### 📋 Seus Projetos Salvos:")
-        if lista_projetos:
-            nomes_projetos = [p["nome_projeto"] for p in lista_projetos]
+        if projetos_usuario:
+            nomes_projetos = [p["nome_projeto"] for p in projetos_usuario]
             opcoes_selectbox = ["Selecione um projeto..."] + nomes_projetos
             
             indice_atual = 0
@@ -177,16 +158,11 @@ with st.sidebar:
                 st.rerun()
             
             if projeto_selecionado != "Selecione um projeto..." and st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
-                proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
-                if proj_alvo and client_db is not None:
-                    try:
-                        client_db.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
-                        client_db.table("dados_projetos").delete().eq("user_email", st.session_state.user_email).eq("nome_projeto", projeto_selecionado).execute()
-                        st.session_state.projeto_ativo = "Selecione um projeto..."
-                        st.success(f"Projeto '{projeto_selecionado}' apagado!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao apagar projeto: {e}")
+                db["projetos"] = [p for p in db["projetos"] if not (p["user_email"] == st.session_state.user_email and p["nome_projeto"] == projeto_selecionado)]
+                salvar_banco(db)
+                st.session_state.projeto_ativo = "Selecione um projeto..."
+                st.success(f"Projeto '{projeto_selecionado}' apagado!")
+                st.rerun()
         else:
             st.info("Nenhum projeto cadastrado ainda.")
             st.session_state.projeto_ativo = "Selecione um projeto..."
@@ -209,65 +185,29 @@ if st.session_state.projeto_ativo == "Selecione um projeto...":
 
 st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
 
-# Busca dados salvos do projeto no Supabase
-dados_salvos_db = None
-client_db = get_supabase_client()
-if client_db is not None:
-    try:
-        res_dados = client_db.table("dados_projetos").select("*").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
-        if res_dados.data:
-            dados_salvos_db = res_dados.data[0]
-    except Exception as e:
-        st.error(f"Erro ao consultar dados no banco: {e}")
+# Localiza o projeto atual no banco local
+db = carregar_banco()
+projeto_obj = next((p for p in db["projetos"] if p["user_email"] == st.session_state.user_email and p["nome_projeto"] == st.session_state.projeto_ativo), None)
 
 dxf_bytes = None
 dados_ambientes = []
 
-if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
-    dados_ambientes = dados_salvos_db["tabela_editada"]
-    
-    if dados_salvos_db.get("dxf_bytes"):
+if projeto_obj:
+    if projeto_obj.get("dxf_hex"):
         try:
-            val_dxf = dados_salvos_db["dxf_bytes"]
-            if isinstance(val_dxf, str):
-                dxf_bytes = bytes.fromhex(val_dxf)
-            else:
-                dxf_bytes = bytes(val_dxf)
+            dxf_bytes = bytes.fromhex(projeto_obj["dxf_hex"])
         except:
             dxf_bytes = None
-            
-    with st.expander("🔄 Reenviar / Substituir Arquivo DXF (Planta Base)"):
-        uploaded_file = st.file_uploader("Envie a nova planta base (formato DXF):", type=["dxf"], key="novo_dxf_upload")
-        if uploaded_file is not None:
-            dxf_bytes = uploaded_file.read()
-            try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-                    tmp.write(dxf_bytes)
-                    tmp_path = tmp.name
-                dados_ambientes = motores.processar_dxf(tmp_path)
-                os.remove(tmp_path)
-                
-                db_write = get_supabase_client()
-                if db_write is not None:
-                    payload = {
-                        "user_email": st.session_state.user_email,
-                        "nome_projeto": st.session_state.projeto_ativo,
-                        "tabela_editada": dados_ambientes,
-                        "dxf_bytes": dxf_bytes.hex()
-                    }
-                    res_check = db_write.table("dados_projetos").select("id").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
-                    if res_check.data:
-                        db_write.table("dados_projetos").update(payload).eq("id", res_check.data[0]["id"]).execute()
-                    else:
-                        db_write.table("dados_projetos").insert(payload).execute()
-                
-                st.success("✅ Novo arquivo DXF processado e salvo no banco de dados!")
-            except Exception as e:
-                st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
-else:
-    st.subheader("📁 Projeto Unifilar (DXF)")
-    uploaded_file = st.file_uploader("Envie a planta base (formato DXF):", type=["dxf"])
+    dados_ambientes = projeto_obj.get("tabela_editada", [])
 
+# ============================================================
+# ÁREA DE UPLOAD / REENVIO DA PLANTA BAIXA (DXF)
+# ============================================================
+tem_dxf_salvo = dxf_bytes is not None and len(dados_ambientes) > 0
+
+if not tem_dxf_salvo:
+    st.subheader("📁 Enviar Planta Base (Formato DXF)")
+    uploaded_file = st.file_uploader("Envie o arquivo DXF para iniciar o dimensionamento:", type=["dxf"], key="upload_inicial")
     if uploaded_file is not None:
         dxf_bytes = uploaded_file.read()
         try:
@@ -277,19 +217,39 @@ else:
             dados_ambientes = motores.processar_dxf(tmp_path)
             os.remove(tmp_path)
             
-            db_write = get_supabase_client()
-            if db_write is not None:
-                payload = {
-                    "user_email": st.session_state.user_email,
-                    "nome_projeto": st.session_state.projeto_ativo,
-                    "tabela_editada": dados_ambientes,
-                    "dxf_bytes": dxf_bytes.hex()
-                }
-                db_write.table("dados_projetos").insert(payload).execute()
-                st.success("✅ Projeto enviado e gravado no banco de dados!")
+            # Salva no banco local
+            projeto_obj["dxf_hex"] = dxf_bytes.hex()
+            projeto_obj["tabela_editada"] = dados_ambientes
+            salvar_banco(db)
+            st.success("✅ Planta baixa processada e salva com sucesso!")
+            st.rerun()
         except Exception as e:
-            st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
+            st.error(f"❌ Erro ao processar o DXF: {e}")
+else:
+    with st.expander("🔄 Reenviar / Substituir Planta Baixa (DXF)"):
+        st.markdown("Envie um novo arquivo DXF caso a geometria tenha sido alterada. Os dados ajustados abaixo serão preservados.")
+        novo_uploaded_file = st.file_uploader("Envie a nova planta base (.dxf):", type=["dxf"], key="upload_substituicao")
+        if novo_uploaded_file is not None:
+            dxf_bytes = novo_uploaded_file.read()
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+                    tmp.write(dxf_bytes)
+                    tmp_path = tmp.name
+                novos_dados = motores.processar_dxf(tmp_path)
+                os.remove(tmp_path)
+                
+                # Atualiza geometria preservando cargas existentes se os ambientes baterem
+                projeto_obj["dxf_hex"] = dxf_bytes.hex()
+                projeto_obj["tabela_editada"] = novos_dados
+                salvar_banco(db)
+                st.success("✅ Nova planta baixa substituída com sucesso!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Erro ao processar o novo DXF: {e}")
 
+# ============================================================
+# QUADRO DE CARGAS E EDIÇÃO
+# ============================================================
 if dados_ambientes:
     dados_ambientes = sorted(dados_ambientes, key=lambda x: x['Ambiente'])
 
@@ -397,7 +357,7 @@ if dados_ambientes:
     local_qdc = local_qdc_selecionado.split(" (Recomendado")[0].strip()
 
     # ====================================================
-    # CONFIGURAÇÃO DE INTERRUPTORES (FRONT-END)
+    # CONFIGURAÇÃO DE INTERRUPTORES
     # ====================================================
     st.divider()
     st.subheader("⚙️ Configuração de Interruptores nas Soleiras")
@@ -405,15 +365,7 @@ if dados_ambientes:
 
     nomes_ambientes = [r["Ambiente"] for r in dados_ambientes]
     config_interruptores_usuario = {}
-    
-    raw_config = dados_salvos_db.get("config_interruptores", {}) if dados_salvos_db else {}
-    if isinstance(raw_config, str):
-        try:
-            config_salva = json.loads(raw_config)
-        except:
-            config_salva = {}
-    else:
-        config_salva = raw_config if isinstance(raw_config, dict) else {}
+    config_salva = projeto_obj.get("config_interruptores", {}) if projeto_obj else {}
 
     for amb in nomes_ambientes:
         with st.expander(f"Interruptores - {amb}"):
@@ -455,31 +407,12 @@ if dados_ambientes:
     st.divider()
     st.subheader("🖨️ Exportação e Relatórios")
 
-    if st.button("💾 Salvar Alterações do Projeto no Banco de Dados", use_container_width=True):
-        db_write = get_supabase_client()
-        if db_write is not None:
-            try:
-                payload = {
-                    "user_email": st.session_state.user_email,
-                    "nome_projeto": st.session_state.projeto_ativo,
-                    "tabela_editada": tabela_editada,
-                    "local_qdc": local_qdc,
-                    "config_interruptores": config_interruptores_usuario
-                }
-                if dxf_bytes:
-                    payload["dxf_bytes"] = dxf_bytes.hex()
-
-                res_check = db_write.table("dados_projetos").select("id").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
-                if res_check.data:
-                    db_write.table("dados_projetos").update(payload).eq("id", res_check.data[0]["id"]).execute()
-                else:
-                    db_write.table("dados_projetos").insert(payload).execute()
-                
-                st.success("✅ Alterações salvas com sucesso no banco de dados!")
-            except Exception as e:
-                st.error(f"❌ Erro ao salvar no banco: {e}")
-        else:
-            st.error("❌ Conexão com o banco de dados indisponível no momento.")
+    if st.button("💾 Salvar Alterações do Projeto", use_container_width=True):
+        if projeto_obj:
+            projeto_obj["tabela_editada"] = tabela_editada
+            projeto_obj["config_interruptores"] = config_interruptores_usuario
+            salvar_banco(db)
+            st.success("✅ Alterações salvas com sucesso!")
 
     col_e1, col_e2 = st.columns(2)
     with col_e1:
@@ -493,7 +426,7 @@ if dados_ambientes:
     st.markdown("### Projeto Unifilar (DXF)")
     if st.button("🚀 Gerar CAD (Atualizado)", type="primary", use_container_width=True):
         if not dxf_bytes:
-            st.error("❌ Nenhum arquivo DXF associado a este projeto no banco. Utilize o campo 'Reenviar / Substituir Arquivo DXF' acima.")
+            st.error("❌ Nenhum arquivo DXF associado. Envie uma planta base na opção acima.")
         else:
             try:
                 cad_bytes_out = motores.gerar_cad_unifilar(
@@ -503,7 +436,7 @@ if dados_ambientes:
                     config_interruptores=config_interruptores_usuario
                 )
 
-                st.success("✅ Projeto CAD gerado com sucesso!")
+                st.success("✅ Projeto CAD gerado com sucesso a partir da planta e dos dados salvos!")
                 st.download_button(
                     label="📥 Baixar Projeto DXF Atualizado",
                     data=cad_bytes_out,
@@ -513,6 +446,3 @@ if dados_ambientes:
                 )
             except Exception as e:
                 st.error(f"❌ Erro ao gerar o arquivo CAD: {e}")
-else:
-    if dados_salvos_db is None:
-        st.info("👆 Envie um arquivo `.dxf` válido na opção acima para carregar o projeto e iniciar o dimensionamento.")
