@@ -23,6 +23,10 @@ from materiais import (
     renderizar_materiais
 )
 
+from parametros_projeto import (
+    renderizar_parametros_projeto
+)
+
 from upload_cad import (
     renderizar_upload_dxf,
     renderizar_salvar_e_gerar_cad
@@ -116,6 +120,18 @@ def renderizar_painel_principal():
         )
     )
 
+    tensao_projeto_salva = (
+        dados_obj.get(
+            "tensao_projeto"
+        )
+    )
+
+    pe_direito_salvo = (
+        dados_obj.get(
+            "pe_direito"
+        )
+    )
+
     renderizar_upload_dxf(
         dxf_bytes=dxf_bytes,
         dados_ambientes=dados_ambientes,
@@ -135,6 +151,13 @@ def renderizar_painel_principal():
         tabela_editada
     )
 
+    parametros_projeto = (
+        renderizar_parametros_projeto(
+            tensao_projeto_salva,
+            pe_direito_salvo
+        )
+    )
+
     local_qdc = renderizar_qdc(
         dados_ambientes,
         local_qdc_salvo
@@ -150,7 +173,9 @@ def renderizar_painel_principal():
     renderizar_materiais(
         tabela_editada,
         config_interruptores_usuario,
-        local_qdc
+        local_qdc,
+        tensao_projeto=parametros_projeto["tensao_projeto"],
+        pe_direito=parametros_projeto["pe_direito"]
     )
 
     renderizar_salvar_e_gerar_cad(
@@ -159,5 +184,7 @@ def renderizar_painel_principal():
         local_qdc=local_qdc,
         config_interruptores_usuario=(
             config_interruptores_usuario
-        )
+        ),
+        tensao_projeto=parametros_projeto["tensao_projeto"],
+        pe_direito=parametros_projeto["pe_direito"]
     )
