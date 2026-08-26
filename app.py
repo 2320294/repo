@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
 import os
+import json
 import pandas as pd
 from supabase import create_client, Client
 import motores
@@ -15,16 +16,35 @@ st.set_page_config(
 )
 
 # ============================================================
-# CREDENCIAIS DO SUPABASE
+# CREDENCIAIS DO SUPABASE (COM FALLBACK LOCAL SEGURO)
 # ============================================================
 SUPABASE_URL = "https://nqnqwddvguqvvzigtbkk.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xbnF3ZGR2Z3VxdnZ6aWd0YmtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTIxNzIsImV4cCI6MjEwMjcyODE3Mn0.leyI7ibfwJkm1ah3ny9SbahhieIfQR7jFMQoyhsl9kc"
 
 @st.cache_resource
 def init_supabase() -> Client:
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+    try:
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    except:
+        return None
 
 supabase = init_supabase()
+
+# Arquivo JSON local de segurança para contingência
+ARQUIVO_DB_LOCAL = "db_local_backup.json"
+
+def carregar_db_local():
+    if os.path.exists(ARQUIVO_DB_LOCAL):
+        try:
+            with open(ARQUIVO_DB_LOCAL, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {"usuarios": [], "projetos": []}
+
+def salvar_db_local(dados):
+    with open(ARQUIVO_DB_LOCAL, "w", encoding="utf-8") as f:
+        json.dump(dados, f, ensure_ascii=False, indent=4)
 
 # ============================================================
 # ESTADO DE SESSÃO
@@ -56,20 +76,36 @@ with st.sidebar:
                 if not login_email or not login_senha:
                     st.warning("Preencha o e-mail e a senha.")
                 else:
-                    try:
-                        response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
-                        dados_usuario = response.data
+                    sucesso_login = False
+                    nome_encontrado = ""
+                    
+                    # Tenta via Supabase
+                    if supabase is not None:
+                        try:
+                            response = supabase.table("usuarios").select("*").eq("email", login_email.strip()).execute()
+                            dados_usuario = response.data
+                            if dados_usuario and dados_usuario[0]["senha"] == login_senha:
+                                sucesso_login = True
+                                nome_encontrado = dados_usuario[0]["nome"]
+                        except:
+                            pass
+                            
+                    # Fallback local se falhar na rede
+                    if not sucesso_login:
+                        db_local = carregar_db_local()
+                        user_local = next((u for u in db_local["usuarios"] if u["email"] == login_email.strip() and u["senha"] == login_senha), None)
+                        if user_local:
+                            sucesso_login = True
+                            nome_encontrado = user_local["nome"]
 
-                        if dados_usuario and dados_usuario[0]["senha"] == login_senha:
-                            st.session_state.logged_in = True
-                            st.session_state.user_email = dados_usuario[0]["email"]
-                            st.session_state.user_name = dados_usuario[0]["nome"]
-                            st.success(f"Bem-vindo, {st.session_state.user_name}!")
-                            st.rerun()
-                        else:
-                            st.error("E-mail ou senha incorretos.")
-                    except Exception as e:
-                        st.error("Falha de conexão com a rede/banco. Verifique sua conexão com a internet.")
+                    if sucesso_login:
+                        st.session_state.logged_in = True
+                        st.session_state.user_email = login_email.strip()
+                        st.session_state.user_name = nome_encontrado
+                        st.success(f"Bem-vindo, {st.session_state.user_name}!")
+                        st.rerun()
+                    else:
+                        st.error("E-mail ou senha incorretos.")
 
         else:
             st.subheader("📝 Novo Cadastro")
@@ -81,19 +117,39 @@ with st.sidebar:
                 if not cad_nome or not cad_email or not cad_senha:
                     st.warning("Preencha todos os campos.")
                 else:
-                    try:
-                        check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
-                        if check.data:
+                    cadastrado = False
+                    # Tenta salvar no Supabase
+                    if supabase is not None:
+                        try:
+                            check = supabase.table("usuarios").select("email").eq("email", cad_email.strip()).execute()
+                            if check.data:
+                                st.error("E-mail já cadastrado.")
+                            else:
+                                supabase.table("usuarios").insert({
+                                    "nome": cad_nome.strip(),
+                                    "email": cad_email.strip(),
+                                    "senha": cad_senha
+                                }).execute()
+                                cadastrado = True
+                        except:
+                            pass
+
+                    # Salva no banco local de contingência se a rede falhar
+                    if not cadastrado:
+                        db_local = carregar_db_local()
+                        if any(u["email"] == cad_email.strip() for u in db_local["usuarios"]):
                             st.error("E-mail já cadastrado.")
                         else:
-                            supabase.table("usuarios").insert({
+                            db_local["usuarios"].append({
                                 "nome": cad_nome.strip(),
                                 "email": cad_email.strip(),
                                 "senha": cad_senha
-                            }).execute()
-                            st.success("Conta criada! Faça login ao lado.")
-                    except Exception as e:
-                        st.error("Erro ao conectar com o banco de dados.")
+                            })
+                            salvar_db_local(db_local)
+                            cadastrado = True
+
+                    if cadastrado:
+                        st.success("Conta criada com sucesso! Faça login ao lado.")
     else:
         st.markdown(f"👤 **Olá, {st.session_state.user_name}!**")
         st.caption(f"📧 `{st.session_state.user_email}`")
@@ -113,23 +169,42 @@ with st.sidebar:
             
             if btn_criar_proj:
                 if novo_proj_nome.strip():
-                    try:
-                        supabase.table("projetos").insert({
+                    criou_proj = False
+                    if supabase is not None:
+                        try:
+                            supabase.table("projetos").insert({
+                                "user_email": st.session_state.user_email,
+                                "nome_projeto": novo_proj_nome.strip()
+                            }).execute()
+                            criou_proj = True
+                        except:
+                            pass
+                            
+                    if not criou_proj:
+                        db_local = carregar_db_local()
+                        db_local["projetos"].append({
                             "user_email": st.session_state.user_email,
                             "nome_projeto": novo_proj_nome.strip()
-                        }).execute()
-                        st.success("Projeto cadastrado com sucesso!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error("Erro ao criar projeto.")
+                        })
+                        salvar_db_local(db_local)
+                        
+                    st.success("Projeto cadastrado com sucesso!")
+                    st.rerun()
                 else:
                     st.warning("Digite o nome do projeto.")
 
-        try:
-            res_proj = supabase.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
-            lista_projetos = res_proj.data
-        except:
-            lista_projetos = []
+        # Busca projetos salvos (Supabase + Local)
+        lista_projetos = []
+        if supabase is not None:
+            try:
+                res_proj = supabase.table("projetos").select("*").eq("user_email", st.session_state.user_email).execute()
+                lista_projetos = res_proj.data
+            except:
+                pass
+                
+        if not lista_projetos:
+            db_local = carregar_db_local()
+            lista_projetos = [p for p in db_local["projetos"] if p["user_email"] == st.session_state.user_email]
 
         st.markdown("### 📋 Seus Projetos Salvos:")
         if lista_projetos:
@@ -139,12 +214,18 @@ with st.sidebar:
             if st.button("🗑️ Apagar Projeto Selecionado", type="secondary"):
                 proj_alvo = next((p for p in lista_projetos if p["nome_projeto"] == projeto_selecionado), None)
                 if proj_alvo:
-                    try:
-                        supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
-                        st.success(f"Projeto '{projeto_selecionado}' apagado!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error("Erro ao apagar.")
+                    if "id" in proj_alvo and supabase is not None:
+                        try:
+                            supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
+                        except:
+                            pass
+                    else:
+                        db_local = carregar_db_local()
+                        db_local["projetos"] = [p for p in db_local["projetos"] if not (p["user_email"] == st.session_state.user_email and p["nome_projeto"] == projeto_selecionado)]
+                        salvar_db_local(db_local)
+                        
+                    st.success(f"Projeto '{projeto_selecionado}' apagado!")
+                    st.rerun()
         else:
             st.info("Nenhum projeto cadastrado ainda.")
             projeto_selecionado = "Nenhum"
