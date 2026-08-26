@@ -6,15 +6,15 @@ import os
 RAIO_CIRCULO_INTERRUPT = 0.15
 
 # ============================================================
-# DIMENSIONAMENTO DAS CARGAS (DINÂMICO)
+# DIMENSIONAMENTO DAS CARGAS (DINÂMICO EM WATTS)
 # ============================================================
 
 def dimensionar_cargas(nome, area, perimetro):
     if area <= 0 or perimetro <= 0:
         return {
-            "Qtd Ilum.": 0, "Pot. Unit. Ilum (VA)": 0, "Carga Ilum. (VA)": 0, 
-            "TUGs (Qtd)": 0, "Pot. Unit. TUG (VA)": 0, "Carga TUGs (VA)": 0, 
-            "Equipamento TUE": "-", "Qtd TUE": 0, "Pot. Unit. TUE (VA)": 0, "Carga TUE (VA)": 0
+            "Qtd Ilum.": 0, "Pot. Unit. Ilum (W)": 0, "Carga Ilum. (W)": 0, 
+            "TUGs (Qtd)": 0, "Pot. Unit. TUG (W)": 0, "Carga TUGs (W)": 0, 
+            "Equipamento TUE": "-", "Qtd TUE": 0, "Pot. Unit. TUE (W)": 0, "Carga TUE (W)": 0
         }
 
     qtd_ilum = 1 if area <= 10 else math.ceil(area / 10)
@@ -63,15 +63,15 @@ def dimensionar_cargas(nome, area, perimetro):
 
     return {
         "Qtd Ilum.": qtd_ilum,
-        "Pot. Unit. Ilum (VA)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
-        "Carga Ilum. (VA)": carga_ilum, 
+        "Pot. Unit. Ilum (W)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
+        "Carga Ilum. (W)": carga_ilum, 
         "TUGs (Qtd)": qtd_tugs, 
-        "Pot. Unit. TUG (VA)": 600 if is_umida else 100, 
-        "Carga TUGs (VA)": carga_tugs,
+        "Pot. Unit. TUG (W)": 600 if is_umida else 100, 
+        "Carga TUGs (W)": carga_tugs,
         "Equipamento TUE": tue_nome,
         "Qtd TUE": qtd_tue,
-        "Pot. Unit. TUE (VA)": round(carga_tue / max(1, qtd_tue)),
-        "Carga TUE (VA)": carga_tue
+        "Pot. Unit. TUE (W)": round(carga_tue / max(1, qtd_tue)),
+        "Carga TUE (W)": carga_tue
     }
 
 # ============================================================
@@ -323,9 +323,9 @@ def processar_dxf(caminho_arquivo):
         cargas = dimensionar_cargas(nome_ambiente, area, perimetro)
         resultados.append({
             "Ambiente": nome_ambiente, "Centro_X": (min_x+max_x)/2, "Centro_Y": (min_y+max_y)/2, "Área (m²)": area, "Perímetro (m)": perimetro,
-            "Qtd Ilum.": int(cargas["Qtd Ilum."]), "Pot. Unit. Ilum (VA)": int(cargas["Pot. Unit. Ilum (VA)"]), "Carga Ilum. (VA)": int(cargas["Carga Ilum. (VA)"]),
-            "TUGs (Qtd)": int(cargas["TUGs (Qtd)"]), "Pot. Unit. TUG (VA)": int(cargas["Pot. Unit. TUG (VA)"]), "Carga TUGs (VA)": int(cargas["Carga TUGs (VA)"]),
-            "Equipamento TUE": cargas["Equipamento TUE"], "Qtd TUE": int(cargas["Qtd TUE"]), "Pot. Unit. TUE (VA)": int(cargas["Pot. Unit. TUE (VA)"]), "Carga TUE (VA)": int(cargas["Carga TUE (VA)"])
+            "Qtd Ilum.": int(cargas["Qtd Ilum."]), "Pot. Unit. Ilum (W)": int(cargas["Pot. Unit. Ilum (W)"]), "Carga Ilum. (W)": int(cargas["Carga Ilum. (W)"]),
+            "TUGs (Qtd)": int(cargas["TUGs (Qtd)"]), "Pot. Unit. TUG (W)": int(cargas["Pot. Unit. TUG (W)"]), "Carga TUGs (W)": int(cargas["Carga TUGs (W)"]),
+            "Equipamento TUE": cargas["Equipamento TUE"], "Qtd TUE": int(cargas["Qtd TUE"]), "Pot. Unit. TUE (W)": int(cargas["Pot. Unit. TUE (W)"]), "Carga TUE (W)": int(cargas["Carga TUE (W)"])
         })
     return resultados
 
@@ -449,12 +449,12 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc, config_interruptore
 
             # ILUMINAÇÃO
             qtd_ilum = int(row_data.get('Qtd Ilum.', 1))
-            pot_ilum_unit = int(row_data.get('Pot. Unit. Ilum (VA)', 100))
+            pot_ilum_unit = int(row_data.get('Pot. Unit. Ilum (W)', 100))
             if qtd_ilum > 0:
                 pontos_luz = [(centro_x, centro_y)] if qtd_ilum == 1 else [(min_x + (largura / (qtd_ilum + 1)) * i, centro_y) for i in range(1, qtd_ilum + 1)] if largura >= comprimento else [(centro_x, min_y + (comprimento / (qtd_ilum + 1)) * i) for i in range(1, qtd_ilum + 1)]
                 for lx, ly in pontos_luz:
                     msp.add_circle(center=(lx, ly), radius=0.25, dxfattribs={'layer': 'PROJ_ELETRICA_LUZ'})
-                    msp.add_text(f"{pot_ilum_unit}VA", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
+                    msp.add_text(f"{pot_ilum_unit}W", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'insert': (lx + 0.3, ly - 0.07)})
                     msp.add_text("a", dxfattribs={'layer': 'PROJ_ELETRICA_TEXTO', 'height': 0.15, 'color': 2, 'insert': (lx + 0.3, ly + 0.15)})
 
             # RENDERIZAÇÃO DO QDC
@@ -520,7 +520,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc, config_interruptore
             # TOMADAS TUE
             qtd_tue = int(row_data.get('Qtd TUE', row_data.get('TUE', 0)))
             eq_tue_nome = str(row_data.get('Equipamento TUE', '-'))
-            pot_tue_val = int(row_data.get('Pot. Unit. TUE (VA)', 0))
+            pot_tue_val = int(row_data.get('Pot. Unit. TUE (W)', 0))
             if pot_tue_val == 0:
                 eq_lower = eq_tue_nome.lower()
                 pot_tue_val = 5500 if "chuveiro" in eq_lower else 1200 if "ar" in eq_lower else 2000 if "micro" in eq_lower or "forno" in eq_lower else 1000
