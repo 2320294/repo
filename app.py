@@ -2,6 +2,7 @@ import streamlit as st
 import tempfile
 import os
 import pandas as pd
+import json
 from supabase import create_client, Client
 import motores
 
@@ -173,6 +174,7 @@ with st.sidebar:
                 if proj_alvo and supabase is not None:
                     try:
                         supabase.table("projetos").delete().eq("id", proj_alvo["id"]).execute()
+                        supabase.table("dados_projetos").delete().eq("user_email", st.session_state.user_email).eq("nome_projeto", projeto_selecionado).execute()
                         st.session_state.projeto_ativo = "Selecione um projeto..."
                         st.success(f"Projeto '{projeto_selecionado}' apagado!")
                         st.rerun()
@@ -195,29 +197,62 @@ if not st.session_state.logged_in:
 st.title(f"⚡ Painel de Projetos Elétricos — Olá, {st.session_state.user_name}!")
 
 if st.session_state.projeto_ativo == "Selecione um projeto...":
-    st.info("👈 Por favor, **selecione um projeto** na barra lateral ou cadastre um novo para iniciar o dimensionamento e envio do DXF.")
+    st.info("👈 Por favor, **selecione um projeto** na barra lateral ou cadastre um novo para iniciar o dimensionamento.")
     st.stop()
 
 st.info(f"📁 **Projeto Ativo:** {st.session_state.projeto_ativo}")
 
-# Upload do arquivo DXF da planta baixa
-st.subheader("📁 Projeto Unifilar (DXF)")
-uploaded_file = st.file_uploader("Envie a planta base (formato DXF):", type=["dxf"])
+# Busca dados salvos do projeto no Supabase
+dados_salvos_db = None
+if supabase is not None:
+    try:
+        res_dados = supabase.table("dados_projetos").select("*").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
+        if res_dados.data:
+            dados_salvos_db = res_dados.data[0]
+    except Exception:
+        pass
 
+dxf_bytes = None
 dados_ambientes = []
 
-if uploaded_file is not None:
-    dxf_bytes = uploaded_file.read()
+if dados_salvos_db and dados_salvos_db.get("tabela_editada"):
+    st.success("📂 Dados carregados do projeto salvo anteriormente!")
+    dados_ambientes = dados_salvos_db["tabela_editada"]
+    
+    # Recupera o DXF salvo se houver
+    if dados_salvos_db.get("dxf_bytes"):
+        # Se estiver armazenado como hex ou bytes
+        try:
+            dxf_bytes = bytes.fromhex(dados_salvos_db["dxf_bytes"]) if isinstance(dados_salvos_db["dxf_bytes"], str) else bytes(dados_salvos_db["dxf_bytes"])
+        except:
+            dxf_bytes = None
+            
+    if st.checkbox("🔄 Deseja enviar um novo arquivo DXF para substituir a planta base?"):
+        uploaded_file = st.file_uploader("Envie a nova planta base (formato DXF):", type=["dxf"])
+        if uploaded_file is not None:
+            dxf_bytes = uploaded_file.read()
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+                    tmp.write(dxf_bytes)
+                    tmp_path = tmp.name
+                dados_ambientes = motores.processar_dxf(tmp_path)
+                os.remove(tmp_path)
+            except Exception as e:
+                st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
+else:
+    st.subheader("📁 Projeto Unifilar (DXF)")
+    uploaded_file = st.file_uploader("Envie a planta base (formato DXF):", type=["dxf"])
 
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
-            tmp.write(dxf_bytes)
-            tmp_path = tmp.name
-
-        dados_ambientes = motores.processar_dxf(tmp_path)
-        os.remove(tmp_path)
-    except Exception as e:
-        st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
+    if uploaded_file is not None:
+        dxf_bytes = uploaded_file.read()
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".dxf") as tmp:
+                tmp.write(dxf_bytes)
+                tmp_path = tmp.name
+            dados_ambientes = motores.processar_dxf(tmp_path)
+            os.remove(tmp_path)
+        except Exception as e:
+            st.error(f"❌ Erro ao processar o arquivo DXF: {e}")
 
 if dados_ambientes:
     dados_ambientes = sorted(dados_ambientes, key=lambda x: x['Ambiente'])
@@ -233,19 +268,19 @@ if dados_ambientes:
             c1, c2, c3, c4, c5, c6 = st.columns(6)
 
             with c1:
-                q_ilum = st.number_input(f"Qtd Ilum", min_value=0, value=row["Qtd Ilum."], key=f"ilum_{row['Ambiente']}")
+                q_ilum = st.number_input(f"Qtd Ilum", min_value=0, value=int(row.get("Qtd Ilum.", 1)), key=f"ilum_{row['Ambiente']}")
             with c2:
-                p_ilum = st.number_input(f"Pot Ilum (W)", min_value=0, value=row["Pot. Unit. Ilum (W)"], key=f"pilum_{row['Ambiente']}")
+                p_ilum = st.number_input(f"Pot Ilum (W)", min_value=0, value=int(row.get("Pot. Unit. Ilum (W)", 100)), key=f"pilum_{row['Ambiente']}")
             with c3:
-                qtd_tugs = st.number_input(f"Qtd TUGs", min_value=0, value=row["TUGs (Qtd)"], key=f"tugs_{row['Ambiente']}")
+                qtd_tugs = st.number_input(f"Qtd TUGs", min_value=0, value=int(row.get("TUGs (Qtd)", 1)), key=f"tugs_{row['Ambiente']}")
             with c4:
-                pot_tug_unit = st.number_input(f"Pot TUG (W)", min_value=0, value=row["Pot. Unit. TUG (W)"], key=f"ptug_{row['Ambiente']}")
+                pot_tug_unit = st.number_input(f"Pot TUG (W)", min_value=0, value=int(row.get("Pot. Unit. TUG (W)", 100)), key=f"ptug_{row['Ambiente']}")
             with c5:
-                qtd_tue = st.number_input(f"Qtd TUE", min_value=0, value=row["Qtd TUE"], key=f"tue_{row['Ambiente']}")
+                qtd_tue = st.number_input(f"Qtd TUE", min_value=0, value=int(row.get("Qtd TUE", 0)), key=f"tue_{row['Ambiente']}")
             with c6:
-                pot_tue_unit = st.number_input(f"Pot TUE (W)", min_value=0, value=row["Pot. Unit. TUE (W)"], key=f"ptue_{row['Ambiente']}")
+                pot_tue_unit = st.number_input(f"Pot TUE (W)", min_value=0, value=int(row.get("Pot. Unit. TUE (W)", 0)), key=f"ptue_{row['Ambiente']}")
 
-            eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=row["Equipamento TUE"], key=f"eq_{row['Ambiente']}")
+            eq_tue = st.text_input(f"Equipamento TUE ({row['Ambiente']})", value=str(row.get("Equipamento TUE", "-")), key=f"eq_{row['Ambiente']}")
 
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
@@ -272,7 +307,9 @@ if dados_ambientes:
         "Pot. Unit. TUG (W)", "Carga TUGs (W)", 
         "Pot. Unit. TUE (W)", "Carga TUE (W)"
     ]
-    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_consolidado.columns]).copy()
+    df_exibicao = df_consolidado.drop(columns=[col for col in colunas_para_ocultar if col in df_exibicao.columns if col in df_exibicao.columns]).copy()
+    if "Centro_X" in df_exibicao.columns: df_exibicao = df_exibicao.drop(columns=["Centro_X"])
+    if "Centro_Y" in df_exibicao.columns: df_exibicao = df_exibicao.drop(columns=["Centro_Y"])
 
     df_exibicao["Área (m²)"] = df_exibicao["Área (m²)"].round(2)
     df_exibicao["Perímetro (m)"] = df_exibicao["Perímetro (m)"].round(2)
@@ -370,6 +407,31 @@ if dados_ambientes:
     st.divider()
     st.subheader("🖨️ Exportação e Relatórios")
 
+    # Botão para salvar o progresso atual no Supabase
+    if st.button("💾 Salvar Alterações do Projeto na Nuvem", use_container_width=True):
+        if supabase is not None:
+            try:
+                payload = {
+                    "user_email": st.session_state.user_email,
+                    "nome_projeto": st.session_state.projeto_ativo,
+                    "tabela_editada": tabela_editada,
+                    "local_qdc": local_qdc,
+                    "config_interruptores": config_interruptores_usuario
+                }
+                if dxf_bytes:
+                    payload["dxf_bytes"] = dxf_bytes.hex()
+
+                # Verifica se já existe registro
+                res_check = supabase.table("dados_projetos").select("id").eq("user_email", st.session_state.user_email).eq("nome_projeto", st.session_state.projeto_ativo).execute()
+                if res_check.data:
+                    supabase.table("dados_projetos").update(payload).eq("id", res_check.data[0]["id"]).execute()
+                else:
+                    supabase.table("dados_projetos").insert(payload).execute()
+                
+                st.success("✅ Projeto salvo com sucesso na nuvem!")
+            except Exception as e:
+                st.error(f"❌ Erro ao salvar dados: {e}")
+
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         if st.button("📊 Baixar Planilha (Excel)", use_container_width=True):
@@ -381,23 +443,27 @@ if dados_ambientes:
     # Botão de geração do projeto CAD em DXF
     st.markdown("### Projeto Unifilar (DXF)")
     if st.button("🚀 Gerar CAD (Atualizado)", type="primary", use_container_width=True):
-        try:
-            cad_bytes_out = motores.gerar_cad_unifilar(
-                dxf_bytes=dxf_bytes,
-                dados_editados=tabela_editada,
-                local_qdc=local_qdc,
-                config_interruptores=config_interruptores_usuario
-            )
+        if not dxf_bytes:
+            st.error("❌ Nenhum arquivo DXF associado a este projeto. Por favor, envie um arquivo DXF.")
+        else:
+            try:
+                cad_bytes_out = motores.gerar_cad_unifilar(
+                    dxf_bytes=dxf_bytes,
+                    dados_editados=tabela_editada,
+                    local_qdc=local_qdc,
+                    config_interruptores=config_interruptores_usuario
+                )
 
-            st.success("✅ Projeto CAD gerado com sucesso!")
-            st.download_button(
-                label="📥 Baixar Projeto DXF Atualizado",
-                data=cad_bytes_out,
-                file_name="Projeto_Eletrico.dxf",
-                mime="application/dxf",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"❌ Erro ao gerar o arquivo CAD: {e}")
+                st.success("✅ Projeto CAD gerado com sucesso!")
+                st.download_button(
+                    label="📥 Baixar Projeto DXF Atualizado",
+                    data=cad_bytes_out,
+                    file_name="Projeto_Eletrico.dxf",
+                    mime="application/dxf",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"❌ Erro ao gerar o arquivo CAD: {e}")
 else:
-    st.info("👆 Envie um arquivo `.dxf` válido na opção acima para carregar o projeto e iniciar o dimensionamento.")
+    if dados_salvos_db is None:
+        st.info("👆 Envie um arquivo `.dxf` válido na opção acima para carregar o projeto e iniciar o dimensionamento.")
