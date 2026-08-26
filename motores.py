@@ -61,12 +61,14 @@ def dimensionar_cargas(nome, area, perimetro):
         qtd_tue = 1
         carga_tue = 1000
 
+    pot_tug_unit = 600 if is_umida else 100
+
     return {
         "Qtd Ilum.": qtd_ilum,
         "Pot. Unit. Ilum (W)": round(carga_ilum / qtd_ilum) if qtd_ilum > 0 else 0,
         "Carga Ilum. (W)": carga_ilum, 
         "TUGs (Qtd)": qtd_tugs, 
-        "Pot. Unit. TUG (W)": 600 if is_umida else 100, 
+        "Pot. Unit. TUG (W)": pot_tug_unit, 
         "Carga TUGs (W)": carga_tugs,
         "Equipamento TUE": tue_nome,
         "Qtd TUE": qtd_tue,
