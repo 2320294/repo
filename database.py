@@ -99,7 +99,7 @@ def buscar_projeto(email, nome_projeto):
         .select(
             "id,user_email,nome_projeto,dxf_bytes,"
             "tabela_editada,local_qdc,config_interruptores,"
-            "created_at"
+            "tensao_projeto,pe_direito,created_at"
         )
         .eq("user_email", email)
         .eq("nome_projeto", nome_projeto)
@@ -147,7 +147,9 @@ def criar_projeto(email, nome_projeto):
             "dxf_bytes": None,
             "tabela_editada": [],
             "local_qdc": None,
-            "config_interruptores": {}
+            "config_interruptores": {},
+            "tensao_projeto": 110,
+            "pe_direito": 2.80
         })
         .execute()
     )
@@ -181,7 +183,9 @@ def salvar_dados_projeto(
     dxf_bytes=None,
     tabela_editada=None,
     local_qdc=None,
-    config_interruptores=None
+    config_interruptores=None,
+    tensao_projeto=None,
+    pe_direito=None
 ):
     existentes = (
         _db()
@@ -210,6 +214,16 @@ def salvar_dados_projeto(
     if config_interruptores is not None:
         registro["config_interruptores"] = (
             config_interruptores
+        )
+
+    if tensao_projeto is not None:
+        registro["tensao_projeto"] = int(
+            tensao_projeto
+        )
+
+    if pe_direito is not None:
+        registro["pe_direito"] = float(
+            pe_direito
         )
 
     if existentes.data:

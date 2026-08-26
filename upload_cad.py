@@ -149,7 +149,9 @@ def renderizar_salvar_e_gerar_cad(
     dxf_bytes,
     tabela_editada,
     local_qdc,
-    config_interruptores_usuario
+    config_interruptores_usuario,
+    tensao_projeto,
+    pe_direito
 ):
     st.divider()
 
@@ -169,7 +171,9 @@ def renderizar_salvar_e_gerar_cad(
                 local_qdc=local_qdc,
                 config_interruptores=(
                     config_interruptores_usuario
-                )
+                ),
+                tensao_projeto=tensao_projeto,
+                pe_direito=pe_direito
             )
 
             st.success(
@@ -207,7 +211,9 @@ def renderizar_salvar_e_gerar_cad(
                     local_qdc=local_qdc,
                     config_interruptores=(
                         config_interruptores_usuario
-                    )
+                    ),
+                    tensao_projeto=tensao_projeto,
+                    pe_direito=pe_direito
                 )
 
                 cad_bytes_out = (

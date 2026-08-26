@@ -21,9 +21,7 @@ import streamlit as st
 # projeto.
 # ============================================================
 
-TENSAO_ILUMINACAO = 127
-TENSAO_TUG = 127
-TENSAO_TUE = 220
+# Tensões agora vêm dos parâmetros do projeto
 
 FOLGA_CABOS = 1.15
 FOLGA_ELETRODUTO = 1.10
@@ -153,7 +151,7 @@ def _distancia_qdc_ambiente(
 
 def _bitola_tue(
     potencia_w,
-    tensao=TENSAO_TUE
+    tensao=220
 ):
     """
     Seleção preliminar/conservadora para circuito TUE.
@@ -217,7 +215,8 @@ def _disjuntor_por_corrente(
 def _comprimento_estimado_circuito(
     row,
     centro_qdc,
-    adicional_ambiente=0.0
+    adicional_ambiente=0.0,
+    pe_direito=2.80
 ):
     distancia = (
         _distancia_qdc_ambiente(
@@ -233,6 +232,12 @@ def _comprimento_estimado_circuito(
         )
     )
 
+    # Acrescenta uma subida/descida vertical aproximada.
+    adicional_vertical = max(
+        0.0,
+        pe_direito - 1.10
+    )
+
     return max(
         1.0,
         distancia
@@ -240,6 +245,8 @@ def _comprimento_estimado_circuito(
         adicional_ambiente
         +
         perimetro * 0.25
+        +
+        adicional_vertical
     )
 
 
@@ -277,9 +284,22 @@ def _adicionar_material(
 def calcular_quantitativo_materiais(
     tabela_editada,
     config_interruptores_usuario,
-    local_qdc=None
+    local_qdc=None,
+    tensao_projeto=110,
+    pe_direito=2.80
 ):
     materiais = []
+
+    tensao_projeto = int(
+        tensao_projeto
+        if tensao_projeto in [110, 220]
+        else 110
+    )
+
+    pe_direito = max(
+        2.0,
+        float(pe_direito)
+    )
 
     centro_qdc = _centro_qdc(
         tabela_editada,
@@ -526,7 +546,8 @@ def calcular_quantitativo_materiais(
                 _comprimento_estimado_circuito(
                     row,
                     centro_qdc,
-                    adicional_ambiente=1.5
+                    adicional_ambiente=1.5,
+                    pe_direito=pe_direito
                 )
             )
 
@@ -555,8 +576,8 @@ def calcular_quantitativo_materiais(
             corrente = (
                 potencia
                 /
-                TENSAO_ILUMINACAO
-                if TENSAO_ILUMINACAO
+                tensao_projeto
+                if tensao_projeto
                 else 0
             )
 
@@ -587,7 +608,8 @@ def calcular_quantitativo_materiais(
                 _comprimento_estimado_circuito(
                     row,
                     centro_qdc,
-                    adicional_ambiente=2.0
+                    adicional_ambiente=2.0,
+                    pe_direito=pe_direito
                 )
             )
 
@@ -615,8 +637,8 @@ def calcular_quantitativo_materiais(
             corrente = (
                 potencia
                 /
-                TENSAO_TUG
-                if TENSAO_TUG
+                tensao_projeto
+                if tensao_projeto
                 else 0
             )
 
@@ -646,7 +668,7 @@ def calcular_quantitativo_materiais(
             bitola = (
                 _bitola_tue(
                     potencia,
-                    TENSAO_TUE
+                    tensao_projeto
                 )
             )
 
@@ -654,7 +676,8 @@ def calcular_quantitativo_materiais(
                 _comprimento_estimado_circuito(
                     row,
                     centro_qdc,
-                    adicional_ambiente=1.0
+                    adicional_ambiente=1.0,
+                    pe_direito=pe_direito
                 )
             )
 
@@ -683,8 +706,8 @@ def calcular_quantitativo_materiais(
             corrente = (
                 potencia
                 /
-                TENSAO_TUE
-                if TENSAO_TUE
+                tensao_projeto
+                if tensao_projeto
                 else 0
             )
 
@@ -817,7 +840,7 @@ def calcular_quantitativo_materiais(
     corrente_geral = (
         potencia_total
         /
-        220
+        tensao_projeto
         if potencia_total > 0
         else 0
     )
@@ -969,7 +992,9 @@ def calcular_quantitativo_materiais(
 def renderizar_materiais(
     tabela_editada,
     config_interruptores_usuario,
-    local_qdc=None
+    local_qdc=None,
+    tensao_projeto=110,
+    pe_direito=2.80
 ):
     st.divider()
 
@@ -981,11 +1006,15 @@ def renderizar_materiais(
         calcular_quantitativo_materiais(
             tabela_editada,
             config_interruptores_usuario,
-            local_qdc
+            local_qdc,
+            tensao_projeto,
+            pe_direito
         )
     )
 
     st.caption(
+        f"Parâmetros usados: alimentação {int(tensao_projeto)} V | "
+        f"pé-direito {float(pe_direito):.2f} m. "
         "Quantidades de pontos e caixas são calculadas diretamente do projeto. "
         "Comprimentos de cabos/eletrodutos e alguns dispositivos de proteção "
         "ainda são pré-dimensionamentos, pois o CAD ainda não possui o "
