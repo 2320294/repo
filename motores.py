@@ -1332,22 +1332,32 @@ def gerar_cad_unifilar(
                     ambientes_adjacentes.append(poly)
 
             # ------------------------------------------------
-            # Vetor P2 -> P3.
-            # Ele representa a largura da abertura/soleira.
+            # VETOR DA SOLEIRA: P1 -> P2
+            #
+            # IMPORTANTE:
+            # Os círculos devem ficar TANGENTES exatamente nos
+            # pontos P2 e P3 e avançar para dentro de cada
+            # ambiente. Portanto, a normal usada para deslocar
+            # o centro do círculo deve ser PERPENDICULAR À
+            # SOLEIRA (P1 -> P2), e não perpendicular a P2 -> P3.
+            #
+            # Era justamente isso que fazia os dois círculos
+            # aparecerem alinhados pelo mesmo P3 na versão
+            # anterior.
             # ------------------------------------------------
-            abertura_vx = p3[0] - p2[0]
-            abertura_vy = p3[1] - p2[1]
+            soleira_vx = p2[0] - p1[0]
+            soleira_vy = p2[1] - p1[1]
 
-            abertura_len = math.hypot(
-                abertura_vx,
-                abertura_vy
+            soleira_len = math.hypot(
+                soleira_vx,
+                soleira_vy
             )
 
-            if abertura_len == 0:
+            if soleira_len == 0:
                 continue
 
-            abertura_vx /= abertura_len
-            abertura_vy /= abertura_len
+            soleira_vx /= soleira_len
+            soleira_vy /= soleira_len
 
             # ------------------------------------------------
             # Desenha círculo SOMENTE no ponto indicado e no
@@ -1364,8 +1374,8 @@ def gerar_cad_unifilar(
                 ) / len(poly)
 
                 nx, ny = get_inside_normal(
-                    abertura_vx,
-                    abertura_vy,
+                    soleira_vx,
+                    soleira_vy,
                     ponto[0],
                     ponto[1],
                     cx,
@@ -1395,8 +1405,12 @@ def gerar_cad_unifilar(
             # ------------------------------------------------
             # Quando existem dois ambientes adjacentes:
             #
-            # P2 recebe o círculo no ambiente de um lado.
-            # P3 recebe o círculo no ambiente do outro lado.
+            # P2 recebe um círculo TANGENTE EM P2.
+            # P3 recebe outro círculo TANGENTE EM P3.
+            #
+            # O ponto de tangência fica exatamente em P2/P3;
+            # o centro é deslocado somente pelo raio, na normal
+            # da soleira para dentro do ambiente correspondente.
             #
             # P1 e P4 NÃO recebem círculo.
             # ------------------------------------------------
@@ -1414,8 +1428,8 @@ def gerar_cad_unifilar(
                 ) / len(poly_a)
 
                 nx_a, ny_a = get_inside_normal(
-                    abertura_vx,
-                    abertura_vy,
+                    soleira_vx,
+                    soleira_vy,
                     p2[0],
                     p2[1],
                     cx_a,
