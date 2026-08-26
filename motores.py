@@ -184,7 +184,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
         camadas_vazias = [cam for cam, qtd in contagem_camadas.items() if qtd == 0]
         if camadas_vazias:
             raise ValueError(
-                f"❌ Erro de Geração du CAD: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
+                f"❌ Erro de Validação do CAD: A(s) seguinte(s) camada(s) obrigatória(s) está(ão) vazia(s) ou ausente(s): {', '.join(camadas_vazias)}. "
                 f"Verifique se os elementos estão corretamente posicionados em suas camadas antes de processar."
             )
         
@@ -231,7 +231,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                     pts = [(p[0], p[1]) for p in entity.get_points(format='xy')]
                     if len(pts) >= 2: soleiras_raw.append({'p1': pts[0], 'p2': pts[-1]})
 
-        # 1. IGNORA SOLEIRAS SEM PORTAS (Tolerância restrita a 0.15m)
+        # 1. IGNORA SOLEIRAS SEM PORTAS (Tolerância estrita a 0.15m)
         soleiras_com_porta = []
         for s in soleiras_raw:
             s_p1, s_p2 = s['p1'], s['p2']
@@ -251,7 +251,7 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
 
         raio_circulo = 0.15
 
-        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (USANDO O PONTO MÉDIO DA SOLEIRA PARA ALINHAMENTO PERFEITO)
+        # 2. PROCESSA CADA SOLEIRA COM PORTA VÁLIDA (USANDO EXTREMIDADE OPOSTA À DOBRADIÇA COMO ÂNCORA)
         for item in soleiras_com_porta:
             s = item['s']
             p_porta = item['porta']
@@ -268,26 +268,25 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 if min(xs) - 0.5 <= sm_x <= max(xs) + 0.5 and min(ys) - 0.5 <= sm_y <= max(ys) + 0.5:
                     ambientes_adjacentes.append(poly)
             
-            pm_porta_x = (p_porta['p1'][0] + p_porta['p2'][0]) / 2
-            pm_porta_y = (p_porta['p1'][1] + p_porta['p2'][1]) / 2
+            # Descobre qual extremidade da porta está mais próxima de cada ponta da soleira
+            # A extremidade da porta mais próxima de uma ponta da soleira indica a dobradiça naquele lado
+            d_p1_s1 = math.hypot(p_porta['p1'][0] - s_p1[0], p_porta['p1'][1] - s_p1[1])
+            d_p1_s2 = math.hypot(p_porta['p1'][0] - s_p2[0], p_porta['p1'][1] - s_p2[1])
             
-            d1 = math.hypot(s_p1[0] - pm_porta_x, s_p1[1] - pm_porta_y)
-            d2 = math.hypot(s_p2[0] - pm_porta_x, s_p2[1] - pm_porta_y)
-            
-            ponto_oposto_1 = s_p2 if d1 < d2 else s_p1
-            ponto_oposto_2 = s_p1 if d1 < d2 else s_p2
+            # A extremidade OPSTA à dobradiça é a ponta da soleira mais distante da dobradiça da porta
+            ponto_ancora_1 = s_p2 if d_p1_s1 < d_p1_s2 else s_p1
+            ponto_ancora_2 = s_p1 if d_p1_s1 < d_p1_s2 else s_p2
             
             if len(ambientes_adjacentes) >= 2:
-                pontos_opostos = [ponto_oposto_1, ponto_oposto_2]
+                ancoras = [ponto_ancora_1, ponto_ancora_2]
                 for idx, poly in enumerate(ambientes_adjacentes[:2]):
-                    p_op = pontos_opostos[idx]
+                    p_op = ancoras[idx]
                     cx = sum([pt[0] for pt in poly]) / len(poly)
                     cy = sum([pt[1] for pt in poly]) / len(poly)
                     
-                    # Baseia o deslocamento no ponto médio da soleira se afastando da porta, garantindo que caiba no ambiente
-                    nx, ny = get_inside_normal(vx, vy, sm_x, sm_y, cx, cy)
-                    final_x = sm_x + nx * raio_circulo
-                    final_y = sm_y + ny * raio_circulo
+                    nx, ny = get_inside_normal(vx, vy, p_op[0], p_op[1], cx, cy)
+                    final_x = p_op[0] + nx * raio_circulo
+                    final_y = p_op[1] + ny * raio_circulo
                     
                     if ponto_em_poligono(final_x, final_y, poly):
                         msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
@@ -296,9 +295,9 @@ def gerar_cad_unifilar(dxf_bytes, dados_editados, local_qdc):
                 cx = sum([pt[0] for pt in poly]) / len(poly)
                 cy = sum([pt[1] for pt in poly]) / len(poly)
                 
-                nx, ny = get_inside_normal(vx, vy, sm_x, sm_y, cx, cy)
-                final_x = sm_x + nx * raio_circulo
-                final_y = sm_y + ny * raio_circulo
+                nx, ny = get_inside_normal(vx, vy, ponto_ancora_1[0], ponto_ancora_1[1], cx, cy)
+                final_x = ponto_ancora_1[0] + nx * raio_circulo
+                final_y = ponto_ancora_1[1] + ny * raio_circulo
                 
                 if ponto_em_poligono(final_x, final_y, poly):
                     msp.add_circle(center=(final_x, final_y), radius=raio_circulo, dxfattribs={'layer': 'PROJ_ELETRICA_DEBUG', 'color': 6})
