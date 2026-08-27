@@ -19,6 +19,10 @@ from painel import (
     renderizar_painel_principal
 )
 
+from tema_login import (
+    aplicar_fundo_login
+)
+
 
 # ============================================================
 # CONFIGURAÇÃO INICIAL
@@ -26,6 +30,10 @@ from painel import (
 
 configurar_pagina()
 inicializar_estado_sessao()
+
+# Fundo personalizado somente na tela de login.
+if not st.session_state.logged_in:
+    aplicar_fundo_login()
 
 
 # ============================================================
