@@ -14,6 +14,8 @@ def inicializar_estado_sessao():
         "user_name": "",
         "projeto_ativo": "Selecione um projeto...",
         "menu_login": "🔒  Login",
+        "auth_view": "login",
+        "ultimo_menu_login": "🔒  Login",
     }
 
     for chave, valor in valores_padrao.items():
@@ -27,52 +29,55 @@ def fazer_logout():
     st.session_state.user_name = ""
     st.session_state.projeto_ativo = "Selecione um projeto..."
     st.session_state.menu_login = "🔒  Login"
+    st.session_state.auth_view = "login"
+    st.session_state.ultimo_menu_login = "🔒  Login"
 
 
 def renderizar_menu_login():
     logo_b64 = obter_logo_base64()
 
-    if logo_b64:
-        st.markdown(
-            f"""
-            <div class="ae-brand">
-                <img src="data:image/png;base64,{logo_b64}" alt="AutoElétrica">
-                <div class="ae-brand-subtitle">Projetos Elétricos</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    # IMPORTANTE: todo o menu de autenticação precisa ser renderizado
+    # dentro do st.sidebar. Sem isso, o Streamlit coloca logo/menu na
+    # área principal, que foi o problema visual da versão anterior.
+    with st.sidebar:
+        if logo_b64:
+            st.markdown(
+                f"""
+                <div class="ae-brand">
+                    <img src="data:image/png;base64,{logo_b64}" alt="AutoElétrica">
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                """
+                <div class="ae-brand ae-brand-fallback">
+                    ⚡ AutoElétrica
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        menu = st.radio(
+            "Navegação",
+            [
+                "🔒  Login",
+                "ⓘ  Sobre o sistema",
+            ],
+            key="menu_login",
+            label_visibility="collapsed",
         )
-    else:
+
         st.markdown(
             """
-            <div class="ae-brand">
-                <h2 style="color:white;margin:0">⚡ AutoElétrica</h2>
-                <div class="ae-brand-subtitle">Projetos Elétricos</div>
+            <div class="ae-sidebar-footer">
+                <div>© 2026 AutoElétrica</div>
+                <div>Todos os direitos reservados.</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-    menu = st.radio(
-        "Navegação",
-        [
-            "🔒  Login",
-            "👤  Cadastro",
-            "ⓘ  Sobre o sistema",
-        ],
-        key="menu_login",
-        label_visibility="collapsed",
-    )
-
-    st.markdown(
-        """
-        <div class="ae-sidebar-footer">
-            <div>© 2026 AutoElétrica</div>
-            <div>Todos os direitos reservados.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
     return menu
 
@@ -169,11 +174,20 @@ def _renderizar_cadastro():
                     )
                     if ok:
                         st.success(mensagem)
-                        st.info("Cadastro concluído. Selecione Login no menu lateral para entrar.")
+                        st.info("Cadastro concluído. Volte ao login e entre com sua nova conta.")
                     else:
                         st.error(mensagem)
                 except Exception as e:
                     st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
+
+            st.markdown('<div class="ae-auth-switch-label">Já possui uma conta?</div>', unsafe_allow_html=True)
+            if st.button(
+                "Voltar para o login",
+                key="voltar_login_cadastro",
+                use_container_width=True,
+            ):
+                st.session_state.auth_view = "login"
+                st.rerun()
 
 
 def _renderizar_sobre_o_sistema():
@@ -272,15 +286,37 @@ def _renderizar_formulario_login():
                 unsafe_allow_html=True,
             )
 
+            st.markdown(
+                '<div class="ae-auth-switch-label">Ainda não possui uma conta?</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "Criar cadastro",
+                key="abrir_cadastro_login",
+                use_container_width=True,
+            ):
+                st.session_state.auth_view = "cadastro"
+                st.rerun()
+
 
 def renderizar_pagina_login():
     menu = renderizar_menu_login()
+
+    # Se o usuário saiu de "Sobre o sistema" e clicou novamente em Login,
+    # volta sempre ao formulário de login principal.
+    menu_anterior = st.session_state.get("ultimo_menu_login", "🔒  Login")
+    if menu != menu_anterior:
+        if menu == "🔒  Login":
+            st.session_state.auth_view = "login"
+        st.session_state.ultimo_menu_login = menu
 
     if menu == "ⓘ  Sobre o sistema":
         _renderizar_sobre_o_sistema()
         return
 
-    if menu == "👤  Cadastro":
+    # O cadastro não aparece mais na barra lateral. Ele é acessado
+    # a partir do próprio card de login, como na primeira versão.
+    if st.session_state.get("auth_view", "login") == "cadastro":
         _renderizar_cadastro()
         return
 

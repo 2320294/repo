@@ -78,16 +78,16 @@ def aplicar_fundo_login():
         section[data-testid="stSidebar"] {{
             background: var(--ae-navy) !important;
             border-right: 0 !important;
-            min-width: 308px !important;
-            max-width: 308px !important;
-            width: 308px !important;
+            min-width: 310px !important;
+            max-width: 310px !important;
+            width: 310px !important;
             border-radius: 0 22px 22px 0;
             overflow: hidden;
             box-shadow: 5px 0 24px rgba(12, 25, 46, .10);
         }}
 
         section[data-testid="stSidebar"] > div:first-child {{
-            width: 308px !important;
+            width: 310px !important;
             background: var(--ae-navy) !important;
         }}
 
@@ -103,12 +103,12 @@ def aplicar_fundo_login():
         }}
 
         .ae-brand {{
-            padding: 74px 4px 52px 4px;
+            padding: 92px 6px 62px 6px;
             text-align: center;
         }}
 
         .ae-brand img {{
-            width: 232px;
+            width: 220px;
             max-width: 100%;
             display: block;
             margin: 0 auto;
@@ -182,8 +182,8 @@ def aplicar_fundo_login():
         }}
 
         .ae-main-spacer {{
-            height: 16vh;
-            min-height: 120px;
+            height: 17vh;
+            min-height: 135px;
         }}
 
         /* Card do login. */
@@ -392,6 +392,30 @@ def aplicar_fundo_login():
             font-size: 1.05rem;
             font-weight: 800;
             color: #4285f4;
+        }}
+
+        .ae-auth-switch-label {{
+            text-align: center;
+            color: #697487;
+            font-size: .90rem;
+            margin: 17px 0 7px 0;
+        }}
+
+        /* Botão de cadastro/voltar, dentro do próprio card de autenticação. */
+        [data-testid="stMain"] [data-testid="stButton"] button {{
+            min-height: 46px;
+            border-radius: 8px;
+            border: 1px solid #cdd8ef !important;
+            background: #f7f9fe !important;
+            color: #2757bb !important;
+            font-weight: 650;
+            box-shadow: none !important;
+        }}
+
+        [data-testid="stMain"] [data-testid="stButton"] button:hover {{
+            background: #eef3ff !important;
+            border-color: #9db7ec !important;
+            color: #1949ac !important;
         }}
 
         /* Card de Sobre o Sistema. */
