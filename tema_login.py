@@ -18,241 +18,477 @@ def obter_logo_base64() -> str:
     return _arquivo_em_base64(ASSETS_DIR / "logo_autoeletrica.png")
 
 
+def obter_fundo_login_base64() -> str:
+    return _arquivo_em_base64(ASSETS_DIR / "fundo_login.png")
+
+
 def aplicar_fundo_login():
     """Aplica o visual completo da tela de autenticação."""
-    st.markdown(
-        """
-        <style>
-        :root {
-            --ae-navy: #132440;
-            --ae-navy-2: #1b3153;
-            --ae-blue: #245fe7;
-            --ae-blue-2: #1748c8;
-            --ae-text: #141821;
-            --ae-muted: #697386;
-            --ae-border: #d9dee8;
-        }
+    fundo_b64 = obter_fundo_login_base64()
 
-        html, body, [class*="css"] {
+    fundo_css = (
+        f'background-image: url("data:image/png;base64,{fundo_b64}");'
+        if fundo_b64
+        else "background-color: #fbfbfb;"
+    )
+
+    st.markdown(
+        f"""
+        <style>
+        :root {{
+            --ae-navy: #1b2840;
+            --ae-blue: #2e63e6;
+            --ae-blue-dark: #2050cc;
+            --ae-text: #171b23;
+            --ae-muted: #4d596b;
+            --ae-border: #d9dee7;
+        }}
+
+        html, body, [class*="css"] {{
             font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
                 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
+        }}
 
-        [data-testid="stAppViewContainer"] {
+        /* Fundo da área principal: usa a imagem enviada pelo usuário. */
+        [data-testid="stAppViewContainer"] {{
             background-color: #fbfbfb;
-            background-image:
-                linear-gradient(135deg, rgba(224,228,235,.44) 8%, transparent 8%, transparent 50%, rgba(224,228,235,.44) 50%, rgba(224,228,235,.44) 58%, transparent 58%, transparent),
-                linear-gradient(45deg, rgba(234,237,242,.38) 8%, transparent 8%, transparent 50%, rgba(234,237,242,.38) 50%, rgba(234,237,242,.38) 58%, transparent 58%, transparent);
-            background-size: 108px 108px;
-            background-position: 0 0, 54px 54px;
-        }
+            {fundo_css}
+            background-repeat: repeat;
+            background-size: 410px auto;
+            background-position: top left;
+            min-height: 100vh;
+        }}
 
-        [data-testid="stHeader"] {
+        [data-testid="stHeader"] {{
             background: transparent;
-        }
+        }}
 
-        [data-testid="stToolbar"] {
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"] {{
             visibility: hidden;
             height: 0;
-        }
+        }}
 
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, var(--ae-navy) 0%, #172b49 100%);
-            border-right: 0;
-            min-width: 308px;
-            max-width: 308px;
-        }
+        button[kind="header"] {{
+            display: none !important;
+        }}
 
-        [data-testid="stSidebar"] > div:first-child {
-            width: 308px;
-        }
+        /* Barra lateral com a MESMA cor do fundo do arquivo do logo. */
+        section[data-testid="stSidebar"] {{
+            background: var(--ae-navy) !important;
+            border-right: 0 !important;
+            min-width: 308px !important;
+            max-width: 308px !important;
+            width: 308px !important;
+            border-radius: 0 22px 22px 0;
+            overflow: hidden;
+            box-shadow: 5px 0 24px rgba(12, 25, 46, .10);
+        }}
 
-        [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-            padding-top: 0.8rem;
-        }
+        section[data-testid="stSidebar"] > div:first-child {{
+            width: 308px !important;
+            background: var(--ae-navy) !important;
+        }}
 
-        [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] label,
-        [data-testid="stSidebar"] span {
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+            padding: 0 16px !important;
+            background: var(--ae-navy) !important;
+        }}
+
+        section[data-testid="stSidebar"] p,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] span {{
             color: #f7f9fd;
-        }
+        }}
 
-        [data-testid="stSidebar"] [role="radiogroup"] {
-            gap: .6rem;
-        }
-
-        [data-testid="stSidebar"] [data-baseweb="radio"] {
-            background: transparent;
-            border-radius: 10px;
-            padding: .8rem .9rem;
-            transition: all .15s ease;
-        }
-
-        [data-testid="stSidebar"] [data-baseweb="radio"]:hover {
-            background: rgba(255,255,255,.08);
-        }
-
-        [data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) {
-            background: linear-gradient(90deg, rgba(36,95,231,.92), rgba(45,86,179,.82));
-            box-shadow: 0 8px 18px rgba(0,0,0,.12);
-        }
-
-        [data-testid="stSidebar"] [data-baseweb="radio"] > div:first-child {
-            display: none;
-        }
-
-        .ae-brand {
-            padding: 1.5rem 1rem 1.35rem 1rem;
+        .ae-brand {{
+            padding: 74px 4px 52px 4px;
             text-align: center;
-        }
+        }}
 
-        .ae-brand img {
-            width: 190px;
+        .ae-brand img {{
+            width: 232px;
             max-width: 100%;
             display: block;
             margin: 0 auto;
-        }
+            border: 0;
+        }}
 
-        .ae-brand-subtitle {
-            color: #4f90ff;
+        .ae-brand-subtitle {{
+            color: #4f8cff;
+            font-size: 1.10rem;
+            font-weight: 500;
+            margin-top: 7px;
+            letter-spacing: .01em;
+        }}
+
+        .ae-sidebar-separator {{
+            display: none;
+        }}
+
+        /* Menu lateral - duas opções somente. */
+        section[data-testid="stSidebar"] [role="radiogroup"] {{
+            gap: 14px;
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"] {{
+            background: transparent;
+            border-radius: 9px;
+            padding: 14px 16px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            transition: background .15s ease, transform .15s ease;
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"]:hover {{
+            background: rgba(255,255,255,.075);
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) {{
+            background: linear-gradient(90deg, #2c5fcf 0%, #294f9f 100%);
+            box-shadow: 0 10px 22px rgba(3, 13, 33, .18);
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"] > div:first-child {{
+            display: none;
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"] p {{
             font-size: 1.02rem;
             font-weight: 500;
-            margin-top: .1rem;
-        }
+            margin: 0;
+        }}
 
-        .ae-sidebar-separator {
-            height: 1px;
-            background: rgba(255,255,255,.08);
-            margin: .2rem .5rem 1rem .5rem;
-        }
-
-        .ae-sidebar-footer {
+        .ae-sidebar-footer {{
             position: fixed;
             left: 30px;
-            bottom: 28px;
+            bottom: 25px;
             width: 245px;
-            color: rgba(255,255,255,.68);
-            font-size: .83rem;
+            color: rgba(255,255,255,.70);
+            font-size: .82rem;
             line-height: 1.65;
-        }
+        }}
 
-        .ae-login-title {
+        /* Área central. */
+        [data-testid="stMainBlockContainer"] {{
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-left: 4.5rem !important;
+            padding-right: 4.5rem !important;
+            max-width: 100% !important;
+            min-height: 100vh;
+        }}
+
+        .ae-main-spacer {{
+            height: 16vh;
+            min-height: 120px;
+        }}
+
+        /* Card do login. */
+        [data-testid="stVerticalBlockBorderWrapper"] {{
+            background: rgba(255,255,255,.975);
+            border: 1px solid rgba(215,220,228,.88) !important;
+            border-radius: 22px !important;
+            box-shadow: 0 18px 44px rgba(30,40,55,.13), 0 2px 7px rgba(30,40,55,.05);
+        }}
+
+        [data-testid="stVerticalBlockBorderWrapper"] > div {{
+            padding: 28px 32px 26px 32px !important;
+        }}
+
+        .ae-lock {{
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 18px auto;
+            border-radius: 50%;
+            background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 12px 25px rgba(20,43,98,.16);
+            position: relative;
+        }}
+
+        .ae-lock-body {{
+            width: 30px;
+            height: 25px;
+            border: 4px solid white;
+            border-radius: 6px;
+            box-sizing: border-box;
+            position: absolute;
+            top: 36px;
+        }}
+
+        .ae-lock-body:before {{
+            content: "";
+            position: absolute;
+            width: 19px;
+            height: 18px;
+            border: 4px solid white;
+            border-bottom: 0;
+            border-radius: 13px 13px 0 0;
+            left: 2px;
+            top: -19px;
+            box-sizing: border-box;
+        }}
+
+        .ae-lock-body:after {{
+            content: "";
+            position: absolute;
+            width: 4px;
+            height: 7px;
+            border-radius: 2px;
+            background: white;
+            left: 9px;
+            top: 7px;
+        }}
+
+
+        /* Ícone da tela de cadastro. */
+        .ae-user-icon {{
+            width: 76px;
+            height: 76px;
+            margin: 0 auto 18px auto;
+            border-radius: 50%;
+            background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
+            position: relative;
+            box-shadow: 0 12px 25px rgba(20,43,98,.16);
+        }}
+
+        .ae-user-head {{
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid white;
+            border-radius: 50%;
+            left: 22px;
+            top: 15px;
+            box-sizing: border-box;
+        }}
+
+        .ae-user-body {{
+            position: absolute;
+            width: 34px;
+            height: 20px;
+            border: 3px solid white;
+            border-bottom: 0;
+            border-radius: 18px 18px 0 0;
+            left: 15px;
+            top: 39px;
+            box-sizing: border-box;
+        }}
+
+        .ae-user-plus {{
+            position: absolute;
+            right: 9px;
+            bottom: 8px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #4f8cff;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            line-height: 1;
+            font-weight: 700;
+            border: 2px solid #1b2840;
+        }}
+
+        .ae-login-title {{
             text-align: center;
             margin: 0;
             color: var(--ae-text);
             font-size: 2.05rem;
             font-weight: 800;
-            letter-spacing: -.02em;
-        }
+            letter-spacing: -.025em;
+            line-height: 1.1;
+        }}
 
-        .ae-login-subtitle {
+        .ae-login-subtitle {{
             text-align: center;
-            color: #4a5568;
-            margin-top: .35rem;
-            margin-bottom: 1.55rem;
-            font-size: 1rem;
-        }
+            color: #475365;
+            margin-top: 8px;
+            margin-bottom: 24px;
+            font-size: .99rem;
+        }}
 
-        .ae-lock {
-            width: 76px;
-            height: 76px;
-            margin: 0 auto 1rem auto;
-            border-radius: 50%;
-            background: radial-gradient(circle at 35% 25%, #264a94, #142b62 70%);
-            display: grid;
-            place-items: center;
-            box-shadow: 0 12px 25px rgba(20,43,98,.18);
-            color: white;
-            font-size: 2.1rem;
-        }
+        [data-testid="stTextInput"] {{
+            margin-bottom: 3px;
+        }}
 
-        [data-testid="stMainBlockContainer"] {
-            padding-top: 5.5rem;
-            padding-bottom: 3rem;
-            max-width: 100%;
-        }
-
-        [data-testid="stVerticalBlockBorderWrapper"] {
-            background: rgba(255,255,255,.97);
-            border: 1px solid rgba(211,217,226,.72) !important;
-            border-radius: 22px !important;
-            box-shadow: 0 18px 44px rgba(28,39,55,.13), 0 2px 8px rgba(28,39,55,.06);
-        }
-
-        [data-testid="stVerticalBlockBorderWrapper"] > div {
-            padding: 1.35rem 1.05rem .95rem 1.05rem;
-        }
-
-        [data-testid="stTextInput"] label p {
-            color: #161a22;
-            font-weight: 600;
+        [data-testid="stTextInput"] label p {{
+            color: #171b23;
+            font-weight: 500;
             font-size: .93rem;
-        }
+        }}
 
-        [data-testid="stTextInput"] input {
-            height: 50px;
+        [data-testid="stTextInput"] input {{
+            min-height: 51px;
             border-radius: 9px;
-            border-color: #d4dae4;
+            border-color: #d3d9e3;
             background: #fff;
             font-size: .96rem;
-        }
+            padding-left: 14px;
+        }}
 
-        [data-testid="stFormSubmitButton"] button {
-            height: 54px;
-            border: 0;
-            border-radius: 9px;
-            background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-2));
-            color: white;
-            font-size: 1rem;
+        [data-testid="stTextInput"] input:focus {{
+            border-color: #7ca2ff;
+            box-shadow: 0 0 0 1px #7ca2ff;
+        }}
+
+        [data-testid="stFormSubmitButton"] button {{
+            height: 56px;
+            border: 0 !important;
+            border-radius: 8px;
+            background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-dark));
+            color: white !important;
+            font-size: 1.02rem;
             font-weight: 700;
-            box-shadow: 0 8px 18px rgba(36,95,231,.22);
-        }
+            box-shadow: 0 8px 18px rgba(36,95,231,.20);
+            margin-top: 5px;
+        }}
 
-        [data-testid="stFormSubmitButton"] button:hover {
-            border: 0;
-            color: white;
-            filter: brightness(1.03);
-        }
+        [data-testid="stFormSubmitButton"] button:hover {{
+            filter: brightness(1.035);
+            transform: translateY(-1px);
+        }}
 
-        .ae-ou {
+        .ae-ou {{
             display: flex;
             align-items: center;
-            gap: .8rem;
-            color: #697386;
-            margin: .7rem 0;
-            font-size: .9rem;
-        }
+            gap: .85rem;
+            color: #657084;
+            margin: 15px 0 12px 0;
+            font-size: .90rem;
+        }}
 
-        .ae-ou:before, .ae-ou:after {
+        .ae-ou:before,
+        .ae-ou:after {{
             content: "";
             flex: 1;
             height: 1px;
-            background: #e0e4eb;
-        }
+            background: #dfe4eb;
+        }}
 
-        .ae-info-card {
-            background: rgba(255,255,255,.96);
-            border: 1px solid #e2e6ed;
-            border-radius: 18px;
-            padding: 1.5rem 1.6rem;
-            box-shadow: 0 15px 35px rgba(28,39,55,.08);
-        }
+        .ae-google {{
+            height: 49px;
+            border: 1px solid #d9dee7;
+            border-radius: 8px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 11px;
+            color: #171b23;
+            font-size: .98rem;
+            user-select: none;
+        }}
 
-        @media (max-width: 900px) {
-            [data-testid="stSidebar"] {
-                min-width: 260px;
-                max-width: 260px;
-            }
-            [data-testid="stSidebar"] > div:first-child {
-                width: 260px;
-            }
-            .ae-sidebar-footer {
+        .ae-google-g {{
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #4285f4;
+        }}
+
+        /* Card de Sobre o Sistema. */
+        .ae-info-card {{
+            background: rgba(255,255,255,.975);
+            border: 1px solid rgba(215,220,228,.88);
+            border-radius: 22px;
+            padding: 34px 38px;
+            box-shadow: 0 18px 44px rgba(30,40,55,.12), 0 2px 7px rgba(30,40,55,.04);
+            color: #1a202b;
+        }}
+
+        .ae-info-icon {{
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            margin: 0 auto 18px auto;
+            background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-family: Georgia, serif;
+            font-weight: 700;
+        }}
+
+        .ae-info-card h2 {{
+            margin: 0 0 12px 0;
+            text-align: center;
+            font-size: 1.85rem;
+            color: #171b23;
+        }}
+
+        .ae-info-card .ae-info-lead {{
+            text-align: center;
+            color: #4c5869;
+            margin: 0 0 22px 0;
+            line-height: 1.6;
+        }}
+
+        .ae-info-card p {{
+            color: #3d4757;
+            line-height: 1.72;
+            font-size: .97rem;
+            margin: 0 0 13px 0;
+        }}
+
+        .ae-info-highlight {{
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 10px;
+            background: #f5f8ff;
+            border: 1px solid #dce6fb;
+            color: #31528d;
+            line-height: 1.55;
+        }}
+
+        /* Esconde elementos que atrapalham o layout de login. */
+        [data-testid="stSidebarCollapseButton"] {{
+            display: none !important;
+        }}
+
+        @media (max-width: 900px) {{
+            section[data-testid="stSidebar"] {{
+                min-width: 255px !important;
+                max-width: 255px !important;
+                width: 255px !important;
+            }}
+
+            section[data-testid="stSidebar"] > div:first-child {{
+                width: 255px !important;
+            }}
+
+            .ae-brand {{
+                padding-top: 48px;
+                padding-bottom: 36px;
+            }}
+
+            .ae-brand img {{
+                width: 205px;
+            }}
+
+            .ae-sidebar-footer {{
                 display: none;
-            }
-            [data-testid="stMainBlockContainer"] {
-                padding-top: 2rem;
-            }
-        }
+            }}
+
+            [data-testid="stMainBlockContainer"] {{
+                padding-left: 1.5rem !important;
+                padding-right: 1.5rem !important;
+            }}
+
+            .ae-main-spacer {{
+                height: 8vh;
+                min-height: 55px;
+            }}
+        }}
         </style>
         """,
         unsafe_allow_html=True,

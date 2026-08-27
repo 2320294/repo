@@ -39,7 +39,6 @@ def renderizar_menu_login():
                 <img src="data:image/png;base64,{logo_b64}" alt="AutoElétrica">
                 <div class="ae-brand-subtitle">Projetos Elétricos</div>
             </div>
-            <div class="ae-sidebar-separator"></div>
             """,
             unsafe_allow_html=True,
         )
@@ -58,8 +57,8 @@ def renderizar_menu_login():
         "Navegação",
         [
             "🔒  Login",
+            "👤  Cadastro",
             "ⓘ  Sobre o sistema",
-            "❔  Ajuda",
         ],
         key="menu_login",
         label_visibility="collapsed",
@@ -100,89 +99,135 @@ def _processar_login(login_email, login_senha):
 
 
 def _renderizar_cadastro():
-    with st.expander("Ainda não tem conta? Cadastre-se"):
-        with st.form("form_cadastro", clear_on_submit=False):
-            cad_nome = st.text_input("Nome completo", key="cad_nome")
-            cad_email = st.text_input("E-mail", key="cad_email")
-            cad_senha = st.text_input(
-                "Senha",
-                type="password",
-                key="cad_senha",
-            )
-
-            enviar_cadastro = st.form_submit_button(
-                "Criar conta",
-                use_container_width=True,
-            )
-
-        if enviar_cadastro:
-            if not cad_nome or not cad_email or not cad_senha:
-                st.warning("Preencha todos os campos.")
-                return
-
-            try:
-                ok, mensagem = cadastrar_usuario(
-                    cad_nome,
-                    cad_email,
-                    cad_senha,
-                )
-                if ok:
-                    st.success(mensagem)
-                else:
-                    st.error(mensagem)
-            except Exception as e:
-                st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
-
-
-def renderizar_pagina_login():
-    menu = renderizar_menu_login()
-
-    if menu == "ⓘ  Sobre o sistema":
-        _, centro, _ = st.columns([1.0, 1.7, 1.0])
-        with centro:
-            st.markdown(
-                """
-                <div class="ae-info-card">
-                    <h2 style="margin-top:0">Sobre o AutoElétrica</h2>
-                    <p>
-                        Plataforma para desenvolvimento e organização de projetos
-                        elétricos, com recursos de dimensionamento, processamento de
-                        arquivos CAD e geração de documentação técnica.
-                    </p>
-                    <p style="color:#697386;margin-bottom:0">
-                        Acesse o menu <b>Login</b> para entrar no sistema.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        return
-
-    if menu == "❔  Ajuda":
-        _, centro, _ = st.columns([1.0, 1.7, 1.0])
-        with centro:
-            st.markdown(
-                """
-                <div class="ae-info-card">
-                    <h2 style="margin-top:0">Ajuda</h2>
-                    <p>Para acessar, informe o e-mail e a senha cadastrados.</p>
-                    <p>
-                        Caso ainda não possua uma conta, abra a opção
-                        <b>“Ainda não tem conta? Cadastre-se”</b> na tela de login.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        return
-
-    esquerda, centro, direita = st.columns([1.2, 1.55, 1.2])
+    st.markdown('<div class="ae-main-spacer"></div>', unsafe_allow_html=True)
+    esquerda, centro, direita = st.columns([1.12, 1.58, 1.12])
 
     with centro:
         with st.container(border=True):
             st.markdown(
                 """
-                <div class="ae-lock">🔒</div>
+                <div class="ae-user-icon">
+                    <div class="ae-user-head"></div>
+                    <div class="ae-user-body"></div>
+                    <div class="ae-user-plus">+</div>
+                </div>
+                <h1 class="ae-login-title">Crie sua conta</h1>
+                <div class="ae-login-subtitle">
+                    Cadastre-se para começar a usar o AutoElétrica
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            with st.form("form_cadastro", clear_on_submit=False):
+                cad_nome = st.text_input(
+                    "Nome completo",
+                    placeholder="Seu nome",
+                    key="cad_nome",
+                )
+                cad_email = st.text_input(
+                    "E-mail",
+                    placeholder="seu@email.com",
+                    key="cad_email",
+                )
+                cad_senha = st.text_input(
+                    "Senha",
+                    type="password",
+                    placeholder="Crie uma senha",
+                    key="cad_senha",
+                )
+                cad_confirmar = st.text_input(
+                    "Confirmar senha",
+                    type="password",
+                    placeholder="Repita a senha",
+                    key="cad_confirmar_senha",
+                )
+
+                enviar_cadastro = st.form_submit_button(
+                    "＋  Criar conta",
+                    use_container_width=True,
+                )
+
+            if enviar_cadastro:
+                if not cad_nome or not cad_email or not cad_senha or not cad_confirmar:
+                    st.warning("Preencha todos os campos.")
+                    return
+
+                if cad_senha != cad_confirmar:
+                    st.error("As senhas não coincidem.")
+                    return
+
+                if len(cad_senha) < 6:
+                    st.warning("A senha deve ter pelo menos 6 caracteres.")
+                    return
+
+                try:
+                    ok, mensagem = cadastrar_usuario(
+                        cad_nome,
+                        cad_email,
+                        cad_senha,
+                    )
+                    if ok:
+                        st.success(mensagem)
+                        st.info("Cadastro concluído. Selecione Login no menu lateral para entrar.")
+                    else:
+                        st.error(mensagem)
+                except Exception as e:
+                    st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
+
+
+def _renderizar_sobre_o_sistema():
+    st.markdown('<div class="ae-main-spacer"></div>', unsafe_allow_html=True)
+    esquerda, centro, direita = st.columns([1.0, 1.72, 1.0])
+
+    with centro:
+        st.markdown(
+            """
+            <div class="ae-info-card">
+                <div class="ae-info-icon">i</div>
+                <h2>Sobre o AutoElétrica</h2>
+                <div class="ae-info-lead">
+                    Uma plataforma desenvolvida para apoiar a elaboração de
+                    projetos elétricos residenciais de forma organizada,
+                    prática e automatizada.
+                </div>
+                <p>
+                    O <b>AutoElétrica</b> reúne em um único ambiente ferramentas
+                    para leitura e processamento de desenhos em CAD, identificação
+                    de ambientes, dimensionamento de cargas, tomadas, iluminação e
+                    equipamentos de uso específico.
+                </p>
+                <p>
+                    A proposta do sistema é reduzir tarefas repetitivas durante o
+                    desenvolvimento do projeto, mantendo o profissional no controle
+                    das informações e permitindo revisar os dados antes da geração
+                    final do desenho elétrico e da documentação do projeto.
+                </p>
+                <p>
+                    O sistema também organiza projetos e parâmetros técnicos para
+                    facilitar a continuidade do trabalho e futuras revisões.
+                </p>
+                <div class="ae-info-highlight">
+                    Para iniciar, selecione <b>Login</b> no menu lateral e informe
+                    suas credenciais de acesso.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def _renderizar_formulario_login():
+    st.markdown('<div class="ae-main-spacer"></div>', unsafe_allow_html=True)
+    esquerda, centro, direita = st.columns([1.12, 1.58, 1.12])
+
+    with centro:
+        with st.container(border=True):
+            st.markdown(
+                """
+                <div class="ae-lock">
+                    <div class="ae-lock-body"></div>
+                </div>
                 <h1 class="ae-login-title">Bem-vindo!</h1>
                 <div class="ae-login-subtitle">
                     Faça login para acessar o sistema
@@ -215,14 +260,31 @@ def renderizar_pagina_login():
 
             st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
 
-            st.button(
-                "🇬  Entrar com Google",
-                use_container_width=True,
-                disabled=True,
-                help="Integração com Google ainda não configurada.",
+            # Elemento visual mantido para reproduzir a referência.
+            # A autenticação Google ainda não está configurada no projeto.
+            st.markdown(
+                """
+                <div class="ae-google" title="Integração com Google ainda não configurada">
+                    <span class="ae-google-g">G</span>
+                    <span>Entrar com Google</span>
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
 
-            _renderizar_cadastro()
+
+def renderizar_pagina_login():
+    menu = renderizar_menu_login()
+
+    if menu == "ⓘ  Sobre o sistema":
+        _renderizar_sobre_o_sistema()
+        return
+
+    if menu == "👤  Cadastro":
+        _renderizar_cadastro()
+        return
+
+    _renderizar_formulario_login()
 
 
 def renderizar_autenticacao():

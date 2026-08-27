@@ -7,7 +7,8 @@ def configurar_pagina():
     st.set_page_config(
         page_title="AutoElétrica Profissional",
         page_icon="⚡",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="expanded"
     )
 
 
