@@ -181,14 +181,26 @@ def aplicar_fundo_login():
             min-height: 100vh;
         }}
 
+        /* O conteúdo de autenticação ocupa toda a altura útil e é
+           centralizado verticalmente. O antigo espaçador superior foi removido. */
+        [data-testid="stMainBlockContainer"] > div:first-child {{
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }}
+
         .ae-main-spacer {{
-            height: 17vh;
-            min-height: 135px;
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }}
 
         /* Card do login. */
         [data-testid="stVerticalBlockBorderWrapper"] {{
-            background: rgba(255,255,255,.975);
+            background: #ffffff;
             border: 1px solid rgba(215,220,228,.88) !important;
             border-radius: 22px !important;
             box-shadow: 0 18px 44px rgba(30,40,55,.13), 0 2px 7px rgba(30,40,55,.05);
@@ -509,8 +521,7 @@ def aplicar_fundo_login():
             }}
 
             .ae-main-spacer {{
-                height: 8vh;
-                min-height: 55px;
+                display: none !important;
             }}
         }}
         </style>
