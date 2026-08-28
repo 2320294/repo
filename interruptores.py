@@ -99,12 +99,81 @@ def analisar_portas_dxf(dxf_bytes):
 
 
 
+
 def _figura_ambiente(nome, poly, portas, selecionadas):
     """
-    Retorna uma especificação Vega-Lite pura.
-    Não depende de Plotly nem de Altair importado.
+    Fase 5.7:
+    - mostra o ambiente inteiro;
+    - mantém a proporção geométrica aproximada;
+    - desenha todas as soleiras/portas;
+    - identifica Porta 1, Porta 2...;
+    - permite clicar diretamente nos marcadores.
     """
+    if not poly:
+        return {}
 
+    xs_poly = [float(p[0]) for p in poly]
+    ys_poly = [float(p[1]) for p in poly]
+
+    # Inclui também as soleiras nos limites visuais.
+    xs_todos = list(xs_poly)
+    ys_todos = list(ys_poly)
+
+    for porta in portas:
+        for p in (porta["soleira"].get("vertices") or []):
+            xs_todos.append(float(p[0]))
+            ys_todos.append(float(p[1]))
+
+    min_x = min(xs_todos)
+    max_x = max(xs_todos)
+    min_y = min(ys_todos)
+    max_y = max(ys_todos)
+
+    largura = max(max_x - min_x, 0.50)
+    altura = max(max_y - min_y, 0.50)
+
+    # Margem de 12% para não cortar números/marcadores.
+    margem_x = max(largura * 0.12, 0.20)
+    margem_y = max(altura * 0.12, 0.20)
+
+    dominio_x = [
+        min_x - margem_x,
+        max_x + margem_x
+    ]
+    dominio_y = [
+        min_y - margem_y,
+        max_y + margem_y
+    ]
+
+    # Mantém o aspecto visual do ambiente.
+    proporcao = largura / altura
+    largura_grafico = 720
+
+    if proporcao >= 1:
+        altura_grafico = int(
+            max(
+                320,
+                min(
+                    560,
+                    largura_grafico / max(proporcao, 0.01)
+                )
+            )
+        )
+    else:
+        altura_grafico = 520
+        largura_grafico = int(
+            max(
+                420,
+                min(
+                    720,
+                    altura_grafico * proporcao
+                )
+            )
+        )
+
+    # -------------------------------------------------------------
+    # CONTORNO COMPLETO DO AMBIENTE
+    # -------------------------------------------------------------
     contorno = []
     pontos_contorno = list(poly) + [poly[0]]
 
@@ -115,6 +184,38 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
             "ordem": ordem
         })
 
+    # -------------------------------------------------------------
+    # SOLEIRAS / PORTAS
+    # -------------------------------------------------------------
+    segmentos_portas = []
+
+    for porta in portas:
+        verts = list(
+            porta["soleira"].get("vertices")
+            or []
+        )
+
+        if len(verts) < 2:
+            continue
+
+        verts_fechados = verts + [verts[0]]
+
+        for ordem, p in enumerate(verts_fechados):
+            segmentos_portas.append({
+                "porta_id": porta["id"],
+                "x": float(p[0]),
+                "y": float(p[1]),
+                "ordem": ordem,
+                "selecionada": (
+                    "SIM"
+                    if porta["id"] in selecionadas
+                    else "NAO"
+                )
+            })
+
+    # -------------------------------------------------------------
+    # MARCADORES CLICÁVEIS
+    # -------------------------------------------------------------
     dados_portas = []
 
     for porta in portas:
@@ -130,33 +231,49 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
             "estado": (
                 "Selecionada"
                 if selecionada
-                else "Não selecionada"
+                else "Clique para selecionar"
+            ),
+            "selecionada": (
+                "SIM"
+                if selecionada
+                else "NAO"
             ),
             "tamanho": (
-                420
+                650
                 if selecionada
-                else 250
-            ),
-            "forma": (
-                "diamond"
-                if selecionada
-                else "circle"
+                else 450
             )
         })
+
+    escala_x = {
+        "domain": dominio_x,
+        "nice": False,
+        "zero": False
+    }
+
+    escala_y = {
+        "domain": dominio_y,
+        "nice": False,
+        "zero": False
+    }
 
     return {
         "$schema": (
             "https://vega.github.io/schema/"
             "vega-lite/v5.json"
         ),
-        "title": (
-            f"Selecione as portas — {nome}"
-        ),
-        "height": 400,
+        "title": {
+            "text": f"{nome} — clique nas portas que terão interruptor",
+            "anchor": "middle",
+            "fontSize": 16
+        },
+        "width": largura_grafico,
+        "height": altura_grafico,
         "autosize": {
             "type": "fit",
             "contains": "padding"
         },
+        "padding": 15,
         "config": {
             "view": {
                 "stroke": None
@@ -166,24 +283,28 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
             }
         },
         "layer": [
+            # Contorno do ambiente
             {
                 "data": {
                     "values": contorno
                 },
                 "mark": {
                     "type": "line",
-                    "strokeWidth": 3
+                    "stroke": "#1f2937",
+                    "strokeWidth": 4
                 },
                 "encoding": {
                     "x": {
                         "field": "x",
                         "type": "quantitative",
-                        "axis": None
+                        "axis": None,
+                        "scale": escala_x
                     },
                     "y": {
                         "field": "y",
                         "type": "quantitative",
-                        "axis": None
+                        "axis": None,
+                        "scale": escala_y
                     },
                     "order": {
                         "field": "ordem",
@@ -191,6 +312,50 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                     }
                 }
             },
+
+            # Soleiras / portas
+            {
+                "data": {
+                    "values": segmentos_portas
+                },
+                "mark": {
+                    "type": "line",
+                    "strokeWidth": 7
+                },
+                "encoding": {
+                    "x": {
+                        "field": "x",
+                        "type": "quantitative",
+                        "axis": None,
+                        "scale": escala_x
+                    },
+                    "y": {
+                        "field": "y",
+                        "type": "quantitative",
+                        "axis": None,
+                        "scale": escala_y
+                    },
+                    "detail": {
+                        "field": "porta_id",
+                        "type": "nominal"
+                    },
+                    "order": {
+                        "field": "ordem",
+                        "type": "quantitative"
+                    },
+                    "color": {
+                        "condition": {
+                            "test": (
+                                "datum.selecionada === 'SIM'"
+                            ),
+                            "value": "#16a34a"
+                        },
+                        "value": "#dc2626"
+                    }
+                }
+            },
+
+            # Seleção clicável
             {
                 "data": {
                     "values": dados_portas
@@ -211,18 +376,21 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                 "mark": {
                     "type": "point",
                     "filled": True,
+                    "stroke": "#111827",
                     "strokeWidth": 2
                 },
                 "encoding": {
                     "x": {
                         "field": "x",
                         "type": "quantitative",
-                        "axis": None
+                        "axis": None,
+                        "scale": escala_x
                     },
                     "y": {
                         "field": "y",
                         "type": "quantitative",
-                        "axis": None
+                        "axis": None,
+                        "scale": escala_y
                     },
                     "size": {
                         "field": "tamanho",
@@ -231,20 +399,22 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                         "legend": None
                     },
                     "shape": {
-                        "field": "forma",
-                        "type": "nominal",
-                        "scale": None,
-                        "legend": None
-                    },
-                    "opacity": {
                         "condition": {
                             "test": (
-                                "datum.estado === "
-                                "'Selecionada'"
+                                "datum.selecionada === 'SIM'"
                             ),
-                            "value": 1.0
+                            "value": "diamond"
                         },
-                        "value": 0.55
+                        "value": "circle"
+                    },
+                    "color": {
+                        "condition": {
+                            "test": (
+                                "datum.selecionada === 'SIM'"
+                            ),
+                            "value": "#16a34a"
+                        },
+                        "value": "#ef4444"
                     },
                     "tooltip": [
                         {
@@ -255,34 +425,80 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                         {
                             "field": "estado",
                             "type": "nominal",
-                            "title": "Estado"
+                            "title": "Interruptor"
                         }
                     ]
                 }
             },
+
+            # Números das portas
             {
                 "data": {
                     "values": dados_portas
                 },
                 "mark": {
                     "type": "text",
-                    "dy": -18,
-                    "fontSize": 13,
-                    "fontWeight": "bold"
+                    "dy": -24,
+                    "fontSize": 15,
+                    "fontWeight": "bold",
+                    "color": "#111827"
                 },
                 "encoding": {
                     "x": {
                         "field": "x",
                         "type": "quantitative",
-                        "axis": None
+                        "axis": None,
+                        "scale": escala_x
                     },
                     "y": {
                         "field": "y",
                         "type": "quantitative",
-                        "axis": None
+                        "axis": None,
+                        "scale": escala_y
                     },
                     "text": {
                         "field": "rotulo",
+                        "type": "nominal"
+                    }
+                }
+            },
+
+            # Nome do ambiente no centro visual
+            {
+                "data": {
+                    "values": [{
+                        "x": (
+                            min(xs_poly)
+                            + max(xs_poly)
+                        ) / 2.0,
+                        "y": (
+                            min(ys_poly)
+                            + max(ys_poly)
+                        ) / 2.0,
+                        "nome": nome
+                    }]
+                },
+                "mark": {
+                    "type": "text",
+                    "fontSize": 22,
+                    "fontWeight": "bold",
+                    "opacity": 0.25
+                },
+                "encoding": {
+                    "x": {
+                        "field": "x",
+                        "type": "quantitative",
+                        "axis": None,
+                        "scale": escala_x
+                    },
+                    "y": {
+                        "field": "y",
+                        "type": "quantitative",
+                        "axis": None,
+                        "scale": escala_y
+                    },
+                    "text": {
+                        "field": "nome",
                         "type": "nominal"
                     }
                 }
@@ -290,8 +506,18 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
         ]
     }
 
+
 def _ids_salvos_ambiente(config_salva, amb, portas):
-    ids_validos = {p["id"] for p in portas}
+    """
+    Fase 5.7:
+    restaura apenas escolhas gráficas reais já salvas por ID.
+    Configurações antigas baseadas somente em quantidade NÃO
+    selecionam portas automaticamente.
+    """
+    ids_validos = {
+        p["id"]
+        for p in portas
+    }
 
     cfg = (
         config_salva.get(amb, {})
@@ -300,32 +526,21 @@ def _ids_salvos_ambiente(config_salva, amb, portas):
     )
 
     if not isinstance(cfg, dict):
-        cfg = {}
+        return []
 
-    salvos = cfg.get("portas_ids", [])
-    if isinstance(salvos, list):
-        filtrados = [
-            pid for pid in salvos
-            if pid in ids_validos
-        ]
-        if filtrados:
-            return filtrados
-
-    # Compatibilidade com configurações das fases anteriores:
-    # se só havia quantidade, seleciona determinísticamente as primeiras.
-    qtd_antiga = max(
-        0,
-        min(
-            len(portas),
-            int(cfg.get("quantidade", 0))
-        )
+    salvos = cfg.get(
+        "portas_ids",
+        []
     )
 
-    return [
-        p["id"]
-        for p in portas[:qtd_antiga]
-    ]
+    if not isinstance(salvos, list):
+        return []
 
+    return [
+        pid
+        for pid in salvos
+        if pid in ids_validos
+    ]
 
 def renderizar_interruptores(
     dados_ambientes,
@@ -411,8 +626,8 @@ def renderizar_interruptores(
             expanded=True
         ):
             st.caption(
-                "● círculo = não selecionada   |   "
-                "◆ losango = selecionada"
+                "🔴 Vermelho = sem interruptor   |   "
+                "🟢 Verde = porta selecionada para interruptor"
             )
 
             fig = _figura_ambiente(

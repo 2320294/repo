@@ -1,3 +1,3 @@
 # Versão central do AutoElétrica
-VERSAO_SISTEMA = "Fase 5.6"
-VERSAO_ARQUIVO = "Fase_5_6"
+VERSAO_SISTEMA = "Fase 5.7"
+VERSAO_ARQUIVO = "Fase_5_7"

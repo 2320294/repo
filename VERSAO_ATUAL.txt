@@ -1,10 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 5.6
-IDENTIFICADOR DO ARQUIVO: Fase_5_6
+VERSÃO ATUAL: Fase 5.7
+IDENTIFICADOR DO ARQUIVO: Fase_5_7
 
-VALIDADO:
-- barra lateral usa VERSAO_SISTEMA
-- gerador CAD usa VERSAO_SISTEMA
-- nome do DXF usa VERSAO_ARQUIVO
-- nenhuma referência ativa às fases 5.3, 5.4 ou 5.5
-- Plotly removido
+CHECKLIST DE ENTREGA:
+[OK] Sistema = Fase 5.7
+[OK] Gerador CAD = Fase 5.7
+[OK] Arquivo DXF = Fase_5_7
+[OK] Sem referências ativas às fases 5.3/5.4/5.5/5.6
+[OK] Sem Plotly
+[OK] Mini planta mostra ambiente completo
