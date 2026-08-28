@@ -176,41 +176,65 @@ def _geometrias_porta_do_dxf(msp):
     return geometrias
 
 
-def _geometria_pertence_as_portas(
+
+def _centro_geometria(geometria):
+    pontos = geometria.get("pontos") or []
+
+    if not pontos:
+        return None
+
+    return (
+        sum(float(p[0]) for p in pontos) / len(pontos),
+        sum(float(p[1]) for p in pontos) / len(pontos)
+    )
+
+
+def _porta_mais_proxima_da_geometria(
     geometria,
     portas,
-    tolerancia=0.16
+    tolerancia=0.22
 ):
     """
-    Associa folha/arco à soleira pelo ponto geométrico mais próximo.
+    Associa cada geometria visual de IA_PORTAS a UMA única porta.
+
+    Isso evita que a mesma folha/arco seja desenhada mais de uma vez
+    em soleiras vizinhas.
     """
     if not portas:
-        return False
+        return None
 
-    referencias = []
+    melhor = None
+    menor = float("inf")
 
     for porta in portas:
-        referencias.extend(
+        referencias = (
             porta["soleira"].get(
                 "vertices",
                 []
             )
+            or []
         )
 
-    if not referencias:
-        return False
+        if not referencias:
+            continue
 
-    return min(
-        _distancia(
-            ponto,
-            ref
+        d = min(
+            _distancia(
+                ponto,
+                ref
+            )
+            for ponto in geometria["pontos"]
+            for ref in referencias
         )
-        for ponto
-        in geometria["pontos"]
-        for ref
-        in referencias
-    ) <= tolerancia
 
+        if d < menor:
+            menor = d
+            melhor = porta
+
+    if menor <= tolerancia:
+        return melhor
+
+    return None
 
 def analisar_portas_dxf(dxf_bytes):
     """
@@ -273,17 +297,29 @@ def analisar_portas_dxf(dxf_bytes):
                 )
             )
 
-            geometrias = [
-                g
-                for g
-                in todas_geometrias
-                if (
-                    _geometria_pertence_as_portas(
-                        g,
+            geometrias = []
+
+            for geometria in todas_geometrias:
+                porta_associada = (
+                    _porta_mais_proxima_da_geometria(
+                        geometria,
                         portas
                     )
                 )
-            ]
+
+                if porta_associada is None:
+                    continue
+
+                # Cada geometria recebe o ID da única porta
+                # à qual foi associada.
+                geometrias.append({
+                    "tipo":
+                        geometria["tipo"],
+                    "pontos":
+                        geometria["pontos"],
+                    "porta_id":
+                        porta_associada["id"]
+                })
 
             saida[nome] = {
                 "poly": poly,
@@ -314,7 +350,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 6.4:
+    Mini planta Fase 6.5:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -592,7 +628,8 @@ def _figura_ambiente(
             linhas_porta.append({
                 "grupo":
                     (
-                        f"G{indice}"
+                        f"{geometria.get('porta_id', 'PORTA')}"
+                        f"_{indice}"
                     ),
                 "tipo":
                     geometria[
@@ -817,7 +854,7 @@ def _figura_ambiente(
                 "stroke":
                     "#111827",
                 "strokeWidth":
-                    2
+                    1.6
             },
             "encoding": {
                 "x": {
@@ -883,7 +920,7 @@ def _figura_ambiente(
                 "stroke":
                     "#ffffff",
                 "strokeWidth":
-                    2
+                    1.6
             },
             "encoding": {
                 "x": {
@@ -1087,7 +1124,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.4:
+    Fase 6.5:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1189,7 +1226,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase6_4_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase6_5_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1213,8 +1250,9 @@ def renderizar_interruptores(
                 expanded=True
             ):
                 st.caption(
+                    "Clique diretamente no círculo da porta. "
                     "🔴 Vermelho = sem interruptor   |   "
-                    "🟢 Verde = porta selecionada para interruptor"
+                    "🟢 Verde = selecionada"
                 )
     
                 fig = _figura_ambiente(
@@ -1231,7 +1269,7 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=True,
-                    key=f"fase6_4_planta_portas_{amb}",
+                    key=f"fase6_5_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
@@ -1263,7 +1301,7 @@ def renderizar_interruptores(
                     pid = ids_evento[-1]
     
                     chave_ultimo = (
-                        f"fase6_4_ultima_porta_evento_{amb}"
+                        f"fase6_5_ultima_porta_evento_{amb}"
                     )
     
                     if (
@@ -1293,38 +1331,15 @@ def renderizar_interruptores(
     
                         st.rerun()
     
-                # Alternativa acessível/precisa abaixo do desenho.
-                opcoes = {
-                    p["rotulo"]: p["id"]
-                    for p in portas
-                }
-                rotulos_selecionados = [
-                    p["rotulo"]
-                    for p in portas
-                    if p["id"] in selecionadas
-                ]
-    
-                escolhidas_lista = st.multiselect(
-                    "Portas selecionadas:",
-                    options=list(opcoes.keys()),
-                    default=rotulos_selecionados,
-                    key=f"fase6_4_lista_portas_{amb}",
-                    help=(
-                        "Você pode clicar na mini planta ou "
-                        "usar esta lista. As duas formas representam "
-                        "a mesma seleção."
-                    )
+                # Fase 6.5:
+                # a escolha é feita diretamente na mini planta.
+                # Não há mais dropdown/multiselect.
+                selecionadas = list(
+                    st.session_state[
+                        chave_estado
+                    ]
                 )
-    
-                ids_lista = [
-                    opcoes[rotulo]
-                    for rotulo in escolhidas_lista
-                ]
-    
-                if set(ids_lista) != set(selecionadas):
-                    st.session_state[chave_estado] = ids_lista
-                    selecionadas = ids_lista
-    
+
                 if selecionadas:
                     st.success(
                         f"{len(selecionadas)} "
@@ -1339,7 +1354,7 @@ def renderizar_interruptores(
                         "Nenhuma porta selecionada: "
                         "este ambiente ficará sem interruptor."
                     )
-    
+
                 config[amb] = {
                     "quantidade": len(selecionadas),
                     "portas_ids": selecionadas,
