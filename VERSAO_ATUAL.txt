@@ -1,12 +1,12 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 5.9
-IDENTIFICADOR DO ARQUIVO: Fase_5_9
+VERSÃO ATUAL: Fase 6.0
+IDENTIFICADOR DO ARQUIVO: Fase_6_0
 
 CHECKLIST:
-[OK] Sistema = Fase 5.9
-[OK] Gerador CAD = Fase 5.9
-[OK] DXF = Fase_5_9
-[OK] ambientes selecionáveis em 2 colunas
-[OK] mini plantas compactas
-[OK] interruptores duplos usam P2/P3 em faces opostas
-[OK] separação transversal baseada em P2-P3
+[OK] Sistema = Fase 6.0
+[OK] Gerador CAD = Fase 6.0
+[OK] DXF = Fase_6_0
+[OK] marcações P1/P2/P3/P4 removidas do desenho
+[OK] círculos de debug removidos
+[OK] lógica P1/P2/P3/P4 mantida internamente
+[OK] conduítes continuam ocultos

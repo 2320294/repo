@@ -169,7 +169,7 @@ def _geometria_interruptor(
     porta_geom
 ):
     """
-    Regra Fase 5.9:
+    Regra Fase 6.0:
 
     - lado do ambiente correspondente à face P1-P2:
       ponto de referência = P2;
@@ -289,7 +289,7 @@ def desenhar_interruptores(
     config_interruptores
 ):
     """
-    Fase 5.9:
+    Fase 6.0:
     - 1 porta: automático.
     - 2+ portas: somente IDs selecionados.
     - mesma porta selecionada pelos dois ambientes:
