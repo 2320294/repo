@@ -102,7 +102,7 @@ def analisar_portas_dxf(dxf_bytes):
 
 def _figura_ambiente(nome, poly, portas, selecionadas):
     """
-    Fase 5.7:
+    Fase 5.8:
     - mostra o ambiente inteiro;
     - mantém a proporção geométrica aproximada;
     - desenha todas as soleiras/portas;
@@ -271,9 +271,15 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
         "height": altura_grafico,
         "autosize": {
             "type": "fit",
-            "contains": "padding"
+            "contains": "padding",
+            "resize": True
         },
-        "padding": 15,
+        "padding": {
+            "left": 15,
+            "right": 15,
+            "top": 15,
+            "bottom": 15
+        },
         "config": {
             "view": {
                 "stroke": None
@@ -509,7 +515,7 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 5.7:
+    Fase 5.8:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -602,7 +608,7 @@ def renderizar_interruptores(
         portas = analise[amb]["portas"]
         poly = analise[amb]["poly"]
 
-        chave_estado = f"portas_interruptor_selecionadas_{amb}"
+        chave_estado = f"fase5_8_portas_interruptor_selecionadas_{amb}"
 
         if chave_estado not in st.session_state:
             st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -640,7 +646,7 @@ def renderizar_interruptores(
             evento = st.vega_lite_chart(
                 fig,
                 use_container_width=True,
-                key=f"planta_portas_{amb}",
+                key=f"fase5_8_planta_portas_{amb}",
                 on_select="rerun"
             )
 
@@ -672,7 +678,7 @@ def renderizar_interruptores(
                 pid = ids_evento[-1]
 
                 chave_ultimo = (
-                    f"ultima_porta_evento_{amb}"
+                    f"fase5_8_ultima_porta_evento_{amb}"
                 )
 
                 if (
@@ -717,7 +723,7 @@ def renderizar_interruptores(
                 "Portas selecionadas:",
                 options=list(opcoes.keys()),
                 default=rotulos_selecionados,
-                key=f"lista_portas_{amb}",
+                key=f"fase5_8_lista_portas_{amb}",
                 help=(
                     "Você pode clicar na mini planta ou "
                     "usar esta lista. As duas formas representam "

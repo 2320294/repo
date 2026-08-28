@@ -1,11 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 5.7
-IDENTIFICADOR DO ARQUIVO: Fase_5_7
+VERSÃO ATUAL: Fase 5.8
+IDENTIFICADOR DO ARQUIVO: Fase_5_8
 
-CHECKLIST DE ENTREGA:
-[OK] Sistema = Fase 5.7
-[OK] Gerador CAD = Fase 5.7
-[OK] Arquivo DXF = Fase_5_7
-[OK] Sem referências ativas às fases 5.3/5.4/5.5/5.6
-[OK] Sem Plotly
-[OK] Mini planta mostra ambiente completo
+CHECKLIST:
+[OK] barra lateral = Fase 5.8
+[OK] gerador CAD = Fase 5.8
+[OK] nome DXF = Fase_5_8
+[OK] padding Vega-Lite é objeto
+[OK] chaves de widget/session_state renovadas
+[OK] nenhuma referência ativa às fases anteriores no código Python
