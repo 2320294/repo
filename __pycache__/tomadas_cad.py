@@ -1,0 +1,600 @@
+import math
+
+from geometria import (
+    point_seg_dist,
+    get_ponto_perimetro,
+    get_inside_normal
+)
+
+
+def ponto_tomada_valido(
+    px,
+    py,
+    polilinha,
+    portas_raw,
+    soleiras_raw,
+    distancia_canto=0.35,
+    distancia_porta=0.40,
+    distancia_soleira=0.40
+):
+    for vx, vy in polilinha:
+        if math.hypot(
+            px - vx,
+            py - vy
+        ) < distancia_canto:
+            return False
+
+    for porta in portas_raw:
+        if point_seg_dist(
+            px,
+            py,
+            porta["p1"],
+            porta["p2"]
+        ) < distancia_porta:
+            return False
+
+    for soleira in soleiras_raw:
+        if point_seg_dist(
+            px,
+            py,
+            soleira["p1"],
+            soleira["p2"]
+        ) < distancia_soleira:
+            return False
+
+    return True
+
+
+def procurar_ponto_valido_perimetro(
+    distancia_original,
+    comp_total,
+    segmentos_crus,
+    polilinha,
+    portas_raw,
+    soleiras_raw
+):
+    if comp_total <= 0:
+        return None
+
+    px, py, vx, vy = get_ponto_perimetro(
+        distancia_original,
+        segmentos_crus
+    )
+
+    if ponto_tomada_valido(
+        px,
+        py,
+        polilinha,
+        portas_raw,
+        soleiras_raw
+    ):
+        return px, py, vx, vy
+
+    passo_busca = min(
+        max(
+            comp_total * 0.01,
+            0.10
+        ),
+        0.50
+    )
+
+    max_busca = min(
+        comp_total * 0.20,
+        2.00
+    )
+
+    deslocamento = passo_busca
+
+    while deslocamento <= max_busca:
+        for distancia_teste in [
+            distancia_original - deslocamento,
+            distancia_original + deslocamento
+        ]:
+            if (
+                distancia_teste <= 0
+                or distancia_teste >= comp_total
+            ):
+                continue
+
+            tx, ty, tvx, tvy = (
+                get_ponto_perimetro(
+                    distancia_teste,
+                    segmentos_crus
+                )
+            )
+
+            if ponto_tomada_valido(
+                tx,
+                ty,
+                polilinha,
+                portas_raw,
+                soleiras_raw
+            ):
+                return (
+                    tx,
+                    ty,
+                    tvx,
+                    tvy
+                )
+
+        deslocamento += passo_busca
+
+    return None
+
+
+def desenhar_tomadas(
+    msp,
+    row_data,
+    nome,
+    polilinha,
+    logical_walls,
+    segmentos_crus,
+    comp_total,
+    unique_portas,
+    portas_raw,
+    soleiras_raw,
+    centro_x,
+    centro_y
+):
+    if not row_data:
+        return []
+
+    pontos_gerados = []
+
+    qtd_tugs = int(
+        row_data.get(
+            "Qtd TUG",
+            row_data.get(
+                "TUGs (Qtd)",
+                row_data.get(
+                    "TUGs",
+                    0
+                )
+            )
+        )
+    )
+
+    qtd_tue = int(
+        row_data.get(
+            "Qtd TUE",
+            row_data.get(
+                "TUE",
+                0
+            )
+        )
+    )
+
+    eq_tue_nome = str(
+        row_data.get(
+            "Equipamento TUE",
+            "-"
+        )
+    )
+
+    pot_tue_val = int(
+        row_data.get(
+            "Pot. Unit. TUE (W)",
+            row_data.get(
+                "Pot. Unit. TUE (VA)",
+                0
+            )
+        )
+    )
+
+    if pot_tue_val == 0:
+        eq_lower = (
+            eq_tue_nome.lower()
+        )
+
+        if "chuveiro" in eq_lower:
+            pot_tue_val = 5500
+
+        elif "ar" in eq_lower:
+            pot_tue_val = 1200
+
+        elif (
+            "micro" in eq_lower
+            or "forno" in eq_lower
+        ):
+            pot_tue_val = 2000
+
+        elif (
+            "máquina" in eq_lower
+            or "lavar" in eq_lower
+        ):
+            pot_tue_val = 1000
+
+        else:
+            pot_tue_val = 1000
+
+    eq_lower = (
+        eq_tue_nome.lower()
+    )
+
+    is_chuveiro_ou_ac = any(
+        x in eq_lower
+        for x in [
+            "chuveiro",
+            "ar-condicionado",
+            "ar condicionado"
+        ]
+    )
+
+    nome_lower_env = (
+        nome.lower().strip()
+    )
+
+    is_ambiente_molhado = any(
+        x in nome_lower_env
+        for x in [
+            "coz",
+            "serv",
+            "banh",
+            "lav",
+            "sanit",
+            "wc",
+            "as"
+        ]
+    )
+
+    # TUE
+    if qtd_tue > 0 and logical_walls:
+        paredes_candidatas = sorted(
+            logical_walls,
+            key=lambda w:
+            w["length"]
+        )
+
+        paredes_sem_porta = [
+            w
+            for w in paredes_candidatas
+            if not any(
+                point_seg_dist(
+                    (
+                        p["p1"][0]
+                        +
+                        p["p2"][0]
+                    ) / 2,
+                    (
+                        p["p1"][1]
+                        +
+                        p["p2"][1]
+                    ) / 2,
+                    w["p1"],
+                    w["p2"]
+                ) < 0.6
+                for p in unique_portas
+            )
+        ]
+
+        paredes_finais = (
+            paredes_sem_porta
+            if paredes_sem_porta
+            else paredes_candidatas
+        )
+
+        for idx_tue in range(
+            qtd_tue
+        ):
+            p_alvo = paredes_finais[
+                idx_tue
+                %
+                len(paredes_finais)
+            ]
+
+            pt1 = p_alvo["p1"]
+            pt2 = p_alvo["p2"]
+
+            fator = (
+                0.5
+                if qtd_tue == 1
+                else (
+                    idx_tue + 1
+                ) / (
+                    qtd_tue + 1
+                )
+            )
+
+            px = (
+                pt1[0]
+                +
+                (pt2[0] - pt1[0])
+                * fator
+            )
+
+            py = (
+                pt1[1]
+                +
+                (pt2[1] - pt1[1])
+                * fator
+            )
+
+            if not ponto_tomada_valido(
+                px,
+                py,
+                polilinha,
+                portas_raw,
+                soleiras_raw
+            ):
+                encontrado = None
+
+                for fator_alt in [
+                    0.25,
+                    0.35,
+                    0.65,
+                    0.75
+                ]:
+                    tx = (
+                        pt1[0]
+                        +
+                        (pt2[0] - pt1[0])
+                        * fator_alt
+                    )
+
+                    ty = (
+                        pt1[1]
+                        +
+                        (pt2[1] - pt1[1])
+                        * fator_alt
+                    )
+
+                    if ponto_tomada_valido(
+                        tx,
+                        ty,
+                        polilinha,
+                        portas_raw,
+                        soleiras_raw
+                    ):
+                        encontrado = (
+                            tx,
+                            ty
+                        )
+                        break
+
+                if encontrado:
+                    px, py = encontrado
+                else:
+                    continue
+
+            vx = p_alvo["vx"]
+            vy = p_alvo["vy"]
+
+            nx, ny = get_inside_normal(
+                vx,
+                vy,
+                px,
+                py,
+                centro_x,
+                centro_y
+            )
+
+            ponto_b1 = (
+                px - vx * 0.10,
+                py - vy * 0.10
+            )
+
+            ponto_b2 = (
+                px + vx * 0.10,
+                py + vy * 0.10
+            )
+
+            ponto_pt = (
+                px + nx * 0.20,
+                py + ny * 0.20
+            )
+
+            msp.add_lwpolyline(
+                [
+                    ponto_b1,
+                    ponto_b2,
+                    ponto_pt,
+                    ponto_b1
+                ],
+                close=True,
+                dxfattribs={
+                    "layer":
+                        "PROJ_ELETRICA_TOMADA"
+                }
+            )
+
+            if is_chuveiro_ou_ac:
+                msp.add_solid(
+                    [
+                        ponto_b1,
+                        ponto_b2,
+                        ponto_pt
+                    ],
+                    dxfattribs={
+                        "layer":
+                            "PROJ_ELETRICA_TOMADA"
+                    }
+                )
+
+            elif is_ambiente_molhado:
+                msp.add_solid(
+                    [
+                        ponto_b1,
+                        (px, py),
+                        ponto_pt
+                    ],
+                    dxfattribs={
+                        "layer":
+                            "PROJ_ELETRICA_TOMADA"
+                    }
+                )
+
+            msp.add_text(
+                f"{pot_tue_val}W",
+                dxfattribs={
+                    "layer":
+                        "PROJ_ELETRICA_TEXTO",
+                    "height":
+                        0.12,
+                    "color":
+                        2,
+                    "insert":
+                        (
+                            px + nx * 0.35,
+                            py + ny * 0.35
+                        )
+                }
+            )
+
+
+            pontos_gerados.append({
+                "ambiente": nome,
+                "tipo": "TUE",
+                "ponto": (px, py),
+                "potencia": pot_tue_val,
+                "equipamento": eq_tue_nome,
+            })
+
+    # TUG
+    if qtd_tugs > 0 and comp_total > 0:
+        margem_inicial = 0.35
+
+        comprimento_util = (
+            comp_total
+            -
+            2 * margem_inicial
+        )
+
+        if comprimento_util > 0:
+            passo = (
+                comprimento_util
+                /
+                qtd_tugs
+            )
+
+            inicio_offset = (
+                margem_inicial
+                +
+                passo / 2
+            )
+
+        else:
+            passo = (
+                comp_total
+                /
+                qtd_tugs
+            )
+
+            inicio_offset = (
+                passo / 2
+            )
+
+        distancias_usadas = []
+
+        for i in range(
+            qtd_tugs
+        ):
+            distancia_desejada = (
+                inicio_offset
+                +
+                i * passo
+            )
+
+            if (
+                distancia_desejada <= 0
+                or distancia_desejada >= comp_total
+            ):
+                continue
+
+            resultado = (
+                procurar_ponto_valido_perimetro(
+                    distancia_desejada,
+                    comp_total,
+                    segmentos_crus,
+                    polilinha,
+                    portas_raw,
+                    soleiras_raw
+                )
+            )
+
+            if resultado is None:
+                continue
+
+            px, py, seg_vx, seg_vy = (
+                resultado
+            )
+
+            if any(
+                abs(
+                    distancia_desejada - d
+                ) < 0.60
+                for d in distancias_usadas
+            ):
+                continue
+
+            if not ponto_tomada_valido(
+                px,
+                py,
+                polilinha,
+                portas_raw,
+                soleiras_raw
+            ):
+                continue
+
+            distancias_usadas.append(
+                distancia_desejada
+            )
+
+            nx, ny = get_inside_normal(
+                seg_vx,
+                seg_vy,
+                px,
+                py,
+                centro_x,
+                centro_y
+            )
+
+            ponto_b1 = (
+                px - seg_vx * 0.10,
+                py - seg_vy * 0.10
+            )
+
+            ponto_b2 = (
+                px + seg_vx * 0.10,
+                py + seg_vy * 0.10
+            )
+
+            ponto_pt = (
+                px + nx * 0.20,
+                py + ny * 0.20
+            )
+
+            msp.add_lwpolyline(
+                [
+                    ponto_b1,
+                    ponto_b2,
+                    ponto_pt,
+                    ponto_b1
+                ],
+                close=True,
+                dxfattribs={
+                    "layer":
+                        "PROJ_ELETRICA_TOMADA"
+                }
+            )
+
+            if is_ambiente_molhado:
+                msp.add_solid(
+                    [
+                        ponto_b1,
+                        (px, py),
+                        ponto_pt
+                    ],
+                    dxfattribs={
+                        "layer":
+                            "PROJ_ELETRICA_TOMADA"
+                    }
+                )
+
+            pontos_gerados.append({
+                "ambiente": nome,
+                "tipo": "TUG",
+                "ponto": (px, py),
+                "potencia": 600 if is_ambiente_molhado else 100,
+            })
+
+    return pontos_gerados

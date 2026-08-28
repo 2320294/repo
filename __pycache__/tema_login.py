@@ -1,0 +1,689 @@
+import base64
+from pathlib import Path
+
+import streamlit as st
+
+
+BASE_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = BASE_DIR / "assets"
+
+
+def _arquivo_em_base64(caminho: Path) -> str:
+    if not caminho.exists():
+        return ""
+    return base64.b64encode(caminho.read_bytes()).decode("utf-8")
+
+
+def obter_logo_base64() -> str:
+    return _arquivo_em_base64(ASSETS_DIR / "logo_autoeletrica.png")
+
+
+def obter_fundo_login_base64() -> str:
+    return _arquivo_em_base64(ASSETS_DIR / "fundo_login.png")
+
+
+def aplicar_fundo_login():
+    """Aplica o visual completo da tela de autenticação."""
+    fundo_b64 = obter_fundo_login_base64()
+
+    fundo_css = (
+        f'background-image: url("data:image/png;base64,{fundo_b64}");'
+        if fundo_b64
+        else "background-color: #fbfbfb;"
+    )
+
+    st.markdown(
+        f"""
+        <style>
+        :root {{
+            --ae-navy: #1b2840;
+            --ae-blue: #2e63e6;
+            --ae-blue-dark: #2050cc;
+            --ae-text: #171b23;
+            --ae-muted: #4d596b;
+            --ae-border: #d9dee7;
+        }}
+
+        html, body, [class*="css"] {{
+            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+                "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }}
+
+        /* Fundo da área principal: usa a imagem enviada pelo usuário. */
+        [data-testid="stAppViewContainer"] {{
+            background-color: #fbfbfb;
+            {fundo_css}
+            background-repeat: repeat;
+            background-size: 200px 200px;
+            background-position: top left;
+            min-height: 100vh;
+        }}
+
+        [data-testid="stHeader"] {{
+            background: transparent;
+        }}
+
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"] {{
+            visibility: hidden;
+            height: 0;
+        }}
+
+        button[kind="header"] {{
+            display: none !important;
+        }}
+
+        /* Barra lateral com a MESMA cor do fundo do arquivo do logo. */
+        section[data-testid="stSidebar"] {{
+            background: var(--ae-navy) !important;
+            border-right: 0 !important;
+            min-width: 310px !important;
+            max-width: 310px !important;
+            width: 310px !important;
+            border-radius: 0 22px 22px 0;
+            overflow: hidden;
+            box-shadow: 5px 0 24px rgba(12, 25, 46, .10);
+        }}
+
+        section[data-testid="stSidebar"] > div:first-child {{
+            width: 310px !important;
+            background: var(--ae-navy) !important;
+        }}
+
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+            padding: 0 16px !important;
+            background: var(--ae-navy) !important;
+        }}
+
+        section[data-testid="stSidebar"] p,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] span {{
+            color: #f7f9fd;
+        }}
+
+        .ae-brand {{
+            padding: 92px 6px 62px 6px;
+            text-align: center;
+        }}
+
+        .ae-brand img {{
+            width: 220px;
+            max-width: 100%;
+            display: block;
+            margin: 0 auto;
+            border: 0;
+        }}
+
+        .ae-brand-subtitle {{
+            color: #4f8cff;
+            font-size: 1.10rem;
+            font-weight: 500;
+            margin-top: 7px;
+            letter-spacing: .01em;
+        }}
+
+        .ae-sidebar-separator {{
+            display: none;
+        }}
+
+        /* Menu lateral - duas opções somente. */
+        section[data-testid="stSidebar"] [role="radiogroup"] {{
+            gap: 14px;
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"] {{
+            background: transparent;
+            border-radius: 9px;
+            padding: 14px 16px;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            transition: background .15s ease, transform .15s ease;
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"]:hover {{
+            background: rgba(255,255,255,.075);
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"]:has(input:checked) {{
+            background: linear-gradient(90deg, #2c5fcf 0%, #294f9f 100%);
+            box-shadow: 0 10px 22px rgba(3, 13, 33, .18);
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"] > div:first-child {{
+            display: none;
+        }}
+
+        section[data-testid="stSidebar"] [data-baseweb="radio"] p {{
+            font-size: 1.02rem;
+            font-weight: 500;
+            margin: 0;
+        }}
+
+        .ae-sidebar-footer {{
+            position: fixed;
+            left: 30px;
+            bottom: 25px;
+            width: 245px;
+            color: rgba(255,255,255,.70);
+            font-size: .82rem;
+            line-height: 1.65;
+        }}
+
+        /* Área central. */
+        [data-testid="stMainBlockContainer"] {{
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            padding-left: 4.0rem !important;
+            padding-right: 4.0rem !important;
+            max-width: 100% !important;
+            min-height: calc(100vh - 2px) !important;
+            height: calc(100vh - 2px) !important;
+            overflow: hidden !important;
+        }}
+
+        /* O conteúdo de autenticação ocupa toda a altura útil e é
+           centralizado verticalmente. O antigo espaçador superior foi removido. */
+        [data-testid="stMainBlockContainer"] > div:first-child {{
+            min-height: 100% !important;
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+        }}
+
+        .ae-main-spacer {{
+            display: none !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+
+        /* Card de autenticação: o próprio centro das 3 colunas vira o card branco.
+           Isso evita depender da estrutura interna variável do st.container. */
+        [data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {{
+            background: #ffffff !important;
+            background-image: none !important;
+            border: 1px solid rgba(215,220,228,.95) !important;
+            border-radius: 18px !important;
+            box-shadow: 0 14px 34px rgba(30,40,55,.12), 0 2px 6px rgba(30,40,55,.05) !important;
+            padding: 16px 20px 15px 20px !important;
+            overflow: hidden !important;
+        }}
+
+        [data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) > div {{
+            background: #ffffff !important;
+            background-image: none !important;
+        }}
+
+        [data-testid="stMain"] [data-testid="stForm"] {{
+            background: #ffffff !important;
+            background-image: none !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }}
+
+        .ae-lock {{
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 8px auto;
+            border-radius: 50%;
+            background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 12px 25px rgba(20,43,98,.16);
+            position: relative;
+        }}
+
+        .ae-lock-body {{
+            width: 24px;
+            height: 20px;
+            border: 4px solid white;
+            border-radius: 6px;
+            box-sizing: border-box;
+            position: absolute;
+            top: 27px;
+        }}
+
+        .ae-lock-body:before {{
+            content: "";
+            position: absolute;
+            width: 15px;
+            height: 14px;
+            border: 4px solid white;
+            border-bottom: 0;
+            border-radius: 13px 13px 0 0;
+            left: 1px;
+            top: -15px;
+            box-sizing: border-box;
+        }}
+
+        .ae-lock-body:after {{
+            content: "";
+            position: absolute;
+            width: 4px;
+            height: 7px;
+            border-radius: 2px;
+            background: white;
+            left: 9px;
+            top: 7px;
+        }}
+
+
+        /* Ícone da tela de cadastro. */
+        .ae-user-icon {{
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 8px auto;
+            border-radius: 50%;
+            background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
+            position: relative;
+            box-shadow: 0 12px 25px rgba(20,43,98,.16);
+        }}
+
+        .ae-user-head {{
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 3px solid white;
+            border-radius: 50%;
+            left: 22px;
+            top: 15px;
+            box-sizing: border-box;
+        }}
+
+        .ae-user-body {{
+            position: absolute;
+            width: 34px;
+            height: 20px;
+            border: 3px solid white;
+            border-bottom: 0;
+            border-radius: 18px 18px 0 0;
+            left: 15px;
+            top: 39px;
+            box-sizing: border-box;
+        }}
+
+        .ae-user-plus {{
+            position: absolute;
+            right: 9px;
+            bottom: 8px;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #4f8cff;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            line-height: 1;
+            font-weight: 700;
+            border: 2px solid #1b2840;
+        }}
+
+        .ae-login-title {{
+            text-align: center;
+            margin: 0;
+            color: var(--ae-text);
+            font-size: 1.62rem;
+            font-weight: 800;
+            letter-spacing: -.025em;
+            line-height: 1.1;
+        }}
+
+        .ae-login-subtitle {{
+            text-align: center;
+            color: #475365;
+            margin-top: 4px;
+            margin-bottom: 9px;
+            font-size: .88rem;
+        }}
+
+        [data-testid="stTextInput"] {{
+            margin-bottom: 3px;
+        }}
+
+        [data-testid="stTextInput"] label p {{
+            color: #171b23;
+            font-weight: 500;
+            font-size: .93rem;
+        }}
+
+        [data-testid="stTextInput"] input {{
+            min-height: 36px;
+            border-radius: 9px;
+            border-color: #d3d9e3;
+            background: #fff;
+            font-size: .96rem;
+            padding-left: 14px;
+        }}
+
+        [data-testid="stTextInput"] input:focus {{
+            border-color: #7ca2ff;
+            box-shadow: 0 0 0 1px #7ca2ff;
+        }}
+
+        [data-testid="stFormSubmitButton"] button {{
+            height: 40px;
+            border: 0 !important;
+            border-radius: 8px;
+            background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-dark));
+            color: white !important;
+            font-size: 1.02rem;
+            font-weight: 700;
+            box-shadow: 0 8px 18px rgba(36,95,231,.20);
+            margin-top: 3px;
+        }}
+
+        [data-testid="stFormSubmitButton"] button:hover {{
+            filter: brightness(1.035);
+            transform: translateY(-1px);
+        }}
+
+        .ae-ou {{
+            display: flex;
+            align-items: center;
+            gap: .85rem;
+            color: #657084;
+            margin: 12px 0 12px 0;
+            font-size: .90rem;
+        }}
+
+        .ae-ou:before,
+        .ae-ou:after {{
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #dfe4eb;
+        }}
+
+        .ae-google {{
+            height: 40px;
+            border: 1px solid #d9dee7;
+            border-radius: 8px;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 11px;
+            color: #171b23;
+            font-size: .98rem;
+            user-select: none;
+            margin: 0;
+        }}
+
+        .ae-google-g {{
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #4285f4;
+        }}
+
+        .ae-auth-switch-label {{
+            text-align: center;
+            color: #697487;
+            font-size: .90rem;
+            margin: 12px 0 9px 0;
+        }}
+
+        /* Botão de cadastro/voltar, dentro do próprio card de autenticação. */
+        [data-testid="stMain"] [data-testid="stButton"] button {{
+            min-height: 36px;
+            border-radius: 8px;
+            border: 1px solid #cdd8ef !important;
+            background: #f7f9fe !important;
+            color: #2757bb !important;
+            font-weight: 650;
+            box-shadow: none !important;
+        }}
+
+        [data-testid="stMain"] [data-testid="stButton"] button:hover {{
+            background: #eef3ff !important;
+            border-color: #9db7ec !important;
+            color: #1949ac !important;
+        }}
+
+        /* Botão Google no padrão visual usado em sites: fundo branco,
+           borda cinza e ícone G multicolorido. O seletor pela key deixa
+           o estilo restrito somente ao botão de autenticação Google. */
+        [data-testid="stMain"] .st-key-entrar_google button,
+        [data-testid="stMain"] [class*="st-key-entrar_google"] button {{
+            position: relative !important;
+            min-height: 42px !important;
+            background: #ffffff !important;
+            border: 1px solid #dadce0 !important;
+            color: #202124 !important;
+            font-weight: 500 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease !important;
+        }}
+
+        [data-testid="stMain"] .st-key-entrar_google button::before,
+        [data-testid="stMain"] [class*="st-key-entrar_google"] button::before {{
+            content: "" !important;
+            width: 18px !important;
+            height: 18px !important;
+            display: inline-block !important;
+            flex: 0 0 18px !important;
+            margin-right: 10px !important;
+            background-repeat: no-repeat !important;
+            background-position: center !important;
+            background-size: 18px 18px !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath fill='%234285F4' d='M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.875 2.684-6.615z'/%3E%3Cpath fill='%2334A853' d='M9 18c2.43 0 4.467-.806 5.956-2.18l-2.91-2.258c-.805.54-1.835.86-3.046.86-2.344 0-4.328-1.585-5.037-3.714H.956v2.332A9 9 0 0 0 9 18z'/%3E%3Cpath fill='%23FBBC05' d='M3.963 10.708A5.42 5.42 0 0 1 3.682 9c0-.593.102-1.17.281-1.708V4.96H.956A9 9 0 0 0 0 9c0 1.45.347 2.822.956 4.04l3.007-2.332z'/%3E%3Cpath fill='%23EA4335' d='M9 3.58c1.322 0 2.508.455 3.44 1.346l2.582-2.582C13.463.892 11.426 0 9 0A9 9 0 0 0 .956 4.96l3.007 2.332C4.672 5.163 6.656 3.58 9 3.58z'/%3E%3C/svg%3E") !important;
+        }}
+
+        [data-testid="stMain"] .st-key-entrar_google button:hover,
+        [data-testid="stMain"] [class*="st-key-entrar_google"] button:hover {{
+            background: #f8faff !important;
+            border-color: #c9ccd1 !important;
+            color: #202124 !important;
+            box-shadow: 0 1px 2px rgba(60,64,67,.16) !important;
+        }}
+
+
+        /* Reduz os espaços verticais padrão do Streamlit para o formulário
+           caber inteiro em uma tela comum sem rolagem. */
+        [data-testid="stMain"] [data-testid="stVerticalBlock"] {{
+            gap: .34rem !important;
+        }}
+
+        [data-testid="stMain"] [data-testid="stForm"] [data-testid="stVerticalBlock"] {{
+            gap: .30rem !important;
+        }}
+
+        [data-testid="stMain"] .stElementContainer {{
+            margin-bottom: 0 !important;
+        }}
+
+                /* Card de Sobre o Sistema. */
+        .ae-info-card {{
+            background: rgba(255,255,255,.975);
+            border: 1px solid rgba(215,220,228,.88);
+            border-radius: 22px;
+            padding: 34px 38px;
+            box-shadow: 0 18px 44px rgba(30,40,55,.12), 0 2px 7px rgba(30,40,55,.04);
+            color: #1a202b;
+        }}
+
+        .ae-info-icon {{
+            width: 66px;
+            height: 66px;
+            border-radius: 50%;
+            margin: 0 auto 18px auto;
+            background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-family: Georgia, serif;
+            font-weight: 700;
+        }}
+
+        .ae-info-card h2 {{
+            margin: 0 0 12px 0;
+            text-align: center;
+            font-size: 1.85rem;
+            color: #171b23;
+        }}
+
+        .ae-info-card .ae-info-lead {{
+            text-align: center;
+            color: #4c5869;
+            margin: 0 0 22px 0;
+            line-height: 1.6;
+        }}
+
+        .ae-info-card p {{
+            color: #3d4757;
+            line-height: 1.72;
+            font-size: .97rem;
+            margin: 0 0 13px 0;
+        }}
+
+        .ae-info-highlight {{
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 10px;
+            background: #f5f8ff;
+            border: 1px solid #dce6fb;
+            color: #31528d;
+            line-height: 1.55;
+        }}
+
+        /* Esconde elementos que atrapalham o layout de login. */
+        [data-testid="stSidebarCollapseButton"] {{
+            display: none !important;
+        }}
+
+        @media (max-width: 900px) {{
+            section[data-testid="stSidebar"] {{
+                min-width: 255px !important;
+                max-width: 255px !important;
+                width: 255px !important;
+            }}
+
+            section[data-testid="stSidebar"] > div:first-child {{
+                width: 255px !important;
+            }}
+
+            .ae-brand {{
+                padding-top: 48px;
+                padding-bottom: 36px;
+            }}
+
+            .ae-brand img {{
+                width: 205px;
+            }}
+
+            .ae-sidebar-footer {{
+                display: none;
+            }}
+
+            [data-testid="stMainBlockContainer"] {{
+                padding-left: 1.5rem !important;
+                padding-right: 1.5rem !important;
+            }}
+
+            .ae-main-spacer {{
+                display: none !important;
+            }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+
+def aplicar_tema_sistema():
+    """Mantém o sistema logado com a mesma identidade visual da tela de login."""
+    st.markdown(
+        """
+        <style>
+        :root {
+            --ae-navy: #1b2840;
+            --ae-blue: #2e63e6;
+            --ae-blue-dark: #2050cc;
+        }
+
+        /* Sidebar do sistema com a mesma cor da tela de login. */
+        section[data-testid="stSidebar"] {
+            background: var(--ae-navy) !important;
+            border-right: 0 !important;
+        }
+
+        section[data-testid="stSidebar"] > div:first-child,
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            background: var(--ae-navy) !important;
+        }
+
+        /* Textos, títulos, captions e labels da sidebar. */
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3,
+        section[data-testid="stSidebar"] p,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] span,
+        section[data-testid="stSidebar"] small,
+        section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+            color: #f4f7fd !important;
+        }
+
+        section[data-testid="stSidebar"] hr {
+            border-color: rgba(255,255,255,.18) !important;
+        }
+
+        /* Campos e selects permanecem claros para leitura. */
+        section[data-testid="stSidebar"] input,
+        section[data-testid="stSidebar"] textarea,
+        section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+            background: #ffffff !important;
+            color: #1b2840 !important;
+            border-color: rgba(255,255,255,.30) !important;
+        }
+
+        section[data-testid="stSidebar"] input::placeholder,
+        section[data-testid="stSidebar"] textarea::placeholder {
+            color: #77839a !important;
+        }
+
+        /* Botões laterais adaptados ao azul do login. */
+        section[data-testid="stSidebar"] [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button {
+            background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-dark)) !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255,255,255,.12) !important;
+            border-radius: 9px !important;
+            box-shadow: 0 7px 18px rgba(0,0,0,.16) !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stButton"] button:hover,
+        section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button:hover {
+            filter: brightness(1.06);
+            border-color: rgba(255,255,255,.28) !important;
+        }
+
+        /* Alertas da sidebar com leitura confortável sobre o fundo escuro. */
+        section[data-testid="stSidebar"] [data-testid="stAlert"] {
+            background: rgba(255,255,255,.10) !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stAlert"] * {
+            color: #f4f7fd !important;
+        }
+
+        /* Mantém a área principal limpa e clara. */
+        [data-testid="stAppViewContainer"] {
+            background: #ffffff !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
