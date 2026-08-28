@@ -389,7 +389,7 @@ def _geometria_visual_porta_por_soleira(porta,poly,geometrias_portas):
     maior=_maior_lado_soleira(verts)
     if maior is None:
         return None
-    comprimento,a,b=maior
+    largura_porta,a,b=maior
 
     arestas=[]
     for i in range(len(verts)):
@@ -429,14 +429,14 @@ def _geometria_visual_porta_por_soleira(porta,poly,geometrias_portas):
     probe2=(dobradica[0]+n2[0]*0.05,dobradica[1]+n2[1]*0.05)
     normal=n1 if _distancia(probe1,centro_amb)<=_distancia(probe2,centro_amb) else n2
 
-    folha_fim=(dobradica[0]+normal[0]*comprimento,dobradica[1]+normal[1]*comprimento)
+    folha_fim=(dobradica[0]+normal[0]*largura_porta,dobradica[1]+normal[1]*largura_porta)
     ang_inicio=math.degrees(math.atan2(outro[1]-dobradica[1],outro[0]-dobradica[0]))
     ang_folha=math.degrees(math.atan2(folha_fim[1]-dobradica[1],folha_fim[0]-dobradica[0]))
     delta_ccw=(ang_folha-ang_inicio)%360.0
     sentido=1.0 if delta_ccw<=180.0 else -1.0
-    arco=_arco_quarto_circulo(dobradica,ang_inicio,sentido,comprimento)
+    arco=_arco_quarto_circulo(dobradica,ang_inicio,sentido,largura_porta)
 
-    return {"folha":[dobradica,folha_fim],"arco":arco,"raio":comprimento,"dobradica":dobradica}
+    return {"folha":[dobradica,folha_fim],"arco":arco,"raio":largura_porta,"largura_porta":largura_porta,"dobradica":dobradica}
 
 def _figura_ambiente(
     nome,
@@ -446,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 6.6:
+    Mini planta Fase 6.7:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -552,41 +552,45 @@ def _figura_ambiente(
         max_y + margem_y
     ]
 
-    proporcao = (
-        largura
-        / altura
+    # Fase 6.7:
+    # X e Y usam exatamente o MESMO fator de escala.
+    # Isso impede círculo virar elipse e arco de porta ficar esticado.
+    largura_dom = max(
+        dominio_x[1] - dominio_x[0],
+        0.01
+    )
+    altura_dom = max(
+        dominio_y[1] - dominio_y[0],
+        0.01
     )
 
-    largura_grafico = 430
+    max_largura_px = 430.0
+    max_altura_px = 330.0
 
-    if proporcao >= 1:
-        altura_grafico = int(
-            max(
-                240,
-                min(
-                    340,
-                    largura_grafico
-                    / max(
-                        proporcao,
-                        0.01
-                    )
-                )
+    escala_px_por_unidade = min(
+        max_largura_px / largura_dom,
+        max_altura_px / altura_dom
+    )
+
+    largura_grafico = int(
+        max(
+            1,
+            round(
+                largura_dom
+                * escala_px_por_unidade
             )
         )
+    )
 
-    else:
-        altura_grafico = 330
-
-        largura_grafico = int(
-            max(
-                300,
-                min(
-                    430,
-                    altura_grafico
-                    * proporcao
-                )
+    altura_grafico = int(
+        max(
+            1,
+            round(
+                altura_dom
+                * escala_px_por_unidade
             )
         )
+    )
 
     # =========================================================
     # PAREDES
@@ -988,24 +992,6 @@ def _figura_ambiente(
                 "values":
                     dados_portas
             },
-            "params": [
-                {
-                    "name":
-                        "porta",
-                    "select": {
-                        "type":
-                            "point",
-                        "fields": [
-                            "porta_id"
-                        ],
-                        "on":
-                            "click",
-                            "toggle": True,
-                        "clear":
-                            False
-                    }
-                }
-            ],
             "mark": {
                 "type":
                     "point",
@@ -1200,6 +1186,18 @@ def _figura_ambiente(
             "top": 14,
             "bottom": 14
         },
+        "params": [
+            {
+                "name": "porta",
+                "select": {
+                    "type": "point",
+                    "fields": ["porta_id"],
+                    "on": "click",
+                    "toggle": True,
+                    "clear": False
+                }
+            }
+        ],
         "config": {
             "view": {
                 "stroke":
@@ -1218,7 +1216,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.6:
+    Fase 6.7:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1320,7 +1318,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase6_6_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase6_7_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1363,46 +1361,123 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=True,
-                    key=f"fase6_6_planta_portas_{amb}",
-                    on_select="rerun"
+                    key=f"fase6_7_planta_portas_{amb}",
+                    on_select="rerun",
+                    selection_mode=["porta"]
                 )
     
-                # Fase 6.6: seleção do Vega-Lite é a fonte de verdade.
-                ids_evento=[]
+                # Fase 6.7:
+                # lê o estado real da seleção retornada pelo Streamlit.
+                ids_evento = []
 
                 try:
-                    ids_evento=evento.selection.porta.get(
+                    sel = evento.selection["porta"]
+                except Exception:
+                    try:
+                        sel = evento["selection"]["porta"]
+                    except Exception:
+                        sel = {}
+
+                # Formato esperado do Streamlit:
+                # {"porta_id": ["PORTA_x", ...]}
+                if isinstance(sel, dict):
+                    bruto = sel.get(
                         "porta_id",
                         []
                     )
-                except Exception:
-                    try:
-                        ids_evento=(
-                            evento["selection"]["porta"].get(
-                                "porta_id",
-                                []
-                            )
+
+                    if isinstance(
+                        bruto,
+                        str
+                    ):
+                        ids_evento = [
+                            bruto
+                        ]
+
+                    elif isinstance(
+                        bruto,
+                        (list, tuple)
+                    ):
+                        ids_evento = list(
+                            bruto
                         )
-                    except Exception:
-                        ids_evento=[]
 
-                if isinstance(ids_evento,str):
-                    ids_evento=[ids_evento]
+                    # Compatibilidade com retorno em "values".
+                    elif "values" in sel:
+                        valores = (
+                            sel.get(
+                                "values"
+                            )
+                            or []
+                        )
 
-                ids_evento=[
-                    pid for pid in ids_evento
-                    if pid in ids_validos
-                ]
+                        for item in valores:
+                            if isinstance(
+                                item,
+                                dict
+                            ):
+                                pid = (
+                                    item.get(
+                                        "porta_id"
+                                    )
+                                )
 
-                estado_atual=list(
-                    st.session_state[chave_estado]
+                                if pid:
+                                    ids_evento.append(
+                                        pid
+                                    )
+
+                elif isinstance(
+                    sel,
+                    (list, tuple)
+                ):
+                    for item in sel:
+                        if isinstance(
+                            item,
+                            dict
+                        ):
+                            pid = (
+                                item.get(
+                                    "porta_id"
+                                )
+                            )
+
+                            if pid:
+                                ids_evento.append(
+                                    pid
+                                )
+
+                ids_evento = list(
+                    dict.fromkeys(
+                        pid
+                        for pid
+                        in ids_evento
+                        if pid in ids_validos
+                    )
                 )
 
-                if set(ids_evento)!=set(estado_atual):
-                    st.session_state[chave_estado]=ids_evento
+                estado_atual = list(
+                    st.session_state[
+                        chave_estado
+                    ]
+                )
+
+                # Quando o usuário clicar em uma bolinha,
+                # o Vega-Lite devolve o conjunto atualizado.
+                # Sincronizamos a sessão e forçamos nova renderização:
+                # vermelho -> verde ou verde -> vermelho.
+                if set(
+                    ids_evento
+                ) != set(
+                    estado_atual
+                ):
+                    st.session_state[
+                        chave_estado
+                    ] = ids_evento
+
                     st.rerun()
 
-                # Fase 6.6:
+                # Fase 6.7:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(
