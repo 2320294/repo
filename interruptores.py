@@ -8,6 +8,7 @@ import streamlit as st
 
 from dxf_io import ler_elementos
 from portas_selecao import portas_do_ambiente
+from soleiras_geometria import rotular_p1_p4, distancia_ponto_segmento
 
 
 def _nome_ambiente_da_poligonal(poly, textos):
@@ -342,6 +343,101 @@ def analisar_portas_dxf(dxf_bytes):
             )
 
 
+
+def _maior_lado_soleira(verts):
+    if not verts or len(verts) < 2:
+        return None
+    arestas=[]
+    for i in range(len(verts)):
+        a=(float(verts[i][0]),float(verts[i][1]))
+        b=(float(verts[(i+1)%len(verts)][0]),float(verts[(i+1)%len(verts)][1]))
+        comp=_distancia(a,b)
+        if comp>1e-9:
+            arestas.append((comp,a,b))
+    return max(arestas,key=lambda item:item[0]) if arestas else None
+
+
+def _porta_geom_mais_proxima_da_soleira(soleira, geometrias_portas):
+    verts=soleira.get("vertices") or []
+    if not verts or not geometrias_portas:
+        return None
+    melhor=None
+    menor=float("inf")
+    for geometria in geometrias_portas:
+        pontos=geometria.get("pontos",[])
+        if not pontos:
+            continue
+        d=min(_distancia(ponto,ref) for ponto in pontos for ref in verts)
+        if d<menor:
+            menor=d
+            melhor=geometria
+    return melhor
+
+
+def _arco_quarto_circulo(centro,inicio,sentido,raio,passos=20):
+    pontos=[]
+    for i in range(passos+1):
+        ang=inicio+sentido*90.0*i/passos
+        rad=math.radians(ang)
+        pontos.append((centro[0]+raio*math.cos(rad),centro[1]+raio*math.sin(rad)))
+    return pontos
+
+
+def _geometria_visual_porta_por_soleira(porta,poly,geometrias_portas):
+    soleira=porta["soleira"]
+    verts=soleira.get("vertices") or []
+    maior=_maior_lado_soleira(verts)
+    if maior is None:
+        return None
+    comprimento,a,b=maior
+
+    arestas=[]
+    for i in range(len(verts)):
+        p=(float(verts[i][0]),float(verts[i][1]))
+        q=(float(verts[(i+1)%len(verts)][0]),float(verts[(i+1)%len(verts)][1]))
+        comp=_distancia(p,q)
+        if comp>1e-9:
+            arestas.append((comp,p,q))
+    arestas.sort(key=lambda item:item[0],reverse=True)
+    face=arestas[0]
+    pA,pB=face[1],face[2]
+
+    cx=sum(float(p[0]) for p in poly)/len(poly)
+    cy=sum(float(p[1]) for p in poly)/len(poly)
+    centro_amb=(cx,cy)
+
+    original=_porta_geom_mais_proxima_da_soleira(soleira,geometrias_portas)
+    if original and original.get("pontos"):
+        primeiro=original["pontos"][0]
+        if _distancia(primeiro,pA)<=_distancia(primeiro,pB):
+            dobradica,outro=pA,pB
+        else:
+            dobradica,outro=pB,pA
+    else:
+        dobradica,outro=((pA,pB) if (pA[0],pA[1])<=(pB[0],pB[1]) else (pB,pA))
+
+    vx=outro[0]-dobradica[0]
+    vy=outro[1]-dobradica[1]
+    comp=math.hypot(vx,vy)
+    if comp<=1e-12:
+        return None
+    ux,uy=vx/comp,vy/comp
+    n1=(-uy,ux)
+    n2=(uy,-ux)
+
+    probe1=(dobradica[0]+n1[0]*0.05,dobradica[1]+n1[1]*0.05)
+    probe2=(dobradica[0]+n2[0]*0.05,dobradica[1]+n2[1]*0.05)
+    normal=n1 if _distancia(probe1,centro_amb)<=_distancia(probe2,centro_amb) else n2
+
+    folha_fim=(dobradica[0]+normal[0]*comprimento,dobradica[1]+normal[1]*comprimento)
+    ang_inicio=math.degrees(math.atan2(outro[1]-dobradica[1],outro[0]-dobradica[0]))
+    ang_folha=math.degrees(math.atan2(folha_fim[1]-dobradica[1],folha_fim[0]-dobradica[0]))
+    delta_ccw=(ang_folha-ang_inicio)%360.0
+    sentido=1.0 if delta_ccw<=180.0 else -1.0
+    arco=_arco_quarto_circulo(dobradica,ang_inicio,sentido,comprimento)
+
+    return {"folha":[dobradica,folha_fim],"arco":arco,"raio":comprimento,"dobradica":dobradica}
+
 def _figura_ambiente(
     nome,
     poly,
@@ -350,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 6.5:
+    Mini planta Fase 6.6:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -619,32 +715,29 @@ def _figura_ambiente(
     # =========================================================
     linhas_porta = []
 
-    for indice, geometria in enumerate(
-        geometrias_portas
-    ):
-        for ordem, ponto in enumerate(
-            geometria["pontos"]
-        ):
+    for indice, porta in enumerate(portas):
+        visual=_geometria_visual_porta_por_soleira(
+            porta,poly,geometrias_portas
+        )
+        if visual is None:
+            continue
+
+        for ordem,ponto in enumerate(visual["folha"]):
             linhas_porta.append({
-                "grupo":
-                    (
-                        f"{geometria.get('porta_id', 'PORTA')}"
-                        f"_{indice}"
-                    ),
-                "tipo":
-                    geometria[
-                        "tipo"
-                    ],
-                "ordem":
-                    ordem,
-                "x":
-                    float(
-                        ponto[0]
-                    ),
-                "y":
-                    float(
-                        ponto[1]
-                    )
+                "grupo":f"FOLHA_{porta['id']}",
+                "tipo":"FOLHA",
+                "ordem":ordem,
+                "x":float(ponto[0]),
+                "y":float(ponto[1])
+            })
+
+        for ordem,ponto in enumerate(visual["arco"]):
+            linhas_porta.append({
+                "grupo":f"ARCO_{porta['id']}",
+                "tipo":"ARCO",
+                "ordem":ordem,
+                "x":float(ponto[0]),
+                "y":float(ponto[1])
             })
 
     # =========================================================
@@ -907,6 +1000,7 @@ def _figura_ambiente(
                         ],
                         "on":
                             "click",
+                            "toggle": True,
                         "clear":
                             False
                     }
@@ -1124,7 +1218,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.5:
+    Fase 6.6:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1226,7 +1320,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase6_5_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase6_6_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1269,69 +1363,46 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=True,
-                    key=f"fase6_5_planta_portas_{amb}",
+                    key=f"fase6_6_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
-                # Streamlit retorna os valores selecionados pelo Vega-Lite.
-                # Usamos o ID geométrico da porta para alternar a seleção.
-                ids_evento = []
-    
+                # Fase 6.6: seleção do Vega-Lite é a fonte de verdade.
+                ids_evento=[]
+
                 try:
-                    ids_evento = (
-                        evento.selection.porta.get(
-                            "porta_id",
-                            []
-                        )
+                    ids_evento=evento.selection.porta.get(
+                        "porta_id",
+                        []
                     )
                 except Exception:
                     try:
-                        ids_evento = (
-                            evento["selection"]
-                            ["porta"]
-                            .get("porta_id", [])
+                        ids_evento=(
+                            evento["selection"]["porta"].get(
+                                "porta_id",
+                                []
+                            )
                         )
                     except Exception:
-                        ids_evento = []
-    
-                if isinstance(ids_evento, str):
-                    ids_evento = [ids_evento]
-    
-                if ids_evento:
-                    pid = ids_evento[-1]
-    
-                    chave_ultimo = (
-                        f"fase6_5_ultima_porta_evento_{amb}"
-                    )
-    
-                    if (
-                        pid in ids_validos
-                        and st.session_state.get(
-                            chave_ultimo
-                        ) != pid
-                    ):
-                        atual = list(
-                            st.session_state[
-                                chave_estado
-                            ]
-                        )
-    
-                        if pid in atual:
-                            atual.remove(pid)
-                        else:
-                            atual.append(pid)
-    
-                        st.session_state[
-                            chave_estado
-                        ] = atual
-    
-                        st.session_state[
-                            chave_ultimo
-                        ] = pid
-    
-                        st.rerun()
-    
-                # Fase 6.5:
+                        ids_evento=[]
+
+                if isinstance(ids_evento,str):
+                    ids_evento=[ids_evento]
+
+                ids_evento=[
+                    pid for pid in ids_evento
+                    if pid in ids_validos
+                ]
+
+                estado_atual=list(
+                    st.session_state[chave_estado]
+                )
+
+                if set(ids_evento)!=set(estado_atual):
+                    st.session_state[chave_estado]=ids_evento
+                    st.rerun()
+
+                # Fase 6.6:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(

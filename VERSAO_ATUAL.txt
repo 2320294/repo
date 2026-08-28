@@ -1,11 +1,8 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 6.5
-IDENTIFICADOR: Fase_6_5
-
-[OK] Sistema Fase 6.5
-[OK] Gerador CAD Fase 6.5
-[OK] DXF Fase_6_5
-[OK] sem dropdown de portas
-[OK] seleção por clique direto
-[OK] geometria de cada porta associada uma única vez
-[OK] interruptores Ø10 cm
+VERSÃO ATUAL: Fase 6.6
+IDENTIFICADOR: Fase_6_6
+[OK] Sistema 6.6
+[OK] Gerador 6.6
+[OK] DXF 6.6
+[OK] arco = maior lado da soleira
+[OK] toggle por clique
