@@ -1,13 +1,13 @@
 
 import math
-from geometria import centro_poligono
+from geometria import centro_poligono, get_inside_normal
 from soleiras_geometria import (
     rotular_p1_p4,
     ponto_10cm_apos_p2,
     distancia_ponto_segmento,
 )
 
-RAIO_INTERRUPTOR = 0.15
+RAIO_INTERRUPTOR = 0.025  # Ø 5 cm
 AFASTAMENTO_APOS_P2 = 0.10  # 10 cm exatos
 
 
@@ -83,11 +83,11 @@ def desenhar_interruptores(
         if not rot:
             continue
 
-        # REGRA FASE 5.2:
-        # centro do interruptor = exatamente 10 cm após P2,
-        # continuando o vetor P1 -> P2.
-        ponto_interruptor = ponto_10cm_apos_p2(rot, AFASTAMENTO_APOS_P2)
-        if ponto_interruptor is None:
+        # REGRA FASE 5.3:
+        # O ponto localizado exatamente 10 cm após P2 continua SOBRE A PAREDE
+        # e passa a ser o PONTO DE TANGÊNCIA do símbolo do interruptor.
+        ponto_tangencia = ponto_10cm_apos_p2(rot, AFASTAMENTO_APOS_P2)
+        if ponto_tangencia is None:
             continue
 
         # Centro geométrico da soleira para localizar ambientes adjacentes.
@@ -118,12 +118,42 @@ def desenhar_interruptores(
             if qtd == 0:
                 continue
 
-            # Nesta fase o ponto geométrico é único: 10 cm após P2.
-            # Se a configuração solicitar 2 teclas/interruptores, desenhamos
-            # o mesmo ponto uma única vez; o tratamento do símbolo múltiplo
-            # será refinado depois sem alterar a referência geométrica.
+            # A parede de referência segue a direção P1 -> P2.
+            p1 = rot["p1"]
+            p2 = rot["p2"]
+
+            dx = p2[0] - p1[0]
+            dy = p2[1] - p1[1]
+            comp = math.hypot(dx, dy)
+            if comp <= 1e-12:
+                continue
+
+            ux = dx / comp
+            uy = dy / comp
+
+            # Escolhe automaticamente a normal que aponta para DENTRO
+            # do ambiente atual.
+            cx_env, cy_env = centro_poligono(ambiente["poly"])
+            normal_interna = get_inside_normal(
+                ux,
+                uy,
+                ponto_tangencia[0],
+                ponto_tangencia[1],
+                cx_env,
+                cy_env
+            )
+
+            # O círculo tem Ø 5 cm (raio 2,5 cm).
+            # Portanto, deslocamos o centro exatamente um raio para dentro.
+            # Assim, um quadrante do círculo toca a parede no ponto situado
+            # exatamente 10 cm após P2.
+            centro_interruptor = (
+                ponto_tangencia[0] + normal_interna[0] * RAIO_INTERRUPTOR,
+                ponto_tangencia[1] + normal_interna[1] * RAIO_INTERRUPTOR
+            )
+
             msp.add_circle(
-                center=ponto_interruptor,
+                center=centro_interruptor,
                 radius=RAIO_INTERRUPTOR,
                 dxfattribs={"layer": "PROJ_ELETRICA_INTERRUPTOR"}
             )
@@ -131,8 +161,11 @@ def desenhar_interruptores(
             pontos_gerados.append({
                 "ambiente": nome,
                 "tipo": "INTERRUPTOR",
-                "ponto": ponto_interruptor,
-                "referencia": "10cm_APOS_P2",
+                "ponto": centro_interruptor,
+                "ponto_tangencia": ponto_tangencia,
+                "referencia": "TANGENTE_10cm_APOS_P2",
+                "diametro_m": 0.05,
+                "raio_m": RAIO_INTERRUPTOR,
                 "p1": rot["p1"],
                 "p2": rot["p2"],
                 "p3": rot["p3"],
