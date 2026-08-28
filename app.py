@@ -13,7 +13,7 @@ from auth import (
 
 from projetos import renderizar_gerenciador_projetos
 from painel import renderizar_painel_principal
-from tema_login import aplicar_fundo_login
+from tema_login import aplicar_fundo_login, aplicar_tema_sistema
 
 
 # ============================================================
@@ -48,6 +48,8 @@ if not st.session_state.logged_in:
 # ============================================================
 # SISTEMA APÓS LOGIN
 # ============================================================
+
+aplicar_tema_sistema()
 
 with st.sidebar:
     st.markdown("## ⚡ AutoElétrica Profissional")

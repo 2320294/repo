@@ -35,10 +35,8 @@ from upload_cad import (
 
 def renderizar_painel_principal():
 
-    st.title(
-        f"⚡ Painel de Projetos Elétricos — "
-        f"Olá, {st.session_state.user_name}!"
-    )
+    st.title("⚡ Painel de Projetos Elétricos")
+    st.subheader(f"Olá, {st.session_state.user_name}!")
 
     if (
         st.session_state.projeto_ativo

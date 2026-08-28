@@ -390,7 +390,7 @@ def aplicar_fundo_login():
             align-items: center;
             gap: .85rem;
             color: #657084;
-            margin: 7px 0 6px 0;
+            margin: 10px 0 10px 0;
             font-size: .90rem;
         }}
 
@@ -426,7 +426,7 @@ def aplicar_fundo_login():
             text-align: center;
             color: #697487;
             font-size: .90rem;
-            margin: 7px 0 4px 0;
+            margin: 10px 0 6px 0;
         }}
 
         /* Botão de cadastro/voltar, dentro do próprio card de autenticação. */
@@ -555,6 +555,95 @@ def aplicar_fundo_login():
                 display: none !important;
             }}
         }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+
+def aplicar_tema_sistema():
+    """Mantém o sistema logado com a mesma identidade visual da tela de login."""
+    st.markdown(
+        """
+        <style>
+        :root {
+            --ae-navy: #1b2840;
+            --ae-blue: #2e63e6;
+            --ae-blue-dark: #2050cc;
+        }
+
+        /* Sidebar do sistema com a mesma cor da tela de login. */
+        section[data-testid="stSidebar"] {
+            background: var(--ae-navy) !important;
+            border-right: 0 !important;
+        }
+
+        section[data-testid="stSidebar"] > div:first-child,
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            background: var(--ae-navy) !important;
+        }
+
+        /* Textos, títulos, captions e labels da sidebar. */
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3,
+        section[data-testid="stSidebar"] p,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] span,
+        section[data-testid="stSidebar"] small,
+        section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+            color: #f4f7fd !important;
+        }
+
+        section[data-testid="stSidebar"] hr {
+            border-color: rgba(255,255,255,.18) !important;
+        }
+
+        /* Campos e selects permanecem claros para leitura. */
+        section[data-testid="stSidebar"] input,
+        section[data-testid="stSidebar"] textarea,
+        section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+            background: #ffffff !important;
+            color: #1b2840 !important;
+            border-color: rgba(255,255,255,.30) !important;
+        }
+
+        section[data-testid="stSidebar"] input::placeholder,
+        section[data-testid="stSidebar"] textarea::placeholder {
+            color: #77839a !important;
+        }
+
+        /* Botões laterais adaptados ao azul do login. */
+        section[data-testid="stSidebar"] [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button {
+            background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-dark)) !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255,255,255,.12) !important;
+            border-radius: 9px !important;
+            box-shadow: 0 7px 18px rgba(0,0,0,.16) !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stButton"] button:hover,
+        section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button:hover {
+            filter: brightness(1.06);
+            border-color: rgba(255,255,255,.28) !important;
+        }
+
+        /* Alertas da sidebar com leitura confortável sobre o fundo escuro. */
+        section[data-testid="stSidebar"] [data-testid="stAlert"] {
+            background: rgba(255,255,255,.10) !important;
+            border: 1px solid rgba(255,255,255,.13) !important;
+        }
+
+        section[data-testid="stSidebar"] [data-testid="stAlert"] * {
+            color: #f4f7fd !important;
+        }
+
+        /* Mantém a área principal limpa e clara. */
+        [data-testid="stAppViewContainer"] {
+            background: #ffffff !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
