@@ -265,75 +265,119 @@ def renderizar_salvar_e_gerar_cad(
         "### Projeto Unifilar (DXF)"
     )
 
+    # Marcador visual para confirmar no Streamlit que esta versão
+    # do arquivo upload_cad.py foi realmente publicada/carregada.
+    st.caption("CAD: rotina de geração v4.1")
+
+    # --------------------------------------------------------
+    # O clique apenas grava uma solicitação persistente.
+    # Em alguns reruns do Streamlit, executar todo o CAD dentro
+    # do retorno booleano de st.button() pode fazer o evento se
+    # perder. O session_state evita isso.
+    # --------------------------------------------------------
+    if "solicitar_geracao_cad" not in st.session_state:
+        st.session_state["solicitar_geracao_cad"] = False
+
     if st.button(
         "🚀 Gerar CAD (Atualizado)",
         type="primary",
-        use_container_width=True
+        use_container_width=True,
+        key="btn_gerar_cad_atualizado",
     ):
-        if not dxf_bytes:
-            st.error(
-                "❌ Nenhum arquivo DXF associado."
-            )
+        st.session_state["solicitar_geracao_cad"] = True
+        st.session_state.pop("cad_gerado_erro", None)
 
+    # A geração acontece fora do bloco do botão, usando o estado
+    # persistente. Dessa forma, mesmo que haja rerun, a solicitação
+    # continua verdadeira até o processamento terminar.
+    if st.session_state.get("solicitar_geracao_cad", False):
+        if not dxf_bytes:
+            st.session_state["solicitar_geracao_cad"] = False
+            st.session_state["cad_gerado_erro"] = (
+                "Nenhum arquivo DXF associado ao projeto."
+            )
         else:
             try:
-                salvar_dados_projeto(
-                    st.session_state.user_email,
-                    st.session_state.projeto_ativo,
-                    tabela_editada=tabela_editada,
-                    local_qdc=local_qdc,
-                    config_interruptores=(
-                        config_interruptores_usuario
-                    ),
-                    tensao_projeto=tensao_projeto,
-                    pe_direito=pe_direito
-                )
+                with st.spinner("Gerando o projeto CAD atualizado..."):
+                    salvar_dados_projeto(
+                        st.session_state.user_email,
+                        st.session_state.projeto_ativo,
+                        tabela_editada=tabela_editada,
+                        local_qdc=local_qdc,
+                        config_interruptores=(
+                            config_interruptores_usuario
+                        ),
+                        tensao_projeto=tensao_projeto,
+                        pe_direito=pe_direito,
+                    )
 
-                cad_bytes_out = (
-                    motores.gerar_cad_unifilar(
+                    cad_bytes_out = motores.gerar_cad_unifilar(
                         dxf_bytes=dxf_bytes,
                         dados_editados=tabela_editada,
                         local_qdc=local_qdc,
                         config_interruptores=(
                             config_interruptores_usuario
-                        )
+                        ),
                     )
-                )
 
-                # Guarda o DXF gerado na sessão. Isso é necessário porque
-                # o Streamlit executa novamente a página a cada interação;
-                # se o download ficar somente dentro do st.button(), ele
-                # pode desaparecer no rerun seguinte.
+                    if cad_bytes_out is None:
+                        raise RuntimeError(
+                            "A rotina gerar_cad_unifilar retornou vazio."
+                        )
+
+                    # Garante bytes reais para o download.
+                    if isinstance(cad_bytes_out, bytearray):
+                        cad_bytes_out = bytes(cad_bytes_out)
+                    elif not isinstance(cad_bytes_out, bytes):
+                        try:
+                            cad_bytes_out = bytes(cad_bytes_out)
+                        except Exception as exc:
+                            raise TypeError(
+                                "O CAD foi gerado em um formato que não "
+                                "pode ser baixado como arquivo DXF."
+                            ) from exc
+
+                    if len(cad_bytes_out) == 0:
+                        raise RuntimeError(
+                            "O arquivo DXF gerado ficou vazio."
+                        )
+
                 st.session_state["cad_gerado_bytes"] = cad_bytes_out
                 st.session_state["cad_gerado_projeto"] = (
                     st.session_state.projeto_ativo
                 )
-
-                st.success(
-                    "✅ Projeto CAD gerado com sucesso! "
-                    "O botão de download está disponível abaixo."
+                st.session_state["cad_gerado_tamanho"] = len(
+                    cad_bytes_out
                 )
+                st.session_state.pop("cad_gerado_erro", None)
 
             except Exception as e:
-                # Evita oferecer um arquivo antigo se a nova geração falhar.
                 st.session_state.pop("cad_gerado_bytes", None)
                 st.session_state.pop("cad_gerado_projeto", None)
-                st.error(
-                    f"❌ Erro ao gerar o arquivo CAD: {e}"
-                )
+                st.session_state.pop("cad_gerado_tamanho", None)
+                st.session_state["cad_gerado_erro"] = str(e)
 
-    # O botão de download fica FORA do botão de geração e é persistido
-    # no session_state. Assim continua visível após os reruns do Streamlit.
+            finally:
+                # Só libera a solicitação depois que tentou processar.
+                st.session_state["solicitar_geracao_cad"] = False
+
+    erro_cad = st.session_state.get("cad_gerado_erro")
+    if erro_cad:
+        st.error(f"❌ Erro ao gerar o arquivo CAD: {erro_cad}")
+
     cad_salvo = st.session_state.get("cad_gerado_bytes")
     projeto_cad = st.session_state.get("cad_gerado_projeto")
 
-    if (
-        cad_salvo
-        and projeto_cad == st.session_state.projeto_ativo
-    ):
+    if cad_salvo and projeto_cad == st.session_state.projeto_ativo:
         nome_seguro = str(
             st.session_state.projeto_ativo
         ).strip() or "Projeto"
+
+        tamanho = st.session_state.get("cad_gerado_tamanho", len(cad_salvo))
+        st.success(
+            "✅ Projeto CAD gerado com sucesso! "
+            f"Arquivo preparado ({tamanho / 1024:.1f} KB)."
+        )
 
         st.download_button(
             label="📥 Baixar Projeto DXF Atualizado",
@@ -341,5 +385,6 @@ def renderizar_salvar_e_gerar_cad(
             file_name=f"{nome_seguro}_Projeto_Eletrico.dxf",
             mime="application/dxf",
             use_container_width=True,
-            key="download_cad_atualizado"
+            key="download_cad_atualizado_v41",
         )
+
