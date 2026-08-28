@@ -300,23 +300,46 @@ def renderizar_salvar_e_gerar_cad(
                     )
                 )
 
-                st.success(
-                    "✅ Projeto CAD gerado com sucesso!"
+                # Guarda o DXF gerado na sessão. Isso é necessário porque
+                # o Streamlit executa novamente a página a cada interação;
+                # se o download ficar somente dentro do st.button(), ele
+                # pode desaparecer no rerun seguinte.
+                st.session_state["cad_gerado_bytes"] = cad_bytes_out
+                st.session_state["cad_gerado_projeto"] = (
+                    st.session_state.projeto_ativo
                 )
 
-                st.download_button(
-                    label=
-                        "📥 Baixar Projeto DXF Atualizado",
-                    data=
-                        cad_bytes_out,
-                    file_name=
-                        "Projeto_Eletrico.dxf",
-                    mime=
-                        "application/dxf",
-                    use_container_width=True
+                st.success(
+                    "✅ Projeto CAD gerado com sucesso! "
+                    "O botão de download está disponível abaixo."
                 )
 
             except Exception as e:
+                # Evita oferecer um arquivo antigo se a nova geração falhar.
+                st.session_state.pop("cad_gerado_bytes", None)
+                st.session_state.pop("cad_gerado_projeto", None)
                 st.error(
                     f"❌ Erro ao gerar o arquivo CAD: {e}"
                 )
+
+    # O botão de download fica FORA do botão de geração e é persistido
+    # no session_state. Assim continua visível após os reruns do Streamlit.
+    cad_salvo = st.session_state.get("cad_gerado_bytes")
+    projeto_cad = st.session_state.get("cad_gerado_projeto")
+
+    if (
+        cad_salvo
+        and projeto_cad == st.session_state.projeto_ativo
+    ):
+        nome_seguro = str(
+            st.session_state.projeto_ativo
+        ).strip() or "Projeto"
+
+        st.download_button(
+            label="📥 Baixar Projeto DXF Atualizado",
+            data=cad_salvo,
+            file_name=f"{nome_seguro}_Projeto_Eletrico.dxf",
+            mime="application/dxf",
+            use_container_width=True,
+            key="download_cad_atualizado"
+        )
