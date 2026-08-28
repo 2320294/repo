@@ -267,7 +267,11 @@ def renderizar_salvar_e_gerar_cad(
 
     # Marcador visual para confirmar no Streamlit que esta versão
     # do arquivo upload_cad.py foi realmente publicada/carregada.
-    st.caption("CAD: rotina de geração v4.1")
+    VERSAO_CAD = "Fase 4.5"
+    st.info(
+        f"🔖 Versão atual do gerador CAD: **{VERSAO_CAD}**",
+        icon="ℹ️",
+    )
 
     # --------------------------------------------------------
     # O clique apenas grava uma solicitação persistente.
@@ -277,6 +281,12 @@ def renderizar_salvar_e_gerar_cad(
     # --------------------------------------------------------
     if "solicitar_geracao_cad" not in st.session_state:
         st.session_state["solicitar_geracao_cad"] = False
+
+    # Indicadores locais desta execução. Não ficam persistidos entre
+    # reruns, portanto a mensagem de sucesso só aparece imediatamente
+    # após um clique real em "Gerar CAD".
+    cad_gerado_neste_ciclo = False
+    erro_cad_neste_ciclo = None
 
     if st.button(
         "🚀 Gerar CAD (Atualizado)",
@@ -293,7 +303,7 @@ def renderizar_salvar_e_gerar_cad(
     if st.session_state.get("solicitar_geracao_cad", False):
         if not dxf_bytes:
             st.session_state["solicitar_geracao_cad"] = False
-            st.session_state["cad_gerado_erro"] = (
+            erro_cad_neste_ciclo = (
                 "Nenhum arquivo DXF associado ao projeto."
             )
         else:
@@ -350,20 +360,23 @@ def renderizar_salvar_e_gerar_cad(
                     cad_bytes_out
                 )
                 st.session_state.pop("cad_gerado_erro", None)
+                cad_gerado_neste_ciclo = True
 
             except Exception as e:
                 st.session_state.pop("cad_gerado_bytes", None)
                 st.session_state.pop("cad_gerado_projeto", None)
                 st.session_state.pop("cad_gerado_tamanho", None)
-                st.session_state["cad_gerado_erro"] = str(e)
+                erro_cad_neste_ciclo = str(e)
 
             finally:
                 # Só libera a solicitação depois que tentou processar.
                 st.session_state["solicitar_geracao_cad"] = False
 
-    erro_cad = st.session_state.get("cad_gerado_erro")
-    if erro_cad:
-        st.error(f"❌ Erro ao gerar o arquivo CAD: {erro_cad}")
+    if erro_cad_neste_ciclo:
+        st.error(
+            f"❌ Erro ao gerar o arquivo CAD ({VERSAO_CAD}): "
+            f"{erro_cad_neste_ciclo}"
+        )
 
     cad_salvo = st.session_state.get("cad_gerado_bytes")
     projeto_cad = st.session_state.get("cad_gerado_projeto")
@@ -374,17 +387,24 @@ def renderizar_salvar_e_gerar_cad(
         ).strip() or "Projeto"
 
         tamanho = st.session_state.get("cad_gerado_tamanho", len(cad_salvo))
-        st.success(
-            "✅ Projeto CAD gerado com sucesso! "
-            f"Arquivo preparado ({tamanho / 1024:.1f} KB)."
-        )
 
+        # A mensagem verde aparece SOMENTE no rerun provocado pelo clique
+        # em Gerar CAD. O arquivo continua guardado para download.
+        if cad_gerado_neste_ciclo:
+            st.success(
+                f"✅ Projeto CAD {VERSAO_CAD} gerado com sucesso! "
+                f"Arquivo preparado ({tamanho / 1024:.1f} KB)."
+            )
+
+        versao_arquivo = VERSAO_CAD.replace(" ", "_").replace(".", "_")
         st.download_button(
-            label="📥 Baixar Projeto DXF Atualizado",
+            label=f"📥 Baixar Projeto DXF Atualizado — {VERSAO_CAD}",
             data=cad_salvo,
-            file_name=f"{nome_seguro}_Projeto_Eletrico.dxf",
+            file_name=(
+                f"{nome_seguro}_Projeto_Eletrico_{versao_arquivo}.dxf"
+            ),
             mime="application/dxf",
             use_container_width=True,
-            key="download_cad_atualizado_v41",
+            key="download_cad_atualizado_v45",
         )
 

@@ -260,6 +260,91 @@ def _ordenar_pontos_por_proximidade(inicio, registros):
     return ordem
 
 
+
+def _projecao_no_segmento(p, a, b):
+    ax, ay = a
+    bx, by = b
+    px, py = p
+    vx, vy = bx - ax, by - ay
+    l2 = vx * vx + vy * vy
+    if l2 <= 1e-12:
+        return tuple(a), _dist(p, a), 0.0
+    t = ((px - ax) * vx + (py - ay) * vy) / l2
+    t = max(0.0, min(1.0, t))
+    q = (ax + t * vx, ay + t * vy)
+    return q, _dist(p, q), t
+
+
+def _posicao_no_perimetro(ponto, polilinha):
+    segs = _segmentos_poligono(polilinha)
+    if not segs:
+        return None
+    acumulado = 0.0
+    melhor = None
+    total = sum(_dist(a, b) for a, b in segs)
+    for indice, (a, b) in enumerate(segs):
+        comp = _dist(a, b)
+        proj, d, t = _projecao_no_segmento(ponto, a, b)
+        pos = acumulado + t * comp
+        cand = (d, pos, indice, proj)
+        if melhor is None or cand[0] < melhor[0]:
+            melhor = cand
+        acumulado += comp
+    if melhor is None:
+        return None
+    return {
+        "distancia_parede": melhor[0],
+        "posicao": melhor[1],
+        "segmento": melhor[2],
+        "projecao": melhor[3],
+        "perimetro": total,
+    }
+
+
+def _ordenar_tugs_pelo_perimetro(hub, registros, ambiente_geom):
+    """Escolhe a TUG mais próxima da luz e segue a sequência das paredes."""
+    if not registros:
+        return []
+    if not ambiente_geom or not ambiente_geom.get("polilinha"):
+        return _ordenar_pontos_por_proximidade(hub, registros)
+
+    infos = []
+    for r in registros:
+        pos = _posicao_no_perimetro(tuple(r["ponto"]), ambiente_geom["polilinha"])
+        if pos is None:
+            return _ordenar_pontos_por_proximidade(hub, registros)
+        infos.append((r, pos["pos"], pos["perimetro"]))
+
+    primeira = min(registros, key=lambda r: _dist(hub, r["ponto"]))
+    perimetro = infos[0][2]
+    pos_primeira = next(pos for r, pos, _ in infos if r is primeira)
+    restantes = [(r, pos) for r, pos, _ in infos if r is not primeira]
+    if not restantes:
+        return [primeira]
+
+    horario = sorted(restantes, key=lambda rp: (rp[1] - pos_primeira) % perimetro)
+    anti = sorted(restantes, key=lambda rp: (pos_primeira - rp[1]) % perimetro)
+
+    def custo(ordem, sentido):
+        atual = pos_primeira
+        soma = 0.0
+        for _, pos in ordem:
+            soma += ((pos - atual) % perimetro) if sentido > 0 else ((atual - pos) % perimetro)
+            atual = pos
+        return soma
+
+    escolhida = horario if custo(horario, 1) <= custo(anti, -1) else anti
+    return [primeira] + [r for r, _ in escolhida]
+
+
+def _formatar_rotulo_circuitos(ids):
+    """Rótulo compacto para não poluir o CAD."""
+    nums = [str(i)[1:] if str(i).upper().startswith('C') else str(i) for i in ids]
+    if len(nums) <= 6:
+        return ",".join(nums)
+    return ",".join(nums[:5]) + f"…(+{len(nums)-5})"
+
+
 def _rotulo_trecho(msp, p1, p2, texto):
     if not _segmento_valido(p1, p2):
         return
@@ -345,52 +430,45 @@ def _escolher_pontos_distribuicao(ambientes_geom, pontos_eletricos):
     return distribuicao
 
 
-def _construir_arvore_distribuicao(qdc, ambiente_qdc, pontos_distribuicao, economia_minima=0.18, profundidade_max=2):
-    """Monta uma árvore QDC -> luminárias sem usar portas/soleiras.
+def _construir_arvore_distribuicao(qdc, ambiente_qdc, pontos_distribuicao, **_):
+    """Cria UMA árvore física de eletrodutos usando Prim (MST).
 
-    Regra conservadora: o QDC é a raiz. Um ambiente só deriva através da
-    luminária de outro ambiente quando isso reduz de forma relevante o caminho
-    geométrico em relação à saída direta do QDC. A profundidade é limitada para
-    evitar cadeias excessivas e manter a planta legível.
+    O QDC é a raiz fixa. Cada luminária principal entra uma única vez na árvore.
+    Depois, todos os circuitos reutilizam esses mesmos trechos físicos. Isso evita
+    uma linha independente por circuito/ambiente e reduz cruzamentos e poluição.
     """
     hubs = {nome: tuple(d["ponto"]) for nome, d in pontos_distribuicao.items()}
+    if not hubs:
+        return {}, {}
+
+    pontos = {"__QDC__": tuple(qdc), **hubs}
+    visitados = {"__QDC__"}
     pais = {}
     profundidade = {}
 
-    # O ambiente do QDC, quando possui luminária, é o primeiro nó natural.
-    if ambiente_qdc in hubs:
-        pais[ambiente_qdc] = "__QDC__"
-        profundidade[ambiente_qdc] = 1
+    # Prim: a cada passo adiciona a menor ligação entre a árvore já construída
+    # e uma luminária ainda não ligada.
+    while len(visitados) < len(pontos):
+        melhor = None
+        for origem in visitados:
+            po = pontos[origem]
+            for destino, pd in pontos.items():
+                if destino in visitados:
+                    continue
+                custo = _dist(po, pd)
+                candidato = (custo, origem, destino)
+                if melhor is None or candidato < melhor:
+                    melhor = candidato
 
-    restantes = [n for n in hubs if n != ambiente_qdc]
-    # Ambientes mais próximos do quadro são decididos primeiro e podem servir
-    # como nós de passagem para ambientes mais distantes.
-    restantes.sort(key=lambda n: _dist(qdc, hubs[n]))
+        if melhor is None:
+            break
 
-    for nome in restantes:
-        direto = _dist(qdc, hubs[nome])
-        melhor_pai = "__QDC__"
-        melhor_custo = direto
-
-        for candidato, ponto_candidato in hubs.items():
-            if candidato == nome or candidato not in profundidade:
-                continue
-            if profundidade[candidato] >= profundidade_max:
-                continue
-            custo = _dist(qdc, ponto_candidato) + _dist(ponto_candidato, hubs[nome])
-            # Derivação só é aceita quando o novo ramal, medido a partir de um
-            # nó já alimentado, representa economia local relevante frente à
-            # nova saída independente do QDC.
-            ramal = _dist(ponto_candidato, hubs[nome])
-            if ramal <= direto * (1.0 - economia_minima) and custo < melhor_custo * 1.35:
-                melhor_pai = candidato
-                melhor_custo = custo
-
-        pais[nome] = melhor_pai
-        profundidade[nome] = 1 if melhor_pai == "__QDC__" else profundidade[melhor_pai] + 1
+        _, pai, filho = melhor
+        pais[filho] = pai
+        profundidade[filho] = 1 if pai == "__QDC__" else profundidade.get(pai, 0) + 1
+        visitados.add(filho)
 
     return pais, profundidade
-
 
 def _caminho_nos_ate_qdc(ambiente, pais):
     caminho = []
@@ -430,7 +508,7 @@ def desenhar_rede_eletrodutos(
     soleiras_raw=None,
     pontos_interruptores=None,
 ):
-    """Fase 4: rede elétrica independente de portas e soleiras.
+    """Fase 4.4: árvore física única de eletrodutos.
 
     QDC = raiz fixa escolhida pelo usuário.
     Luminária principal = nó de distribuição de cada ambiente.
@@ -448,6 +526,11 @@ def desenhar_rede_eletrodutos(
 
     agregados = {}
     alocados = []
+    geom_por_nome = {
+        str(a.get("nome", "")).strip(): a
+        for a in (ambientes_geom or [])
+        if str(a.get("nome", "")).strip()
+    }
     for circuito in circuitos:
         destino = circuito["ambiente"]
         registros = _pontos_do_circuito(circuito, pontos_eletricos or [])
@@ -470,7 +553,7 @@ def desenhar_rede_eletrodutos(
         # Isso reproduz melhor a leitura de uma planta elétrica convencional e
         # reduz drasticamente a poluição gráfica.
         if circuito["tipo"] == "TUG":
-            ordenados = _ordenar_pontos_por_proximidade(hub, registros)
+            ordenados = _ordenar_tugs_pelo_perimetro(hub, registros, geom_por_nome.get(destino))
             atual = hub
             for indice, registro in enumerate(ordenados):
                 p = tuple(registro["ponto"])
@@ -542,7 +625,7 @@ def desenhar_rede_eletrodutos(
         p1, p2 = item["p1"], item["p2"]
         ids = sorted(item["circuitos"], key=lambda x: int(x[1:]) if x[1:].isdigit() else 9999)
         msp.add_line(p1, p2, dxfattribs={"layer": LAYER_ELETRODUTOS})
-        _rotulo_trecho(msp, p1, p2, "-".join(ids))
+        _rotulo_trecho(msp, p1, p2, _formatar_rotulo_circuitos(ids))
         trechos.append({"tipo": item["natureza"], "p1": p1, "p2": p2, "circuitos": ids, "comprimento": _dist(p1,p2), "ambiente": item.get("ambiente")})
 
     comandos = _desenhar_comandos_iluminacao(msp, pontos_interruptores or [], pontos_eletricos or [])
