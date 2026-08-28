@@ -1,9 +1,14 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 6.8
-IDENTIFICADOR: Fase_6_8
-[OK] Sistema 6.8
-[OK] Gerador 6.8
-[OK] DXF 6.8
-[OK] renderização baseada na estrutura estável da 6.6
-[OK] escala X/Y 1:1
-[OK] clique só atualiza com evento real
+VERSÃO ATUAL: Fase 6.9
+IDENTIFICADOR: Fase_6_9
+
+CHECKLIST
+[OK] Sistema = Fase 6.9
+[OK] Gerador CAD = Fase 6.9
+[OK] DXF = Fase_6_9
+[OK] canvas fixo sem stretch do Streamlit
+[OK] escala X/Y geométrica igual
+[OK] folha = tamanho da soleira
+[OK] arco = raio igual à soleira
+[OK] toggle Vega = "true"
+[OK] múltiplas portas sem Shift

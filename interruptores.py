@@ -446,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 6.8:
+    Mini planta Fase 6.9:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -552,8 +552,14 @@ def _figura_ambiente(
         max_y + margem_y
     ]
 
-    # Fase 6.8 — escala visual 1:1.
-    # X e Y recebem o mesmo número de pixels por unidade.
+    # Fase 6.9:
+    # Canvas fixo para não ser deformado pelo Streamlit.
+    largura_grafico = 430
+    altura_grafico = 330
+
+    # Ajusta os DOMÍNIOS, e não o tamanho do gráfico.
+    # Isso preserva escala 1:1 e mantém todos os cartões
+    # visualmente com o mesmo tamanho.
     largura_dom = max(
         dominio_x[1] - dominio_x[0],
         0.01
@@ -563,28 +569,51 @@ def _figura_ambiente(
         0.01
     )
 
-    px_por_unidade = min(
-        430.0 / largura_dom,
-        330.0 / altura_dom
+    aspecto_canvas = (
+        largura_grafico
+        / altura_grafico
     )
 
-    largura_grafico = int(
-        max(
-            1,
-            round(
-                largura_dom * px_por_unidade
-            )
-        )
+    aspecto_dominio = (
+        largura_dom
+        / altura_dom
     )
 
-    altura_grafico = int(
-        max(
-            1,
-            round(
-                altura_dom * px_por_unidade
-            )
+    if aspecto_dominio > aspecto_canvas:
+        # O ambiente é proporcionalmente mais largo.
+        # Expandimos Y para manter o mesmo px/unidade.
+        nova_altura = (
+            largura_dom
+            / aspecto_canvas
         )
-    )
+
+        centro_y = (
+            dominio_y[0]
+            + dominio_y[1]
+        ) / 2.0
+
+        dominio_y = [
+            centro_y - nova_altura / 2.0,
+            centro_y + nova_altura / 2.0
+        ]
+
+    else:
+        # O ambiente é proporcionalmente mais alto.
+        # Expandimos X para manter o mesmo px/unidade.
+        nova_largura = (
+            altura_dom
+            * aspecto_canvas
+        )
+
+        centro_x = (
+            dominio_x[0]
+            + dominio_x[1]
+        ) / 2.0
+
+        dominio_x = [
+            centro_x - nova_largura / 2.0,
+            centro_x + nova_largura / 2.0
+        ]
 
     # =========================================================
     # PAREDES
@@ -998,7 +1027,7 @@ def _figura_ambiente(
                         ],
                         "on":
                             "click",
-                            "toggle": True,
+                            "toggle": "true",
                         "clear":
                             False
                     }
@@ -1216,7 +1245,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.8:
+    Fase 6.9:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1318,7 +1347,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase6_8_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase6_9_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1360,15 +1389,15 @@ def renderizar_interruptores(
     
                 evento = st.vega_lite_chart(
                     fig,
-                    use_container_width=True,
-                    key=f"fase6_8_planta_portas_{amb}",
+                    use_container_width=False,
+                    key=f"fase6_9_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
-                # Fase 6.8:
-                # O carregamento inicial NÃO conta como clique.
-                # Só alteramos session_state quando o componente
-                # realmente devolve o campo de seleção da porta.
+                # Fase 6.9:
+                # O parâmetro Vega usa toggle="true":
+                # cada clique comum adiciona/remove uma porta,
+                # sem necessidade de Shift.
                 ids_evento = []
                 selecao_recebida = False
 
@@ -1376,62 +1405,110 @@ def renderizar_interruptores(
                     sel = evento.selection.porta
                 except Exception:
                     try:
-                        sel = evento["selection"]["porta"]
+                        sel = evento[
+                            "selection"
+                        ]["porta"]
                     except Exception:
                         sel = None
 
                 if sel is not None:
-                    # Alguns retornos do Streamlit são objetos tipo dict.
-                    if hasattr(sel, "to_dict"):
+                    if hasattr(
+                        sel,
+                        "to_dict"
+                    ):
                         try:
                             sel = sel.to_dict()
                         except Exception:
                             pass
 
-                    if isinstance(sel, dict):
+                    if isinstance(
+                        sel,
+                        dict
+                    ):
                         if "porta_id" in sel:
-                            bruto = sel.get("porta_id")
+                            bruto = sel.get(
+                                "porta_id"
+                            )
 
-                            if isinstance(bruto, str):
-                                ids_evento = [bruto]
-                            elif isinstance(bruto, (list, tuple)):
-                                ids_evento = list(bruto)
+                            if isinstance(
+                                bruto,
+                                str
+                            ):
+                                ids_evento = [
+                                    bruto
+                                ]
+
+                            elif isinstance(
+                                bruto,
+                                (list, tuple)
+                            ):
+                                ids_evento = list(
+                                    bruto
+                                )
+
                             elif bruto is None:
                                 ids_evento = []
 
                             selecao_recebida = True
 
                         elif "values" in sel:
-                            valores = sel.get("values") or []
+                            valores = (
+                                sel.get(
+                                    "values"
+                                )
+                                or []
+                            )
 
                             for item in valores:
-                                if isinstance(item, dict):
-                                    pid = item.get("porta_id")
+                                if isinstance(
+                                    item,
+                                    dict
+                                ):
+                                    pid = (
+                                        item.get(
+                                            "porta_id"
+                                        )
+                                    )
+
                                     if pid:
-                                        ids_evento.append(pid)
+                                        ids_evento.append(
+                                            pid
+                                        )
 
                             selecao_recebida = True
 
-                    elif isinstance(sel, (list, tuple)):
+                    elif isinstance(
+                        sel,
+                        (list, tuple)
+                    ):
                         for item in sel:
-                            if isinstance(item, dict):
-                                pid = item.get("porta_id")
+                            if isinstance(
+                                item,
+                                dict
+                            ):
+                                pid = (
+                                    item.get(
+                                        "porta_id"
+                                    )
+                                )
+
                                 if pid:
-                                    ids_evento.append(pid)
+                                    ids_evento.append(
+                                        pid
+                                    )
 
                         selecao_recebida = True
 
                 ids_evento = list(
                     dict.fromkeys(
                         pid
-                        for pid in ids_evento
-                        if pid in ids_validos
+                        for pid
+                        in ids_evento
+                        if pid
+                        in ids_validos
                     )
                 )
 
-                # Um clique real modifica o estado e faz UM rerun extra
-                # somente para redesenhar imediatamente vermelho/verde
-                # e atualizar a quantidade.
                 if selecao_recebida:
                     estado_atual = list(
                         st.session_state[
@@ -1439,14 +1516,21 @@ def renderizar_interruptores(
                         ]
                     )
 
-                    if set(ids_evento) != set(estado_atual):
+                    if set(
+                        ids_evento
+                    ) != set(
+                        estado_atual
+                    ):
                         st.session_state[
                             chave_estado
                         ] = ids_evento
 
+                        # on_select já executou o primeiro rerun.
+                        # Este segundo serve apenas para refletir
+                        # imediatamente as cores e a contagem.
                         st.rerun()
 
-                # Fase 6.8:
+                # Fase 6.9:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(
