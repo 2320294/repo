@@ -173,9 +173,18 @@ def ler_elementos(msp):
                         ]
 
                     if len(pts) >= 2:
+                        # Fase 5.2: preserva os quatro vértices para que
+                        # P1/P2/P3/P4 e o interruptor usem a MESMA geometria.
+                        vertices_unicos = []
+                        for pt in pts:
+                            q = (float(pt[0]), float(pt[1]))
+                            if q not in vertices_unicos:
+                                vertices_unicos.append(q)
+
                         soleiras_raw.append({
                             "p1": pts[0],
-                            "p2": pts[-1]
+                            "p2": pts[-1],
+                            "vertices": vertices_unicos
                         })
                 except Exception:
                     pass
