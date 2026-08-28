@@ -1,12 +1,9 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 6.7
-IDENTIFICADOR: Fase_6_7
-
-[OK] Sistema Fase 6.7
-[OK] Gerador Fase 6.7
-[OK] DXF Fase_6_7
-[OK] escala geométrica X/Y igual
-[OK] folha = tamanho da soleira
-[OK] arco = raio da soleira
-[OK] seleção Vega no nível principal
-[OK] selection_mode porta
+VERSÃO ATUAL: Fase 6.8
+IDENTIFICADOR: Fase_6_8
+[OK] Sistema 6.8
+[OK] Gerador 6.8
+[OK] DXF 6.8
+[OK] renderização baseada na estrutura estável da 6.6
+[OK] escala X/Y 1:1
+[OK] clique só atualiza com evento real
