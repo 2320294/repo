@@ -201,28 +201,23 @@ def aplicar_fundo_login():
             padding: 0 !important;
         }}
 
-        /* Card de autenticação. O branco fica somente dentro do card;
-           o restante da área principal mantém a textura de fundo. */
-        /* Durante a autenticação este CSS só é carregado antes do login.
-           Portanto podemos estilizar diretamente o container com borda do
-           Streamlit, sem depender de :has(), que varia entre versões. */
-        [data-testid="stMain"] div[data-testid="stVerticalBlockBorderWrapper"] {{
+        /* Card de autenticação: o próprio centro das 3 colunas vira o card branco.
+           Isso evita depender da estrutura interna variável do st.container. */
+        [data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) {{
             background: #ffffff !important;
             background-image: none !important;
-            border: 1px solid rgba(215,220,228,.92) !important;
-            border-radius: 20px !important;
-            box-shadow: 0 16px 38px rgba(30,40,55,.12), 0 2px 7px rgba(30,40,55,.05) !important;
+            border: 1px solid rgba(215,220,228,.95) !important;
+            border-radius: 18px !important;
+            box-shadow: 0 14px 34px rgba(30,40,55,.12), 0 2px 6px rgba(30,40,55,.05) !important;
+            padding: 16px 20px 15px 20px !important;
             overflow: hidden !important;
         }}
 
-        [data-testid="stMain"] div[data-testid="stVerticalBlockBorderWrapper"] > div {{
+        [data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:nth-child(2) > div {{
             background: #ffffff !important;
             background-image: none !important;
-            padding: 18px 26px 18px 26px !important;
         }}
 
-        /* O formulário interno fica sem caixa própria: todo o branco pertence
-           ao card externo, como na referência enviada. */
         [data-testid="stMain"] [data-testid="stForm"] {{
             background: #ffffff !important;
             background-image: none !important;
@@ -232,9 +227,9 @@ def aplicar_fundo_login():
         }}
 
         .ae-lock {{
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 12px auto;
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 8px auto;
             border-radius: 50%;
             background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
             display: flex;
@@ -245,25 +240,25 @@ def aplicar_fundo_login():
         }}
 
         .ae-lock-body {{
-            width: 27px;
-            height: 23px;
+            width: 24px;
+            height: 20px;
             border: 4px solid white;
             border-radius: 6px;
             box-sizing: border-box;
             position: absolute;
-            top: 30px;
+            top: 27px;
         }}
 
         .ae-lock-body:before {{
             content: "";
             position: absolute;
-            width: 17px;
-            height: 16px;
+            width: 15px;
+            height: 14px;
             border: 4px solid white;
             border-bottom: 0;
             border-radius: 13px 13px 0 0;
             left: 1px;
-            top: -17px;
+            top: -15px;
             box-sizing: border-box;
         }}
 
@@ -281,9 +276,9 @@ def aplicar_fundo_login():
 
         /* Ícone da tela de cadastro. */
         .ae-user-icon {{
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 12px auto;
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 8px auto;
             border-radius: 50%;
             background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
             position: relative;
@@ -335,7 +330,7 @@ def aplicar_fundo_login():
             text-align: center;
             margin: 0;
             color: var(--ae-text);
-            font-size: 1.78rem;
+            font-size: 1.62rem;
             font-weight: 800;
             letter-spacing: -.025em;
             line-height: 1.1;
@@ -344,9 +339,9 @@ def aplicar_fundo_login():
         .ae-login-subtitle {{
             text-align: center;
             color: #475365;
-            margin-top: 6px;
-            margin-bottom: 14px;
-            font-size: .92rem;
+            margin-top: 4px;
+            margin-bottom: 9px;
+            font-size: .88rem;
         }}
 
         [data-testid="stTextInput"] {{
@@ -360,7 +355,7 @@ def aplicar_fundo_login():
         }}
 
         [data-testid="stTextInput"] input {{
-            min-height: 44px;
+            min-height: 36px;
             border-radius: 9px;
             border-color: #d3d9e3;
             background: #fff;
@@ -374,7 +369,7 @@ def aplicar_fundo_login():
         }}
 
         [data-testid="stFormSubmitButton"] button {{
-            height: 48px;
+            height: 40px;
             border: 0 !important;
             border-radius: 8px;
             background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-dark));
@@ -382,7 +377,7 @@ def aplicar_fundo_login():
             font-size: 1.02rem;
             font-weight: 700;
             box-shadow: 0 8px 18px rgba(36,95,231,.20);
-            margin-top: 5px;
+            margin-top: 3px;
         }}
 
         [data-testid="stFormSubmitButton"] button:hover {{
@@ -395,7 +390,7 @@ def aplicar_fundo_login():
             align-items: center;
             gap: .85rem;
             color: #657084;
-            margin: 10px 0 9px 0;
+            margin: 7px 0 6px 0;
             font-size: .90rem;
         }}
 
@@ -408,7 +403,7 @@ def aplicar_fundo_login():
         }}
 
         .ae-google {{
-            height: 44px;
+            height: 40px;
             border: 1px solid #d9dee7;
             border-radius: 8px;
             background: #fff;
@@ -431,12 +426,12 @@ def aplicar_fundo_login():
             text-align: center;
             color: #697487;
             font-size: .90rem;
-            margin: 10px 0 5px 0;
+            margin: 7px 0 4px 0;
         }}
 
         /* Botão de cadastro/voltar, dentro do próprio card de autenticação. */
         [data-testid="stMain"] [data-testid="stButton"] button {{
-            min-height: 40px;
+            min-height: 36px;
             border-radius: 8px;
             border: 1px solid #cdd8ef !important;
             background: #f7f9fe !important;
@@ -455,11 +450,11 @@ def aplicar_fundo_login():
         /* Reduz os espaços verticais padrão do Streamlit para o formulário
            caber inteiro em uma tela comum sem rolagem. */
         [data-testid="stMain"] [data-testid="stVerticalBlock"] {{
-            gap: .48rem !important;
+            gap: .34rem !important;
         }}
 
         [data-testid="stMain"] [data-testid="stForm"] [data-testid="stVerticalBlock"] {{
-            gap: .42rem !important;
+            gap: .30rem !important;
         }}
 
         [data-testid="stMain"] .stElementContainer {{

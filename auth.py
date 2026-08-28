@@ -108,87 +108,85 @@ def _renderizar_cadastro():
     esquerda, centro, direita = st.columns([1.12, 1.58, 1.12])
 
     with centro:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="ae-user-icon">
-                    <div class="ae-user-head"></div>
-                    <div class="ae-user-body"></div>
-                    <div class="ae-user-plus">+</div>
-                </div>
-                <h1 class="ae-login-title">Crie sua conta</h1>
-                <div class="ae-login-subtitle">
-                    Cadastre-se para começar a usar o AutoElétrica
-                </div>
-                """,
-                unsafe_allow_html=True,
+        st.markdown(
+            """
+            <div class="ae-user-icon">
+                <div class="ae-user-head"></div>
+                <div class="ae-user-body"></div>
+                <div class="ae-user-plus">+</div>
+            </div>
+            <h1 class="ae-login-title">Crie sua conta</h1>
+            <div class="ae-login-subtitle">
+                Cadastre-se para começar a usar o AutoElétrica
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.form("form_cadastro", clear_on_submit=False):
+            cad_nome = st.text_input(
+                "Nome completo",
+                placeholder="Seu nome",
+                key="cad_nome",
+            )
+            cad_email = st.text_input(
+                "E-mail",
+                placeholder="seu@email.com",
+                key="cad_email",
+            )
+            cad_senha = st.text_input(
+                "Senha",
+                type="password",
+                placeholder="Crie uma senha",
+                key="cad_senha",
+            )
+            cad_confirmar = st.text_input(
+                "Confirmar senha",
+                type="password",
+                placeholder="Repita a senha",
+                key="cad_confirmar_senha",
             )
 
-            with st.form("form_cadastro", clear_on_submit=False):
-                cad_nome = st.text_input(
-                    "Nome completo",
-                    placeholder="Seu nome",
-                    key="cad_nome",
-                )
-                cad_email = st.text_input(
-                    "E-mail",
-                    placeholder="seu@email.com",
-                    key="cad_email",
-                )
-                cad_senha = st.text_input(
-                    "Senha",
-                    type="password",
-                    placeholder="Crie uma senha",
-                    key="cad_senha",
-                )
-                cad_confirmar = st.text_input(
-                    "Confirmar senha",
-                    type="password",
-                    placeholder="Repita a senha",
-                    key="cad_confirmar_senha",
-                )
-
-                enviar_cadastro = st.form_submit_button(
-                    "＋  Criar conta",
-                    use_container_width=True,
-                )
-
-            if enviar_cadastro:
-                if not cad_nome or not cad_email or not cad_senha or not cad_confirmar:
-                    st.warning("Preencha todos os campos.")
-                    return
-
-                if cad_senha != cad_confirmar:
-                    st.error("As senhas não coincidem.")
-                    return
-
-                if len(cad_senha) < 6:
-                    st.warning("A senha deve ter pelo menos 6 caracteres.")
-                    return
-
-                try:
-                    ok, mensagem = cadastrar_usuario(
-                        cad_nome,
-                        cad_email,
-                        cad_senha,
-                    )
-                    if ok:
-                        st.success(mensagem)
-                        st.info("Cadastro concluído. Volte ao login e entre com sua nova conta.")
-                    else:
-                        st.error(mensagem)
-                except Exception as e:
-                    st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
-
-            st.markdown('<div class="ae-auth-switch-label">Já possui uma conta?</div>', unsafe_allow_html=True)
-            if st.button(
-                "Voltar para o login",
-                key="voltar_login_cadastro",
+            enviar_cadastro = st.form_submit_button(
+                "＋  Criar conta",
                 use_container_width=True,
-            ):
-                st.session_state.auth_view = "login"
-                st.rerun()
+            )
 
+        if enviar_cadastro:
+            if not cad_nome or not cad_email or not cad_senha or not cad_confirmar:
+                st.warning("Preencha todos os campos.")
+                return
+
+            if cad_senha != cad_confirmar:
+                st.error("As senhas não coincidem.")
+                return
+
+            if len(cad_senha) < 6:
+                st.warning("A senha deve ter pelo menos 6 caracteres.")
+                return
+
+            try:
+                ok, mensagem = cadastrar_usuario(
+                    cad_nome,
+                    cad_email,
+                    cad_senha,
+                )
+                if ok:
+                    st.success(mensagem)
+                    st.info("Cadastro concluído. Volte ao login e entre com sua nova conta.")
+                else:
+                    st.error(mensagem)
+            except Exception as e:
+                st.error(f"❌ Erro ao cadastrar no Supabase: {e}")
+
+        st.markdown('<div class="ae-auth-switch-label">Já possui uma conta?</div>', unsafe_allow_html=True)
+        if st.button(
+            "Voltar para o login",
+            key="voltar_login_cadastro",
+            use_container_width=True,
+        ):
+            st.session_state.auth_view = "login"
+            st.rerun()
 
 def _renderizar_sobre_o_sistema():
     st.markdown('<div class="ae-main-spacer"></div>', unsafe_allow_html=True)
@@ -236,68 +234,66 @@ def _renderizar_formulario_login():
     esquerda, centro, direita = st.columns([1.12, 1.58, 1.12])
 
     with centro:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div class="ae-lock">
-                    <div class="ae-lock-body"></div>
-                </div>
-                <h1 class="ae-login-title">Bem-vindo!</h1>
-                <div class="ae-login-subtitle">
-                    Faça login para acessar o sistema
-                </div>
-                """,
-                unsafe_allow_html=True,
+        st.markdown(
+            """
+            <div class="ae-lock">
+                <div class="ae-lock-body"></div>
+            </div>
+            <h1 class="ae-login-title">Bem-vindo!</h1>
+            <div class="ae-login-subtitle">
+                Faça login para acessar o sistema
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.form("form_login", clear_on_submit=False):
+            login_email = st.text_input(
+                "E-mail",
+                placeholder="seu@email.com",
+                key="login_email",
             )
 
-            with st.form("form_login", clear_on_submit=False):
-                login_email = st.text_input(
-                    "E-mail",
-                    placeholder="seu@email.com",
-                    key="login_email",
-                )
-
-                login_senha = st.text_input(
-                    "Senha",
-                    type="password",
-                    placeholder="Sua senha",
-                    key="login_senha",
-                )
-
-                enviar_login = st.form_submit_button(
-                    "⇥  Entrar",
-                    use_container_width=True,
-                )
-
-            if enviar_login:
-                _processar_login(login_email, login_senha)
-
-            st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
-
-            # Elemento visual mantido para reproduzir a referência.
-            # A autenticação Google ainda não está configurada no projeto.
-            st.markdown(
-                """
-                <div class="ae-google" title="Integração com Google ainda não configurada">
-                    <span class="ae-google-g">G</span>
-                    <span>Entrar com Google</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            login_senha = st.text_input(
+                "Senha",
+                type="password",
+                placeholder="Sua senha",
+                key="login_senha",
             )
 
-            st.markdown(
-                '<div class="ae-auth-switch-label">Ainda não possui uma conta?</div>',
-                unsafe_allow_html=True,
-            )
-            if st.button(
-                "Criar cadastro",
-                key="abrir_cadastro_login",
+            enviar_login = st.form_submit_button(
+                "⇥  Entrar",
                 use_container_width=True,
-            ):
-                st.session_state.auth_view = "cadastro"
-                st.rerun()
+            )
 
+        if enviar_login:
+            _processar_login(login_email, login_senha)
+
+        st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
+
+        # Elemento visual mantido para reproduzir a referência.
+        # A autenticação Google ainda não está configurada no projeto.
+        st.markdown(
+            """
+            <div class="ae-google" title="Integração com Google ainda não configurada">
+                <span class="ae-google-g">G</span>
+                <span>Entrar com Google</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="ae-auth-switch-label">Ainda não possui uma conta?</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            "Criar cadastro",
+            key="abrir_cadastro_login",
+            use_container_width=True,
+        ):
+            st.session_state.auth_view = "cadastro"
+            st.rerun()
 
 def renderizar_pagina_login():
     menu = renderizar_menu_login()
