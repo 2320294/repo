@@ -28,6 +28,10 @@ from tomadas_cad import (
     desenhar_tomadas
 )
 
+from eletrodutos_cad import (
+    desenhar_rede_eletrodutos
+)
+
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -66,7 +70,10 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_TEXTO": 2,
             "PROJ_ELETRICA_TOMADA": 4,
             "PROJ_ELETRICA_INTERRUPTOR": 5,
-            "PROJ_ELETRICA_DEBUG": 6
+            "PROJ_ELETRICA_DEBUG": 6,
+            "PROJ_ELETRICA_ELETRODUTO": 3,
+            "PROJ_ELETRICA_ELETRODUTO_TEXTO": 3,
+            "PROJ_ELETRICA_COMANDO": 6
         }
 
         for nome_l, cor_l in camadas.items():
@@ -100,14 +107,17 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_TEXTO",
                     "PROJ_ELETRICA_TOMADA",
                     "PROJ_ELETRICA_INTERRUPTOR",
-                    "PROJ_ELETRICA_DEBUG"
+                    "PROJ_ELETRICA_DEBUG",
+                    "PROJ_ELETRICA_ELETRODUTO",
+                    "PROJ_ELETRICA_ELETRODUTO_TEXTO",
+                    "PROJ_ELETRICA_COMANDO"
                 }:
                     msp.delete_entity(ent)
             except Exception:
                 pass
 
         # Interruptores
-        desenhar_interruptores(
+        pontos_interruptores = desenhar_interruptores(
             msp=msp,
             polilinhas=polilinhas,
             textos=textos,
@@ -120,6 +130,9 @@ def gerar_cad_unifilar(
         )
 
         ambientes_processados = {}
+        ambientes_geom = []
+        pontos_eletricos = []
+        qdc_info = None
 
         dict_dados = {
             row["Ambiente"]:
@@ -177,6 +190,17 @@ def gerar_cad_unifilar(
                     None
                 )
             )
+
+            ambientes_geom.append({
+                "nome": nome_busca,
+                "nome_base": nome,
+                "centro": (
+                    (min_x + max_x) / 2,
+                    (min_y + max_y) / 2
+                ),
+                "bbox": (min_x, max_x, min_y, max_y),
+                "polilinha": list(polilinha),
+            })
 
             centro_x = (
                 min_x + max_x
@@ -344,6 +368,13 @@ def gerar_cad_unifilar(
                                 )
 
                     for lx, ly in pontos_luz:
+                        pontos_eletricos.append({
+                            "ambiente": nome_busca,
+                            "tipo": "ILUMINACAO",
+                            "ponto": (lx, ly),
+                            "potencia": pot_ilum_unit,
+                        })
+
                         msp.add_circle(
                             center=(lx, ly),
                             radius=0.25,
@@ -386,7 +417,7 @@ def gerar_cad_unifilar(
                         )
 
             # QDC
-            desenhar_qdc(
+            qdc_resultado = desenhar_qdc(
                 msp=msp,
                 logical_walls=logical_walls,
                 unique_portas=unique_portas,
@@ -396,8 +427,11 @@ def gerar_cad_unifilar(
                 centro_y=centro_y
             )
 
+            if qdc_resultado:
+                qdc_info = qdc_resultado
+
             # Tomadas
-            desenhar_tomadas(
+            pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
                 nome=nome,
@@ -411,6 +445,24 @@ def gerar_cad_unifilar(
                 centro_x=centro_x,
                 centro_y=centro_y
             )
+
+            if pontos_tomadas:
+                # A função de tomadas usa o nome base recebido; normalizamos
+                # para o mesmo identificador empregado em dados_editados.
+                for ponto in pontos_tomadas:
+                    ponto["ambiente"] = nome_busca
+                    pontos_eletricos.append(ponto)
+
+        # Rede física/simbólica de eletrodutos / circuitos
+        desenhar_rede_eletrodutos(
+            msp=msp,
+            dados_editados=dados_editados,
+            ambientes_geom=ambientes_geom,
+            qdc_info=qdc_info,
+            pontos_eletricos=pontos_eletricos,
+            soleiras_raw=soleiras_raw,
+            pontos_interruptores=pontos_interruptores,
+        )
 
         doc.saveas(
             tmp_in_path

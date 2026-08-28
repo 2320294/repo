@@ -87,6 +87,8 @@ def desenhar_interruptores(
         or {}
     )
 
+    pontos_gerados = []
+
     soleiras_com_porta = (
         associar_soleiras_portas(
             soleiras_raw,
@@ -286,3 +288,11 @@ def desenhar_interruptores(
                             "PROJ_ELETRICA_INTERRUPTOR"
                     }
                 )
+
+                pontos_gerados.append({
+                    "ambiente": nome,
+                    "tipo": "INTERRUPTOR",
+                    "ponto": centro,
+                })
+
+    return pontos_gerados

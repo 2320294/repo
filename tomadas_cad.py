@@ -137,7 +137,9 @@ def desenhar_tomadas(
     centro_y
 ):
     if not row_data:
-        return
+        return []
+
+    pontos_gerados = []
 
     qtd_tugs = int(
         row_data.get(
@@ -438,6 +440,15 @@ def desenhar_tomadas(
                 }
             )
 
+
+            pontos_gerados.append({
+                "ambiente": nome,
+                "tipo": "TUE",
+                "ponto": (px, py),
+                "potencia": pot_tue_val,
+                "equipamento": eq_tue_nome,
+            })
+
     # TUG
     if qtd_tugs > 0 and comp_total > 0:
         margem_inicial = 0.35
@@ -578,3 +589,12 @@ def desenhar_tomadas(
                             "PROJ_ELETRICA_TOMADA"
                     }
                 )
+
+            pontos_gerados.append({
+                "ambiente": nome,
+                "tipo": "TUG",
+                "ponto": (px, py),
+                "potencia": 600 if is_ambiente_molhado else 100,
+            })
+
+    return pontos_gerados

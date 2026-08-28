@@ -30,7 +30,7 @@ def desenhar_qdc(
         nome_atual_upper != qdc_formatado
         or not logical_walls
     ):
-        return
+        return None
 
     qdc_w = 0.4
     qdc_d = 0.15
@@ -286,3 +286,35 @@ def desenhar_qdc(
                 "PROJ_ELETRICA_QDC"
         }
     )
+
+    # Identificação gráfica explícita do quadro. O ponto de origem dos
+    # circuitos continua sendo (mx, my), isto é, exatamente a posição
+    # calculada na parede do ambiente escolhido pelo usuário.
+    msp.add_text(
+        "QDC",
+        dxfattribs={
+            "layer": "PROJ_ELETRICA_TEXTO",
+            "height": 0.12,
+            "insert": (
+                mx + out_nx * (qdc_d + 0.10),
+                my + out_ny * (qdc_d + 0.10),
+            ),
+        },
+    )
+
+    return {
+        "centro": (mx, my),
+        "centro_externo": (
+            mx + out_nx * qdc_d / 2,
+            my + out_ny * qdc_d / 2
+        ),
+        "pontos": pts_qdc,
+        "ambiente": nome,
+        "parede": {
+            "p1": pt1,
+            "p2": pt2,
+            "vx": vx,
+            "vy": vy,
+        },
+    }
+
