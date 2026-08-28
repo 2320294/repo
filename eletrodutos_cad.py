@@ -461,10 +461,71 @@ def desenhar_rede_eletrodutos(
             item = dict(circuito); item["status"] = "SEM_ROTA_DISTRIBUICAO"; alocados.append(item); continue
 
         hub = tuple(hub_destino["ponto"])
-        for registro in registros:
-            p = tuple(registro["ponto"])
-            if _segmento_valido(hub, p):
-                _adicionar_segmento_agregado(agregados, hub, p, circuito["id"], natureza="RAMAL_DO_PONTO_DE_LUZ", ambiente=destino)
+
+        # Distribuição interna do ambiente.
+        #
+        # TUG: não criar uma estrela da luminária para cada tomada. O ponto de
+        # iluminação alimenta somente a tomada mais próxima e, a partir dela,
+        # o eletroduto segue de tomada em tomada pela menor continuidade local.
+        # Isso reproduz melhor a leitura de uma planta elétrica convencional e
+        # reduz drasticamente a poluição gráfica.
+        if circuito["tipo"] == "TUG":
+            ordenados = _ordenar_pontos_por_proximidade(hub, registros)
+            atual = hub
+            for indice, registro in enumerate(ordenados):
+                p = tuple(registro["ponto"])
+                if _segmento_valido(atual, p):
+                    _adicionar_segmento_agregado(
+                        agregados,
+                        atual,
+                        p,
+                        circuito["id"],
+                        natureza=(
+                            "RAMAL_LUZ_PARA_TUG"
+                            if indice == 0
+                            else "ENCADEAMENTO_TUG"
+                        ),
+                        ambiente=destino,
+                    )
+                atual = p
+
+        # Iluminação: a luminária escolhida como distribuição já é o hub do
+        # ambiente. Se houver outras luminárias do mesmo circuito, elas são
+        # encadeadas a partir desse hub, evitando outra estrela desnecessária.
+        elif circuito["tipo"] == "ILUMINACAO":
+            outros = [
+                r for r in registros
+                if _segmento_valido(hub, tuple(r["ponto"]))
+            ]
+            ordenados = _ordenar_pontos_por_proximidade(hub, outros)
+            atual = hub
+            for registro in ordenados:
+                p = tuple(registro["ponto"])
+                if _segmento_valido(atual, p):
+                    _adicionar_segmento_agregado(
+                        agregados,
+                        atual,
+                        p,
+                        circuito["id"],
+                        natureza="ENCADEAMENTO_ILUMINACAO",
+                        ambiente=destino,
+                    )
+                atual = p
+
+        # TUE: permanece como carga dedicada; o ramal sai do ponto de
+        # distribuição diretamente para o equipamento correspondente.
+        else:
+            for registro in registros:
+                p = tuple(registro["ponto"])
+                if _segmento_valido(hub, p):
+                    _adicionar_segmento_agregado(
+                        agregados,
+                        hub,
+                        p,
+                        circuito["id"],
+                        natureza="RAMAL_TUE_DEDICADO",
+                        ambiente=destino,
+                    )
 
         item = dict(circuito)
         item.update({
