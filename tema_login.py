@@ -447,6 +447,44 @@ def aplicar_fundo_login():
             color: #1949ac !important;
         }}
 
+        /* Botão Google no padrão visual usado em sites: fundo branco,
+           borda cinza e ícone G multicolorido. O seletor pela key deixa
+           o estilo restrito somente ao botão de autenticação Google. */
+        [data-testid="stMain"] .st-key-entrar_google button,
+        [data-testid="stMain"] [class*="st-key-entrar_google"] button {{
+            position: relative !important;
+            min-height: 42px !important;
+            background: #ffffff !important;
+            border: 1px solid #dadce0 !important;
+            color: #202124 !important;
+            font-weight: 500 !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease !important;
+        }}
+
+        [data-testid="stMain"] .st-key-entrar_google button::before,
+        [data-testid="stMain"] [class*="st-key-entrar_google"] button::before {{
+            content: "" !important;
+            width: 18px !important;
+            height: 18px !important;
+            display: inline-block !important;
+            flex: 0 0 18px !important;
+            margin-right: 10px !important;
+            background-repeat: no-repeat !important;
+            background-position: center !important;
+            background-size: 18px 18px !important;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath fill='%234285F4' d='M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.482h4.844a4.14 4.14 0 0 1-1.797 2.716v2.258h2.909c1.702-1.567 2.684-3.875 2.684-6.615z'/%3E%3Cpath fill='%2334A853' d='M9 18c2.43 0 4.467-.806 5.956-2.18l-2.91-2.258c-.805.54-1.835.86-3.046.86-2.344 0-4.328-1.585-5.037-3.714H.956v2.332A9 9 0 0 0 9 18z'/%3E%3Cpath fill='%23FBBC05' d='M3.963 10.708A5.42 5.42 0 0 1 3.682 9c0-.593.102-1.17.281-1.708V4.96H.956A9 9 0 0 0 0 9c0 1.45.347 2.822.956 4.04l3.007-2.332z'/%3E%3Cpath fill='%23EA4335' d='M9 3.58c1.322 0 2.508.455 3.44 1.346l2.582-2.582C13.463.892 11.426 0 9 0A9 9 0 0 0 .956 4.96l3.007 2.332C4.672 5.163 6.656 3.58 9 3.58z'/%3E%3C/svg%3E") !important;
+        }}
+
+        [data-testid="stMain"] .st-key-entrar_google button:hover,
+        [data-testid="stMain"] [class*="st-key-entrar_google"] button:hover {{
+            background: #f8faff !important;
+            border-color: #c9ccd1 !important;
+            color: #202124 !important;
+            box-shadow: 0 1px 2px rgba(60,64,67,.16) !important;
+        }}
+
 
         /* Reduz os espaços verticais padrão do Streamlit para o formulário
            caber inteiro em uma tela comum sem rolagem. */

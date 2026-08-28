@@ -322,7 +322,7 @@ def _renderizar_formulario_login():
         st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
 
         if st.button(
-            "G   Entrar com Google",
+            "Entrar com Google",
             key="entrar_google",
             use_container_width=True,
         ):
