@@ -5,6 +5,8 @@ import streamlit as st
 
 import motores
 
+from versao import VERSAO_SISTEMA, VERSAO_ARQUIVO
+
 from database import (
     salvar_dados_projeto
 )
@@ -267,11 +269,19 @@ def renderizar_salvar_e_gerar_cad(
 
     # Marcador visual para confirmar no Streamlit que esta versão
     # do arquivo upload_cad.py foi realmente publicada/carregada.
-    VERSAO_CAD = "Fase 4.7"
+    VERSAO_CAD = VERSAO_SISTEMA
     st.info(
         f"🔖 Versão atual do gerador CAD: **{VERSAO_CAD}**",
         icon="ℹ️",
     )
+
+    # Nunca reaproveita CAD de uma fase anterior. Ao detectar mudança de
+    # versão, descarta o arquivo persistido e exige uma nova geração.
+    if st.session_state.get("cad_gerado_versao") != VERSAO_CAD:
+        st.session_state.pop("cad_gerado_bytes", None)
+        st.session_state.pop("cad_gerado_projeto", None)
+        st.session_state.pop("cad_gerado_tamanho", None)
+        st.session_state.pop("cad_gerado_versao", None)
 
     # --------------------------------------------------------
     # O clique apenas grava uma solicitação persistente.
@@ -359,6 +369,7 @@ def renderizar_salvar_e_gerar_cad(
                 st.session_state["cad_gerado_tamanho"] = len(
                     cad_bytes_out
                 )
+                st.session_state["cad_gerado_versao"] = VERSAO_CAD
                 st.session_state.pop("cad_gerado_erro", None)
                 cad_gerado_neste_ciclo = True
 
@@ -366,6 +377,7 @@ def renderizar_salvar_e_gerar_cad(
                 st.session_state.pop("cad_gerado_bytes", None)
                 st.session_state.pop("cad_gerado_projeto", None)
                 st.session_state.pop("cad_gerado_tamanho", None)
+                st.session_state.pop("cad_gerado_versao", None)
                 erro_cad_neste_ciclo = str(e)
 
             finally:
@@ -381,7 +393,11 @@ def renderizar_salvar_e_gerar_cad(
     cad_salvo = st.session_state.get("cad_gerado_bytes")
     projeto_cad = st.session_state.get("cad_gerado_projeto")
 
-    if cad_salvo and projeto_cad == st.session_state.projeto_ativo:
+    if (
+        cad_salvo
+        and projeto_cad == st.session_state.projeto_ativo
+        and st.session_state.get("cad_gerado_versao") == VERSAO_CAD
+    ):
         nome_seguro = str(
             st.session_state.projeto_ativo
         ).strip() or "Projeto"
@@ -396,15 +412,14 @@ def renderizar_salvar_e_gerar_cad(
                 f"Arquivo preparado ({tamanho / 1024:.1f} KB)."
             )
 
-        versao_arquivo = VERSAO_CAD.replace(" ", "_").replace(".", "_")
         st.download_button(
             label=f"📥 Baixar Projeto DXF Atualizado — {VERSAO_CAD}",
             data=cad_salvo,
             file_name=(
-                f"{nome_seguro}_Projeto_Eletrico_{versao_arquivo}.dxf"
+                f"{nome_seguro}_Projeto_Eletrico_{VERSAO_ARQUIVO}.dxf"
             ),
             mime="application/dxf",
             use_container_width=True,
-            key="download_cad_atualizado_v45",
+            key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
         )
 

@@ -4,6 +4,8 @@ import tempfile
 
 import ezdxf
 
+from versao import VERSAO_SISTEMA
+
 from dxf_io import (
     processar_dxf,
     validar_camadas,
@@ -73,7 +75,8 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_DEBUG": 6,
             "PROJ_ELETRICA_ELETRODUTO": 3,
             "PROJ_ELETRICA_ELETRODUTO_TEXTO": 3,
-            "PROJ_ELETRICA_COMANDO": 6
+            "PROJ_ELETRICA_COMANDO": 6,
+            "AE_VERSAO": 8
         }
 
         for nome_l, cor_l in camadas.items():
@@ -110,11 +113,25 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_DEBUG",
                     "PROJ_ELETRICA_ELETRODUTO",
                     "PROJ_ELETRICA_ELETRODUTO_TEXTO",
-                    "PROJ_ELETRICA_COMANDO"
+                    "PROJ_ELETRICA_COMANDO",
+                    "AE_VERSAO"
                 }:
                     msp.delete_entity(ent)
             except Exception:
                 pass
+
+        # Identificador interno da fase dentro do próprio DXF. A camada
+        # permanece congelada para não poluir a planta, mas permite auditar
+        # qual versão efetivamente gerou o arquivo.
+        try:
+            layer_versao = doc.layers.get("AE_VERSAO")
+            layer_versao.freeze()
+        except Exception:
+            pass
+        msp.add_text(
+            f"AutoEletrica {VERSAO_SISTEMA}",
+            dxfattribs={"layer": "AE_VERSAO", "height": 0.05},
+        ).set_placement((0.0, 0.0))
 
         # Interruptores
         pontos_interruptores = desenhar_interruptores(
