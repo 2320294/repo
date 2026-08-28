@@ -54,7 +54,7 @@ def aplicar_fundo_login():
             background-color: #fbfbfb;
             {fundo_css}
             background-repeat: repeat;
-            background-size: 410px auto;
+            background-size: 200px 200px;
             background-position: top left;
             min-height: 100vh;
         }}
@@ -198,16 +198,29 @@ def aplicar_fundo_login():
             padding: 0 !important;
         }}
 
-        /* Card do login. */
-        [data-testid="stVerticalBlockBorderWrapper"] {{
-            background: #ffffff;
+        /* Card de autenticação. O branco fica somente dentro do card;
+           o restante da área principal mantém a textura de fundo. */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-lock),
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-user-icon) {{
+            background: #ffffff !important;
+            background-image: none !important;
             border: 1px solid rgba(215,220,228,.88) !important;
             border-radius: 22px !important;
-            box-shadow: 0 18px 44px rgba(30,40,55,.13), 0 2px 7px rgba(30,40,55,.05);
+            box-shadow: 0 18px 44px rgba(30,40,55,.13), 0 2px 7px rgba(30,40,55,.05) !important;
+            overflow: hidden !important;
         }}
 
-        [data-testid="stVerticalBlockBorderWrapper"] > div {{
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-lock) > div,
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-user-icon) > div {{
+            background: #ffffff !important;
+            background-image: none !important;
             padding: 28px 32px 26px 32px !important;
+        }}
+
+        /* O formulário interno não cria um segundo cartão visual. */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-lock) [data-testid="stForm"],
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-user-icon) [data-testid="stForm"] {{
+            background: transparent !important;
         }}
 
         .ae-lock {{
