@@ -313,7 +313,7 @@ def _ordenar_tugs_pelo_perimetro(hub, registros, ambiente_geom):
         pos = _posicao_no_perimetro(tuple(r["ponto"]), ambiente_geom["polilinha"])
         if pos is None:
             return _ordenar_pontos_por_proximidade(hub, registros)
-        infos.append((r, pos["pos"], pos["perimetro"]))
+        infos.append((r, pos["posicao"], pos["perimetro"]))
 
     primeira = min(registros, key=lambda r: _dist(hub, r["ponto"]))
     perimetro = infos[0][2]
