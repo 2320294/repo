@@ -175,19 +175,22 @@ def aplicar_fundo_login():
         [data-testid="stMainBlockContainer"] {{
             padding-top: 0 !important;
             padding-bottom: 0 !important;
-            padding-left: 4.5rem !important;
-            padding-right: 4.5rem !important;
+            padding-left: 4.0rem !important;
+            padding-right: 4.0rem !important;
             max-width: 100% !important;
-            min-height: 100vh;
+            min-height: calc(100vh - 2px) !important;
+            height: calc(100vh - 2px) !important;
+            overflow: hidden !important;
         }}
 
         /* O conteúdo de autenticação ocupa toda a altura útil e é
            centralizado verticalmente. O antigo espaçador superior foi removido. */
         [data-testid="stMainBlockContainer"] > div:first-child {{
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            min-height: 100% !important;
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
         }}
 
         .ae-main-spacer {{
@@ -200,33 +203,38 @@ def aplicar_fundo_login():
 
         /* Card de autenticação. O branco fica somente dentro do card;
            o restante da área principal mantém a textura de fundo. */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-lock),
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-user-icon) {{
+        /* Durante a autenticação este CSS só é carregado antes do login.
+           Portanto podemos estilizar diretamente o container com borda do
+           Streamlit, sem depender de :has(), que varia entre versões. */
+        [data-testid="stMain"] div[data-testid="stVerticalBlockBorderWrapper"] {{
             background: #ffffff !important;
             background-image: none !important;
-            border: 1px solid rgba(215,220,228,.88) !important;
-            border-radius: 22px !important;
-            box-shadow: 0 18px 44px rgba(30,40,55,.13), 0 2px 7px rgba(30,40,55,.05) !important;
+            border: 1px solid rgba(215,220,228,.92) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 16px 38px rgba(30,40,55,.12), 0 2px 7px rgba(30,40,55,.05) !important;
             overflow: hidden !important;
         }}
 
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-lock) > div,
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-user-icon) > div {{
+        [data-testid="stMain"] div[data-testid="stVerticalBlockBorderWrapper"] > div {{
             background: #ffffff !important;
             background-image: none !important;
-            padding: 28px 32px 26px 32px !important;
+            padding: 18px 26px 18px 26px !important;
         }}
 
-        /* O formulário interno não cria um segundo cartão visual. */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-lock) [data-testid="stForm"],
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.ae-user-icon) [data-testid="stForm"] {{
-            background: transparent !important;
+        /* O formulário interno fica sem caixa própria: todo o branco pertence
+           ao card externo, como na referência enviada. */
+        [data-testid="stMain"] [data-testid="stForm"] {{
+            background: #ffffff !important;
+            background-image: none !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
         }}
 
         .ae-lock {{
-            width: 76px;
-            height: 76px;
-            margin: 0 auto 18px auto;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 12px auto;
             border-radius: 50%;
             background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
             display: flex;
@@ -237,25 +245,25 @@ def aplicar_fundo_login():
         }}
 
         .ae-lock-body {{
-            width: 30px;
-            height: 25px;
+            width: 27px;
+            height: 23px;
             border: 4px solid white;
             border-radius: 6px;
             box-sizing: border-box;
             position: absolute;
-            top: 36px;
+            top: 30px;
         }}
 
         .ae-lock-body:before {{
             content: "";
             position: absolute;
-            width: 19px;
-            height: 18px;
+            width: 17px;
+            height: 16px;
             border: 4px solid white;
             border-bottom: 0;
             border-radius: 13px 13px 0 0;
-            left: 2px;
-            top: -19px;
+            left: 1px;
+            top: -17px;
             box-sizing: border-box;
         }}
 
@@ -273,9 +281,9 @@ def aplicar_fundo_login():
 
         /* Ícone da tela de cadastro. */
         .ae-user-icon {{
-            width: 76px;
-            height: 76px;
-            margin: 0 auto 18px auto;
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 12px auto;
             border-radius: 50%;
             background: linear-gradient(150deg, #203d80 0%, #152d65 100%);
             position: relative;
@@ -327,7 +335,7 @@ def aplicar_fundo_login():
             text-align: center;
             margin: 0;
             color: var(--ae-text);
-            font-size: 2.05rem;
+            font-size: 1.78rem;
             font-weight: 800;
             letter-spacing: -.025em;
             line-height: 1.1;
@@ -336,9 +344,9 @@ def aplicar_fundo_login():
         .ae-login-subtitle {{
             text-align: center;
             color: #475365;
-            margin-top: 8px;
-            margin-bottom: 24px;
-            font-size: .99rem;
+            margin-top: 6px;
+            margin-bottom: 14px;
+            font-size: .92rem;
         }}
 
         [data-testid="stTextInput"] {{
@@ -352,7 +360,7 @@ def aplicar_fundo_login():
         }}
 
         [data-testid="stTextInput"] input {{
-            min-height: 51px;
+            min-height: 44px;
             border-radius: 9px;
             border-color: #d3d9e3;
             background: #fff;
@@ -366,7 +374,7 @@ def aplicar_fundo_login():
         }}
 
         [data-testid="stFormSubmitButton"] button {{
-            height: 56px;
+            height: 48px;
             border: 0 !important;
             border-radius: 8px;
             background: linear-gradient(90deg, var(--ae-blue), var(--ae-blue-dark));
@@ -387,7 +395,7 @@ def aplicar_fundo_login():
             align-items: center;
             gap: .85rem;
             color: #657084;
-            margin: 15px 0 12px 0;
+            margin: 10px 0 9px 0;
             font-size: .90rem;
         }}
 
@@ -400,7 +408,7 @@ def aplicar_fundo_login():
         }}
 
         .ae-google {{
-            height: 49px;
+            height: 44px;
             border: 1px solid #d9dee7;
             border-radius: 8px;
             background: #fff;
@@ -423,12 +431,12 @@ def aplicar_fundo_login():
             text-align: center;
             color: #697487;
             font-size: .90rem;
-            margin: 17px 0 7px 0;
+            margin: 10px 0 5px 0;
         }}
 
         /* Botão de cadastro/voltar, dentro do próprio card de autenticação. */
         [data-testid="stMain"] [data-testid="stButton"] button {{
-            min-height: 46px;
+            min-height: 40px;
             border-radius: 8px;
             border: 1px solid #cdd8ef !important;
             background: #f7f9fe !important;
@@ -443,7 +451,22 @@ def aplicar_fundo_login():
             color: #1949ac !important;
         }}
 
-        /* Card de Sobre o Sistema. */
+
+        /* Reduz os espaços verticais padrão do Streamlit para o formulário
+           caber inteiro em uma tela comum sem rolagem. */
+        [data-testid="stMain"] [data-testid="stVerticalBlock"] {{
+            gap: .48rem !important;
+        }}
+
+        [data-testid="stMain"] [data-testid="stForm"] [data-testid="stVerticalBlock"] {{
+            gap: .42rem !important;
+        }}
+
+        [data-testid="stMain"] .stElementContainer {{
+            margin-bottom: 0 !important;
+        }}
+
+                /* Card de Sobre o Sistema. */
         .ae-info-card {{
             background: rgba(255,255,255,.975);
             border: 1px solid rgba(215,220,228,.88);
