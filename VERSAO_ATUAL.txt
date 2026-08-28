@@ -1,13 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 6.1
-IDENTIFICADOR DO ARQUIVO: Fase_6_1
+VERSÃO ATUAL: Fase 6.3
+IDENTIFICADOR DO ARQUIVO: Fase_6_3
 
 CHECKLIST:
-[OK] Sistema = Fase 6.1
-[OK] Gerador CAD = Fase 6.1
-[OK] DXF = Fase_6_1
-[OK] interruptor Ø10 cm
-[OK] 1 interruptor = círculo vazado
-[OK] 2+ no mesmo ambiente = círculos preenchidos
-[OK] conduítes ocultos
-[OK] sem marcações P1/P2/P3/P4
+[OK] Sistema = Fase 6.3
+[OK] Gerador CAD = Fase 6.3
+[OK] DXF = Fase_6_3
+[OK] simples = Ø10 cm vazado
+[OK] paralelo = Ø10 cm preenchido
+[OK] mesmo diâmetro para todos

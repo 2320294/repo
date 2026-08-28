@@ -8,7 +8,7 @@ from soleiras_geometria import (
 )
 from portas_selecao import portas_do_ambiente
 
-RAIO_INTERRUPTOR = 0.05  # Ø 10 cm
+RAIO_INTERRUPTOR = 0.05  # TODOS os interruptores: Ø10 cm
 AFASTAMENTO_APOS_REFERENCIA = 0.10
 
 
@@ -169,7 +169,7 @@ def _geometria_interruptor(
     porta_geom
 ):
     """
-    Regra Fase 6.1:
+    Regra Fase 6.3:
 
     - lado do ambiente correspondente à face P1-P2:
       ponto de referência = P2;
@@ -335,7 +335,7 @@ def desenhar_interruptores(
     config_interruptores
 ):
     """
-    Fase 6.1:
+    Fase 6.3:
     - 1 porta: automático.
     - 2+ portas: somente IDs selecionados.
     - mesma porta selecionada pelos dois ambientes:
@@ -418,9 +418,11 @@ def desenhar_interruptores(
                     in portas[:qtd_antiga]
                 }
 
+        # REGRA FASE 6.3:
+        # TODOS os interruptores têm Ø10 cm.
         # Se o ambiente possui dois ou mais interruptores,
-        # todos os seus símbolos são representados como PARALELOS:
-        # círculo com interior preenchido.
+        # eles são PARALELOS e recebem hachura sólida interna.
+        # Com apenas um interruptor, mantém somente o contorno.
         interruptor_paralelo = (
             len(ids_escolhidos) >= 2
         )

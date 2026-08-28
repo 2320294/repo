@@ -481,7 +481,7 @@ def gerar_cad_unifilar(
             pontos_interruptores=pontos_interruptores,
         )
 
-        # Fase 6.1: limpar conduítes/comandos para foco nos pontos elétricos.
+        # Fase 6.3: limpar conduítes/comandos para foco nos pontos elétricos.
         camadas_ocultar = {"PROJ_ELETRICA_ELETRODUTO", "PROJ_ELETRICA_ELETRODUTO_TEXTO", "PROJ_ELETRICA_COMANDO"}
         for entidade in list(msp):
             if entidade.dxf.layer in camadas_ocultar:
