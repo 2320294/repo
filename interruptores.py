@@ -1,6 +1,7 @@
 
 import os
 import tempfile
+import math
 
 import ezdxf
 import streamlit as st
@@ -45,17 +46,176 @@ def _ambientes_geometricos(polilinhas, textos):
     return resultado
 
 
+
+def _distancia(a, b):
+    return (
+        (float(a[0]) - float(b[0])) ** 2
+        + (float(a[1]) - float(b[1])) ** 2
+    ) ** 0.5
+
+
+def _amostrar_arco(entidade, passos=24):
+    centro = (
+        float(entidade.dxf.center.x),
+        float(entidade.dxf.center.y)
+    )
+    raio = float(entidade.dxf.radius)
+    inicio = float(entidade.dxf.start_angle)
+    fim = float(entidade.dxf.end_angle)
+
+    while fim < inicio:
+        fim += 360.0
+
+    pontos = []
+
+    for i in range(passos + 1):
+        ang = inicio + (
+            fim - inicio
+        ) * i / passos
+
+        rad = math.radians(ang)
+
+        pontos.append((
+            centro[0]
+            + raio * math.cos(rad),
+            centro[1]
+            + raio * math.sin(rad)
+        ))
+
+    return pontos
+
+
+def _geometrias_porta_do_dxf(msp):
+    """
+    Lê a geometria VISUAL real da camada IA_PORTAS.
+    Mantém polilinhas/linhas e amostra os ARCOS de abertura.
+    """
+    geometrias = []
+
+    for ent in msp:
+        if (
+            str(
+                getattr(
+                    ent.dxf,
+                    "layer",
+                    ""
+                )
+            ).upper().strip()
+            != "IA_PORTAS"
+        ):
+            continue
+
+        tipo = ent.dxftype()
+        pontos = []
+
+        try:
+            if tipo == "LINE":
+                pontos = [
+                    (
+                        float(ent.dxf.start.x),
+                        float(ent.dxf.start.y)
+                    ),
+                    (
+                        float(ent.dxf.end.x),
+                        float(ent.dxf.end.y)
+                    )
+                ]
+
+            elif tipo == "LWPOLYLINE":
+                pontos = [
+                    (
+                        float(x),
+                        float(y)
+                    )
+                    for x, y
+                    in ent.get_points("xy")
+                ]
+
+                if (
+                    getattr(
+                        ent,
+                        "closed",
+                        False
+                    )
+                    and pontos
+                ):
+                    pontos = (
+                        pontos
+                        + [pontos[0]]
+                    )
+
+            elif tipo == "POLYLINE":
+                pontos = [
+                    (
+                        float(
+                            v.dxf.location.x
+                        ),
+                        float(
+                            v.dxf.location.y
+                        )
+                    )
+                    for v in ent.vertices
+                ]
+
+            elif tipo == "ARC":
+                pontos = (
+                    _amostrar_arco(
+                        ent
+                    )
+                )
+
+        except Exception:
+            pontos = []
+
+        if len(pontos) >= 2:
+            geometrias.append({
+                "tipo": tipo,
+                "pontos": pontos
+            })
+
+    return geometrias
+
+
+def _geometria_pertence_as_portas(
+    geometria,
+    portas,
+    tolerancia=0.16
+):
+    """
+    Associa folha/arco à soleira pelo ponto geométrico mais próximo.
+    """
+    if not portas:
+        return False
+
+    referencias = []
+
+    for porta in portas:
+        referencias.extend(
+            porta["soleira"].get(
+                "vertices",
+                []
+            )
+        )
+
+    if not referencias:
+        return False
+
+    return min(
+        _distancia(
+            ponto,
+            ref
+        )
+        for ponto
+        in geometria["pontos"]
+        for ref
+        in referencias
+    ) <= tolerancia
+
+
 def analisar_portas_dxf(dxf_bytes):
     """
-    Retorna:
-      {
-        ambiente: {
-          "poly": [...],
-          "portas": [
-             {"id", "numero", "rotulo", "centro", "soleira"}
-          ]
-        }
-      }
+    Além das portas selecionáveis, guarda a geometria arquitetônica
+    da folha e dos arcos de abertura para a mini planta.
     """
     if not dxf_bytes:
         return {}
@@ -70,83 +230,201 @@ def analisar_portas_dxf(dxf_bytes):
             tmp.write(dxf_bytes)
             caminho = tmp.name
 
-        doc = ezdxf.readfile(caminho)
-        elementos = ler_elementos(doc.modelspace())
+        doc = ezdxf.readfile(
+            caminho
+        )
 
-        ambientes = _ambientes_geometricos(
-            elementos["polilinhas"],
-            elementos["textos"]
+        msp = doc.modelspace()
+
+        elementos = (
+            ler_elementos(
+                msp
+            )
+        )
+
+        ambientes = (
+            _ambientes_geometricos(
+                elementos[
+                    "polilinhas"
+                ],
+                elementos[
+                    "textos"
+                ]
+            )
+        )
+
+        todas_geometrias = (
+            _geometrias_porta_do_dxf(
+                msp
+            )
         )
 
         saida = {}
 
         for nome, poly in ambientes.items():
-            saida[nome] = {
-                "poly": poly,
-                "portas": portas_do_ambiente(
+
+            portas = (
+                portas_do_ambiente(
                     nome,
                     poly,
-                    elementos["soleiras_raw"]
+                    elementos[
+                        "soleiras_raw"
+                    ]
                 )
+            )
+
+            geometrias = [
+                g
+                for g
+                in todas_geometrias
+                if (
+                    _geometria_pertence_as_portas(
+                        g,
+                        portas
+                    )
+                )
+            ]
+
+            saida[nome] = {
+                "poly": poly,
+                "portas": portas,
+                "geometrias_portas":
+                    geometrias
             }
 
         return saida
 
     finally:
-        if caminho and os.path.exists(caminho):
-            os.remove(caminho)
+        if (
+            caminho
+            and os.path.exists(
+                caminho
+            )
+        ):
+            os.remove(
+                caminho
+            )
 
 
-
-
-
-def _figura_ambiente(nome, poly, portas, selecionadas):
+def _figura_ambiente(
+    nome,
+    poly,
+    portas,
+    selecionadas,
+    geometrias_portas=None
+):
     """
-    Fase 6.3:
-    - mostra o ambiente inteiro;
-    - mantém a proporção geométrica aproximada;
-    - desenha todas as soleiras/portas;
-    - identifica Porta 1, Porta 2...;
-    - permite clicar diretamente nos marcadores.
+    Mini planta Fase 6.4:
+    visual arquitetônico inspirado na referência do usuário.
     """
+    geometrias_portas = (
+        geometrias_portas
+        or []
+    )
+
     if not poly:
         return {}
 
-    xs_poly = [float(p[0]) for p in poly]
-    ys_poly = [float(p[1]) for p in poly]
+    xs_poly = [
+        float(p[0])
+        for p in poly
+    ]
 
-    # Inclui também as soleiras nos limites visuais.
-    xs_todos = list(xs_poly)
-    ys_todos = list(ys_poly)
+    ys_poly = [
+        float(p[1])
+        for p in poly
+    ]
+
+    xs_todos = list(
+        xs_poly
+    )
+
+    ys_todos = list(
+        ys_poly
+    )
 
     for porta in portas:
-        for p in (porta["soleira"].get("vertices") or []):
-            xs_todos.append(float(p[0]))
-            ys_todos.append(float(p[1]))
+        for ponto in (
+            porta["soleira"].get(
+                "vertices",
+                []
+            )
+            or []
+        ):
+            xs_todos.append(
+                float(
+                    ponto[0]
+                )
+            )
+            ys_todos.append(
+                float(
+                    ponto[1]
+                )
+            )
 
-    min_x = min(xs_todos)
-    max_x = max(xs_todos)
-    min_y = min(ys_todos)
-    max_y = max(ys_todos)
+    for geometria in geometrias_portas:
+        for ponto in geometria[
+            "pontos"
+        ]:
+            xs_todos.append(
+                float(
+                    ponto[0]
+                )
+            )
+            ys_todos.append(
+                float(
+                    ponto[1]
+                )
+            )
 
-    largura = max(max_x - min_x, 0.50)
-    altura = max(max_y - min_y, 0.50)
+    min_x = min(
+        xs_todos
+    )
+    max_x = max(
+        xs_todos
+    )
+    min_y = min(
+        ys_todos
+    )
+    max_y = max(
+        ys_todos
+    )
 
-    # Margem de 12% para não cortar números/marcadores.
-    margem_x = max(largura * 0.12, 0.20)
-    margem_y = max(altura * 0.12, 0.20)
+    largura = max(
+        max_x - min_x,
+        0.50
+    )
+
+    altura = max(
+        max_y - min_y,
+        0.50
+    )
+
+    margem_x = max(
+        largura * 0.14,
+        0.22
+    )
+
+    margem_y = max(
+        altura * 0.14,
+        0.22
+    )
 
     dominio_x = [
         min_x - margem_x,
         max_x + margem_x
     ]
+
     dominio_y = [
         min_y - margem_y,
         max_y + margem_y
     ]
 
-    # Mantém o aspecto visual do ambiente.
-    proporcao = largura / altura
+    proporcao = (
+        largura
+        / altura
+    )
+
     largura_grafico = 430
 
     if proporcao >= 1:
@@ -154,368 +432,662 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
             max(
                 240,
                 min(
-                    360,
-                    largura_grafico / max(proporcao, 0.01)
+                    340,
+                    largura_grafico
+                    / max(
+                        proporcao,
+                        0.01
+                    )
                 )
             )
         )
+
     else:
-        altura_grafico = 340
+        altura_grafico = 330
+
         largura_grafico = int(
             max(
                 300,
                 min(
                     430,
-                    altura_grafico * proporcao
+                    altura_grafico
+                    * proporcao
                 )
             )
         )
 
-    # -------------------------------------------------------------
-    # CONTORNO COMPLETO DO AMBIENTE
-    # -------------------------------------------------------------
+    # =========================================================
+    # PAREDES
+    # Duas linhas visuais são simuladas com traço preto grosso
+    # e uma linha branca mais fina sobre ele.
+    # =========================================================
     contorno = []
-    pontos_contorno = list(poly) + [poly[0]]
 
-    for ordem, p in enumerate(pontos_contorno):
+    pontos_contorno = (
+        list(poly)
+        + [poly[0]]
+    )
+
+    for ordem, ponto in enumerate(
+        pontos_contorno
+    ):
         contorno.append({
-            "x": float(p[0]),
-            "y": float(p[1]),
-            "ordem": ordem
+            "x":
+                float(
+                    ponto[0]
+                ),
+            "y":
+                float(
+                    ponto[1]
+                ),
+            "ordem":
+                ordem
         })
 
-    # -------------------------------------------------------------
-    # SOLEIRAS / PORTAS
-    # -------------------------------------------------------------
-    segmentos_portas = []
+    # =========================================================
+    # ABERTURAS DAS PORTAS
+    # A soleira recebe uma linha branca grossa que apaga a
+    # parede visual naquele trecho.
+    # =========================================================
+    aberturas = []
 
     for porta in portas:
         verts = list(
-            porta["soleira"].get("vertices")
+            porta[
+                "soleira"
+            ].get(
+                "vertices"
+            )
             or []
         )
 
-        if len(verts) < 2:
+        if len(verts) < 4:
             continue
 
-        verts_fechados = verts + [verts[0]]
+        # Maior aresta da soleira = largura do vão.
+        arestas = []
 
-        for ordem, p in enumerate(verts_fechados):
-            segmentos_portas.append({
-                "porta_id": porta["id"],
-                "x": float(p[0]),
-                "y": float(p[1]),
-                "ordem": ordem,
-                "selecionada": (
-                    "SIM"
-                    if porta["id"] in selecionadas
-                    else "NAO"
+        for i in range(
+            len(verts)
+        ):
+            a = verts[i]
+            b = verts[
+                (i + 1)
+                % len(verts)
+            ]
+
+            comp = _distancia(
+                a,
+                b
+            )
+
+            arestas.append(
+                (
+                    comp,
+                    a,
+                    b
                 )
+            )
+
+        arestas.sort(
+            key=lambda x:
+                x[0],
+            reverse=True
+        )
+
+        # As duas maiores são faces paralelas.
+        for grupo, (_, a, b) in enumerate(
+            arestas[:2]
+        ):
+            aberturas.extend([
+                {
+                    "porta_id":
+                        porta["id"],
+                    "grupo":
+                        (
+                            f"{porta['id']}"
+                            f"_{grupo}"
+                        ),
+                    "ordem": 0,
+                    "x":
+                        float(
+                            a[0]
+                        ),
+                    "y":
+                        float(
+                            a[1]
+                        )
+                },
+                {
+                    "porta_id":
+                        porta["id"],
+                    "grupo":
+                        (
+                            f"{porta['id']}"
+                            f"_{grupo}"
+                        ),
+                    "ordem": 1,
+                    "x":
+                        float(
+                            b[0]
+                        ),
+                    "y":
+                        float(
+                            b[1]
+                        )
+                }
+            ])
+
+    # =========================================================
+    # FOLHAS E ARCOS REAIS DO DXF
+    # =========================================================
+    linhas_porta = []
+
+    for indice, geometria in enumerate(
+        geometrias_portas
+    ):
+        for ordem, ponto in enumerate(
+            geometria["pontos"]
+        ):
+            linhas_porta.append({
+                "grupo":
+                    (
+                        f"G{indice}"
+                    ),
+                "tipo":
+                    geometria[
+                        "tipo"
+                    ],
+                "ordem":
+                    ordem,
+                "x":
+                    float(
+                        ponto[0]
+                    ),
+                "y":
+                    float(
+                        ponto[1]
+                    )
             })
 
-    # -------------------------------------------------------------
-    # MARCADORES CLICÁVEIS
-    # -------------------------------------------------------------
+    # =========================================================
+    # MARCADORES
+    # =========================================================
     dados_portas = []
 
     for porta in portas:
         selecionada = (
-            porta["id"] in selecionadas
+            porta["id"]
+            in selecionadas
         )
 
         dados_portas.append({
-            "x": float(porta["centro"][0]),
-            "y": float(porta["centro"][1]),
-            "porta_id": porta["id"],
-            "rotulo": porta["rotulo"],
-            "estado": (
-                "Selecionada"
-                if selecionada
-                else "Clique para selecionar"
-            ),
-            "selecionada": (
-                "SIM"
-                if selecionada
-                else "NAO"
-            ),
-            "tamanho": (
-                430
-                if selecionada
-                else 300
-            )
+            "x":
+                float(
+                    porta[
+                        "centro"
+                    ][0]
+                ),
+            "y":
+                float(
+                    porta[
+                        "centro"
+                    ][1]
+                ),
+            "porta_id":
+                porta["id"],
+            "rotulo":
+                porta["rotulo"],
+            "estado":
+                (
+                    "Selecionada"
+                    if selecionada
+                    else
+                    "Sem interruptor"
+                ),
+            "selecionada":
+                (
+                    "SIM"
+                    if selecionada
+                    else "NAO"
+                ),
+            "tamanho":
+                (
+                    310
+                    if selecionada
+                    else 260
+                )
         })
 
     escala_x = {
-        "domain": dominio_x,
-        "nice": False,
-        "zero": False
+        "domain":
+            dominio_x,
+        "nice":
+            False,
+        "zero":
+            False
     }
 
     escala_y = {
-        "domain": dominio_y,
-        "nice": False,
-        "zero": False
+        "domain":
+            dominio_y,
+        "nice":
+            False,
+        "zero":
+            False
     }
 
-    return {
-        "$schema": (
-            "https://vega.github.io/schema/"
-            "vega-lite/v5.json"
-        ),
-        "title": {
-            "text": f"{nome} — clique nas portas que terão interruptor",
-            "anchor": "middle",
-            "fontSize": 14
-        },
-        "width": largura_grafico,
-        "height": altura_grafico,
-        "autosize": {
-            "type": "fit",
-            "contains": "padding",
-            "resize": True
-        },
-        "padding": {
-            "left": 15,
-            "right": 15,
-            "top": 15,
-            "bottom": 15
-        },
-        "config": {
-            "view": {
-                "stroke": None
+    layers = [
+        # Parede externa preta grossa
+        {
+            "data": {
+                "values":
+                    contorno
             },
-            "axis": {
-                "grid": False
+            "mark": {
+                "type": "line",
+                "stroke":
+                    "#111827",
+                "strokeWidth":
+                    9,
+                "strokeJoin":
+                    "miter"
+            },
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
+                },
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
+                },
+                "order": {
+                    "field":
+                        "ordem",
+                    "type":
+                        "quantitative"
+                }
             }
         },
-        "layer": [
-            # Contorno do ambiente
-            {
-                "data": {
-                    "values": contorno
+
+        # Linha branca interna cria efeito de parede dupla
+        {
+            "data": {
+                "values":
+                    contorno
+            },
+            "mark": {
+                "type": "line",
+                "stroke":
+                    "#ffffff",
+                "strokeWidth":
+                    4,
+                "strokeJoin":
+                    "miter"
+            },
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
                 },
-                "mark": {
-                    "type": "line",
-                    "stroke": "#1f2937",
-                    "strokeWidth": 4
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
                 },
-                "encoding": {
-                    "x": {
-                        "field": "x",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_x
-                    },
-                    "y": {
-                        "field": "y",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_y
-                    },
-                    "order": {
-                        "field": "ordem",
-                        "type": "quantitative"
+                "order": {
+                    "field":
+                        "ordem",
+                    "type":
+                        "quantitative"
+                }
+            }
+        },
+
+        # Aberturas brancas sobre a parede
+        {
+            "data": {
+                "values":
+                    aberturas
+            },
+            "mark": {
+                "type": "line",
+                "stroke":
+                    "#ffffff",
+                "strokeWidth":
+                    13
+            },
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
+                },
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
+                },
+                "detail": {
+                    "field":
+                        "grupo",
+                    "type":
+                        "nominal"
+                },
+                "order": {
+                    "field":
+                        "ordem",
+                    "type":
+                        "quantitative"
+                }
+            }
+        }
+    ]
+
+    if linhas_porta:
+        layers.append({
+            "data": {
+                "values":
+                    linhas_porta
+            },
+            "mark": {
+                "type": "line",
+                "stroke":
+                    "#111827",
+                "strokeWidth":
+                    2
+            },
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
+                },
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
+                },
+                "detail": {
+                    "field":
+                        "grupo",
+                    "type":
+                        "nominal"
+                },
+                "order": {
+                    "field":
+                        "ordem",
+                    "type":
+                        "quantitative"
+                }
+            }
+        })
+
+    layers.extend([
+        # Marcador clicável
+        {
+            "data": {
+                "values":
+                    dados_portas
+            },
+            "params": [
+                {
+                    "name":
+                        "porta",
+                    "select": {
+                        "type":
+                            "point",
+                        "fields": [
+                            "porta_id"
+                        ],
+                        "on":
+                            "click",
+                        "clear":
+                            False
                     }
                 }
+            ],
+            "mark": {
+                "type":
+                    "point",
+                "filled":
+                    True,
+                "stroke":
+                    "#ffffff",
+                "strokeWidth":
+                    2
             },
-
-            # Soleiras / portas
-            {
-                "data": {
-                    "values": segmentos_portas
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
                 },
-                "mark": {
-                    "type": "line",
-                    "strokeWidth": 7
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
                 },
-                "encoding": {
-                    "x": {
-                        "field": "x",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_x
-                    },
-                    "y": {
-                        "field": "y",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_y
-                    },
-                    "detail": {
-                        "field": "porta_id",
-                        "type": "nominal"
-                    },
-                    "order": {
-                        "field": "ordem",
-                        "type": "quantitative"
-                    },
-                    "color": {
-                        "condition": {
-                            "test": (
-                                "datum.selecionada === 'SIM'"
+                "size": {
+                    "field":
+                        "tamanho",
+                    "type":
+                        "quantitative",
+                    "scale": None,
+                    "legend": None
+                },
+                "color": {
+                    "condition": {
+                        "test":
+                            (
+                                "datum."
+                                "selecionada "
+                                "=== 'SIM'"
                             ),
-                            "value": "#16a34a"
-                        },
-                        "value": "#dc2626"
-                    }
-                }
-            },
-
-            # Seleção clicável
-            {
-                "data": {
-                    "values": dados_portas
+                        "value":
+                            "#34a853"
+                    },
+                    "value":
+                        "#ef5350"
                 },
-                "params": [
+                "tooltip": [
                     {
-                        "name": "porta",
-                        "select": {
-                            "type": "point",
-                            "fields": [
-                                "porta_id"
-                            ],
-                            "on": "click",
-                            "clear": False
-                        }
+                        "field":
+                            "rotulo",
+                        "type":
+                            "nominal",
+                        "title":
+                            "Porta"
+                    },
+                    {
+                        "field":
+                            "estado",
+                        "type":
+                            "nominal",
+                        "title":
+                            "Interruptor"
                     }
-                ],
-                "mark": {
-                    "type": "point",
-                    "filled": True,
-                    "stroke": "#111827",
-                    "strokeWidth": 2
-                },
-                "encoding": {
-                    "x": {
-                        "field": "x",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_x
-                    },
-                    "y": {
-                        "field": "y",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_y
-                    },
-                    "size": {
-                        "field": "tamanho",
-                        "type": "quantitative",
-                        "scale": None,
-                        "legend": None
-                    },
-                    "shape": {
-                        "condition": {
-                            "test": (
-                                "datum.selecionada === 'SIM'"
-                            ),
-                            "value": "diamond"
-                        },
-                        "value": "circle"
-                    },
-                    "color": {
-                        "condition": {
-                            "test": (
-                                "datum.selecionada === 'SIM'"
-                            ),
-                            "value": "#16a34a"
-                        },
-                        "value": "#ef4444"
-                    },
-                    "tooltip": [
-                        {
-                            "field": "rotulo",
-                            "type": "nominal",
-                            "title": "Porta"
-                        },
-                        {
-                            "field": "estado",
-                            "type": "nominal",
-                            "title": "Interruptor"
-                        }
-                    ]
-                }
-            },
+                ]
+            }
+        },
 
-            # Números das portas
-            {
-                "data": {
-                    "values": dados_portas
-                },
-                "mark": {
-                    "type": "text",
-                    "dy": -24,
-                    "fontSize": 12,
-                    "fontWeight": "bold",
-                    "color": "#111827"
-                },
-                "encoding": {
-                    "x": {
-                        "field": "x",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_x
-                    },
-                    "y": {
-                        "field": "y",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_y
-                    },
-                    "text": {
-                        "field": "rotulo",
-                        "type": "nominal"
-                    }
-                }
+        # Porta 1, Porta 2...
+        {
+            "data": {
+                "values":
+                    dados_portas
             },
+            "mark": {
+                "type":
+                    "text",
+                "dy":
+                    -17,
+                "fontSize":
+                    11,
+                "fontWeight":
+                    "bold",
+                "color":
+                    "#111827"
+            },
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
+                },
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
+                },
+                "text": {
+                    "field":
+                        "rotulo",
+                    "type":
+                        "nominal"
+                }
+            }
+        },
 
-            # Nome do ambiente no centro visual
-            {
-                "data": {
-                    "values": [{
-                        "x": (
+        # Nome do ambiente forte e central
+        {
+            "data": {
+                "values": [{
+                    "x":
+                        (
                             min(xs_poly)
                             + max(xs_poly)
                         ) / 2.0,
-                        "y": (
+                    "y":
+                        (
                             min(ys_poly)
                             + max(ys_poly)
                         ) / 2.0,
-                        "nome": nome
-                    }]
+                    "nome":
+                        nome
+                }]
+            },
+            "mark": {
+                "type":
+                    "text",
+                "fontSize":
+                    17,
+                "fontWeight":
+                    "bold",
+                "color":
+                    "#111827"
+            },
+            "encoding": {
+                "x": {
+                    "field": "x",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_x
                 },
-                "mark": {
-                    "type": "text",
-                    "fontSize": 17,
-                    "fontWeight": "bold",
-                    "opacity": 0.25
+                "y": {
+                    "field": "y",
+                    "type":
+                        "quantitative",
+                    "axis": None,
+                    "scale":
+                        escala_y
                 },
-                "encoding": {
-                    "x": {
-                        "field": "x",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_x
-                    },
-                    "y": {
-                        "field": "y",
-                        "type": "quantitative",
-                        "axis": None,
-                        "scale": escala_y
-                    },
-                    "text": {
-                        "field": "nome",
-                        "type": "nominal"
-                    }
+                "text": {
+                    "field":
+                        "nome",
+                    "type":
+                        "nominal"
                 }
             }
-        ]
-    }
+        }
+    ])
 
+    return {
+        "$schema": (
+            "https://vega.github.io/"
+            "schema/vega-lite/v5.json"
+        ),
+        "width":
+            largura_grafico,
+        "height":
+            altura_grafico,
+        "background":
+            "#ffffff",
+        "autosize": {
+            "type":
+                "fit",
+            "contains":
+                "padding",
+            "resize":
+                True
+        },
+        "padding": {
+            "left": 14,
+            "right": 14,
+            "top": 14,
+            "bottom": 14
+        },
+        "config": {
+            "view": {
+                "stroke":
+                    "#e5e7eb",
+                "strokeWidth":
+                    1
+            },
+            "axis": {
+                "grid":
+                    False
+            }
+        },
+        "layer":
+            layers
+    }
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.3:
+    Fase 6.4:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -617,7 +1189,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase5_8_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase6_4_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -649,13 +1221,17 @@ def renderizar_interruptores(
                     amb,
                     poly,
                     portas,
-                    selecionadas
+                    selecionadas,
+                    analise[amb].get(
+                        "geometrias_portas",
+                        []
+                    )
                 )
     
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=True,
-                    key=f"fase5_8_planta_portas_{amb}",
+                    key=f"fase6_4_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
@@ -687,7 +1263,7 @@ def renderizar_interruptores(
                     pid = ids_evento[-1]
     
                     chave_ultimo = (
-                        f"fase5_8_ultima_porta_evento_{amb}"
+                        f"fase6_4_ultima_porta_evento_{amb}"
                     )
     
                     if (
@@ -732,7 +1308,7 @@ def renderizar_interruptores(
                     "Portas selecionadas:",
                     options=list(opcoes.keys()),
                     default=rotulos_selecionados,
-                    key=f"fase5_8_lista_portas_{amb}",
+                    key=f"fase6_4_lista_portas_{amb}",
                     help=(
                         "Você pode clicar na mini planta ou "
                         "usar esta lista. As duas formas representam "

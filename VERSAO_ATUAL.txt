@@ -1,11 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 6.3
-IDENTIFICADOR DO ARQUIVO: Fase_6_3
+VERSÃO ATUAL: Fase 6.4
+IDENTIFICADOR: Fase_6_4
 
-CHECKLIST:
-[OK] Sistema = Fase 6.3
-[OK] Gerador CAD = Fase 6.3
-[OK] DXF = Fase_6_3
-[OK] simples = Ø10 cm vazado
-[OK] paralelo = Ø10 cm preenchido
-[OK] mesmo diâmetro para todos
+[OK] Sistema Fase 6.4
+[OK] Gerador CAD Fase 6.4
+[OK] DXF Fase_6_4
+[OK] mini plantas arquitetônicas
+[OK] portas com folha/arco do DXF
+[OK] interruptores Ø10 cm
+[OK] paralelos por hachura sólida
