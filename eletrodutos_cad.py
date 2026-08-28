@@ -337,6 +337,125 @@ def _ordenar_tugs_pelo_perimetro(hub, registros, ambiente_geom):
     return [primeira] + [r for r, _ in escolhida]
 
 
+
+def _interruptores_do_ambiente(ambiente, pontos_interruptores):
+    return [
+        r for r in (pontos_interruptores or [])
+        if str(r.get("ambiente", "")).strip() == str(ambiente).strip()
+        and r.get("ponto")
+    ]
+
+
+def _escolher_entrada_tug(ambiente, registros_tug, pontos_interruptores, hub):
+    """Escolhe a origem da rede de TUG do ambiente.
+
+    Prioridade:
+    1. interruptor do ambiente que esteja mais perto de alguma TUG;
+    2. na ausência de interruptor, usa a luminária principal (hub).
+    """
+    if not registros_tug:
+        return tuple(hub), None, "ILUMINACAO_FALLBACK"
+
+    interruptores = _interruptores_do_ambiente(
+        ambiente,
+        pontos_interruptores,
+    )
+
+    if interruptores:
+        melhor = None
+        for intr in interruptores:
+            pi = tuple(intr["ponto"])
+            for tug in registros_tug:
+                pt = tuple(tug["ponto"])
+                cand = (_dist(pi, pt), pi, tug)
+                if melhor is None or cand[0] < melhor[0]:
+                    melhor = cand
+
+        if melhor is not None:
+            _, origem, tug = melhor
+            return origem, tug, "INTERRUPTOR"
+
+    primeira = min(
+        registros_tug,
+        key=lambda r: _dist(tuple(hub), tuple(r["ponto"]))
+    )
+    return tuple(hub), primeira, "ILUMINACAO_FALLBACK"
+
+
+def _ordenar_tugs_com_primeira_fixa(primeira, registros, ambiente_geom):
+    """Ordena TUGs pelo perímetro mantendo a primeira TUG já escolhida."""
+    if not registros:
+        return []
+    if primeira is None:
+        return list(registros)
+    if len(registros) == 1:
+        return [primeira]
+
+    if not ambiente_geom or not ambiente_geom.get("polilinha"):
+        restantes = [r for r in registros if r is not primeira]
+        return [primeira] + _ordenar_pontos_por_proximidade(
+            tuple(primeira["ponto"]),
+            restantes,
+        )
+
+    info_primeira = _posicao_no_perimetro(
+        tuple(primeira["ponto"]),
+        ambiente_geom["polilinha"],
+    )
+    if info_primeira is None:
+        restantes = [r for r in registros if r is not primeira]
+        return [primeira] + _ordenar_pontos_por_proximidade(
+            tuple(primeira["ponto"]),
+            restantes,
+        )
+
+    perimetro = info_primeira["perimetro"]
+    pos0 = info_primeira["posicao"]
+
+    itens = []
+    for r in registros:
+        if r is primeira:
+            continue
+        info = _posicao_no_perimetro(
+            tuple(r["ponto"]),
+            ambiente_geom["polilinha"],
+        )
+        if info is None:
+            restantes = [x for x in registros if x is not primeira]
+            return [primeira] + _ordenar_pontos_por_proximidade(
+                tuple(primeira["ponto"]),
+                restantes,
+            )
+        itens.append((r, info["posicao"]))
+
+    horario = sorted(
+        itens,
+        key=lambda rp: (rp[1] - pos0) % perimetro,
+    )
+    anti = sorted(
+        itens,
+        key=lambda rp: (pos0 - rp[1]) % perimetro,
+    )
+
+    def custo(ordem, sentido):
+        atual = pos0
+        total = 0.0
+        for _, pos in ordem:
+            if sentido > 0:
+                total += (pos - atual) % perimetro
+            else:
+                total += (atual - pos) % perimetro
+            atual = pos
+        return total
+
+    escolhida = (
+        horario
+        if custo(horario, 1) <= custo(anti, -1)
+        else anti
+    )
+    return [primeira] + [r for r, _ in escolhida]
+
+
 def _formatar_rotulo_circuitos(ids):
     """Rótulo compacto para não poluir o CAD."""
     nums = [str(i)[1:] if str(i).upper().startswith('C') else str(i) for i in ids]
@@ -508,7 +627,7 @@ def desenhar_rede_eletrodutos(
     soleiras_raw=None,
     pontos_interruptores=None,
 ):
-    """Fase 4.4: árvore física única de eletrodutos.
+    """Fase 4.7: árvore física única + entrada de TUG pelo interruptor.
 
     QDC = raiz fixa escolhida pelo usuário.
     Luminária principal = nó de distribuição de cada ambiente.
@@ -553,8 +672,33 @@ def desenhar_rede_eletrodutos(
         # Isso reproduz melhor a leitura de uma planta elétrica convencional e
         # reduz drasticamente a poluição gráfica.
         if circuito["tipo"] == "TUG":
-            ordenados = _ordenar_tugs_pelo_perimetro(hub, registros, geom_por_nome.get(destino))
-            atual = hub
+            origem_tug, primeira_tug, tipo_origem = _escolher_entrada_tug(
+                destino,
+                registros,
+                pontos_interruptores or [],
+                hub,
+            )
+
+            if (
+                tipo_origem == "INTERRUPTOR"
+                and _segmento_valido(hub, origem_tug)
+            ):
+                _adicionar_segmento_agregado(
+                    agregados,
+                    hub,
+                    origem_tug,
+                    circuito["id"],
+                    natureza="LUZ_PARA_INTERRUPTOR_TUG",
+                    ambiente=destino,
+                )
+
+            ordenados = _ordenar_tugs_com_primeira_fixa(
+                primeira_tug,
+                registros,
+                geom_por_nome.get(destino),
+            )
+
+            atual = origem_tug
             for indice, registro in enumerate(ordenados):
                 p = tuple(registro["ponto"])
                 if _segmento_valido(atual, p):
@@ -564,9 +708,13 @@ def desenhar_rede_eletrodutos(
                         p,
                         circuito["id"],
                         natureza=(
-                            "RAMAL_LUZ_PARA_TUG"
-                            if indice == 0
-                            else "ENCADEAMENTO_TUG"
+                            "INTERRUPTOR_PARA_PRIMEIRA_TUG"
+                            if indice == 0 and tipo_origem == "INTERRUPTOR"
+                            else (
+                                "LUZ_PARA_PRIMEIRA_TUG"
+                                if indice == 0
+                                else "ENCADEAMENTO_TUG"
+                            )
                         ),
                         ambiente=destino,
                     )

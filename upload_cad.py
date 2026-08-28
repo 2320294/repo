@@ -267,7 +267,7 @@ def renderizar_salvar_e_gerar_cad(
 
     # Marcador visual para confirmar no Streamlit que esta versão
     # do arquivo upload_cad.py foi realmente publicada/carregada.
-    VERSAO_CAD = "Fase 4.6"
+    VERSAO_CAD = "Fase 4.7"
     st.info(
         f"🔖 Versão atual do gerador CAD: **{VERSAO_CAD}**",
         icon="ℹ️",
