@@ -9,6 +9,7 @@ from auth import (
     inicializar_estado_sessao,
     renderizar_pagina_login,
     fazer_logout,
+    sincronizar_login_google,
 )
 
 from projetos import renderizar_gerenciador_projetos
@@ -87,6 +88,7 @@ def aplicar_tema_sistema():
 
 configurar_pagina()
 inicializar_estado_sessao()
+sincronizar_login_google()
 
 
 # ============================================================

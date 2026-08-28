@@ -16,6 +16,7 @@ def inicializar_estado_sessao():
         "menu_login": "🔒  Login",
         "auth_view": "login",
         "ultimo_menu_login": "🔒  Login",
+        "auth_provider": "",
     }
 
     for chave, valor in valores_padrao.items():
@@ -23,7 +24,51 @@ def inicializar_estado_sessao():
             st.session_state[chave] = valor
 
 
+def sincronizar_login_google():
+    """Sincroniza uma sessão autenticada pelo Google/OIDC com o estado do app."""
+    try:
+        usuario_google = st.user
+    except Exception:
+        return False
+
+    try:
+        autenticado = bool(usuario_google.is_logged_in)
+    except Exception:
+        autenticado = False
+
+    if not autenticado:
+        return False
+
+    email = str(usuario_google.get("email", "") or "").strip()
+    nome = str(usuario_google.get("name", "") or "").strip()
+
+    if not email:
+        # O Google normalmente fornece e-mail; sem ele o sistema não consegue
+        # associar os projetos ao usuário.
+        return False
+
+    if not nome:
+        nome = email.split("@", 1)[0]
+
+    st.session_state.logged_in = True
+    st.session_state.user_email = email
+    st.session_state.user_name = nome
+    st.session_state.auth_provider = "google"
+
+    if not st.session_state.get("projeto_ativo"):
+        st.session_state.projeto_ativo = "Selecione um projeto..."
+
+    return True
+
+
 def fazer_logout():
+    """Encerra login local e, quando aplicável, também a sessão OIDC/Google."""
+    login_google_ativo = False
+    try:
+        login_google_ativo = bool(st.user.is_logged_in)
+    except Exception:
+        pass
+
     st.session_state.logged_in = False
     st.session_state.user_email = ""
     st.session_state.user_name = ""
@@ -31,6 +76,10 @@ def fazer_logout():
     st.session_state.menu_login = "🔒  Login"
     st.session_state.auth_view = "login"
     st.session_state.ultimo_menu_login = "🔒  Login"
+    st.session_state.auth_provider = ""
+
+    if login_google_ativo:
+        st.logout()
 
 
 def renderizar_menu_login():
@@ -94,6 +143,7 @@ def _processar_login(login_email, login_senha):
             st.session_state.logged_in = True
             st.session_state.user_email = usuario["email"]
             st.session_state.user_name = usuario["nome"]
+            st.session_state.auth_provider = "senha"
             st.session_state.projeto_ativo = "Selecione um projeto..."
             st.rerun()
         else:
@@ -271,17 +321,19 @@ def _renderizar_formulario_login():
 
         st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
 
-        # Elemento visual mantido para reproduzir a referência.
-        # A autenticação Google ainda não está configurada no projeto.
-        st.markdown(
-            """
-            <div class="ae-google" title="Integração com Google ainda não configurada">
-                <span class="ae-google-g">G</span>
-                <span>Entrar com Google</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        if st.button(
+            "G   Entrar com Google",
+            key="entrar_google",
+            use_container_width=True,
+        ):
+            try:
+                st.login()
+            except Exception as e:
+                st.error(
+                    "Não foi possível iniciar o login com Google. "
+                    "Confira os Secrets de autenticação do Streamlit. "
+                    f"Detalhes: {e}"
+                )
 
         st.markdown(
             '<div class="ae-auth-switch-label">Ainda não possui uma conta?</div>',
