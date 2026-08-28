@@ -8,7 +8,7 @@ from soleiras_geometria import (
 )
 from portas_selecao import portas_do_ambiente
 
-RAIO_INTERRUPTOR = 0.025
+RAIO_INTERRUPTOR = 0.05  # Ø 10 cm
 AFASTAMENTO_APOS_REFERENCIA = 0.10
 
 
@@ -169,7 +169,7 @@ def _geometria_interruptor(
     porta_geom
 ):
     """
-    Regra Fase 6.0:
+    Regra Fase 6.1:
 
     - lado do ambiente correspondente à face P1-P2:
       ponto de referência = P2;
@@ -280,6 +280,52 @@ def _geometria_interruptor(
     }
 
 
+
+def _preencher_circulo_interruptor(
+    msp,
+    centro,
+    raio
+):
+    """
+    Cria preenchimento sólido circular para representar
+    interruptor paralelo.
+
+    O contorno CIRCLE continua sendo desenhado normalmente;
+    o HATCH SOLID fica na mesma camada.
+    """
+    try:
+        hatch = msp.add_hatch(
+            color=256,
+            dxfattribs={
+                "layer":
+                    "PROJ_ELETRICA_INTERRUPTOR"
+            }
+        )
+
+        hatch.set_solid_fill(
+            color=256
+        )
+
+        caminho = (
+            hatch.paths.add_edge_path()
+        )
+
+        caminho.add_arc(
+            center=centro,
+            radius=raio,
+            start_angle=0,
+            end_angle=360,
+            ccw=True
+        )
+
+        return hatch
+
+    except Exception:
+        # O contorno do interruptor permanece mesmo que
+        # algum visualizador não aceite o hatch circular.
+        return None
+
+
 def desenhar_interruptores(
     msp,
     polilinhas,
@@ -289,7 +335,7 @@ def desenhar_interruptores(
     config_interruptores
 ):
     """
-    Fase 6.0:
+    Fase 6.1:
     - 1 porta: automático.
     - 2+ portas: somente IDs selecionados.
     - mesma porta selecionada pelos dois ambientes:
@@ -372,6 +418,13 @@ def desenhar_interruptores(
                     in portas[:qtd_antiga]
                 }
 
+        # Se o ambiente possui dois ou mais interruptores,
+        # todos os seus símbolos são representados como PARALELOS:
+        # círculo com interior preenchido.
+        interruptor_paralelo = (
+            len(ids_escolhidos) >= 2
+        )
+
         for item_porta in portas:
             if (
                 item_porta["id"]
@@ -411,12 +464,21 @@ def desenhar_interruptores(
                 }
             )
 
+            if interruptor_paralelo:
+                _preencher_circulo_interruptor(
+                    msp,
+                    geo["centro"],
+                    RAIO_INTERRUPTOR
+                )
+
             rot = geo["rot"]
 
             pontos_gerados.append({
                 "ambiente": nome,
                 "tipo":
                     "INTERRUPTOR",
+                "paralelo":
+                    interruptor_paralelo,
                 "porta_id":
                     item_porta["id"],
                 "porta_numero":
@@ -431,7 +493,7 @@ def desenhar_interruptores(
                     geo["distancia_p2_p3"],
                 "referencia":
                     "10cm_APOS_P2_OU_P3",
-                "diametro_m": 0.05,
+                "diametro_m": 0.10,
                 "p1": rot["p1"],
                 "p2": rot["p2"],
                 "p3": rot["p3"],

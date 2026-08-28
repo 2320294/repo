@@ -102,7 +102,7 @@ def analisar_portas_dxf(dxf_bytes):
 
 def _figura_ambiente(nome, poly, portas, selecionadas):
     """
-    Fase 6.0:
+    Fase 6.1:
     - mostra o ambiente inteiro;
     - mantém a proporção geométrica aproximada;
     - desenha todas as soleiras/portas;
@@ -515,7 +515,7 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.0:
+    Fase 6.1:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
