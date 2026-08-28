@@ -1,14 +1,12 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 6.9
-IDENTIFICADOR: Fase_6_9
+VERSÃO ATUAL: Fase 7.0
+IDENTIFICADOR: Fase_7_0
 
-CHECKLIST
-[OK] Sistema = Fase 6.9
-[OK] Gerador CAD = Fase 6.9
-[OK] DXF = Fase_6_9
-[OK] canvas fixo sem stretch do Streamlit
-[OK] escala X/Y geométrica igual
-[OK] folha = tamanho da soleira
-[OK] arco = raio igual à soleira
-[OK] toggle Vega = "true"
-[OK] múltiplas portas sem Shift
+CHECKLIST:
+[OK] Sistema = Fase 7.0
+[OK] Gerador CAD = Fase 7.0
+[OK] DXF = Fase_7_0
+[OK] largura mini planta = 430 px
+[OK] altura = proporcional ao ambiente
+[OK] use_container_width=False
+[OK] multisseleção preservada

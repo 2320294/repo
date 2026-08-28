@@ -446,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 6.9:
+    Mini planta Fase 7.0:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -552,68 +552,42 @@ def _figura_ambiente(
         max_y + margem_y
     ]
 
-    # Fase 6.9:
-    # Canvas fixo para não ser deformado pelo Streamlit.
-    largura_grafico = 430
-    altura_grafico = 330
-
-    # Ajusta os DOMÍNIOS, e não o tamanho do gráfico.
-    # Isso preserva escala 1:1 e mantém todos os cartões
-    # visualmente com o mesmo tamanho.
+    # Fase 7.0:
+    # A mini planta tem largura fixa para encaixar nas duas colunas.
+    # A altura é calculada pela proporção REAL do ambiente.
+    #
+    # Exemplo:
+    # ambiente 4,00 x 3,00 m
+    # largura = 430 px
+    # altura  = 430 * (3 / 4) = 322 px
+    #
+    # Assim não há deformação do desenho.
     largura_dom = max(
         dominio_x[1] - dominio_x[0],
         0.01
     )
+
     altura_dom = max(
         dominio_y[1] - dominio_y[0],
         0.01
     )
 
-    aspecto_canvas = (
-        largura_grafico
-        / altura_grafico
+    largura_grafico = 430
+
+    proporcao_altura = (
+        altura_dom
+        / largura_dom
     )
 
-    aspecto_dominio = (
-        largura_dom
-        / altura_dom
+    altura_grafico = int(
+        max(
+            1,
+            round(
+                largura_grafico
+                * proporcao_altura
+            )
+        )
     )
-
-    if aspecto_dominio > aspecto_canvas:
-        # O ambiente é proporcionalmente mais largo.
-        # Expandimos Y para manter o mesmo px/unidade.
-        nova_altura = (
-            largura_dom
-            / aspecto_canvas
-        )
-
-        centro_y = (
-            dominio_y[0]
-            + dominio_y[1]
-        ) / 2.0
-
-        dominio_y = [
-            centro_y - nova_altura / 2.0,
-            centro_y + nova_altura / 2.0
-        ]
-
-    else:
-        # O ambiente é proporcionalmente mais alto.
-        # Expandimos X para manter o mesmo px/unidade.
-        nova_largura = (
-            altura_dom
-            * aspecto_canvas
-        )
-
-        centro_x = (
-            dominio_x[0]
-            + dominio_x[1]
-        ) / 2.0
-
-        dominio_x = [
-            centro_x - nova_largura / 2.0,
-            centro_x + nova_largura / 2.0
-        ]
 
     # =========================================================
     # PAREDES
@@ -1245,7 +1219,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 6.9:
+    Fase 7.0:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1347,7 +1321,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase6_9_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase7_0_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1390,11 +1364,11 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=False,
-                    key=f"fase6_9_planta_portas_{amb}",
+                    key=f"fase7_0_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
-                # Fase 6.9:
+                # Fase 7.0:
                 # O parâmetro Vega usa toggle="true":
                 # cada clique comum adiciona/remove uma porta,
                 # sem necessidade de Shift.
@@ -1530,7 +1504,7 @@ def renderizar_interruptores(
                         # imediatamente as cores e a contagem.
                         st.rerun()
 
-                # Fase 6.9:
+                # Fase 7.0:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(
