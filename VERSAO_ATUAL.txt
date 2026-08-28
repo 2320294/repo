@@ -1,0 +1,10 @@
+AUTOELÉTRICA
+VERSÃO ATUAL: Fase 5.5
+IDENTIFICADOR DE ARQUIVO: Fase_5_5
+
+Checklist validado antes do empacotamento:
+- versao.py = Fase 5.5
+- nenhuma referência Fase 5.3/Fase 5.4 nos arquivos Python
+- barra lateral usa a versão central
+- gerador CAD usa a versão central
+- nome do DXF usa Fase_5_5
