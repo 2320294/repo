@@ -176,7 +176,8 @@ def renderizar_painel_principal():
     config_interruptores_usuario = (
         renderizar_interruptores(
             dados_ambientes,
-            config_salva
+            config_salva,
+            dxf_bytes=dxf_bytes
         )
     )
 
