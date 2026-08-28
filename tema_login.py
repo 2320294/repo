@@ -390,7 +390,7 @@ def aplicar_fundo_login():
             align-items: center;
             gap: .85rem;
             color: #657084;
-            margin: 10px 0 10px 0;
+            margin: 12px 0 12px 0;
             font-size: .90rem;
         }}
 
@@ -414,6 +414,7 @@ def aplicar_fundo_login():
             color: #171b23;
             font-size: .98rem;
             user-select: none;
+            margin: 0;
         }}
 
         .ae-google-g {{
@@ -426,7 +427,7 @@ def aplicar_fundo_login():
             text-align: center;
             color: #697487;
             font-size: .90rem;
-            margin: 10px 0 6px 0;
+            margin: 12px 0 9px 0;
         }}
 
         /* Botão de cadastro/voltar, dentro do próprio card de autenticação. */
