@@ -150,7 +150,7 @@ def desenhar_interruptores(
     config_interruptores
 ):
     """
-    Fase 5.5:
+    Fase 5.6:
     - Ambiente com uma porta: interruptor automático.
     - Ambiente com 2+ portas: somente IDs selecionados
       graficamente pelo usuário recebem interruptores.

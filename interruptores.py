@@ -3,7 +3,6 @@ import os
 import tempfile
 
 import ezdxf
-import plotly.graph_objects as go
 import streamlit as st
 
 from dxf_io import ler_elementos
@@ -98,110 +97,198 @@ def analisar_portas_dxf(dxf_bytes):
             os.remove(caminho)
 
 
+
+
 def _figura_ambiente(nome, poly, portas, selecionadas):
-    fig = go.Figure()
+    """
+    Retorna uma especificação Vega-Lite pura.
+    Não depende de Plotly nem de Altair importado.
+    """
 
-    # Contorno do ambiente.
-    xs = [p[0] for p in poly] + [poly[0][0]]
-    ys = [p[1] for p in poly] + [poly[0][1]]
+    contorno = []
+    pontos_contorno = list(poly) + [poly[0]]
 
-    fig.add_trace(
-        go.Scatter(
-            x=xs,
-            y=ys,
-            mode="lines",
-            line=dict(width=3),
-            hoverinfo="skip",
-            showlegend=False,
-            name="Ambiente"
-        )
-    )
+    for ordem, p in enumerate(pontos_contorno):
+        contorno.append({
+            "x": float(p[0]),
+            "y": float(p[1]),
+            "ordem": ordem
+        })
 
-    # Soleiras como pequenos retângulos.
+    dados_portas = []
+
     for porta in portas:
-        verts = porta["soleira"].get("vertices") or []
-        if len(verts) >= 2:
-            sx = [p[0] for p in verts] + [verts[0][0]]
-            sy = [p[1] for p in verts] + [verts[0][1]]
-            fig.add_trace(
-                go.Scatter(
-                    x=sx,
-                    y=sy,
-                    mode="lines",
-                    line=dict(width=5),
-                    hoverinfo="skip",
-                    showlegend=False,
-                    name=porta["rotulo"]
-                )
-            )
-
-    # Marcadores clicáveis das portas.
-    x_portas = [p["centro"][0] for p in portas]
-    y_portas = [p["centro"][1] for p in portas]
-    textos = [
-        (
-            f"{p['rotulo']}<br>"
-            + (
-                "SELECIONADA"
-                if p["id"] in selecionadas
-                else "Clique para selecionar"
-            )
+        selecionada = (
+            porta["id"] in selecionadas
         )
-        for p in portas
-    ]
 
-    tamanhos = [
-        24 if p["id"] in selecionadas else 18
-        for p in portas
-    ]
-
-    simbolos = [
-        "diamond" if p["id"] in selecionadas else "circle"
-        for p in portas
-    ]
-
-    fig.add_trace(
-        go.Scatter(
-            x=x_portas,
-            y=y_portas,
-            mode="markers+text",
-            text=[p["rotulo"] for p in portas],
-            textposition="top center",
-            customdata=[p["id"] for p in portas],
-            hovertext=textos,
-            hoverinfo="text",
-            marker=dict(
-                size=tamanhos,
-                symbol=simbolos,
-                line=dict(width=2)
+        dados_portas.append({
+            "x": float(porta["centro"][0]),
+            "y": float(porta["centro"][1]),
+            "porta_id": porta["id"],
+            "rotulo": porta["rotulo"],
+            "estado": (
+                "Selecionada"
+                if selecionada
+                else "Não selecionada"
             ),
-            showlegend=False,
-            name="Portas"
-        )
-    )
+            "tamanho": (
+                420
+                if selecionada
+                else 250
+            ),
+            "forma": (
+                "diamond"
+                if selecionada
+                else "circle"
+            )
+        })
 
-    fig.update_layout(
-        title=dict(
-            text=f"Selecione as portas — {nome}",
-            x=0.5
+    return {
+        "$schema": (
+            "https://vega.github.io/schema/"
+            "vega-lite/v5.json"
         ),
-        height=420,
-        margin=dict(l=15, r=15, t=55, b=15),
-        clickmode="event+select",
-        dragmode=False,
-        xaxis=dict(
-            visible=False,
-            scaleanchor="y",
-            scaleratio=1
+        "title": (
+            f"Selecione as portas — {nome}"
         ),
-        yaxis=dict(
-            visible=False
-        ),
-        showlegend=False
-    )
-
-    return fig
-
+        "height": 400,
+        "autosize": {
+            "type": "fit",
+            "contains": "padding"
+        },
+        "config": {
+            "view": {
+                "stroke": None
+            },
+            "axis": {
+                "grid": False
+            }
+        },
+        "layer": [
+            {
+                "data": {
+                    "values": contorno
+                },
+                "mark": {
+                    "type": "line",
+                    "strokeWidth": 3
+                },
+                "encoding": {
+                    "x": {
+                        "field": "x",
+                        "type": "quantitative",
+                        "axis": None
+                    },
+                    "y": {
+                        "field": "y",
+                        "type": "quantitative",
+                        "axis": None
+                    },
+                    "order": {
+                        "field": "ordem",
+                        "type": "quantitative"
+                    }
+                }
+            },
+            {
+                "data": {
+                    "values": dados_portas
+                },
+                "params": [
+                    {
+                        "name": "porta",
+                        "select": {
+                            "type": "point",
+                            "fields": [
+                                "porta_id"
+                            ],
+                            "on": "click",
+                            "clear": False
+                        }
+                    }
+                ],
+                "mark": {
+                    "type": "point",
+                    "filled": True,
+                    "strokeWidth": 2
+                },
+                "encoding": {
+                    "x": {
+                        "field": "x",
+                        "type": "quantitative",
+                        "axis": None
+                    },
+                    "y": {
+                        "field": "y",
+                        "type": "quantitative",
+                        "axis": None
+                    },
+                    "size": {
+                        "field": "tamanho",
+                        "type": "quantitative",
+                        "scale": None,
+                        "legend": None
+                    },
+                    "shape": {
+                        "field": "forma",
+                        "type": "nominal",
+                        "scale": None,
+                        "legend": None
+                    },
+                    "opacity": {
+                        "condition": {
+                            "test": (
+                                "datum.estado === "
+                                "'Selecionada'"
+                            ),
+                            "value": 1.0
+                        },
+                        "value": 0.55
+                    },
+                    "tooltip": [
+                        {
+                            "field": "rotulo",
+                            "type": "nominal",
+                            "title": "Porta"
+                        },
+                        {
+                            "field": "estado",
+                            "type": "nominal",
+                            "title": "Estado"
+                        }
+                    ]
+                }
+            },
+            {
+                "data": {
+                    "values": dados_portas
+                },
+                "mark": {
+                    "type": "text",
+                    "dy": -18,
+                    "fontSize": 13,
+                    "fontWeight": "bold"
+                },
+                "encoding": {
+                    "x": {
+                        "field": "x",
+                        "type": "quantitative",
+                        "axis": None
+                    },
+                    "y": {
+                        "field": "y",
+                        "type": "quantitative",
+                        "axis": None
+                    },
+                    "text": {
+                        "field": "rotulo",
+                        "type": "nominal"
+                    }
+                }
+            }
+        ]
+    }
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     ids_validos = {p["id"] for p in portas}
@@ -335,57 +422,70 @@ def renderizar_interruptores(
                 selecionadas
             )
 
-            evento = st.plotly_chart(
+            evento = st.vega_lite_chart(
                 fig,
                 use_container_width=True,
                 key=f"planta_portas_{amb}",
-                on_select="rerun",
-                selection_mode="points"
+                on_select="rerun"
             )
 
-            pontos = []
+            # Streamlit retorna os valores selecionados pelo Vega-Lite.
+            # Usamos o ID geométrico da porta para alternar a seleção.
+            ids_evento = []
+
             try:
-                pontos = evento.selection.points
+                ids_evento = (
+                    evento.selection.porta.get(
+                        "porta_id",
+                        []
+                    )
+                )
             except Exception:
                 try:
-                    pontos = evento["selection"]["points"]
+                    ids_evento = (
+                        evento["selection"]
+                        ["porta"]
+                        .get("porta_id", [])
+                    )
                 except Exception:
-                    pontos = []
+                    ids_evento = []
 
-            # Plotly retorna a seleção atual de pontos.
-            # Como queremos comportamento de clique/toggle, o ponto selecionado
-            # é usado para alternar o ID no nosso estado persistente.
-            if pontos:
-                ultimo = pontos[-1]
-                pid = (
-                    ultimo.get("customdata")
-                    if isinstance(ultimo, dict)
-                    else getattr(ultimo, "customdata", None)
-                )
+            if isinstance(ids_evento, str):
+                ids_evento = [ids_evento]
 
-                chave_ultimo = f"ultima_porta_evento_{amb}"
-                assinatura_evento = (
-                    str(pid),
-                    len(pontos)
+            if ids_evento:
+                pid = ids_evento[-1]
+
+                chave_ultimo = (
+                    f"ultima_porta_evento_{amb}"
                 )
 
                 if (
                     pid in ids_validos
-                    and st.session_state.get(chave_ultimo)
-                    != assinatura_evento
+                    and st.session_state.get(
+                        chave_ultimo
+                    ) != pid
                 ):
-                    atual = list(st.session_state[chave_estado])
+                    atual = list(
+                        st.session_state[
+                            chave_estado
+                        ]
+                    )
 
                     if pid in atual:
                         atual.remove(pid)
                     else:
                         atual.append(pid)
 
-                    st.session_state[chave_estado] = atual
-                    st.session_state[chave_ultimo] = assinatura_evento
-                    st.rerun()
+                    st.session_state[
+                        chave_estado
+                    ] = atual
 
-            selecionadas = list(st.session_state[chave_estado])
+                    st.session_state[
+                        chave_ultimo
+                    ] = pid
+
+                    st.rerun()
 
             # Alternativa acessível/precisa abaixo do desenho.
             opcoes = {
