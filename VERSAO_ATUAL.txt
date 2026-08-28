@@ -1,11 +1,12 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 5.8
-IDENTIFICADOR DO ARQUIVO: Fase_5_8
+VERSÃO ATUAL: Fase 5.9
+IDENTIFICADOR DO ARQUIVO: Fase_5_9
 
 CHECKLIST:
-[OK] barra lateral = Fase 5.8
-[OK] gerador CAD = Fase 5.8
-[OK] nome DXF = Fase_5_8
-[OK] padding Vega-Lite é objeto
-[OK] chaves de widget/session_state renovadas
-[OK] nenhuma referência ativa às fases anteriores no código Python
+[OK] Sistema = Fase 5.9
+[OK] Gerador CAD = Fase 5.9
+[OK] DXF = Fase_5_9
+[OK] ambientes selecionáveis em 2 colunas
+[OK] mini plantas compactas
+[OK] interruptores duplos usam P2/P3 em faces opostas
+[OK] separação transversal baseada em P2-P3

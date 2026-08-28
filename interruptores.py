@@ -102,7 +102,7 @@ def analisar_portas_dxf(dxf_bytes):
 
 def _figura_ambiente(nome, poly, portas, selecionadas):
     """
-    Fase 5.8:
+    Fase 5.9:
     - mostra o ambiente inteiro;
     - mantém a proporção geométrica aproximada;
     - desenha todas as soleiras/portas;
@@ -147,25 +147,25 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
 
     # Mantém o aspecto visual do ambiente.
     proporcao = largura / altura
-    largura_grafico = 720
+    largura_grafico = 430
 
     if proporcao >= 1:
         altura_grafico = int(
             max(
-                320,
+                240,
                 min(
-                    560,
+                    360,
                     largura_grafico / max(proporcao, 0.01)
                 )
             )
         )
     else:
-        altura_grafico = 520
+        altura_grafico = 340
         largura_grafico = int(
             max(
-                420,
+                300,
                 min(
-                    720,
+                    430,
                     altura_grafico * proporcao
                 )
             )
@@ -239,9 +239,9 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                 else "NAO"
             ),
             "tamanho": (
-                650
+                430
                 if selecionada
-                else 450
+                else 300
             )
         })
 
@@ -265,7 +265,7 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
         "title": {
             "text": f"{nome} — clique nas portas que terão interruptor",
             "anchor": "middle",
-            "fontSize": 16
+            "fontSize": 14
         },
         "width": largura_grafico,
         "height": altura_grafico,
@@ -445,7 +445,7 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                 "mark": {
                     "type": "text",
                     "dy": -24,
-                    "fontSize": 15,
+                    "fontSize": 12,
                     "fontWeight": "bold",
                     "color": "#111827"
                 },
@@ -486,7 +486,7 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
                 },
                 "mark": {
                     "type": "text",
-                    "fontSize": 22,
+                    "fontSize": 17,
                     "fontWeight": "bold",
                     "opacity": 0.25
                 },
@@ -515,7 +515,7 @@ def _figura_ambiente(nome, poly, portas, selecionadas):
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 5.8:
+    Fase 5.9:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -599,167 +599,176 @@ def renderizar_interruptores(
         return config
 
     st.markdown(
-        "Nos ambientes abaixo, escolha **diretamente na mini planta** "
+        "Nos ambientes abaixo, organizados em **duas colunas**, escolha **diretamente na mini planta** "
         "quais portas receberão interruptores. "
         "Clique em uma porta para selecionar ou retirar a seleção."
     )
 
-    for amb in multiplos:
-        portas = analise[amb]["portas"]
-        poly = analise[amb]["poly"]
+    col_esquerda, col_direita = st.columns(2, gap="medium")
 
-        chave_estado = f"fase5_8_portas_interruptor_selecionadas_{amb}"
+    for indice_amb, amb in enumerate(multiplos):
+        coluna = (
+            col_esquerda
+            if indice_amb % 2 == 0
+            else col_direita
+        )
 
-        if chave_estado not in st.session_state:
-            st.session_state[chave_estado] = _ids_salvos_ambiente(
-                config_salva,
-                amb,
-                portas
-            )
-
-        # Remove IDs que deixaram de existir após troca do DXF.
-        ids_validos = {p["id"] for p in portas}
-        st.session_state[chave_estado] = [
-            pid
-            for pid in st.session_state[chave_estado]
-            if pid in ids_validos
-        ]
-
-        selecionadas = list(st.session_state[chave_estado])
-
-        with st.expander(
-            f"🚪 {amb} — {len(portas)} portas",
-            expanded=True
-        ):
-            st.caption(
-                "🔴 Vermelho = sem interruptor   |   "
-                "🟢 Verde = porta selecionada para interruptor"
-            )
-
-            fig = _figura_ambiente(
-                amb,
-                poly,
-                portas,
-                selecionadas
-            )
-
-            evento = st.vega_lite_chart(
-                fig,
-                use_container_width=True,
-                key=f"fase5_8_planta_portas_{amb}",
-                on_select="rerun"
-            )
-
-            # Streamlit retorna os valores selecionados pelo Vega-Lite.
-            # Usamos o ID geométrico da porta para alternar a seleção.
-            ids_evento = []
-
-            try:
-                ids_evento = (
-                    evento.selection.porta.get(
-                        "porta_id",
-                        []
-                    )
+        with coluna:
+            portas = analise[amb]["portas"]
+            poly = analise[amb]["poly"]
+    
+            chave_estado = f"fase5_8_portas_interruptor_selecionadas_{amb}"
+    
+            if chave_estado not in st.session_state:
+                st.session_state[chave_estado] = _ids_salvos_ambiente(
+                    config_salva,
+                    amb,
+                    portas
                 )
-            except Exception:
+    
+            # Remove IDs que deixaram de existir após troca do DXF.
+            ids_validos = {p["id"] for p in portas}
+            st.session_state[chave_estado] = [
+                pid
+                for pid in st.session_state[chave_estado]
+                if pid in ids_validos
+            ]
+    
+            selecionadas = list(st.session_state[chave_estado])
+    
+            with st.expander(
+                f"🚪 {amb} — {len(portas)} portas",
+                expanded=True
+            ):
+                st.caption(
+                    "🔴 Vermelho = sem interruptor   |   "
+                    "🟢 Verde = porta selecionada para interruptor"
+                )
+    
+                fig = _figura_ambiente(
+                    amb,
+                    poly,
+                    portas,
+                    selecionadas
+                )
+    
+                evento = st.vega_lite_chart(
+                    fig,
+                    use_container_width=True,
+                    key=f"fase5_8_planta_portas_{amb}",
+                    on_select="rerun"
+                )
+    
+                # Streamlit retorna os valores selecionados pelo Vega-Lite.
+                # Usamos o ID geométrico da porta para alternar a seleção.
+                ids_evento = []
+    
                 try:
                     ids_evento = (
-                        evento["selection"]
-                        ["porta"]
-                        .get("porta_id", [])
+                        evento.selection.porta.get(
+                            "porta_id",
+                            []
+                        )
                     )
                 except Exception:
-                    ids_evento = []
-
-            if isinstance(ids_evento, str):
-                ids_evento = [ids_evento]
-
-            if ids_evento:
-                pid = ids_evento[-1]
-
-                chave_ultimo = (
-                    f"fase5_8_ultima_porta_evento_{amb}"
-                )
-
-                if (
-                    pid in ids_validos
-                    and st.session_state.get(
-                        chave_ultimo
-                    ) != pid
-                ):
-                    atual = list(
+                    try:
+                        ids_evento = (
+                            evento["selection"]
+                            ["porta"]
+                            .get("porta_id", [])
+                        )
+                    except Exception:
+                        ids_evento = []
+    
+                if isinstance(ids_evento, str):
+                    ids_evento = [ids_evento]
+    
+                if ids_evento:
+                    pid = ids_evento[-1]
+    
+                    chave_ultimo = (
+                        f"fase5_8_ultima_porta_evento_{amb}"
+                    )
+    
+                    if (
+                        pid in ids_validos
+                        and st.session_state.get(
+                            chave_ultimo
+                        ) != pid
+                    ):
+                        atual = list(
+                            st.session_state[
+                                chave_estado
+                            ]
+                        )
+    
+                        if pid in atual:
+                            atual.remove(pid)
+                        else:
+                            atual.append(pid)
+    
                         st.session_state[
                             chave_estado
-                        ]
-                    )
-
-                    if pid in atual:
-                        atual.remove(pid)
-                    else:
-                        atual.append(pid)
-
-                    st.session_state[
-                        chave_estado
-                    ] = atual
-
-                    st.session_state[
-                        chave_ultimo
-                    ] = pid
-
-                    st.rerun()
-
-            # Alternativa acessível/precisa abaixo do desenho.
-            opcoes = {
-                p["rotulo"]: p["id"]
-                for p in portas
-            }
-            rotulos_selecionados = [
-                p["rotulo"]
-                for p in portas
-                if p["id"] in selecionadas
-            ]
-
-            escolhidas_lista = st.multiselect(
-                "Portas selecionadas:",
-                options=list(opcoes.keys()),
-                default=rotulos_selecionados,
-                key=f"fase5_8_lista_portas_{amb}",
-                help=(
-                    "Você pode clicar na mini planta ou "
-                    "usar esta lista. As duas formas representam "
-                    "a mesma seleção."
-                )
-            )
-
-            ids_lista = [
-                opcoes[rotulo]
-                for rotulo in escolhidas_lista
-            ]
-
-            if set(ids_lista) != set(selecionadas):
-                st.session_state[chave_estado] = ids_lista
-                selecionadas = ids_lista
-
-            if selecionadas:
-                st.success(
-                    f"{len(selecionadas)} "
-                    + (
-                        "porta selecionada."
-                        if len(selecionadas) == 1
-                        else "portas selecionadas."
+                        ] = atual
+    
+                        st.session_state[
+                            chave_ultimo
+                        ] = pid
+    
+                        st.rerun()
+    
+                # Alternativa acessível/precisa abaixo do desenho.
+                opcoes = {
+                    p["rotulo"]: p["id"]
+                    for p in portas
+                }
+                rotulos_selecionados = [
+                    p["rotulo"]
+                    for p in portas
+                    if p["id"] in selecionadas
+                ]
+    
+                escolhidas_lista = st.multiselect(
+                    "Portas selecionadas:",
+                    options=list(opcoes.keys()),
+                    default=rotulos_selecionados,
+                    key=f"fase5_8_lista_portas_{amb}",
+                    help=(
+                        "Você pode clicar na mini planta ou "
+                        "usar esta lista. As duas formas representam "
+                        "a mesma seleção."
                     )
                 )
-            else:
-                st.warning(
-                    "Nenhuma porta selecionada: "
-                    "este ambiente ficará sem interruptor."
-                )
-
-            config[amb] = {
-                "quantidade": len(selecionadas),
-                "portas_ids": selecionadas,
-                "portas_detectadas": len(portas),
-                "automatico": False
-            }
+    
+                ids_lista = [
+                    opcoes[rotulo]
+                    for rotulo in escolhidas_lista
+                ]
+    
+                if set(ids_lista) != set(selecionadas):
+                    st.session_state[chave_estado] = ids_lista
+                    selecionadas = ids_lista
+    
+                if selecionadas:
+                    st.success(
+                        f"{len(selecionadas)} "
+                        + (
+                            "porta selecionada."
+                            if len(selecionadas) == 1
+                            else "portas selecionadas."
+                        )
+                    )
+                else:
+                    st.warning(
+                        "Nenhuma porta selecionada: "
+                        "este ambiente ficará sem interruptor."
+                    )
+    
+                config[amb] = {
+                    "quantidade": len(selecionadas),
+                    "portas_ids": selecionadas,
+                    "portas_detectadas": len(portas),
+                    "automatico": False
+                }
 
     return config
