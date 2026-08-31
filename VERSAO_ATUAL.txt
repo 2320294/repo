@@ -1,10 +1,13 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 7.2
-IDENTIFICADOR: Fase_7_2
+VERSÃO ATUAL: Fase 7.3
+IDENTIFICADOR: Fase_7_3
 
-[OK] Sistema = Fase 7.2
-[OK] Gerador CAD = Fase 7.2
-[OK] DXF = Fase_7_2
-[OK] ambientes verticais girados 90° apenas na mini planta
-[OK] mesma escala X/Y
+CHECKLIST:
+[OK] Sistema = Fase 7.3
+[OK] Gerador CAD = Fase 7.3
+[OK] DXF = Fase_7_3
+[OK] orientação original do DXF preservada
+[OK] sem rotação visual
+[OK] fit uniforme X/Y
+[OK] quadro 430 x 330
 [OK] multisseleção preservada

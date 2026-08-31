@@ -446,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 7.2:
+    Mini planta Fase 7.3:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -552,7 +552,7 @@ def _figura_ambiente(
         max_y + margem_y
     ]
 
-    # Fase 7.2:
+    # Fase 7.3:
     # Quadro fixo para as duas colunas.
     # O ambiente inteiro recebe UM ÚNICO fator percentual,
     # igual em X e Y, até caber no quadro (fit/contain).
@@ -597,30 +597,15 @@ def _figura_ambiente(
         altura_grafico / 2.0
     )
 
-    # Fase 7.2:
-    # Ambientes mais altos que largos são girados 90 graus
-    # APENAS na mini planta, para aproveitar melhor as duas colunas.
-    # A geometria real e os IDs das portas permanecem inalterados.
-    rotacionar_visual = (
-        altura_real > largura_real
-    )
-
-    # Se houver rotação, recalcula o fit usando dimensões trocadas.
-    largura_exibicao = (
-        altura_real
-        if rotacionar_visual
-        else largura_real
-    )
-
-    altura_exibicao = (
-        largura_real
-        if rotacionar_visual
-        else altura_real
-    )
-
+    # Fase 7.3:
+    # A orientação visual é EXATAMENTE a mesma do DXF original.
+    # Não há rotação, espelhamento ou escala diferente entre X e Y.
+    #
+    # O ambiente inteiro recebe apenas UM fator uniforme de escala
+    # ("fit/contain") para caber dentro do quadro fixo.
     fator_escala = min(
-        largura_util / largura_exibicao,
-        altura_util / altura_exibicao
+        largura_util / largura_real,
+        altura_util / altura_real
     )
 
     def _transformar_visual(ponto):
@@ -632,14 +617,6 @@ def _figura_ambiente(
             float(ponto[1])
             - centro_real_y
         )
-
-        if rotacionar_visual:
-            # Rotação de 90° anti-horário no plano visual:
-            # (x, y) -> (-y, x)
-            dx, dy = (
-                -dy,
-                dx
-            )
 
         return (
             centro_canvas_x
@@ -858,7 +835,7 @@ def _figura_ambiente(
                 )
         })
 
-    # Fase 7.2 — aplica o MESMO percentual em todos os elementos.
+    # Fase 7.3 — aplica o MESMO percentual em todos os elementos.
     for item in contorno:
         item["x"], item["y"] = _transformar_visual(
             (item["x"], item["y"])
@@ -1309,7 +1286,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 7.2:
+    Fase 7.3:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1411,7 +1388,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase7_2_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase7_3_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1454,11 +1431,11 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=False,
-                    key=f"fase7_2_planta_portas_{amb}",
+                    key=f"fase7_3_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
-                # Fase 7.2:
+                # Fase 7.3:
                 # O parâmetro Vega usa toggle="true":
                 # cada clique comum adiciona/remove uma porta,
                 # sem necessidade de Shift.
@@ -1594,7 +1571,7 @@ def renderizar_interruptores(
                         # imediatamente as cores e a contagem.
                         st.rerun()
 
-                # Fase 7.2:
+                # Fase 7.3:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(
