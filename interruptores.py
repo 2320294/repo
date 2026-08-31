@@ -446,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 7.0:
+    Mini planta Fase 7.1:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -552,42 +552,73 @@ def _figura_ambiente(
         max_y + margem_y
     ]
 
-    # Fase 7.0:
-    # A mini planta tem largura fixa para encaixar nas duas colunas.
-    # A altura é calculada pela proporção REAL do ambiente.
-    #
-    # Exemplo:
-    # ambiente 4,00 x 3,00 m
-    # largura = 430 px
-    # altura  = 430 * (3 / 4) = 322 px
-    #
-    # Assim não há deformação do desenho.
-    largura_dom = max(
-        dominio_x[1] - dominio_x[0],
-        0.01
-    )
-
-    altura_dom = max(
-        dominio_y[1] - dominio_y[0],
-        0.01
-    )
-
+    # Fase 7.1:
+    # Quadro fixo para as duas colunas.
+    # O ambiente inteiro recebe UM ÚNICO fator percentual,
+    # igual em X e Y, até caber no quadro (fit/contain).
     largura_grafico = 430
+    altura_grafico = 330
+    margem_percentual = 0.08
 
-    proporcao_altura = (
-        altura_dom
-        / largura_dom
+    largura_util = (
+        largura_grafico
+        * (1.0 - 2.0 * margem_percentual)
+    )
+    altura_util = (
+        altura_grafico
+        * (1.0 - 2.0 * margem_percentual)
     )
 
-    altura_grafico = int(
-        max(
-            1,
-            round(
-                largura_grafico
-                * proporcao_altura
-            )
+    largura_real = max(
+        max_x - min_x,
+        0.01
+    )
+    altura_real = max(
+        max_y - min_y,
+        0.01
+    )
+
+    fator_escala = min(
+        largura_util / largura_real,
+        altura_util / altura_real
+    )
+
+    centro_real_x = (
+        min_x + max_x
+    ) / 2.0
+    centro_real_y = (
+        min_y + max_y
+    ) / 2.0
+
+    centro_canvas_x = (
+        largura_grafico / 2.0
+    )
+    centro_canvas_y = (
+        altura_grafico / 2.0
+    )
+
+    def _transformar_visual(ponto):
+        return (
+            centro_canvas_x
+            + (
+                float(ponto[0])
+                - centro_real_x
+            ) * fator_escala,
+            centro_canvas_y
+            + (
+                float(ponto[1])
+                - centro_real_y
+            ) * fator_escala
         )
-    )
+
+    dominio_x = [
+        0.0,
+        float(largura_grafico)
+    ]
+    dominio_y = [
+        0.0,
+        float(altura_grafico)
+    ]
 
     # =========================================================
     # PAREDES
@@ -789,6 +820,34 @@ def _figura_ambiente(
                     else 260
                 )
         })
+
+    # Fase 7.1 — aplica o MESMO percentual em todos os elementos.
+    for item in contorno:
+        item["x"], item["y"] = _transformar_visual(
+            (item["x"], item["y"])
+        )
+
+    for item in aberturas:
+        item["x"], item["y"] = _transformar_visual(
+            (item["x"], item["y"])
+        )
+
+    for item in linhas_porta:
+        item["x"], item["y"] = _transformar_visual(
+            (item["x"], item["y"])
+        )
+
+    for item in dados_portas:
+        item["x"], item["y"] = _transformar_visual(
+            (item["x"], item["y"])
+        )
+
+    centro_nome = _transformar_visual(
+        (
+            (min(xs_poly) + max(xs_poly)) / 2.0,
+            (min(ys_poly) + max(ys_poly)) / 2.0
+        )
+    )
 
     escala_x = {
         "domain":
@@ -1126,15 +1185,9 @@ def _figura_ambiente(
             "data": {
                 "values": [{
                     "x":
-                        (
-                            min(xs_poly)
-                            + max(xs_poly)
-                        ) / 2.0,
+                        centro_nome[0],
                     "y":
-                        (
-                            min(ys_poly)
-                            + max(ys_poly)
-                        ) / 2.0,
+                        centro_nome[1],
                     "nome":
                         nome
                 }]
@@ -1219,7 +1272,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 7.0:
+    Fase 7.1:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1321,7 +1374,7 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase7_0_portas_interruptor_selecionadas_{amb}"
+            chave_estado = f"fase7_1_portas_interruptor_selecionadas_{amb}"
     
             if chave_estado not in st.session_state:
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
@@ -1364,11 +1417,11 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=False,
-                    key=f"fase7_0_planta_portas_{amb}",
+                    key=f"fase7_1_planta_portas_{amb}",
                     on_select="rerun"
                 )
     
-                # Fase 7.0:
+                # Fase 7.1:
                 # O parâmetro Vega usa toggle="true":
                 # cada clique comum adiciona/remove uma porta,
                 # sem necessidade de Shift.
@@ -1504,7 +1557,7 @@ def renderizar_interruptores(
                         # imediatamente as cores e a contagem.
                         st.rerun()
 
-                # Fase 7.0:
+                # Fase 7.1:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(

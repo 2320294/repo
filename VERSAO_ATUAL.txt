@@ -1,12 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 7.0
-IDENTIFICADOR: Fase_7_0
+VERSÃO ATUAL: Fase 7.1
+IDENTIFICADOR: Fase_7_1
 
-CHECKLIST:
-[OK] Sistema = Fase 7.0
-[OK] Gerador CAD = Fase 7.0
-[OK] DXF = Fase_7_0
-[OK] largura mini planta = 430 px
-[OK] altura = proporcional ao ambiente
-[OK] use_container_width=False
+[OK] Sistema 7.1
+[OK] Gerador 7.1
+[OK] DXF 7.1
+[OK] quadro 430x330
+[OK] fit uniforme / contain
+[OK] mesma escala X/Y
 [OK] multisseleção preservada
