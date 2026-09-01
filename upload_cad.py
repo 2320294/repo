@@ -23,28 +23,52 @@ def renderizar_upload_dxf(
     config_salva
 ):
     """
-    Renderiza upload inicial ou substituição da planta.
-    Retorna True se houve rerun/alteração e False caso contrário.
+    Upload inicial / substituição do DXF.
+
+    Fase 7.4:
+    - o file_uploader recebe uma chave com nonce;
+    - após salvar com sucesso, o nonce é incrementado;
+    - no rerun seguinte, nasce um uploader novo e vazio;
+    - o mesmo arquivo não é processado repetidamente;
+    - elimina o ciclo contínuo de rerun ("bicicletinha").
     """
+
     tem_dxf_salvo = (
         dxf_bytes is not None
         and len(dados_ambientes) > 0
     )
 
+    # Mensagem flash exibida somente depois do rerun de sucesso.
+    mensagem_flash = st.session_state.pop(
+        "mensagem_upload_dxf",
+        None
+    )
+
+    if mensagem_flash:
+        st.success(mensagem_flash)
+
+    # --------------------------------------------------------
+    # UPLOAD INICIAL
+    # --------------------------------------------------------
     if not tem_dxf_salvo:
         st.subheader(
             "📁 Enviar Planta Base (Formato DXF)"
+        )
+
+        nonce_inicial = st.session_state.get(
+            "upload_inicial_nonce",
+            0
         )
 
         uploaded_file = st.file_uploader(
             "Envie o arquivo DXF para iniciar "
             "o dimensionamento:",
             type=["dxf"],
-            key="upload_inicial"
+            key=f"upload_inicial_{nonce_inicial}"
         )
 
         if uploaded_file is not None:
-            novo_dxf = uploaded_file.read()
+            novo_dxf = uploaded_file.getvalue()
 
             try:
                 with tempfile.NamedTemporaryFile(
@@ -55,15 +79,11 @@ def renderizar_upload_dxf(
                     tmp_path = tmp.name
 
                 try:
-                    novos_dados = (
-                        motores.processar_dxf(
-                            tmp_path
-                        )
+                    novos_dados = motores.processar_dxf(
+                        tmp_path
                     )
                 finally:
-                    if os.path.exists(
-                        tmp_path
-                    ):
+                    if os.path.exists(tmp_path):
                         os.remove(tmp_path)
 
                 salvar_dados_projeto(
@@ -74,7 +94,14 @@ def renderizar_upload_dxf(
                     config_interruptores=config_salva
                 )
 
-                st.success(
+                # Troca a chave do uploader ANTES do rerun.
+                st.session_state[
+                    "upload_inicial_nonce"
+                ] = nonce_inicial + 1
+
+                st.session_state[
+                    "mensagem_upload_dxf"
+                ] = (
                     "✅ Planta baixa processada e "
                     "salva no Supabase!"
                 )
@@ -89,6 +116,9 @@ def renderizar_upload_dxf(
 
         return False
 
+    # --------------------------------------------------------
+    # SUBSTITUIÇÃO / REENVIO
+    # --------------------------------------------------------
     with st.expander(
         "🔄 Reenviar / Substituir Planta Baixa (DXF)"
     ):
@@ -97,16 +127,22 @@ def renderizar_upload_dxf(
             "tenha sido alterada."
         )
 
+        nonce_substituicao = st.session_state.get(
+            "upload_substituicao_nonce",
+            0
+        )
+
         novo_uploaded_file = st.file_uploader(
             "Envie a nova planta base (.dxf):",
             type=["dxf"],
-            key="upload_substituicao"
+            key=(
+                "upload_substituicao_"
+                f"{nonce_substituicao}"
+            )
         )
 
         if novo_uploaded_file is not None:
-            novo_dxf = (
-                novo_uploaded_file.read()
-            )
+            novo_dxf = novo_uploaded_file.getvalue()
 
             try:
                 with tempfile.NamedTemporaryFile(
@@ -117,15 +153,11 @@ def renderizar_upload_dxf(
                     tmp_path = tmp.name
 
                 try:
-                    novos_dados = (
-                        motores.processar_dxf(
-                            tmp_path
-                        )
+                    novos_dados = motores.processar_dxf(
+                        tmp_path
                     )
                 finally:
-                    if os.path.exists(
-                        tmp_path
-                    ):
+                    if os.path.exists(tmp_path):
                         os.remove(tmp_path)
 
                 salvar_dados_projeto(
@@ -136,9 +168,19 @@ def renderizar_upload_dxf(
                     config_interruptores=config_salva
                 )
 
-                st.success(
-                    "✅ Nova planta baixa "
-                    "substituída no Supabase!"
+                # PONTO PRINCIPAL DA CORREÇÃO:
+                # cria uma nova chave de uploader no próximo ciclo.
+                # Assim o arquivo recém-enviado não reaparece como
+                # novo input e não dispara processamento infinito.
+                st.session_state[
+                    "upload_substituicao_nonce"
+                ] = nonce_substituicao + 1
+
+                st.session_state[
+                    "mensagem_upload_dxf"
+                ] = (
+                    "✅ Nova planta baixa substituída "
+                    "no Supabase!"
                 )
 
                 st.rerun()
@@ -150,7 +192,6 @@ def renderizar_upload_dxf(
                 )
 
     return True
-
 
 def renderizar_salvar_e_gerar_cad(
     dxf_bytes,

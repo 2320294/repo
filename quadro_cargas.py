@@ -196,27 +196,25 @@ def renderizar_edicao_cargas(dados_ambientes):
 
 def renderizar_tabela_consolidada(tabela_editada):
     """
-    Ordem das colunas:
-    Ambiente
-    Área
-    Perímetro
-    Qtd TUE
-    Potência TUE (W)
-    Qtd Ilum.
-    Potência Ilum. (W)
-    Qtd TUG
-    Potência TUG (W)
-    Equipamento TUE
+    Fase 7.4 — ordem definitiva das colunas:
 
-    A linha TOTAL GERAL fica cinza claro.
+    1. Ambiente
+    2. Área (m²)
+    3. Perímetro (m)
+    4. Qtd Ilum.
+    5. Potência Ilum. (W)
+    6. Qtd TUG
+    7. Potência TUG (W)
+    8. Qtd TUE
+    9. Potência TUE (W)
+    10. Equipamento TUE
+
+    A linha TOTAL GERAL segue exatamente a mesma ordem.
     """
     tabela_ordenada = sorted(
         tabela_editada,
         key=lambda x: str(
-            x.get(
-                "Ambiente",
-                ""
-            )
+            x.get("Ambiente", "")
         ).casefold()
     )
 
@@ -224,90 +222,77 @@ def renderizar_tabela_consolidada(tabela_editada):
 
     for row in tabela_ordenada:
         linhas.append({
-            "Ambiente":
-                row.get("Ambiente", ""),
+            "Ambiente": row.get("Ambiente", ""),
 
-            "Área (m²)":
-                round(
-                    float(
-                        row.get(
-                            "Área (m²)",
-                            0
-                        )
-                    ),
-                    2
-                ),
+            "Área (m²)": round(
+                float(row.get("Área (m²)", 0)),
+                2
+            ),
 
-            "Perímetro (m)":
-                round(
-                    float(
-                        row.get(
-                            "Perímetro (m)",
-                            0
-                        )
-                    ),
-                    2
-                ),
+            "Perímetro (m)": round(
+                float(row.get("Perímetro (m)", 0)),
+                2
+            ),
 
-            "Qtd TUE":
-                int(
-                    row.get(
-                        "Qtd TUE",
-                        0
-                    )
-                ),
+            "Qtd Ilum.": int(
+                row.get("Qtd Ilum.", 0)
+            ),
 
-            "Potência TUE (W)":
-                valor_w(
-                    row,
-                    "Pot. Unit. TUE (W)",
-                    "Pot. Unit. TUE (VA)",
-                    0
-                ),
+            "Potência Ilum. (W)": valor_w(
+                row,
+                "Pot. Unit. Ilum (W)",
+                "Pot. Unit. Ilum (VA)",
+                0
+            ),
 
-            "Qtd Ilum.":
-                int(
-                    row.get(
-                        "Qtd Ilum.",
-                        0
-                    )
-                ),
-
-            "Potência Ilum. (W)":
-                valor_w(
-                    row,
-                    "Pot. Unit. Ilum (W)",
-                    "Pot. Unit. Ilum (VA)",
-                    0
-                ),
-
-            "Qtd TUG":
-                int(
-                    row.get(
-                        "Qtd TUG",
-                        row.get(
-                            "TUGs (Qtd)",
-                            0
-                        )
-                    )
-                ),
-
-            "Potência TUG (W)":
-                valor_w(
-                    row,
-                    "Pot. Unit. TUG (W)",
-                    "Pot. Unit. TUG (VA)",
-                    0
-                ),
-
-            "Equipamento TUE":
+            "Qtd TUG": int(
                 row.get(
-                    "Equipamento TUE",
-                    "-"
+                    "Qtd TUG",
+                    row.get("TUGs (Qtd)", 0)
                 )
+            ),
+
+            "Potência TUG (W)": valor_w(
+                row,
+                "Pot. Unit. TUG (W)",
+                "Pot. Unit. TUG (VA)",
+                0
+            ),
+
+            "Qtd TUE": int(
+                row.get("Qtd TUE", 0)
+            ),
+
+            "Potência TUE (W)": valor_w(
+                row,
+                "Pot. Unit. TUE (W)",
+                "Pot. Unit. TUE (VA)",
+                0
+            ),
+
+            "Equipamento TUE": row.get(
+                "Equipamento TUE",
+                "-"
+            )
         })
 
-    df = pd.DataFrame(linhas)
+    colunas = [
+        "Ambiente",
+        "Área (m²)",
+        "Perímetro (m)",
+        "Qtd Ilum.",
+        "Potência Ilum. (W)",
+        "Qtd TUG",
+        "Potência TUG (W)",
+        "Qtd TUE",
+        "Potência TUE (W)",
+        "Equipamento TUE"
+    ]
+
+    df = pd.DataFrame(
+        linhas,
+        columns=colunas
+    )
 
     if df.empty:
         return
@@ -315,79 +300,68 @@ def renderizar_tabela_consolidada(tabela_editada):
     linha_total = {
         "Ambiente": "TOTAL GERAL",
 
-        "Área (m²)":
-            round(
-                df["Área (m²)"].sum(),
-                2
-            ),
+        "Área (m²)": round(
+            df["Área (m²)"].sum(),
+            2
+        ),
 
-        "Perímetro (m)":
-            round(
-                df["Perímetro (m)"].sum(),
-                2
-            ),
+        "Perímetro (m)": round(
+            df["Perímetro (m)"].sum(),
+            2
+        ),
 
-        "Qtd TUE":
-            int(
-                df["Qtd TUE"].sum()
-            ),
+        "Qtd Ilum.": int(
+            df["Qtd Ilum."].sum()
+        ),
 
-        "Potência TUE (W)":
-            int(
-                sum(
-                    int(r["Qtd TUE"])
-                    *
-                    int(r["Potência TUE (W)"])
-                    for _, r
-                    in df.iterrows()
-                )
-            ),
+        "Potência Ilum. (W)": int(
+            sum(
+                int(r["Qtd Ilum."])
+                * int(r["Potência Ilum. (W)"])
+                for _, r in df.iterrows()
+            )
+        ),
 
-        "Qtd Ilum.":
-            int(
-                df["Qtd Ilum."].sum()
-            ),
+        "Qtd TUG": int(
+            df["Qtd TUG"].sum()
+        ),
 
-        "Potência Ilum. (W)":
-            int(
-                sum(
-                    int(r["Qtd Ilum."])
-                    *
-                    int(r["Potência Ilum. (W)"])
-                    for _, r
-                    in df.iterrows()
-                )
-            ),
+        "Potência TUG (W)": int(
+            sum(
+                int(r["Qtd TUG"])
+                * int(r["Potência TUG (W)"])
+                for _, r in df.iterrows()
+            )
+        ),
 
-        "Qtd TUG":
-            int(
-                df["Qtd TUG"].sum()
-            ),
+        "Qtd TUE": int(
+            df["Qtd TUE"].sum()
+        ),
 
-        "Potência TUG (W)":
-            int(
-                sum(
-                    int(r["Qtd TUG"])
-                    *
-                    int(r["Potência TUG (W)"])
-                    for _, r
-                    in df.iterrows()
-                )
-            ),
+        "Potência TUE (W)": int(
+            sum(
+                int(r["Qtd TUE"])
+                * int(r["Potência TUE (W)"])
+                for _, r in df.iterrows()
+            )
+        ),
 
-        "Equipamento TUE":
-            "-"
+        "Equipamento TUE": "-"
     }
 
     df_total = pd.concat(
         [
             df,
             pd.DataFrame(
-                [linha_total]
+                [linha_total],
+                columns=colunas
             )
         ],
         ignore_index=True
     )
+
+    # Reforço explícito da ordem final mesmo após o concat.
+    df_total = df_total[colunas]
 
     def destacar_total(row):
         if row["Ambiente"] == "TOTAL GERAL":
@@ -397,10 +371,7 @@ def renderizar_tabela_consolidada(tabela_editada):
                 for _ in row
             ]
 
-        return [
-            ""
-            for _ in row
-        ]
+        return ["" for _ in row]
 
     tabela_estilizada = (
         df_total
@@ -420,3 +391,4 @@ def renderizar_tabela_consolidada(tabela_editada):
         use_container_width=True,
         hide_index=True
     )
+

@@ -1,13 +1,9 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 7.3
-IDENTIFICADOR: Fase_7_3
+VERSÃO ATUAL: Fase 7.4
+IDENTIFICADOR: Fase_7_4
 
-CHECKLIST:
-[OK] Sistema = Fase 7.3
-[OK] Gerador CAD = Fase 7.3
-[OK] DXF = Fase_7_3
-[OK] orientação original do DXF preservada
-[OK] sem rotação visual
-[OK] fit uniforme X/Y
-[OK] quadro 430 x 330
-[OK] multisseleção preservada
+[OK] Sistema 7.4
+[OK] Gerador CAD 7.4
+[OK] DXF 7.4
+[OK] ordem do quadro validada
+[OK] reenvio DXF sem loop de uploader
