@@ -1,9 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 7.4
-IDENTIFICADOR: Fase_7_4
+VERSÃO ATUAL: Fase 7.5
+IDENTIFICADOR: Fase_7_5
 
-[OK] Sistema 7.4
-[OK] Gerador CAD 7.4
-[OK] DXF 7.4
-[OK] ordem do quadro validada
-[OK] reenvio DXF sem loop de uploader
+[OK] Sistema = Fase 7.5
+[OK] Gerador CAD = Fase 7.5
+[OK] DXF = Fase_7_5
+[OK] iluminação central interna em polígonos irregulares
+[OK] tomada não pode cair em soleira
+[OK] regra de próxima parede para interruptores
+[OK] A.S. = tomada média

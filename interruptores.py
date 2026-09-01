@@ -446,7 +446,7 @@ def _figura_ambiente(
     geometrias_portas=None
 ):
     """
-    Mini planta Fase 7.4:
+    Mini planta Fase 7.5:
     visual arquitetônico inspirado na referência do usuário.
     """
     geometrias_portas = (
@@ -552,7 +552,7 @@ def _figura_ambiente(
         max_y + margem_y
     ]
 
-    # Fase 7.4:
+    # Fase 7.5:
     # Quadro fixo para as duas colunas.
     # O ambiente inteiro recebe UM ÚNICO fator percentual,
     # igual em X e Y, até caber no quadro (fit/contain).
@@ -597,7 +597,7 @@ def _figura_ambiente(
         altura_grafico / 2.0
     )
 
-    # Fase 7.4:
+    # Fase 7.5:
     # A orientação visual é EXATAMENTE a mesma do DXF original.
     # Não há rotação, espelhamento ou escala diferente entre X e Y.
     #
@@ -835,7 +835,7 @@ def _figura_ambiente(
                 )
         })
 
-    # Fase 7.4 — aplica o MESMO percentual em todos os elementos.
+    # Fase 7.5 — aplica o MESMO percentual em todos os elementos.
     for item in contorno:
         item["x"], item["y"] = _transformar_visual(
             (item["x"], item["y"])
@@ -1286,7 +1286,7 @@ def _figura_ambiente(
 
 def _ids_salvos_ambiente(config_salva, amb, portas):
     """
-    Fase 7.4:
+    Fase 7.5:
     restaura apenas escolhas gráficas reais já salvas por ID.
     Configurações antigas baseadas somente em quantidade NÃO
     selecionam portas automaticamente.
@@ -1435,7 +1435,7 @@ def renderizar_interruptores(
                     on_select="rerun"
                 )
     
-                # Fase 7.4:
+                # Fase 7.5:
                 # O parâmetro Vega usa toggle="true":
                 # cada clique comum adiciona/remove uma porta,
                 # sem necessidade de Shift.
@@ -1571,7 +1571,7 @@ def renderizar_interruptores(
                         # imediatamente as cores e a contagem.
                         st.rerun()
 
-                # Fase 7.4:
+                # Fase 7.5:
                 # a escolha é feita diretamente na mini planta.
                 # Não há mais dropdown/multiselect.
                 selecionadas = list(

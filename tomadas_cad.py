@@ -7,6 +7,73 @@ from geometria import (
 )
 
 
+
+def _segmentos_soleira(soleira):
+    """
+    Retorna todas as arestas conhecidas da soleira.
+    Fase 7.5: não valida apenas p1-p2; usa o retângulo inteiro.
+    """
+    verts = [
+        (
+            float(p[0]),
+            float(p[1])
+        )
+        for p in (
+            soleira.get("vertices")
+            or []
+        )
+    ]
+
+    if len(verts) >= 2:
+        return [
+            (
+                verts[i],
+                verts[
+                    (i + 1)
+                    % len(verts)
+                ]
+            )
+            for i in range(
+                len(verts)
+            )
+        ]
+
+    if (
+        soleira.get("p1") is not None
+        and soleira.get("p2") is not None
+    ):
+        return [
+            (
+                soleira["p1"],
+                soleira["p2"]
+            )
+        ]
+
+    return []
+
+
+def _distancia_a_soleira(
+    px,
+    py,
+    soleira
+):
+    segs = _segmentos_soleira(
+        soleira
+    )
+
+    if not segs:
+        return float("inf")
+
+    return min(
+        point_seg_dist(
+            px,
+            py,
+            a,
+            b
+        )
+        for a, b in segs
+    )
+
 def ponto_tomada_valido(
     px,
     py,
@@ -34,11 +101,10 @@ def ponto_tomada_valido(
             return False
 
     for soleira in soleiras_raw:
-        if point_seg_dist(
+        if _distancia_a_soleira(
             px,
             py,
-            soleira["p1"],
-            soleira["p2"]
+            soleira
         ) < distancia_soleira:
             return False
 
@@ -221,20 +287,34 @@ def desenhar_tomadas(
     )
 
     nome_lower_env = (
-        nome.lower().strip()
+        nome.casefold().strip()
     )
 
-    is_ambiente_molhado = any(
-        x in nome_lower_env
-        for x in [
-            "coz",
-            "serv",
-            "banh",
-            "lav",
-            "sanit",
-            "wc",
-            "as"
-        ]
+    # Remove pontuação/espaços para reconhecer, por exemplo,
+    # "A.S.", "A S", "AS" e "Área de Serviço".
+    nome_compacto = "".join(
+        ch
+        for ch in nome_lower_env
+        if ch.isalnum()
+    )
+
+    is_ambiente_molhado = (
+        any(
+            x in nome_compacto
+            for x in [
+                "coz",
+                "serv",
+                "banh",
+                "lav",
+                "sanit",
+                "wc"
+            ]
+        )
+        or nome_compacto in {
+            "as",
+            "areadeservico",
+            "areaservico"
+        }
     )
 
     # TUE

@@ -15,7 +15,9 @@ from dxf_io import (
 
 from geometria import (
     point_seg_dist,
-    bbox_poligono
+    bbox_poligono,
+    ponto_central_interno,
+    ponto_interno_proximo
 )
 
 from interruptores_cad import (
@@ -212,20 +214,23 @@ def gerar_cad_unifilar(
                 "nome": nome_busca,
                 "nome_base": nome,
                 "centro": (
-                    (min_x + max_x) / 2,
-                    (min_y + max_y) / 2
+                    ponto_central_interno(
+                        polilinha
+                    )
                 ),
                 "bbox": (min_x, max_x, min_y, max_y),
                 "polilinha": list(polilinha),
             })
 
-            centro_x = (
-                min_x + max_x
-            ) / 2
-
-            centro_y = (
-                min_y + max_y
-            ) / 2
+            # Fase 7.5:
+            # centro operacional sempre DENTRO do ambiente.
+            # Em geometrias côncavas/irregulares, o centro da bounding
+            # box pode cair perto de um recorte ou até fora do polígono.
+            centro_x, centro_y = (
+                ponto_central_interno(
+                    polilinha
+                )
+            )
 
             largura = (
                 max_x - min_x
@@ -330,59 +335,62 @@ def gerar_cad_unifilar(
                 if qtd_ilum > 0:
                     pontos_luz = []
 
-                    if largura >= comprimento:
-                        if qtd_ilum == 1:
-                            pontos_luz.append(
-                                (
-                                    centro_x,
-                                    centro_y
-                                )
+                    if qtd_ilum == 1:
+                        # Ponto visualmente central, mas sempre interno.
+                        pontos_luz.append(
+                            (
+                                centro_x,
+                                centro_y
                             )
-                        else:
-                            step = (
-                                largura
-                                /
-                                (qtd_ilum + 1)
+                        )
+
+                    elif largura >= comprimento:
+                        step = (
+                            largura
+                            /
+                            (qtd_ilum + 1)
+                        )
+
+                        for i in range(
+                            1,
+                            qtd_ilum + 1
+                        ):
+                            alvo = (
+                                min_x
+                                + step * i,
+                                centro_y
                             )
 
-                            for i in range(
-                                1,
-                                qtd_ilum + 1
-                            ):
-                                pontos_luz.append(
-                                    (
-                                        min_x
-                                        + step * i,
-                                        centro_y
-                                    )
+                            pontos_luz.append(
+                                ponto_interno_proximo(
+                                    polilinha,
+                                    alvo
                                 )
+                            )
 
                     else:
-                        if qtd_ilum == 1:
-                            pontos_luz.append(
-                                (
-                                    centro_x,
-                                    centro_y
-                                )
-                            )
-                        else:
-                            step = (
-                                comprimento
-                                /
-                                (qtd_ilum + 1)
+                        step = (
+                            comprimento
+                            /
+                            (qtd_ilum + 1)
+                        )
+
+                        for i in range(
+                            1,
+                            qtd_ilum + 1
+                        ):
+                            alvo = (
+                                centro_x,
+                                min_y
+                                + step * i
                             )
 
-                            for i in range(
-                                1,
-                                qtd_ilum + 1
-                            ):
-                                pontos_luz.append(
-                                    (
-                                        centro_x,
-                                        min_y
-                                        + step * i
-                                    )
+                            pontos_luz.append(
+                                ponto_interno_proximo(
+                                    polilinha,
+                                    alvo
                                 )
+                            )
 
                     for lx, ly in pontos_luz:
                         pontos_eletricos.append({
@@ -481,7 +489,7 @@ def gerar_cad_unifilar(
             pontos_interruptores=pontos_interruptores,
         )
 
-        # Fase 7.4: limpar conduítes/comandos para foco nos pontos elétricos.
+        # Fase 7.5: limpar conduítes/comandos para foco nos pontos elétricos.
         camadas_ocultar = {"PROJ_ELETRICA_ELETRODUTO", "PROJ_ELETRICA_ELETRODUTO_TEXTO", "PROJ_ELETRICA_COMANDO"}
         for entidade in list(msp):
             if entidade.dxf.layer in camadas_ocultar:

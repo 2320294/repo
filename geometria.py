@@ -169,3 +169,265 @@ def bbox_poligono(poly):
         min(ys),
         max(ys)
     )
+
+
+def distancia_borda_poligono(x, y, poly):
+    """
+    Menor distância de um ponto a qualquer aresta do polígono.
+    """
+    if not poly or len(poly) < 2:
+        return 0.0
+
+    melhor = float("inf")
+
+    for i in range(len(poly)):
+        a = poly[i]
+        b = poly[(i + 1) % len(poly)]
+
+        d = point_seg_dist(
+            x,
+            y,
+            a,
+            b
+        )
+
+        if d < melhor:
+            melhor = d
+
+    return (
+        0.0
+        if melhor == float("inf")
+        else melhor
+    )
+
+
+def centroide_area_poligono(poly):
+    """
+    Centroide geométrico por área (shoelace).
+    Pode ficar fora em alguns polígonos côncavos; por isso é apenas
+    um candidato para ponto_central_interno().
+    """
+    if not poly or len(poly) < 3:
+        return centro_poligono(poly)
+
+    area2 = 0.0
+    cx = 0.0
+    cy = 0.0
+
+    for i in range(len(poly)):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % len(poly)]
+
+        cruz = (
+            x1 * y2
+            - x2 * y1
+        )
+
+        area2 += cruz
+        cx += (x1 + x2) * cruz
+        cy += (y1 + y2) * cruz
+
+    if abs(area2) <= 1e-12:
+        return centro_poligono(poly)
+
+    return (
+        cx / (3.0 * area2),
+        cy / (3.0 * area2)
+    )
+
+
+def ponto_central_interno(
+    poly,
+    grade=28,
+    refinamentos=4
+):
+    """
+    Retorna um ponto visualmente central E garantidamente interno.
+
+    Estratégia semelhante a um "pole of inaccessibility":
+    escolhe, entre pontos internos, o que tem maior distância da borda.
+    Isso funciona bem em WC em L, corredores irregulares e outros
+    ambientes côncavos onde o centro da bounding box pode cair fora.
+
+    O resultado é usado para:
+    - ponto principal de iluminação;
+    - referência de normal interna;
+    - centro geométrico operacional do ambiente.
+    """
+    if not poly:
+        return (0.0, 0.0)
+
+    min_x, max_x, min_y, max_y = bbox_poligono(poly)
+
+    largura = max(
+        max_x - min_x,
+        1e-6
+    )
+    altura = max(
+        max_y - min_y,
+        1e-6
+    )
+
+    alvo = (
+        (min_x + max_x) / 2.0,
+        (min_y + max_y) / 2.0
+    )
+
+    candidatos = [
+        alvo,
+        centroide_area_poligono(poly),
+        centro_poligono(poly),
+    ]
+
+    melhor = None
+    melhor_score = -1.0
+    melhor_dist_alvo = float("inf")
+
+    def testar(x, y):
+        nonlocal melhor, melhor_score, melhor_dist_alvo
+
+        if not ponto_em_poligono(
+            x,
+            y,
+            poly
+        ):
+            return
+
+        score = distancia_borda_poligono(
+            x,
+            y,
+            poly
+        )
+
+        dist_alvo = math.hypot(
+            x - alvo[0],
+            y - alvo[1]
+        )
+
+        if (
+            score > melhor_score + 1e-9
+            or (
+                abs(score - melhor_score) <= 1e-9
+                and dist_alvo < melhor_dist_alvo
+            )
+        ):
+            melhor = (x, y)
+            melhor_score = score
+            melhor_dist_alvo = dist_alvo
+
+    for cand in candidatos:
+        testar(
+            float(cand[0]),
+            float(cand[1])
+        )
+
+    nx = max(
+        8,
+        int(grade)
+    )
+    ny = nx
+
+    for ix in range(nx + 1):
+        x = (
+            min_x
+            + largura * ix / nx
+        )
+
+        for iy in range(ny + 1):
+            y = (
+                min_y
+                + altura * iy / ny
+            )
+            testar(x, y)
+
+    if melhor is None:
+        # Último fallback: primeiro ponto ligeiramente para dentro
+        # a partir do centro médio dos vértices.
+        return centro_poligono(poly)
+
+    passo_x = largura / nx
+    passo_y = altura / ny
+
+    for _ in range(max(0, int(refinamentos))):
+        bx, by = melhor
+
+        for dx in (-passo_x, -passo_x / 2.0, 0.0, passo_x / 2.0, passo_x):
+            for dy in (-passo_y, -passo_y / 2.0, 0.0, passo_y / 2.0, passo_y):
+                testar(
+                    bx + dx,
+                    by + dy
+                )
+
+        passo_x /= 3.0
+        passo_y /= 3.0
+
+    return melhor
+
+
+def ponto_interno_proximo(
+    poly,
+    alvo,
+    grade=22
+):
+    """
+    Retorna o ponto interno mais próximo de um alvo.
+    Útil para múltiplos pontos de iluminação quando o alvo teórico
+    cai fora de um polígono côncavo.
+    """
+    ax, ay = alvo
+
+    if ponto_em_poligono(
+        ax,
+        ay,
+        poly
+    ):
+        return (ax, ay)
+
+    min_x, max_x, min_y, max_y = bbox_poligono(poly)
+    largura = max(max_x - min_x, 1e-6)
+    altura = max(max_y - min_y, 1e-6)
+
+    melhor = None
+    menor = float("inf")
+
+    n = max(10, int(grade))
+
+    for ix in range(n + 1):
+        x = min_x + largura * ix / n
+
+        for iy in range(n + 1):
+            y = min_y + altura * iy / n
+
+            if not ponto_em_poligono(
+                x,
+                y,
+                poly
+            ):
+                continue
+
+            d = math.hypot(
+                x - ax,
+                y - ay
+            )
+
+            # pequena preferência por não encostar em parede
+            folga = distancia_borda_poligono(
+                x,
+                y,
+                poly
+            )
+
+            score = (
+                d
+                - min(folga, 0.20) * 0.05
+            )
+
+            if score < menor:
+                menor = score
+                melhor = (x, y)
+
+    return (
+        melhor
+        if melhor is not None
+        else ponto_central_interno(poly)
+    )
