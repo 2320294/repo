@@ -18,6 +18,8 @@ from reportlab.platypus import (
 from materiais import calcular_quantitativo_materiais
 
 
+from qdc_config import descricao_qdc
+
 def _valor_w(row, campo_w, campo_va, padrao=0):
     if campo_w in row:
         return float(row.get(campo_w, padrao) or 0)
@@ -224,7 +226,7 @@ def gerar_excel_projeto(
         },
         {
             "Parâmetro": "Local do QDC",
-            "Valor": local_qdc
+            "Valor": descricao_qdc(local_qdc)
         }
     ])
 
@@ -503,7 +505,7 @@ def gerar_memorial_pdf(
 
     story.append(
         Paragraph(
-            f"<b>Local previsto para o QDC:</b> {local_qdc}",
+            f"<b>Local previsto para o QDC:</b> {descricao_qdc(local_qdc)}",
             styles["Texto"]
         )
     )

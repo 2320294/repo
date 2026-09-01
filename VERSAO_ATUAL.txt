@@ -1,11 +1,10 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 7.5
-IDENTIFICADOR: Fase_7_5
+VERSÃO ATUAL: Fase 7.6
+IDENTIFICADOR: Fase_7_6
 
-[OK] Sistema = Fase 7.5
-[OK] Gerador CAD = Fase 7.5
-[OK] DXF = Fase_7_5
-[OK] iluminação central interna em polígonos irregulares
-[OK] tomada não pode cair em soleira
-[OK] regra de próxima parede para interruptores
-[OK] A.S. = tomada média
+[OK] Sistema 7.6
+[OK] Gerador CAD 7.6
+[OK] DXF Fase_7_6
+[OK] QDC seleciona ambiente + parede
+[OK] parede persistente
+[OK] texto QDC removido

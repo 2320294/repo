@@ -11,7 +11,7 @@ from geometria import (
 def _segmentos_soleira(soleira):
     """
     Retorna todas as arestas conhecidas da soleira.
-    Fase 7.5: não valida apenas p1-p2; usa o retângulo inteiro.
+    Fase 7.6: não valida apenas p1-p2; usa o retângulo inteiro.
     """
     verts = [
         (

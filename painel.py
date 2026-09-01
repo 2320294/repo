@@ -170,7 +170,8 @@ def renderizar_painel_principal():
 
     local_qdc = renderizar_qdc(
         dados_ambientes,
-        local_qdc_salvo
+        local_qdc_salvo,
+        dxf_bytes=dxf_bytes
     )
 
     config_interruptores_usuario = (

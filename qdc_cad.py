@@ -2,6 +2,7 @@ from geometria import (
     point_seg_dist,
     get_inside_normal
 )
+from qdc_config import decodificar_qdc
 
 
 def desenhar_qdc(
@@ -13,12 +14,23 @@ def desenhar_qdc(
     centro_x,
     centro_y
 ):
-    qdc_formatado = str(
-        local_qdc
-    ).replace(
-        " (recomendado)",
-        ""
-    ).strip().upper()
+    ambiente_qdc, parede_numero = (
+        decodificar_qdc(
+            local_qdc
+        )
+    )
+
+    qdc_formatado = (
+        str(
+            ambiente_qdc
+        )
+        .replace(
+            " (recomendado)",
+            ""
+        )
+        .strip()
+        .upper()
+    )
 
     nome_atual_upper = (
         nome.strip().upper()
@@ -27,7 +39,8 @@ def desenhar_qdc(
     )
 
     if (
-        nome_atual_upper != qdc_formatado
+        nome_atual_upper
+        != qdc_formatado
         or not logical_walls
     ):
         return None
@@ -35,11 +48,23 @@ def desenhar_qdc(
     qdc_w = 0.4
     qdc_d = 0.15
 
-    maior_parede = max(
-        logical_walls,
-        key=lambda w:
-        w["length"]
-    )
+    if (
+        parede_numero is not None
+        and 1 <= parede_numero
+        <= len(logical_walls)
+    ):
+        maior_parede = (
+            logical_walls[
+                parede_numero - 1
+            ]
+        )
+    else:
+        # Compatibilidade com projeto antigo sem parede salva.
+        maior_parede = max(
+            logical_walls,
+            key=lambda w:
+                w["length"]
+        )
 
     pt1 = maior_parede["p1"]
     pt2 = maior_parede["p2"]
@@ -287,20 +312,7 @@ def desenhar_qdc(
         }
     )
 
-    # Identificação gráfica explícita do quadro. O ponto de origem dos
-    # circuitos continua sendo (mx, my), isto é, exatamente a posição
-    # calculada na parede do ambiente escolhido pelo usuário.
-    msp.add_text(
-        "QDC",
-        dxfattribs={
-            "layer": "PROJ_ELETRICA_TEXTO",
-            "height": 0.12,
-            "insert": (
-                mx + out_nx * (qdc_d + 0.10),
-                my + out_ny * (qdc_d + 0.10),
-            ),
-        },
-    )
+    # Fase 7.6: somente o símbolo do QDC, sem texto/legenda.
 
     return {
         "centro": (mx, my),
@@ -310,6 +322,8 @@ def desenhar_qdc(
         ),
         "pontos": pts_qdc,
         "ambiente": nome,
+        "parede_numero":
+            parede_numero,
         "parede": {
             "p1": pt1,
             "p2": pt2,

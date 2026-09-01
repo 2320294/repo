@@ -27,6 +27,8 @@ FOLGA_CABOS = 1.15
 FOLGA_ELETRODUTO = 1.10
 
 
+from qdc_config import ambiente_qdc
+
 def _numero(valor, padrao=0):
     try:
         return float(valor)
@@ -72,7 +74,9 @@ def _centro_qdc(
         return None
 
     alvo = str(
-        local_qdc
+        ambiente_qdc(
+            local_qdc
+        )
     ).strip().casefold()
 
     for row in tabela_editada:
