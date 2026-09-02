@@ -27,6 +27,10 @@ from concessionarias import (
     descricao_localidade
 )
 
+from demanda_qdc import (
+    calcular_demanda_qdc
+)
+
 def _valor_w(row, campo_w, campo_va, padrao=0):
     if campo_w in row:
         return float(row.get(campo_w, padrao) or 0)
@@ -286,6 +290,45 @@ def gerar_excel_projeto(
                 }
             ])
         ],
+        ignore_index=True
+    )
+
+    resultado_demanda = calcular_demanda_qdc(
+        tabela_editada,
+        parametros_rede
+    )
+
+    linhas_demanda = [{
+        "Parâmetro": "Potência instalada",
+        "Valor": f"{resultado_demanda['total_w']/1000:.2f} kW"
+    }]
+
+    if resultado_demanda.get("fator_demanda_pct") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Fator global de demanda",
+            "Valor": f"{resultado_demanda['fator_demanda_pct']:.1f} %"
+        })
+
+    if resultado_demanda.get("potencia_demanda_w") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Potência demandada",
+            "Valor": f"{resultado_demanda['potencia_demanda_w']/1000:.2f} kW"
+        })
+
+    if resultado_demanda.get("corrente_demanda_a") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Corrente equivalente de demanda",
+            "Valor": f"{resultado_demanda['corrente_demanda_a']:.1f} A"
+        })
+
+    if resultado_demanda.get("disjuntor_geral_a") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "DG pré-selecionado",
+            "Valor": f"{resultado_demanda['disjuntor_geral_a']} A"
+        })
+
+    df_parametros = pd.concat(
+        [df_parametros, pd.DataFrame(linhas_demanda)],
         ignore_index=True
     )
 

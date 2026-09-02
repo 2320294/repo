@@ -34,7 +34,9 @@ def desenhar_unifilar_qdc(
     msp,
     circuitos,
     polilinhas_ambientes,
-    tensao_projeto=220
+    tensao_projeto=220,
+    parametros_rede=None,
+    resultado_demanda=None
 ):
     circuitos = list(circuitos or [])
     if not circuitos:
@@ -57,7 +59,19 @@ def desenhar_unifilar_qdc(
     _rect(msp, x0, ybase, x0+largura, y0)
     _text(msp, "DIAGRAMA UNIFILAR DO QDC - PRELIMINAR", x0+0.45, y0-0.45, 0.24)
     _text(msp, f"ALIMENTACAO DO PROJETO: {int(tensao_projeto)} V", x0+0.45, y0-0.82, 0.16)
-    _text(msp, "FASE 9.1 - SEM DEMANDA, SELETIVIDADE OU BALANCEAMENTO", x0+0.45, y0-1.10, 0.12)
+    parametros_rede = dict(parametros_rede or {})
+    resultado_demanda = dict(resultado_demanda or {})
+
+    tipo = str(parametros_rede.get("tipo_fornecimento", "A definir"))
+    tensao = str(parametros_rede.get("tensao_fornecimento", "A definir"))
+
+    _text(
+        msp,
+        f"FASE 9.2 - {tipo} - {tensao}",
+        x0+0.45,
+        y0-1.10,
+        0.12
+    )
 
     xp = x0 + 1.25
     y = y0 - 1.55
@@ -67,7 +81,27 @@ def desenhar_unifilar_qdc(
     ydg = y-0.52
     _breaker(msp, xp, ydg)
     _text(msp, "DG", xp+0.42, ydg+0.02, 0.14)
-    _text(msp, "CORRENTE A DEFINIR POR DEMANDA", xp+0.42, ydg-0.18, 0.10)
+
+    dg = resultado_demanda.get("disjuntor_geral_a")
+    corrente_demanda = resultado_demanda.get("corrente_demanda_a")
+    potencia_demanda = resultado_demanda.get("potencia_demanda_w")
+
+    _text(
+        msp,
+        f"{int(dg)} A - PRE-SELECIONADO" if dg is not None else "DG A DEFINIR",
+        xp+0.42,
+        ydg-0.18,
+        0.10
+    )
+
+    if corrente_demanda is not None and potencia_demanda is not None:
+        _text(
+            msp,
+            f"DEMANDA {potencia_demanda/1000:.2f} kW | Ieq {corrente_demanda:.1f} A",
+            xp+0.42,
+            ydg-0.34,
+            0.095
+        )
     _line(msp, (xp,y-0.18), (xp,ydg+0.16))
 
     ydps = ydg-0.78

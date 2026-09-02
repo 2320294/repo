@@ -19,7 +19,7 @@ def renderizar_parametros_projeto(
     """
     Parâmetros gerais e perfil de fornecimento do projeto.
 
-    Fase 9.1:
+    Fase 9.2:
     - localização;
     - concessionária;
     - tipo/tensão de fornecimento;
@@ -300,6 +300,29 @@ def renderizar_parametros_projeto(
         key="param_rede_metodo_demanda"
     )
 
+    fator_demanda_manual = float(
+        rede.get(
+            "fator_demanda_manual",
+            100.0
+        )
+        or 100.0
+    )
+
+    if metodo_demanda == "Manual pelo responsável técnico":
+        fator_demanda_manual = st.number_input(
+            "Fator global de demanda informado pelo responsável técnico (%):",
+            min_value=0.0,
+            max_value=100.0,
+            value=min(100.0, max(0.0, fator_demanda_manual)),
+            step=1.0,
+            format="%.1f",
+            key="param_rede_fator_demanda_manual"
+        )
+        st.caption(
+            "Entrada técnica explícita. O sistema não trata este valor "
+            "como regra de concessionária."
+        )
+
     parametros_rede = {
         "uf": uf,
         "municipio": municipio,
@@ -312,6 +335,8 @@ def renderizar_parametros_projeto(
             tensao_fornecimento,
         "metodo_demanda":
             metodo_demanda,
+        "fator_demanda_manual":
+            float(fator_demanda_manual),
         "norma_concessionaria": (
             "Perfil normativo ainda não cadastrado"
         )
@@ -333,7 +358,7 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto, mas nesta Fase 9.1 o cálculo de demanda "
+            "no projeto, mas nesta Fase 9.2 o cálculo de demanda "
             "ainda não é aplicado automaticamente. "
             "O perfil normativo será ativado somente quando "
             "a regra oficial dessa concessionária estiver "

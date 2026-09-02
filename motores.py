@@ -46,6 +46,14 @@ from unifilar_qdc import (
     desenhar_unifilar_qdc
 )
 
+from concessionarias import (
+    CHAVE_PARAMETROS_REDE
+)
+
+from demanda_qdc import (
+    calcular_demanda_qdc
+)
+
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -441,7 +449,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 9.1:
+                # Fase 9.2:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -491,7 +499,7 @@ def gerar_cad_unifilar(
         
         
         # ====================================================
-        # FASE 9.1 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # FASE 9.2 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
         # ====================================================
         _, circuitos_unifilar = calcular_quantitativo_materiais(
             tabela_editada=dados_editados,
@@ -501,11 +509,25 @@ def gerar_cad_unifilar(
             pe_direito=pe_direito
         )
 
+        parametros_rede_unifilar = (
+            (config_interruptores or {}).get(
+                CHAVE_PARAMETROS_REDE,
+                {}
+            )
+        )
+
+        resultado_demanda_unifilar = calcular_demanda_qdc(
+            dados_editados,
+            parametros_rede_unifilar
+        )
+
         desenhar_unifilar_qdc(
             msp=msp,
             circuitos=circuitos_unifilar,
             polilinhas_ambientes=polilinhas,
-            tensao_projeto=tensao_projeto
+            tensao_projeto=tensao_projeto,
+            parametros_rede=parametros_rede_unifilar,
+            resultado_demanda=resultado_demanda_unifilar
         )
 
         doc.saveas(

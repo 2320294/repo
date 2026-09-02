@@ -37,6 +37,10 @@ from concessionarias import (
     normalizar_parametros_rede
 )
 
+from demanda_qdc import (
+    calcular_demanda_qdc
+)
+
 from upload_cad import (
     renderizar_upload_dxf,
     renderizar_salvar_e_gerar_cad
@@ -512,6 +516,62 @@ def renderizar_painel_principal():
         st.session_state[
             chave_qdc
         ] = local_qdc
+
+        st.markdown("#### ⚙️ Demanda e proteção geral")
+
+        resultado_demanda = calcular_demanda_qdc(
+            tabela_editada,
+            parametros_projeto.get(
+                "parametros_rede",
+                {}
+            )
+        )
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(
+            "Potência instalada",
+            f"{resultado_demanda['total_w']/1000:.2f} kW"
+        )
+
+        pd = resultado_demanda.get("potencia_demanda_w")
+        idm = resultado_demanda.get("corrente_demanda_a")
+        dg = resultado_demanda.get("disjuntor_geral_a")
+
+        c2.metric(
+            "Potência demandada",
+            f"{pd/1000:.2f} kW" if pd is not None else "Aguardando perfil"
+        )
+        c3.metric(
+            "Corrente de demanda",
+            f"{idm:.1f} A" if idm is not None else "—"
+        )
+        c4.metric(
+            "DG pré-selecionado",
+            f"{dg} A" if dg is not None else "—"
+        )
+
+        status = resultado_demanda.get("status")
+        if status == "aguardando_perfil":
+            st.info(
+                "ℹ️ O método automático está selecionado, mas o perfil "
+                "normativo desta concessionária ainda não foi ativado. "
+                "Nenhum fator de demanda foi inventado pelo sistema."
+            )
+        elif status == "fornecimento_incompleto":
+            st.warning(
+                "⚠️ Informe tipo e tensão de fornecimento em Parâmetros "
+                "para calcular corrente de demanda e DG."
+            )
+        elif status == "acima_da_faixa":
+            st.warning(
+                "⚠️ A corrente calculada ultrapassa a faixa preliminar "
+                "de disjuntores cadastrada. Reavalie o fornecimento."
+            )
+        else:
+            st.caption(
+                "Pré-dimensionamento da Fase 9.2. O DG depende da validação "
+                "do alimentador e do perfil da concessionária."
+            )
 
         return
 
