@@ -1,245 +1,1419 @@
 
 LAYER_UNIFILAR = "PROJ_ELETRICA_UNIFILAR_QDC"
 LAYER_UNIFILAR_TEXTO = "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO"
+LAYER_UNIFILAR_GUIA = "PROJ_ELETRICA_UNIFILAR_QDC_GUIA"
 
-def _line(msp,p1,p2):
-    msp.add_line(p1,p2,dxfattribs={"layer":LAYER_UNIFILAR})
 
-def _rect(msp,x1,y1,x2,y2):
+def _line(msp, p1, p2, layer=LAYER_UNIFILAR):
+    msp.add_line(
+        p1,
+        p2,
+        dxfattribs={"layer": layer}
+    )
+
+
+def _rect(msp, x1, y1, x2, y2, layer=LAYER_UNIFILAR):
     msp.add_lwpolyline(
-        [(x1,y1),(x2,y1),(x2,y2),(x1,y2),(x1,y1)],
-        dxfattribs={"layer":LAYER_UNIFILAR}
+        [
+            (x1, y1),
+            (x2, y1),
+            (x2, y2),
+            (x1, y2),
+            (x1, y1)
+        ],
+        dxfattribs={"layer": layer}
     )
 
-def _text(msp,text,x,y,h=0.15):
-    if text is None or str(text).strip()=="":
+
+def _text(msp, text, x, y, h=0.15, layer=LAYER_UNIFILAR_TEXTO):
+    if text is None:
         return
+
+    texto = str(text).strip()
+
+    if not texto:
+        return
+
     msp.add_text(
-        str(text),
-        dxfattribs={"layer":LAYER_UNIFILAR_TEXTO,"height":h,"insert":(x,y)}
+        texto,
+        dxfattribs={
+            "layer": layer,
+            "height": h,
+            "insert": (x, y)
+        }
     )
 
-def _breaker(msp,x,y,w=0.56,h=0.32):
-    _rect(msp,x-w/2,y-h/2,x+w/2,y+h/2)
-    _line(msp,(x-w*0.32,y-h*0.28),(x+w*0.32,y+h*0.28))
+
+def _breaker(msp, x, y, w=0.58, h=0.34):
+    _rect(
+        msp,
+        x - w / 2,
+        y - h / 2,
+        x + w / 2,
+        y + h / 2
+    )
+
+    _line(
+        msp,
+        (
+            x - w * 0.32,
+            y - h * 0.28
+        ),
+        (
+            x + w * 0.32,
+            y + h * 0.28
+        )
+    )
+
+
+def _dps(msp, x, y):
+    _rect(
+        msp,
+        x - 0.32,
+        y - 0.24,
+        x + 0.32,
+        y + 0.24
+    )
+
+    _line(
+        msp,
+        (x, y - 0.24),
+        (x, y + 0.24)
+    )
+
+    _text(
+        msp,
+        "DPS",
+        x - 0.16,
+        y + 0.33,
+        0.10
+    )
+
+
+def _dr(msp, x, y, titulo, nominal=None, sensibilidade=None):
+    _rect(
+        msp,
+        x - 0.40,
+        y - 0.42,
+        x + 0.40,
+        y + 0.42
+    )
+
+    _text(
+        msp,
+        titulo,
+        x - 0.18,
+        y + 0.15,
+        0.12
+    )
+
+    if nominal is not None:
+        _text(
+            msp,
+            f"{int(nominal)} A",
+            x - 0.18,
+            y - 0.05,
+            0.095
+        )
+
+    if sensibilidade is not None:
+        _text(
+            msp,
+            f"{int(sensibilidade)} mA",
+            x - 0.18,
+            y - 0.22,
+            0.095
+        )
+
 
 def _cabo_texto(c):
-    bit=float(c.get("bitola",0) or 0)
-    if bit<=0:
+    try:
+        bit = float(
+            c.get(
+                "bitola",
+                0
+            )
+            or 0
+        )
+    except Exception:
+        bit = 0
+
+    if bit <= 0:
         return ""
-    tipo=str(c.get("tipo","")).upper()
-    if tipo=="TUE":
-        return f"2F {bit:g} mm2 + PE {bit:g} mm2"
-    return f"F+N {bit:g} mm2 + PE {bit:g} mm2"
 
-def _linha_circuito(msp,c,x_bus,x_dj,x_info,y):
-    numero=int(c.get("numero",0) or 0)
-    tipo=str(c.get("tipo","Circuito"))
-    amb=str(c.get("ambiente",""))
-    fase=str(c.get("fase","") or "").strip()
-    polos=str(c.get("polos","") or "").strip()
-    pot=float(c.get("potencia",0) or 0)
-    cor=float(c.get("corrente",0) or 0)
-    dj=int(c.get("disjuntor",0) or 0)
+    tipo = str(
+        c.get(
+            "tipo",
+            ""
+        )
+    ).upper()
 
-    # Trecho de saída com espaço reservado real para a bitola.
-    _line(msp,(x_bus,y),(x_dj-0.34,y))
-    cabo=_cabo_texto(c)
+    if tipo == "TUE":
+        return (
+            f"2F {bit:g} mm2"
+            f" + PE {bit:g} mm2"
+        )
+
+    return (
+        f"F+N {bit:g} mm2"
+        f" + PE {bit:g} mm2"
+    )
+
+
+def _texto_circuito(c):
+    numero = int(
+        c.get(
+            "numero",
+            0
+        )
+        or 0
+    )
+
+    tipo = str(
+        c.get(
+            "tipo",
+            "Circuito"
+        )
+    )
+
+    ambiente = str(
+        c.get(
+            "ambiente",
+            ""
+        )
+    )
+
+    fase = str(
+        c.get(
+            "fase",
+            ""
+        )
+        or ""
+    ).strip()
+
+    partes = [
+        f"C{numero:02d}",
+        tipo,
+        ambiente
+    ]
+
+    if (
+        fase
+        and fase != "A definir"
+    ):
+        partes.append(
+            f"FASE {fase}"
+        )
+
+    return " | ".join(
+        partes
+    )
+
+
+def _linha_circuito(
+    msp,
+    c,
+    x_bus,
+    x_cabo_fim,
+    x_dj,
+    x_info,
+    x_saida,
+    x_n,
+    x_pe,
+    y
+):
+    tipo = str(
+        c.get(
+            "tipo",
+            "Circuito"
+        )
+    )
+
+    try:
+        pot = float(
+            c.get(
+                "potencia",
+                0
+            )
+            or 0
+        )
+    except Exception:
+        pot = 0
+
+    try:
+        corrente = float(
+            c.get(
+                "corrente",
+                0
+            )
+            or 0
+        )
+    except Exception:
+        corrente = 0
+
+    try:
+        dj = int(
+            c.get(
+                "disjuntor",
+                0
+            )
+            or 0
+        )
+    except Exception:
+        dj = 0
+
+    polos = str(
+        c.get(
+            "polos",
+            ""
+        )
+        or ""
+    ).strip()
+
+    # Barramento do grupo -> trecho reservado ao cabo.
+    _line(
+        msp,
+        (x_bus, y),
+        (x_cabo_fim, y)
+    )
+
+    cabo = _cabo_texto(
+        c
+    )
+
     if cabo:
-        _text(msp,cabo,x_bus+0.22,y+0.13,0.075)
+        _text(
+            msp,
+            cabo,
+            x_bus + 0.18,
+            y + 0.12,
+            0.072
+        )
 
-    _breaker(msp,x_dj,y)
-    if dj>0:
-        txt=f"DJ {dj} A"
-        if polos and polos!="A definir":
-            txt+=f" {polos}"
-        _text(msp,txt,x_dj-0.27,y-0.31,0.080)
+    # Pequeno trecho em branco antes do DJ.
+    _line(
+        msp,
+        (x_cabo_fim, y),
+        (x_dj - 0.31, y)
+    )
 
-    _line(msp,(x_dj+0.28,y),(x_info-0.18,y))
+    # Disjuntor do circuito.
+    _breaker(
+        msp,
+        x_dj,
+        y
+    )
 
-    cab=f"C{numero:02d} | {tipo} | {amb}"
-    if fase and fase!="A definir":
-        cab+=f" | FASE {fase}"
-    _text(msp,cab,x_info,y+0.10,0.115)
-    _text(msp,f"{pot:.0f} W | {cor:.2f} A",x_info,y-0.13,0.090)
+    if dj > 0:
+        texto_dj = (
+            f"DJ {dj} A"
+        )
+
+        if (
+            polos
+            and polos != "A definir"
+        ):
+            texto_dj += (
+                f" {polos}"
+            )
+
+        _text(
+            msp,
+            texto_dj,
+            x_dj - 0.29,
+            y - 0.31,
+            0.078
+        )
+
+    # DJ -> identificação do circuito.
+    _line(
+        msp,
+        (x_dj + 0.29, y),
+        (x_info - 0.12, y)
+    )
+
+    _text(
+        msp,
+        _texto_circuito(
+            c
+        ),
+        x_info,
+        y + 0.10,
+        0.108
+    )
+
+    _text(
+        msp,
+        f"{pot:.0f} W | {corrente:.2f} A",
+        x_info,
+        y - 0.13,
+        0.088
+    )
+
+    # Linha funcional até os barramentos N e PE.
+    _line(
+        msp,
+        (
+            x_info,
+            y - 0.02
+        ),
+        (
+            x_saida,
+            y - 0.02
+        )
+    )
+
+    # Conexão até N e PE.
+    _line(
+        msp,
+        (x_saida, y - 0.02),
+        (x_n, y - 0.02)
+    )
+
+    _line(
+        msp,
+        (x_n, y - 0.02),
+        (x_pe, y - 0.02)
+    )
+
+    # Marcas de ligação.
+    msp.add_circle(
+        (x_n, y - 0.02),
+        radius=0.055,
+        dxfattribs={
+            "layer": LAYER_UNIFILAR
+        }
+    )
+
+    msp.add_circle(
+        (x_pe, y - 0.02),
+        radius=0.055,
+        dxfattribs={
+            "layer": LAYER_UNIFILAR
+        }
+    )
+
+
+def _legenda(
+    msp,
+    x1,
+    y1,
+    x2,
+    y2
+):
+    _rect(
+        msp,
+        x1,
+        y1,
+        x2,
+        y2
+    )
+
+    _text(
+        msp,
+        "LEGENDA",
+        x1 + 0.25,
+        y2 - 0.30,
+        0.12
+    )
+
+    y = y2 - 0.72
+
+    _breaker(
+        msp,
+        x1 + 0.50,
+        y,
+        w=0.42,
+        h=0.26
+    )
+
+    _text(
+        msp,
+        "DG / DJ - DISJUNTOR TERMOMAGNETICO",
+        x1 + 0.85,
+        y - 0.04,
+        0.082
+    )
+
+    _dps(
+        msp,
+        x1 + 5.10,
+        y
+    )
+
+    _text(
+        msp,
+        "DPS - DISPOSITIVO DE PROTECAO CONTRA SURTOS",
+        x1 + 5.55,
+        y - 0.04,
+        0.082
+    )
+
+    _rect(
+        msp,
+        x1 + 10.10,
+        y - 0.20,
+        x1 + 10.50,
+        y + 0.20
+    )
+
+    _text(
+        msp,
+        "DR - DISPOSITIVO DIFERENCIAL RESIDUAL",
+        x1 + 10.75,
+        y - 0.04,
+        0.082
+    )
+
+
+def _notas(
+    msp,
+    x1,
+    y1,
+    x2,
+    y2,
+    parametros_rede,
+    resumo_protecao
+):
+    _rect(
+        msp,
+        x1,
+        y1,
+        x2,
+        y2
+    )
+
+    _text(
+        msp,
+        "NOTAS",
+        x1 + 0.25,
+        y2 - 0.30,
+        0.12
+    )
+
+    y = y2 - 0.68
+
+    tipo = str(
+        parametros_rede.get(
+            "tipo_fornecimento",
+            ""
+        )
+        or ""
+    )
+
+    tensao = str(
+        parametros_rede.get(
+            "tensao_fornecimento",
+            ""
+        )
+        or ""
+    )
+
+    if tipo or tensao:
+        texto = "FORNECIMENTO"
+        if tipo:
+            texto += (
+                f": {tipo}"
+            )
+        if tensao:
+            texto += (
+                f" | {tensao}"
+            )
+
+        _text(
+            msp,
+            texto,
+            x1 + 0.28,
+            y,
+            0.080
+        )
+
+    _text(
+        msp,
+        "N - NEUTRO",
+        x1 + 0.28,
+        y - 0.24,
+        0.080
+    )
+
+    _text(
+        msp,
+        "PE - PROTECAO / TERRA",
+        x1 + 0.28,
+        y - 0.48,
+        0.080
+    )
+
+    seletividade = str(
+        resumo_protecao.get(
+            "seletividade",
+            ""
+        )
+        or ""
+    )
+
+    if seletividade:
+        _text(
+            msp,
+            seletividade.upper(),
+            x1 + 4.35,
+            y,
+            0.074
+        )
+
+    capacidade = str(
+        resumo_protecao.get(
+            "capacidade_interrupcao",
+            ""
+        )
+        or ""
+    )
+
+    if capacidade:
+        _text(
+            msp,
+            capacidade.upper(),
+            x1 + 4.35,
+            y - 0.24,
+            0.074
+        )
+
 
 def desenhar_unifilar_qdc(
-    msp,circuitos,polilinhas_ambientes,tensao_projeto=220,
-    parametros_rede=None,resultado_demanda=None,
-    resumo_balanceamento=None,resumo_drs=None,
+    msp,
+    circuitos,
+    polilinhas_ambientes,
+    tensao_projeto=220,
+    parametros_rede=None,
+    resultado_demanda=None,
+    resumo_balanceamento=None,
+    resumo_drs=None,
     resumo_protecao=None
 ):
-    circuitos=list(circuitos or [])
+    circuitos = list(
+        circuitos
+        or []
+    )
+
     if not circuitos:
         return None
 
-    pontos=[]
-    for pol in polilinhas_ambientes or []:
-        pontos.extend(list(pol or []))
-    max_x=max((p[0] for p in pontos),default=0.0)
-    max_y=max((p[1] for p in pontos),default=10.0)
+    parametros_rede = dict(
+        parametros_rede
+        or {}
+    )
 
-    parametros_rede=dict(parametros_rede or {})
-    resultado_demanda=dict(resultado_demanda or {})
-    resumo_balanceamento=dict(resumo_balanceamento or {})
-    resumo_drs=list(resumo_drs or [])
-    resumo_protecao=dict(resumo_protecao or {})
+    resultado_demanda = dict(
+        resultado_demanda
+        or {}
+    )
 
-    # Separa circuitos realmente por proteção.
-    grupos={}
-    sem_dr=[]
+    resumo_balanceamento = dict(
+        resumo_balanceamento
+        or {}
+    )
+
+    resumo_drs = list(
+        resumo_drs
+        or []
+    )
+
+    resumo_protecao = dict(
+        resumo_protecao
+        or {}
+    )
+
+    # ========================================================
+    # EXTENSÃO DA PLANTA
+    # ========================================================
+
+    pontos = []
+
+    for pol in (
+        polilinhas_ambientes
+        or []
+    ):
+        pontos.extend(
+            list(
+                pol
+                or []
+            )
+        )
+
+    max_x = max(
+        (
+            p[0]
+            for p in pontos
+        ),
+        default=0.0
+    )
+
+    max_y = max(
+        (
+            p[1]
+            for p in pontos
+        ),
+        default=10.0
+    )
+
+    # ========================================================
+    # AGRUPAMENTO
+    # ========================================================
+
+    grupos = {}
+    sem_dr = []
+
     for c in circuitos:
-        dr=str(c.get("dr","") or "").strip()
+        dr = str(
+            c.get(
+                "dr",
+                ""
+            )
+            or ""
+        ).strip()
+
         if dr:
-            grupos.setdefault(dr,[]).append(c)
+            grupos.setdefault(
+                dr,
+                []
+            ).append(
+                c
+            )
         else:
-            sem_dr.append(c)
+            sem_dr.append(
+                c
+            )
 
-    ordem_drs=[g.get("dr") for g in resumo_drs if g.get("dr")]
-    for dr in grupos:
-        if dr not in ordem_drs:
-            ordem_drs.append(dr)
+    resumo_por_id = {
+        str(
+            g.get(
+                "dr",
+                ""
+            )
+        ): g
+        for g in resumo_drs
+    }
 
-    secoes=[]
-    if sem_dr:
-        secoes.append(("SEM_DR","CIRCUITOS SEM DR",sem_dr,None))
-    resumo_por_id={g.get("dr"):g for g in resumo_drs}
-    for dr in ordem_drs:
-        itens=grupos.get(dr,[])
+    ordem_drs = []
+
+    for g in resumo_drs:
+        gid = str(
+            g.get(
+                "dr",
+                ""
+            )
+            or ""
+        ).strip()
+
+        if (
+            gid
+            and gid not in ordem_drs
+        ):
+            ordem_drs.append(
+                gid
+            )
+
+    for gid in grupos:
+        if gid not in ordem_drs:
+            ordem_drs.append(
+                gid
+            )
+
+    secoes = []
+
+    for gid in ordem_drs:
+        itens = grupos.get(
+            gid,
+            []
+        )
+
         if itens:
-            secoes.append((dr,dr,itens,resumo_por_id.get(dr,{})))
+            secoes.append({
+                "id": gid,
+                "titulo": gid,
+                "itens": itens,
+                "resumo": resumo_por_id.get(
+                    gid,
+                    {}
+                ),
+                "com_dr": True
+            })
 
-    # Dimensões generosas para impedir encavalamento.
-    x0=max_x+3.0
-    y0=max_y
-    largura=18.5
-    header_h=2.15
-    entrada_h=2.45
-    sec_header=0.72
-    circ_pitch=0.92
-    gap_sec=0.42
-    corpo=sum(sec_header+len(sec[2])*circ_pitch+gap_sec for sec in secoes)
-    altura=max(11.0,header_h+entrada_h+corpo+0.80)
-    ybase=y0-altura
-    _rect(msp,x0,ybase,x0+largura,y0)
+    if sem_dr:
+        secoes.append({
+            "id": "SEM_DR",
+            "titulo": "CIRCUITOS SEM DR",
+            "itens": sem_dr,
+            "resumo": {},
+            "com_dr": False
+        })
 
-    tipo_for=str(parametros_rede.get("tipo_fornecimento","") or "")
-    tensao_for=str(parametros_rede.get("tensao_fornecimento","") or "")
+    # ========================================================
+    # DIMENSIONAMENTO DO QUADRO
+    # ========================================================
 
-    _text(msp,"DIAGRAMA UNIFILAR DO QDC",x0+0.55,y0-0.42,0.24)
-    linha_for="FASE 9.8"
-    if tipo_for: linha_for+=f" | {tipo_for}"
-    if tensao_for: linha_for+=f" | {tensao_for}"
-    _text(msp,linha_for,x0+0.55,y0-0.82,0.13)
-    _text(msp,f"TENSAO DOS CIRCUITOS: {int(tensao_projeto)} V",
-          x0+0.55,y0-1.12,0.115)
+    # Colunas fixas: garantem alinhamento de projeto para projeto.
+    x0 = max_x + 3.0
+    y0 = max_y
 
-    cargas=resumo_balanceamento.get("fases",{})
+    margem_esq = 0.45
+    margem_dir = 0.45
+
+    largura = 21.5
+
+    x_rede = x0 + 1.45
+    x_main = x0 + 4.05
+    x_dr = x0 + 5.55
+    x_bus = x0 + 6.65
+    x_cabo_fim = x0 + 9.15
+    x_dj = x0 + 9.85
+    x_info = x0 + 10.75
+    x_saida = x0 + 17.35
+
+    # N/PE calculados com o mesmo "respiro" visual da esquerda.
+    # O primeiro barramento N fica próximo ao fim da coluna de identificação,
+    # em vez de preso à borda direita do quadro.
+    x_n = x0 + 18.15
+    x_pe = x0 + 18.95
+
+    # A moldura termina com respiro curto após PE.
+    x2 = x0 + largura
+
+    titulo_h = 1.65
+    entrada_h = 2.25
+    sec_header = 0.92
+    circ_pitch = 0.84
+    gap_sec = 0.46
+    rodape_h = 1.65
+
+    corpo_h = 0.0
+
+    for sec in secoes:
+        corpo_h += (
+            sec_header
+            +
+            len(
+                sec["itens"]
+            )
+            * circ_pitch
+            +
+            gap_sec
+        )
+
+    altura = max(
+        12.0,
+        titulo_h
+        +
+        entrada_h
+        +
+        corpo_h
+        +
+        rodape_h
+        +
+        0.90
+    )
+
+    ybase = y0 - altura
+
+    # Moldura principal.
+    _rect(
+        msp,
+        x0,
+        ybase,
+        x2,
+        y0
+    )
+
+    # ========================================================
+    # CABEÇALHO
+    # ========================================================
+
+    _text(
+        msp,
+        "QDC - QUADRO DE DISTRIBUICAO DE CIRCUITOS",
+        x0 + 5.30,
+        y0 - 0.42,
+        0.22
+    )
+
+    linha_fase = "FASE 10.0"
+
+    tipo_for = str(
+        parametros_rede.get(
+            "tipo_fornecimento",
+            ""
+        )
+        or ""
+    )
+
+    tensao_for = str(
+        parametros_rede.get(
+            "tensao_fornecimento",
+            ""
+        )
+        or ""
+    )
+
+    if tipo_for:
+        linha_fase += (
+            f" | {tipo_for}"
+        )
+
+    if tensao_for:
+        linha_fase += (
+            f" | {tensao_for}"
+        )
+
+    _text(
+        msp,
+        linha_fase,
+        x0 + 5.30,
+        y0 - 0.78,
+        0.105
+    )
+
+    cargas = resumo_balanceamento.get(
+        "fases",
+        {}
+    )
+
     if cargas:
-        txt=" | ".join(f"{f}: {p/1000:.2f} kW" for f,p in cargas.items())
-        _text(msp,f"BALANCEAMENTO | {txt}",x0+0.55,y0-1.43,0.105)
+        texto_cargas = " | ".join(
+            (
+                f"{fase}: "
+                f"{pot / 1000:.2f} kW"
+            )
+            for fase, pot
+            in cargas.items()
+        )
 
-    # Entrada geral.
-    x_main=x0+1.25
-    yrede=y0-2.28
-    _text(msp,"REDE",x_main-0.18,yrede+0.18,0.11)
+        _text(
+            msp,
+            f"BALANCEAMENTO | {texto_cargas}",
+            x0 + 5.30,
+            y0 - 1.06,
+            0.095
+        )
 
-    ydg=yrede-0.68
-    _line(msp,(x_main,yrede+0.08),(x_main,ydg+0.16))
-    _breaker(msp,x_main,ydg)
-    _text(msp,"DG",x_main+0.48,ydg+0.08,0.13)
+    # ========================================================
+    # COLUNA REDE / ENTRADA
+    # ========================================================
 
-    dg=resultado_demanda.get("disjuntor_geral_a")
-    polos=str(resumo_protecao.get("dg_polos","") or "")
+    y_entrada = y0 - titulo_h - 0.55
+
+    _text(
+        msp,
+        "REDE",
+        x_rede - 0.22,
+        y_entrada + 0.48,
+        0.12
+    )
+
+    # Traço de referência vertical da rede.
+    _line(
+        msp,
+        (
+            x_rede + 0.70,
+            y_entrada + 0.70
+        ),
+        (
+            x_rede + 0.70,
+            ybase + rodape_h + 0.55
+        ),
+        layer=LAYER_UNIFILAR_GUIA
+    )
+
+    # Entrada horizontal.
+    _line(
+        msp,
+        (
+            x_rede - 0.55,
+            y_entrada
+        ),
+        (
+            x_main - 1.00,
+            y_entrada
+        )
+    )
+
+    # DG.
+    x_dg = x_main - 0.55
+
+    _breaker(
+        msp,
+        x_dg,
+        y_entrada
+    )
+
+    _text(
+        msp,
+        "DG",
+        x_dg - 0.10,
+        y_entrada + 0.38,
+        0.11
+    )
+
+    dg = resultado_demanda.get(
+        "disjuntor_geral_a"
+    )
+
+    polos_dg = str(
+        resumo_protecao.get(
+            "dg_polos",
+            ""
+        )
+        or ""
+    )
+
     if dg is not None:
-        txt=f"{int(dg)} A"
-        if polos: txt+=f" {polos}"
-        _text(msp,txt,x_main+0.48,ydg-0.12,0.10)
+        txt = (
+            f"{int(dg)} A"
+        )
 
-    pd=resultado_demanda.get("potencia_demanda_w")
-    ic=resultado_demanda.get("corrente_demanda_a")
-    if pd is not None:
-        _text(msp,f"DEMANDA {pd/1000:.2f} kW",x0+4.0,ydg+0.08,0.10)
-    if ic is not None:
-        _text(msp,f"I DEMANDA {ic:.1f} A",x0+4.0,ydg-0.13,0.10)
+        if polos_dg:
+            txt += (
+                f" {polos_dg}"
+            )
 
-    # Alimentador em área própria, sem atravessar o DG.
-    sf=resumo_protecao.get("alimentador_fase_mm2")
-    sn=resumo_protecao.get("alimentador_neutro_mm2")
-    spe=resumo_protecao.get("alimentador_pe_mm2")
-    comp=str(resumo_protecao.get("alimentador_composicao","") or "")
+        _text(
+            msp,
+            txt,
+            x_dg - 0.22,
+            y_entrada - 0.36,
+            0.090
+        )
+
+    # DG -> DPS.
+    _line(
+        msp,
+        (
+            x_dg + 0.29,
+            y_entrada
+        ),
+        (
+            x_main + 0.20,
+            y_entrada
+        )
+    )
+
+    x_dps = x_main + 0.55
+
+    _dps(
+        msp,
+        x_dps,
+        y_entrada
+    )
+
+    # DPS -> barramento principal.
+    _line(
+        msp,
+        (
+            x_dps + 0.32,
+            y_entrada
+        ),
+        (
+            x_main + 1.05,
+            y_entrada
+        )
+    )
+
+    x_barra_principal = x_main + 1.05
+
+    # Alimentador em bloco próprio.
+    _rect(
+        msp,
+        x0 + 0.45,
+        y_entrada - 2.05,
+        x0 + 2.60,
+        y_entrada - 0.65
+    )
+
+    _text(
+        msp,
+        "ALIMENTADOR GERAL",
+        x0 + 0.72,
+        y_entrada - 0.92,
+        0.11
+    )
+
+    sf = resumo_protecao.get(
+        "alimentador_fase_mm2"
+    )
+
+    sn = resumo_protecao.get(
+        "alimentador_neutro_mm2"
+    )
+
+    spe = resumo_protecao.get(
+        "alimentador_pe_mm2"
+    )
+
+    comp = str(
+        resumo_protecao.get(
+            "alimentador_composicao",
+            ""
+        )
+        or ""
+    )
+
+    if comp:
+        _text(
+            msp,
+            comp,
+            x0 + 0.72,
+            y_entrada - 1.20,
+            0.085
+        )
+
     if sf is not None:
-        if comp.startswith("3F"): partes=[f"3F {sf:g} mm2"]
-        elif comp.startswith("2F"): partes=[f"2F {sf:g} mm2"]
-        else: partes=[f"F {sf:g} mm2"]
-        if sn is not None: partes.append(f"N {sn:g} mm2")
-        if spe is not None: partes.append(f"PE {spe:g} mm2")
-        _text(msp,"ALIMENTADOR | "+" | ".join(partes),
-              x0+7.0,ydg-0.02,0.095)
+        _text(
+            msp,
+            f"F: {sf:g} mm2",
+            x0 + 0.72,
+            y_entrada - 1.43,
+            0.085
+        )
 
-    ydps=ydg-0.75
-    _line(msp,(x_main,ydg-0.16),(x_main,ydps+0.16))
-    _rect(msp,x_main-0.28,ydps-0.16,x_main+0.28,ydps+0.16)
-    _text(msp,"DPS",x_main-0.15,ydps-0.05,0.11)
+    if sn is not None:
+        _text(
+            msp,
+            f"N: {sn:g} mm2",
+            x0 + 0.72,
+            y_entrada - 1.64,
+            0.085
+        )
 
-    # Barramento principal alimenta visualmente cada seção/DR.
-    y_start=ydps-0.72
-    y_last=y_start-corpo+0.40
-    _line(msp,(x_main,ydps-0.16),(x_main,y_last))
+    if spe is not None:
+        _text(
+            msp,
+            f"PE: {spe:g} mm2",
+            x0 + 0.72,
+            y_entrada - 1.85,
+            0.085
+        )
 
-    x_dr=x0+3.05
-    x_sec_bus=x0+4.45
-    x_dj=x0+8.15
-    x_info=x0+9.15
+    # ========================================================
+    # BARRAMENTO PRINCIPAL E SEÇÕES
+    # ========================================================
 
-    y=y_start
-    for sid,titulo,itens,resumo in secoes:
-        # derivação horizontal do barramento principal
-        _line(msp,(x_main,y),(x_dr-0.34,y))
+    y_sec = y_entrada - 0.95
 
-        if sid=="SEM_DR":
-            _text(msp,titulo,x_dr,y+0.09,0.12)
-            # pequena ligação direta ao barramento da seção
-            _line(msp,(x_dr+1.65,y),(x_sec_bus,y))
-        else:
-            _breaker(msp,x_dr,y,w=0.68,h=0.36)
-            _text(msp,sid,x_dr-0.15,y-0.05,0.11)
+    # Calcula última coordenada antes de desenhar barramento.
+    total_corpo = 0.0
 
-            nominal=resumo.get("corrente_nominal_a")
-            sens=resumo.get("sensibilidade_ma")
-            spec=[]
-            if nominal is not None: spec.append(f"{nominal} A")
-            if sens is not None: spec.append(f"{sens} mA")
-            if spec:
-                _text(msp," / ".join(spec),x_dr+0.48,y+0.04,0.095)
+    for sec in secoes:
+        total_corpo += (
+            sec_header
+            +
+            len(
+                sec["itens"]
+            )
+            * circ_pitch
+            +
+            gap_sec
+        )
 
-            desc=str(resumo.get("descricao","") or "")
+    y_fim_barra = (
+        y_sec
+        -
+        total_corpo
+        +
+        gap_sec
+        +
+        0.18
+    )
+
+    _line(
+        msp,
+        (
+            x_barra_principal,
+            y_entrada
+        ),
+        (
+            x_barra_principal,
+            y_fim_barra
+        )
+    )
+
+    for sec in secoes:
+        # Cabeçalho da seção.
+        y_header = y_sec
+
+        _line(
+            msp,
+            (
+                x_barra_principal,
+                y_header
+            ),
+            (
+                x_dr - 0.45,
+                y_header
+            )
+        )
+
+        if sec["com_dr"]:
+            resumo = sec["resumo"]
+
+            _dr(
+                msp,
+                x_dr,
+                y_header,
+                sec["titulo"],
+                resumo.get(
+                    "corrente_nominal_a"
+                ),
+                resumo.get(
+                    "sensibilidade_ma"
+                )
+            )
+
+            _line(
+                msp,
+                (
+                    x_dr + 0.40,
+                    y_header
+                ),
+                (
+                    x_bus,
+                    y_header
+                )
+            )
+
+            desc = str(
+                resumo.get(
+                    "descricao",
+                    ""
+                )
+                or ""
+            )
+
             if desc:
-                _text(msp,desc,x_dr+0.48,y-0.16,0.082)
-            _line(msp,(x_dr+0.34,y),(x_sec_bus,y))
+                _text(
+                    msp,
+                    desc,
+                    x_dr + 0.55,
+                    y_header - 0.34,
+                    0.074
+                )
 
-        # barramento exclusivo da seção, deixando claro quem o DR alimenta
-        first_y=y-sec_header
-        last_y=first_y-(len(itens)-1)*circ_pitch
-        _line(msp,(x_sec_bus,y),(x_sec_bus,last_y))
+        else:
+            # Bloco bem delimitado para circuitos sem DR.
+            _rect(
+                msp,
+                x_dr - 0.55,
+                y_header - 0.36,
+                x_dr + 1.20,
+                y_header + 0.36
+            )
 
-        for j,c in enumerate(itens):
-            cy=first_y-j*circ_pitch
-            _linha_circuito(msp,c,x_sec_bus,x_dj,x_info,cy)
+            _text(
+                msp,
+                "CIRCUITOS",
+                x_dr - 0.34,
+                y_header + 0.08,
+                0.095
+            )
 
-        y=last_y-circ_pitch-gap_sec
+            _text(
+                msp,
+                "SEM DR",
+                x_dr - 0.22,
+                y_header - 0.15,
+                0.095
+            )
 
-    # Barramentos N e PE separados à direita.
-    xn=x0+largura-1.35
-    xpe=x0+largura-0.65
-    _line(msp,(xn,y0-2.25),(xn,ybase+0.55))
-    _line(msp,(xpe,y0-2.25),(xpe,ybase+0.55))
-    _text(msp,"N",xn-0.05,y0-2.08,0.13)
-    _text(msp,"PE",xpe-0.08,y0-2.08,0.13)
+            _line(
+                msp,
+                (
+                    x_dr + 1.20,
+                    y_header
+                ),
+                (
+                    x_bus,
+                    y_header
+                )
+            )
+
+        # Barramento próprio do grupo.
+        first_y = (
+            y_header
+            -
+            sec_header
+        )
+
+        last_y = (
+            first_y
+            -
+            (
+                len(
+                    sec["itens"]
+                )
+                - 1
+            )
+            *
+            circ_pitch
+        )
+
+        _line(
+            msp,
+            (
+                x_bus,
+                y_header
+            ),
+            (
+                x_bus,
+                last_y
+            )
+        )
+
+        # Circuitos.
+        for i, c in enumerate(
+            sec["itens"]
+        ):
+            cy = (
+                first_y
+                -
+                i
+                *
+                circ_pitch
+            )
+
+            _linha_circuito(
+                msp,
+                c,
+                x_bus,
+                x_cabo_fim,
+                x_dj,
+                x_info,
+                x_saida,
+                x_n,
+                x_pe,
+                cy
+            )
+
+        y_sec = (
+            last_y
+            -
+            gap_sec
+            -
+            0.35
+        )
+
+    # ========================================================
+    # BARRAMENTOS N E PE
+    # ========================================================
+
+    y_bus_top = (
+        y_entrada
+        +
+        0.62
+    )
+
+    y_bus_bottom = (
+        ybase
+        +
+        rodape_h
+        +
+        0.50
+    )
+
+    # N e PE próximos ao conteúdo, com espaçamento curto e regular.
+    _rect(
+        msp,
+        x_n - 0.08,
+        y_bus_bottom,
+        x_n + 0.08,
+        y_bus_top
+    )
+
+    _rect(
+        msp,
+        x_pe - 0.08,
+        y_bus_bottom,
+        x_pe + 0.08,
+        y_bus_top
+    )
+
+    _text(
+        msp,
+        "N",
+        x_n - 0.05,
+        y_bus_top + 0.18,
+        0.12
+    )
+
+    _text(
+        msp,
+        "PE",
+        x_pe - 0.08,
+        y_bus_top + 0.18,
+        0.12
+    )
+
+    # ========================================================
+    # RODAPÉ
+    # ========================================================
+
+    y_rodape_top = (
+        ybase
+        +
+        rodape_h
+        -
+        0.10
+    )
+
+    legenda_x1 = x0 + 0.25
+    legenda_x2 = x0 + 13.70
+
+    notas_x1 = x0 + 13.95
+    notas_x2 = x2 - 0.25
+
+    _legenda(
+        msp,
+        legenda_x1,
+        ybase + 0.25,
+        legenda_x2,
+        y_rodape_top
+    )
+
+    _notas(
+        msp,
+        notas_x1,
+        ybase + 0.25,
+        notas_x2,
+        y_rodape_top,
+        parametros_rede,
+        resumo_protecao
+    )
 
     return {
-        "quantidade_circuitos":len(circuitos),
-        "quantidade_drs":len([s for s in secoes if s[0]!="SEM_DR"]),
-        "quantidade_secoes":len(secoes),
-        "origem":(x0,ybase)
+        "quantidade_circuitos":
+            len(
+                circuitos
+            ),
+        "quantidade_drs":
+            len(
+                [
+                    s
+                    for s in secoes
+                    if s["com_dr"]
+                ]
+            ),
+        "quantidade_secoes":
+            len(
+                secoes
+            ),
+        "origem":
+            (
+                x0,
+                ybase
+            ),
+        "largura":
+            largura,
+        "altura":
+            altura,
+        "barramento_n_x":
+            x_n,
+        "barramento_pe_x":
+            x_pe
     }

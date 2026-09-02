@@ -112,7 +112,8 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_COMANDO": 6,
             "PROJ_ELETRICA_UNIFILAR_QDC": 7,
             "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO": 7,
-            "AE_VERSAO": 8
+            "PROJ_ELETRICA_UNIFILAR_QDC_GUIA": 8,
+            "AE_VERSAO": 9
         }
 
         for nome_l, cor_l in camadas.items():
@@ -152,6 +153,7 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_COMANDO",
                     "PROJ_ELETRICA_UNIFILAR_QDC",
                     "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO",
+                    "PROJ_ELETRICA_UNIFILAR_QDC_GUIA",
                     "AE_VERSAO"
                 }:
                     msp.delete_entity(ent)
@@ -461,7 +463,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 9.8:
+                # Fase 10.0:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -511,7 +513,7 @@ def gerar_cad_unifilar(
         
         
         # ====================================================
-        # FASE 9.8 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # FASE 10.0 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
         # ====================================================
         _, circuitos_unifilar = calcular_quantitativo_materiais(
             tabela_editada=dados_editados,
