@@ -240,8 +240,17 @@ def gerar_excel_projeto(
 
     df_parametros = pd.DataFrame([
         {
-            "Parâmetro": "Tensão do quadro",
-            "Valor": f"{int(tensao_projeto)} V"
+            "Parâmetro": "Tensão base dos cálculos",
+            "Valor": (
+                str(
+                    parametros_rede.get(
+                        "tensao_fornecimento",
+                        ""
+                    )
+                )
+                if 'parametros_rede' in locals()
+                else f"{int(tensao_projeto)} V"
+            )
         },
         {
             "Parâmetro": "Pé-direito do pavimento",
@@ -674,7 +683,7 @@ def gerar_memorial_pdf(
 
     story.append(
         Paragraph(
-            f"<b>Tensão do quadro:</b> {int(tensao_projeto)} V",
+            f"<b>Tensão base de cálculo:</b> {int(tensao_projeto)} V",
             styles["Texto"]
         )
     )

@@ -149,15 +149,9 @@ def _cabo_texto(c):
     ).upper()
 
     if tipo == "TUE":
-        return (
-            f"2F {bit:g} mm2"
-            f" + PE {bit:g} mm2"
-        )
+        return f"2F x {bit:g} + PE {bit:g} mm2"
 
-    return (
-        f"F+N {bit:g} mm2"
-        f" + PE {bit:g} mm2"
-    )
+    return f"F+N x {bit:g} + PE {bit:g} mm2"
 
 
 def _texto_circuito(c):
@@ -342,12 +336,22 @@ def _linha_circuito(
         0.108
     )
 
+    tensao = c.get("tensao")
+
+    dados = f"{pot:.0f} W"
+    if tensao is not None:
+        try:
+            dados += f" | {float(tensao):g} V"
+        except Exception:
+            pass
+    dados += f" | {corrente:.2f} A"
+
     _text(
         msp,
-        f"{pot:.0f} W | {corrente:.2f} A",
+        dados,
         x_info,
-        y - 0.13,
-        0.088
+        y - 0.15,
+        0.084
     )
 
     # Linha funcional até os barramentos N e PE.
@@ -781,9 +785,9 @@ def desenhar_unifilar_qdc(
 
     titulo_h = 1.65
     entrada_h = 2.25
-    sec_header = 0.92
-    circ_pitch = 0.84
-    gap_sec = 0.46
+    sec_header = 1.08
+    circ_pitch = 1.02
+    gap_sec = 0.62
     rodape_h = 1.65
 
     corpo_h = 0.0
@@ -836,7 +840,7 @@ def desenhar_unifilar_qdc(
         0.24
     )
 
-    linha_fase = "FASE 10.1"
+    linha_fase = "FASE 10.2"
 
     tipo_for = str(
         parametros_rede.get(
@@ -1164,23 +1168,6 @@ def desenhar_unifilar_qdc(
                     y_header
                 )
             )
-
-            desc = str(
-                resumo.get(
-                    "descricao",
-                    ""
-                )
-                or ""
-            )
-
-            if desc:
-                _text(
-                    msp,
-                    desc,
-                    x_dr + 0.55,
-                    y_header - 0.34,
-                    0.074
-                )
 
         else:
             # Bloco bem delimitado para circuitos sem DR.

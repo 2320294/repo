@@ -9,6 +9,7 @@ from balanceamento_fases import balancear_circuitos
 from agrupamento_dr import agrupar_circuitos_dr
 from demanda_qdc import calcular_demanda_qdc
 from protecao_alimentador import avaliar_protecoes_alimentador
+from tensoes_circuitos import tensao_circuito, tensao_base_fornecimento
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -329,6 +330,18 @@ def calcular_quantitativo_materiais(
     centro_qdc = _centro_qdc(
         tabela_editada,
         local_qdc
+    )
+
+    parametros_rede_calculo = (
+        (config_interruptores_usuario or {}).get(
+            CHAVE_PARAMETROS_REDE,
+            {}
+        )
+    )
+
+    tensao_base = tensao_base_fornecimento(
+        parametros_rede_calculo,
+        fallback=tensao_projeto
     )
 
     # ========================================================
@@ -654,11 +667,17 @@ def calcular_quantitativo_materiais(
                 comprimento_condutor
             )
 
+            tensao_circ = tensao_circuito(
+                "Iluminação",
+                parametros_rede_calculo,
+                fallback=tensao_base
+            )
+
             corrente = (
                 potencia
                 /
-                tensao_projeto
-                if tensao_projeto
+                tensao_circ
+                if tensao_circ
                 else 0
             )
 
@@ -666,6 +685,7 @@ def calcular_quantitativo_materiais(
                 "tipo": "Iluminação",
                 "ambiente": ambiente,
                 "potencia": potencia,
+                "tensao": tensao_circ,
                 "corrente": corrente,
                 "bitola": 1.5,
                 "disjuntor":
@@ -739,11 +759,17 @@ def calcular_quantitativo_materiais(
                 comprimento_condutor
             )
 
+            tensao_circ = tensao_circuito(
+                "TUG",
+                parametros_rede_calculo,
+                fallback=tensao_base
+            )
+
             corrente = (
                 potencia
                 /
-                tensao_projeto
-                if tensao_projeto
+                tensao_circ
+                if tensao_circ
                 else 0
             )
 
@@ -751,6 +777,7 @@ def calcular_quantitativo_materiais(
                 "tipo": "TUG",
                 "ambiente": ambiente,
                 "potencia": potencia,
+                "tensao": tensao_circ,
                 "corrente": corrente,
                 "bitola": 2.5,
                 "disjuntor":
@@ -770,10 +797,16 @@ def calcular_quantitativo_materiais(
                 pot_tue_unit
             )
 
+            tensao_circ = tensao_circuito(
+                "TUE",
+                parametros_rede_calculo,
+                fallback=tensao_base
+            )
+
             bitola = (
                 _bitola_tue(
                     potencia,
-                    tensao_projeto
+                    tensao_circ
                 )
             )
 
@@ -835,8 +868,8 @@ def calcular_quantitativo_materiais(
             corrente = (
                 potencia
                 /
-                tensao_projeto
-                if tensao_projeto
+                tensao_circ
+                if tensao_circ
                 else 0
             )
 
@@ -844,6 +877,7 @@ def calcular_quantitativo_materiais(
                 "tipo": "TUE",
                 "ambiente": ambiente,
                 "potencia": potencia,
+                "tensao": tensao_circ,
                 "corrente": corrente,
                 "bitola": bitola,
                 "disjuntor":
@@ -1152,6 +1186,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
             "polos": "Polos",
             "dr": "DR",
             "potencia": "Potência (W)",
+            "tensao": "Tensão (V)",
             "corrente": "Corrente estimada (A)",
             "bitola": "Bitola preliminar (mm²)",
             "disjuntor": "Disjuntor preliminar (A)"
@@ -1323,7 +1358,7 @@ def renderizar_materiais(
     )
 
     st.caption(
-        f"Parâmetros usados: alimentação {int(tensao_projeto)} V | "
+        f"Parâmetros usados: tensão derivada do perfil de fornecimento | "
         f"pé-direito {float(pe_direito):.2f} m. "
         "Quantidades de pontos e caixas são calculadas diretamente do projeto. "
         "Comprimentos de cabos/eletrodutos e alguns dispositivos de proteção "
@@ -1402,7 +1437,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 10.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 10.2: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1452,7 +1487,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_2.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1461,7 +1496,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_2.pdf",
             mime="application/pdf",
             use_container_width=True
         )

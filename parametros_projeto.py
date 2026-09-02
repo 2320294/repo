@@ -1,6 +1,8 @@
 
 import streamlit as st
 
+from tensoes_circuitos import tensao_base_fornecimento
+
 from concessionarias import (
     UFS,
     OUTRA_CONCESSIONARIA,
@@ -19,7 +21,7 @@ def renderizar_parametros_projeto(
     """
     Parâmetros gerais e perfil de fornecimento do projeto.
 
-    Fase 10.1:
+    Fase 10.2:
     - localização;
     - concessionária;
     - tipo/tensão de fornecimento;
@@ -31,69 +33,27 @@ def renderizar_parametros_projeto(
         "#### 🏠 Dados gerais"
     )
 
-    col_tensao, col_pe = st.columns(2)
-
-    with col_tensao:
-        opcoes_tensao = [110, 220]
-
-        try:
-            tensao_atual = int(
-                tensao_salva
-                if tensao_salva is not None
-                else 110
-            )
-        except Exception:
-            tensao_atual = 110
-
-        if tensao_atual == 127:
-            tensao_atual = 110
-
-        if tensao_atual not in opcoes_tensao:
-            tensao_atual = 110
-
-        tensao_projeto = st.selectbox(
-            "Tensão usada nos cálculos atuais:",
-            options=opcoes_tensao,
-            index=opcoes_tensao.index(
-                tensao_atual
-            ),
-            format_func=lambda valor: (
-                f"{valor} V"
-            ),
-            key="param_tensao_projeto"
+    try:
+        pe_atual = float(
+            pe_direito_salvo
+            if pe_direito_salvo is not None
+            else 2.80
         )
+    except Exception:
+        pe_atual = 2.80
 
-        st.caption(
-            "Parâmetro legado dos cálculos atuais. "
-            "O novo perfil de fornecimento abaixo será usado "
-            "na evolução do QDC."
-        )
+    if pe_atual < 2.00 or pe_atual > 10.00:
+        pe_atual = 2.80
 
-    with col_pe:
-        try:
-            pe_atual = float(
-                pe_direito_salvo
-                if pe_direito_salvo is not None
-                else 2.80
-            )
-        except Exception:
-            pe_atual = 2.80
-
-        if (
-            pe_atual < 2.00
-            or pe_atual > 10.00
-        ):
-            pe_atual = 2.80
-
-        pe_direito = st.number_input(
-            "Pé-direito do pavimento (m):",
-            min_value=2.00,
-            max_value=10.00,
-            value=pe_atual,
-            step=0.05,
-            format="%.2f",
-            key="param_pe_direito"
-        )
+    pe_direito = st.number_input(
+        "Pé-direito do pavimento (m):",
+        min_value=2.00,
+        max_value=10.00,
+        value=pe_atual,
+        step=0.05,
+        format="%.2f",
+        key="param_pe_direito"
+    )
 
     st.markdown(
         "#### 🌎 Localização e concessionária"
@@ -358,7 +318,7 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto, mas nesta Fase 10.1 o cálculo de demanda "
+            "no projeto, mas nesta Fase 10.2 o cálculo de demanda "
             "ainda não é aplicado automaticamente. "
             "O perfil normativo será ativado somente quando "
             "a regra oficial dessa concessionária estiver "
@@ -373,7 +333,16 @@ def renderizar_parametros_projeto(
 
     return {
         "tensao_projeto":
-            int(tensao_projeto),
+            int(
+                tensao_base_fornecimento(
+                    parametros_rede,
+                    fallback=(
+                        tensao_salva
+                        if tensao_salva is not None
+                        else 220
+                    )
+                )
+            ),
         "pe_direito":
             float(pe_direito),
         "parametros_rede":
