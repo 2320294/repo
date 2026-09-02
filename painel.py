@@ -32,6 +32,11 @@ from parametros_projeto import (
     renderizar_parametros_projeto
 )
 
+from concessionarias import (
+    CHAVE_PARAMETROS_REDE,
+    normalizar_parametros_rede
+)
+
 from upload_cad import (
     renderizar_upload_dxf,
     renderizar_salvar_e_gerar_cad
@@ -130,7 +135,17 @@ def _inicializar_cache_etapas(
             "tensao_projeto":
                 tensao,
             "pe_direito":
-                pe
+                pe,
+            "parametros_rede":
+                normalizar_parametros_rede(
+                    (
+                        config_salva
+                        or {}
+                    ).get(
+                        CHAVE_PARAMETROS_REDE,
+                        {}
+                    )
+                )
         }
 
     return (
@@ -317,6 +332,12 @@ def renderizar_painel_principal():
                     chave_parametros
                 ].get(
                     "pe_direito"
+                ),
+                st.session_state[
+                    chave_parametros
+                ].get(
+                    "parametros_rede",
+                    {}
                 )
             )
         )
@@ -325,10 +346,32 @@ def renderizar_painel_principal():
             chave_parametros
         ] = parametros
 
+        config_parametros = dict(
+            st.session_state[
+                chave_config
+            ]
+            or {}
+        )
+
+        config_parametros[
+            CHAVE_PARAMETROS_REDE
+        ] = parametros.get(
+            "parametros_rede",
+            {}
+        )
+
+        st.session_state[
+            chave_config
+        ] = config_parametros
+
         renderizar_upload_dxf(
             dxf_bytes=dxf_bytes,
             dados_ambientes=dados_ambientes,
-            config_salva=config_salva
+            config_salva=(
+                st.session_state[
+                    chave_config
+                ]
+            )
         )
 
         if not dxf_bytes:
@@ -488,7 +531,7 @@ def renderizar_painel_principal():
             )
         )
 
-        # Preserva a configuração das tomadas altas enquanto
+        # Preserva configurações reservadas enquanto
         # a etapa de interruptores é editada.
         if (
             CHAVE_TOMADAS_ALTAS
@@ -498,6 +541,16 @@ def renderizar_painel_principal():
                 CHAVE_TOMADAS_ALTAS
             ] = config_atual[
                 CHAVE_TOMADAS_ALTAS
+            ]
+
+        if (
+            CHAVE_PARAMETROS_REDE
+            in config_atual
+        ):
+            config_interruptores[
+                CHAVE_PARAMETROS_REDE
+            ] = config_atual[
+                CHAVE_PARAMETROS_REDE
             ]
 
         st.session_state[

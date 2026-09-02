@@ -20,6 +20,13 @@ from materiais import calcular_quantitativo_materiais
 
 from qdc_config import descricao_qdc
 
+from concessionarias import (
+    CHAVE_PARAMETROS_REDE,
+    normalizar_parametros_rede,
+    nome_concessionaria,
+    descricao_localidade
+)
+
 def _valor_w(row, campo_w, campo_va, padrao=0):
     if campo_w in row:
         return float(row.get(campo_w, padrao) or 0)
@@ -230,12 +237,69 @@ def gerar_excel_projeto(
         }
     ])
 
+    parametros_rede = normalizar_parametros_rede(
+        (
+            config_interruptores_usuario
+            or {}
+        ).get(
+            CHAVE_PARAMETROS_REDE,
+            {}
+        )
+    )
+
+    df_parametros = pd.concat(
+        [
+            df_parametros,
+            pd.DataFrame([
+                {
+                    "Parâmetro": "Localidade",
+                    "Valor": descricao_localidade(
+                        parametros_rede
+                    )
+                },
+                {
+                    "Parâmetro": "Concessionária",
+                    "Valor": nome_concessionaria(
+                        parametros_rede
+                    )
+                },
+                {
+                    "Parâmetro": "Tipo de fornecimento",
+                    "Valor": parametros_rede.get(
+                        "tipo_fornecimento",
+                        "A definir"
+                    )
+                },
+                {
+                    "Parâmetro": "Tensão de fornecimento",
+                    "Valor": parametros_rede.get(
+                        "tensao_fornecimento",
+                        "A definir"
+                    )
+                },
+                {
+                    "Parâmetro": "Método de demanda",
+                    "Valor": parametros_rede.get(
+                        "metodo_demanda",
+                        ""
+                    )
+                }
+            ])
+        ],
+        ignore_index=True
+    )
+
     linhas_interruptores = []
 
     for ambiente in sorted(
         config_interruptores_usuario,
         key=str.casefold
     ):
+        if str(
+            ambiente
+        ).startswith("__"):
+            continue
+
         cfg = (
             config_interruptores_usuario.get(
                 ambiente,

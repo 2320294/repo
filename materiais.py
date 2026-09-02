@@ -369,8 +369,17 @@ def calcular_quantitativo_materiais(
                 0
             )
         )
-        for cfg
-        in config_interruptores_usuario.values()
+        for chave_cfg, cfg
+        in config_interruptores_usuario.items()
+        if (
+            not str(
+                chave_cfg
+            ).startswith("__")
+            and isinstance(
+                cfg,
+                dict
+            )
+        )
     )
 
     _adicionar_material(
@@ -1337,7 +1346,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_0.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1346,7 +1355,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_0.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )
