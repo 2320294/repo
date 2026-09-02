@@ -1,15 +1,20 @@
 import math
 
 # ============================================================
-# FASE 8.8 — PADRÃO GEOMÉTRICO DAS TOMADAS
+# FASE 8.9 — PADRÃO GEOMÉTRICO DAS TOMADAS
 # ============================================================
-# Símbolo triangular:
-#   - base total: 10 cm
-#   - profundidade para dentro do ambiente: 10 cm
-#   - pequeno traço central a partir da base: 5 cm
-TOMADA_MEIA_BASE = 0.05
-TOMADA_PROFUNDIDADE = 0.10
-TOMADA_TRACO_BASE = 0.05
+# Novo padrão:
+#   - base total do triângulo: 15 cm
+#   - o triângulo NÃO nasce mais sobre a parede;
+#   - sua base fica na ponta interna do traço central;
+#   - traço central total: 10 cm;
+#   - 5 cm do traço ficam para dentro do ambiente;
+#   - 5 cm ficam para fora da face interna da parede;
+#   - profundidade do triângulo: 15 cm.
+TOMADA_MEIA_BASE = 0.075
+TOMADA_PROFUNDIDADE = 0.15
+TOMADA_TRACO_TOTAL = 0.10
+TOMADA_TRACO_MEIO = TOMADA_TRACO_TOTAL / 2.0
 
 
 from geometria import (
@@ -31,70 +36,100 @@ def _geometria_simbolo_tomada(
     ny
 ):
     """
-    Retorna a geometria padronizada do símbolo de tomada da Fase 8.8.
+    Fase 8.9.
 
-    A base tem 10 cm no total, o vértice entra 10 cm no ambiente e
-    o pequeno traço central tem 5 cm, também voltado para dentro.
+    px,py continuam sendo o ponto da parede.
+
+    O traço central mede 10 cm e fica atravessando a parede:
+      - 5 cm para dentro do ambiente;
+      - 5 cm para fora.
+
+    A BASE do triângulo fica na ponta interna desse traço,
+    isto é, 5 cm afastada da parede para dentro do ambiente.
+
+    O triângulo tem:
+      - base total = 15 cm;
+      - profundidade = 15 cm.
     """
-    ponto_b1 = (
+    centro_base_x = (
         px
+        + nx
+        * TOMADA_TRACO_MEIO
+    )
+    centro_base_y = (
+        py
+        + ny
+        * TOMADA_TRACO_MEIO
+    )
+
+    ponto_b1 = (
+        centro_base_x
         - vx
         * TOMADA_MEIA_BASE,
-        py
+        centro_base_y
         - vy
         * TOMADA_MEIA_BASE
     )
 
     ponto_b2 = (
-        px
+        centro_base_x
         + vx
         * TOMADA_MEIA_BASE,
-        py
+        centro_base_y
         + vy
         * TOMADA_MEIA_BASE
     )
 
     ponto_pt = (
-        px
+        centro_base_x
         + nx
         * TOMADA_PROFUNDIDADE,
-        py
+        centro_base_y
         + ny
         * TOMADA_PROFUNDIDADE
     )
 
-    ponto_traco = (
+    ponto_traco_externo = (
+        px
+        - nx
+        * TOMADA_TRACO_MEIO,
+        py
+        - ny
+        * TOMADA_TRACO_MEIO
+    )
+
+    ponto_traco_interno = (
         px
         + nx
-        * TOMADA_TRACO_BASE,
+        * TOMADA_TRACO_MEIO,
         py
         + ny
-        * TOMADA_TRACO_BASE
+        * TOMADA_TRACO_MEIO
     )
 
     return (
         ponto_b1,
         ponto_b2,
         ponto_pt,
-        ponto_traco
+        ponto_traco_externo,
+        ponto_traco_interno
     )
+
 
 
 def _adicionar_traco_base_tomada(
     msp,
-    px,
-    py,
-    ponto_traco
+    ponto_traco_externo,
+    ponto_traco_interno
 ):
     """
-    Traço de 5 cm partindo do centro da base do símbolo.
+    Traço total de 10 cm cruzando a parede:
+    5 cm para dentro e 5 cm para fora.
+    A ponta interna coincide com o centro da base do triângulo.
     """
     msp.add_line(
-        (
-            px,
-            py
-        ),
-        ponto_traco,
+        ponto_traco_externo,
+        ponto_traco_interno,
         dxfattribs={
             "layer":
                 "PROJ_ELETRICA_TOMADA"
@@ -542,7 +577,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.8 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.9 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -618,7 +653,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 8.8:
+            # Fase 8.9:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
@@ -750,7 +785,8 @@ def desenhar_tomadas(
                 ponto_b1,
                 ponto_b2,
                 ponto_pt,
-                ponto_traco
+                ponto_traco_externo,
+                ponto_traco_interno
             ) = _geometria_simbolo_tomada(
                 px,
                 py,
@@ -776,9 +812,8 @@ def desenhar_tomadas(
 
             _adicionar_traco_base_tomada(
                 msp,
-                px,
-                py,
-                ponto_traco
+                ponto_traco_externo,
+                ponto_traco_interno
             )
 
             if is_chuveiro_ou_ac:
@@ -939,7 +974,8 @@ def desenhar_tomadas(
                 ponto_b1,
                 ponto_b2,
                 ponto_pt,
-                ponto_traco
+                ponto_traco_externo,
+                ponto_traco_interno
             ) = _geometria_simbolo_tomada(
                 px,
                 py,
@@ -965,9 +1001,8 @@ def desenhar_tomadas(
 
             _adicionar_traco_base_tomada(
                 msp,
-                px,
-                py,
-                ponto_traco
+                ponto_traco_externo,
+                ponto_traco_interno
             )
 
             if is_ambiente_molhado:

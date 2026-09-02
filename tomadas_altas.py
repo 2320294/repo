@@ -149,7 +149,7 @@ def _limpar_aparencia_selecao_paredes(
             )
         ]
 
-        # Fase 8.8: identidade visual igual ao QDC.
+        # Fase 8.9: identidade visual igual ao QDC.
         # Disponível = azul; selecionada confirmada = verde.
         cor[
             "value"
@@ -536,7 +536,7 @@ def renderizar_tomadas_altas(
     dxf_bytes=None
 ):
     """
-    Fase 8.8:
+    Fase 8.9:
     posicionamento interativo das TUEs altas.
 
     Ar-condicionado: seleção do trecho e centralização automática.\n    Chuveiro: seleção do trecho e depois de um ponto específico na parede.\n    Portas dividem a parede em trechos independentes, como no QDC.
@@ -816,7 +816,7 @@ def renderizar_tomadas_altas(
                         )
                     )
 
-                    # Fase 8.8: nenhuma parede disponível parece selecionada.
+                    # Fase 8.9: nenhuma parede disponível parece selecionada.
                     # Somente a parede confirmada no session_state fica verde.
                     fig = (
                         _limpar_aparencia_selecao_paredes(

@@ -1,12 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.8
-IDENTIFICADOR: Fase_8_8
+VERSÃO ATUAL: Fase 8.9
+IDENTIFICADOR: Fase_8_9
 
-[OK] paredes disponíveis em azul
-[OK] parede selecionada em verde
-[OK] segunda mini planta do chuveiro somente após seleção da parede
-[OK] tomadas baixas com símbolo de 10 cm
-[OK] tomadas médias com símbolo de 10 cm
-[OK] tomadas altas com símbolo de 10 cm
-[OK] traço central de 5 cm na base
-[OK] orientação para dentro do ambiente preservada
+[OK] base das tomadas = 15 cm
+[OK] traço central total = 10 cm
+[OK] 5 cm do traço para dentro
+[OK] 5 cm do traço para fora
+[OK] base triangular na ponta interna do traço
+[OK] profundidade triangular = 15 cm
+[OK] orientação interna preservada
