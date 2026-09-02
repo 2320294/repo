@@ -416,57 +416,64 @@ def _legenda(
     _text(
         msp,
         "LEGENDA",
-        x1 + 0.25,
-        y2 - 0.30,
-        0.12
+        x1 + 0.22,
+        y2 - 0.28,
+        0.105
     )
 
-    y = y2 - 0.72
+    # Duas linhas: evita que quatro definições disputem a mesma faixa.
+    y_a = y2 - 0.72
+    y_b = y2 - 1.25
 
     _breaker(
         msp,
-        x1 + 0.50,
-        y,
-        w=0.42,
-        h=0.26
+        x1 + 0.42,
+        y_a,
+        w=0.34,
+        h=0.22
     )
-
     _text(
         msp,
         "DG / DJ - DISJUNTOR TERMOMAGNETICO",
-        x1 + 0.85,
-        y - 0.04,
-        0.082
+        x1 + 0.72,
+        y_a - 0.03,
+        0.065
     )
 
     _dps(
         msp,
-        x1 + 5.10,
-        y
+        x1 + 6.15,
+        y_a
     )
-
     _text(
         msp,
-        "DPS - DISPOSITIVO DE PROTECAO CONTRA SURTOS",
-        x1 + 5.55,
-        y - 0.04,
-        0.082
+        "DPS - PROTECAO CONTRA SURTOS",
+        x1 + 6.60,
+        y_a - 0.03,
+        0.065
     )
 
     _rect(
         msp,
-        x1 + 10.10,
-        y - 0.20,
-        x1 + 10.50,
-        y + 0.20
+        x1 + 0.25,
+        y_b - 0.17,
+        x1 + 0.59,
+        y_b + 0.17
+    )
+    _text(
+        msp,
+        "DR - DIFERENCIAL RESIDUAL",
+        x1 + 0.72,
+        y_b - 0.03,
+        0.065
     )
 
     _text(
         msp,
-        "DR - DISPOSITIVO DIFERENCIAL RESIDUAL",
-        x1 + 10.75,
-        y - 0.04,
-        0.082
+        "N - NEUTRO   |   PE - PROTECAO / TERRA",
+        x1 + 6.15,
+        y_b - 0.03,
+        0.065
     )
 
 
@@ -495,13 +502,6 @@ def _notas(
         0.105
     )
 
-    # Duas colunas independentes. Nenhum texto técnico é concatenado
-    # na mesma linha de outra informação.
-    col1 = x1 + 0.25
-    col2 = x1 + (x2 - x1) * 0.55
-    y = y2 - 0.62
-    passo = 0.25
-
     tipo = str(
         parametros_rede.get(
             "tipo_fornecimento",
@@ -518,96 +518,36 @@ def _notas(
         or ""
     ).strip()
 
+    linhas = []
+
     if tipo:
-        _text(
-            msp,
-            f"FORNECIMENTO: {tipo}",
-            col1,
-            y,
-            0.068
+        linhas.append(
+            f"FORNECIMENTO: {tipo}"
         )
-        y -= passo
 
     if tensao:
-        _text(
-            msp,
-            f"TENSAO: {tensao}",
-            col1,
-            y,
-            0.068
+        linhas.append(
+            f"TENSAO: {tensao}"
         )
-        y -= passo
 
-    _text(
-        msp,
+    linhas.extend([
         "N: NEUTRO",
-        col1,
-        y,
-        0.068
-    )
-    y -= passo
-
-    _text(
-        msp,
         "PE: PROTECAO / TERRA",
-        col1,
-        y,
-        0.068
-    )
+        "SELETIVIDADE: VALIDAR POR CURVAS/TABELAS DO FABRICANTE",
+        "CAP. INTERRUPCAO: DEFINIR PELO ICC E FABRICANTE"
+    ])
 
-    y2c = y2 - 0.62
-
-    seletividade = str(
-        resumo_protecao.get(
-            "seletividade",
-            ""
-        )
-        or ""
-    ).strip()
-
-    capacidade = str(
-        resumo_protecao.get(
-            "capacidade_interrupcao",
-            ""
-        )
-        or ""
-    ).strip()
-
-    # Rótulos curtos evitam textos longos atravessando a moldura.
-    if seletividade:
+    # Cada nota ocupa sua própria linha. Nada é concatenado lateralmente.
+    y = y2 - 0.67
+    for texto in linhas:
         _text(
             msp,
-            "SELETIVIDADE:",
-            col2,
-            y2c,
-            0.068
+            texto,
+            x1 + 0.25,
+            y,
+            0.061
         )
-        y2c -= passo
-        _text(
-            msp,
-            seletividade[:48].upper(),
-            col2,
-            y2c,
-            0.060
-        )
-        y2c -= passo * 1.25
-
-    if capacidade:
-        _text(
-            msp,
-            "CAPACIDADE DE INTERRUPCAO:",
-            col2,
-            y2c,
-            0.068
-        )
-        y2c -= passo
-        _text(
-            msp,
-            capacidade[:48].upper(),
-            col2,
-            y2c,
-            0.060
-        )
+        y -= 0.25
 
 
 def desenhar_unifilar_qdc(
@@ -815,7 +755,7 @@ def desenhar_unifilar_qdc(
     sec_header = 1.30
     circ_pitch = 1.02
     gap_sec = 0.78
-    rodape_h = 2.25
+    rodape_h = 3.35
 
     corpo_h = 0.0
 
@@ -867,7 +807,7 @@ def desenhar_unifilar_qdc(
         0.24
     )
 
-    linha_fase = "FASE 10.4"
+    linha_fase = "FASE 10.5"
 
     tipo_for = str(
         parametros_rede.get(
@@ -1197,35 +1137,33 @@ def desenhar_unifilar_qdc(
             )
 
         else:
-            # Bloco bem delimitado para circuitos sem DR.
-            _rect(
-                msp,
-                x_dr - 0.55,
-                y_header - 0.28,
-                x_dr + 1.20,
-                y_header + 0.42
-            )
-
+            # Circuitos sem DR: cabeçalho simples, sem caixa atravessada
+            # por barramentos/linhas. A derivação sai diretamente do
+            # barramento principal para o barramento do grupo.
             _text(
                 msp,
-                "CIRCUITOS",
-                x_dr - 0.34,
-                y_header + 0.16,
-                0.085
-            )
-
-            _text(
-                msp,
-                "SEM DR",
-                x_dr - 0.22,
-                y_header - 0.06,
-                0.085
+                "CIRCUITOS SEM DR",
+                x_dr - 0.45,
+                y_header + 0.12,
+                0.105
             )
 
             _line(
                 msp,
                 (
-                    x_dr + 1.20,
+                    x_dr - 0.45,
+                    y_header - 0.10
+                ),
+                (
+                    x_dr + 1.45,
+                    y_header - 0.10
+                )
+            )
+
+            _line(
+                msp,
+                (
+                    x_barra_principal,
                     y_header
                 ),
                 (
@@ -1363,9 +1301,9 @@ def desenhar_unifilar_qdc(
     )
 
     legenda_x1 = x0 + 0.25
-    legenda_x2 = x0 + 11.80
+    legenda_x2 = x0 + 12.75
 
-    notas_x1 = x0 + 12.05
+    notas_x1 = x0 + 13.00
     notas_x2 = x2 - 0.25
 
     _legenda(
