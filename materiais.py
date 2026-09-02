@@ -10,6 +10,7 @@ from agrupamento_dr import agrupar_circuitos_dr
 from demanda_qdc import calcular_demanda_qdc
 from protecao_alimentador import avaliar_protecoes_alimentador
 from tensoes_circuitos import tensao_circuito, tensao_base_fornecimento
+from formacao_circuitos import formar_circuitos_definitivos
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -524,7 +525,7 @@ def calcular_quantitativo_materiais(
     comprimentos_por_bitola = {}
     comprimentos_cabos_cor = {}
     eletroduto_total = 0.0
-    circuitos = []
+    circuitos_elementares = []
 
     def acumular_cabo_cor(
         bitola,
@@ -681,7 +682,7 @@ def calcular_quantitativo_materiais(
                 else 0
             )
 
-            circuitos.append({
+            circuitos_elementares.append({
                 "tipo": "Iluminação",
                 "ambiente": ambiente,
                 "potencia": potencia,
@@ -773,7 +774,7 @@ def calcular_quantitativo_materiais(
                 else 0
             )
 
-            circuitos.append({
+            circuitos_elementares.append({
                 "tipo": "TUG",
                 "ambiente": ambiente,
                 "potencia": potencia,
@@ -873,7 +874,7 @@ def calcular_quantitativo_materiais(
                 else 0
             )
 
-            circuitos.append({
+            circuitos_elementares.append({
                 "tipo": "TUE",
                 "ambiente": ambiente,
                 "potencia": potencia,
@@ -886,7 +887,18 @@ def calcular_quantitativo_materiais(
                     )
             })
 
+        # ========================================================
+    # FASE 11.0 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
+    # A estimativa geométrica de cabos/eletrodutos continua baseada nas
+    # cargas elementares por ambiente até a Fase 11.1/11.2, quando o
+    # roteamento físico passará a fornecer os comprimentos reais.
+    circuitos = formar_circuitos_definitivos(
+        circuitos_elementares,
+        _disjuntor_por_corrente
+    )
+
+# ========================================================
     # CABOS POR BITOLA, FUNÇÃO E COR
     # ========================================================
 
@@ -1185,6 +1197,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
             "fase": "Fase(s)",
             "polos": "Polos",
             "dr": "DR",
+            "criterio_formacao": "Critério de formação",
             "potencia": "Potência (W)",
             "tensao": "Tensão (V)",
             "corrente": "Corrente estimada (A)",
@@ -1613,7 +1626,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 10.8: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.0: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1623,6 +1636,13 @@ def renderizar_materiais(
 
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
+    )
+
+    st.caption(
+        "Fase 11.0: os circuitos abaixo já são consolidados. "
+        "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
+        "exclusivas do ambiente; iluminação e demais TUGs podem ser "
+        "agrupadas dentro dos limites preliminares definidos pelo sistema."
     )
 
     if circuitos:
@@ -1668,7 +1688,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_8.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_0.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1677,7 +1697,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_8.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_0.pdf",
             mime="application/pdf",
             use_container_width=True
         )
