@@ -1001,10 +1001,6 @@ def renderizar_materiais(
     pe_direito=2.80
 ):
 
-    st.subheader(
-        "📦 Tabela Quantitativa de Materiais"
-    )
-
     materiais, circuitos = (
         calcular_quantitativo_materiais(
             tabela_editada,

@@ -42,11 +42,6 @@ def renderizar_edicao_cargas(dados_ambientes):
         ).casefold()
     )
 
-    st.divider()
-    st.subheader(
-        "📊 Quadro de Previsão de Cargas Consolidado"
-    )
-
     tabela_editada = []
 
     for row in dados_ambientes:
