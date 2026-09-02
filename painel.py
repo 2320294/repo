@@ -41,7 +41,6 @@ from upload_cad import (
 def renderizar_painel_principal():
 
     st.title("⚡ Painel de Projetos Elétricos")
-    st.subheader(f"Olá, {st.session_state.user_name}!")
 
     if (
         st.session_state.projeto_ativo
@@ -187,7 +186,7 @@ def renderizar_painel_principal():
         )
     )
 
-    # Fase 8.14 — as tomadas altas usam a mesma persistência
+    # Fase 8.15 — as tomadas altas usam a mesma persistência
     # do bloco de configuração para evitar alteração de schema no banco.
     config_tomadas_altas = (
         renderizar_tomadas_altas(

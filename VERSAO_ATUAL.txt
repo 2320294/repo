@@ -1,9 +1,9 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.14
-IDENTIFICADOR: Fase_8_14
+VERSÃO ATUAL: Fase 8.15
+IDENTIFICADOR: Fase_8_15
 
-[OK] tomada alta usa identificador único do ambiente
-[OK] WC 2 não cai mais no posicionamento do WC
-[OK] posição específica do chuveiro chega ao CAD
-[OK] persistência por projeto preservada
-[OK] QDC adaptativo preservado
+[OK] exclusão de projeto exige confirmação
+[OK] botão de cancelamento disponível
+[OK] nome do projeto aparece no alerta
+[OK] saudação removida do painel principal
+[OK] saudação mantida no menu lateral
