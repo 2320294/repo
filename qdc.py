@@ -1527,11 +1527,6 @@ def renderizar_qdc(
             indice = n
             break
 
-    st.divider()
-    st.subheader(
-        "⚡ Posicionamento do Quadro de Distribuição (QDC)"
-    )
-
     escolha = st.selectbox(
         "Selecione o ambiente onde ficará "
         "instalado o QDC:",

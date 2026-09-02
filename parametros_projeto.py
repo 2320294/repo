@@ -12,9 +12,6 @@ def renderizar_parametros_projeto(
     - Pé-direito editável, padrão 2,80 m
     """
 
-    st.divider()
-    st.subheader("🏗️ Parâmetros Gerais do Projeto")
-
     col_tensao, col_pe = st.columns(2)
 
     with col_tensao:

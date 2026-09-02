@@ -8,7 +8,7 @@ from database import (
 
 
 def renderizar_gerenciador_projetos():
-    st.divider()
+    st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown(
         "### 📂 Gerenciador de Obras"

@@ -25,7 +25,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 8.15:
+    Fase 8.16:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -201,7 +201,6 @@ def renderizar_salvar_e_gerar_cad(
     tensao_projeto,
     pe_direito
 ):
-    st.divider()
 
     st.subheader(
         "🖨️ Exportação e Relatórios"

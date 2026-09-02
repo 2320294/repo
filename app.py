@@ -122,7 +122,7 @@ aplicar_tema_sistema()
 with st.sidebar:
     st.markdown("## ⚡ AutoElétrica Profissional")
     st.caption(f"🔖 Sistema: {VERSAO_SISTEMA}")
-    st.divider()
+    st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown(
         f"👤 **Olá, {st.session_state.user_name}!**"

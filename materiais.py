@@ -1000,7 +1000,6 @@ def renderizar_materiais(
     tensao_projeto=110,
     pe_direito=2.80
 ):
-    st.divider()
 
     st.subheader(
         "📦 Tabela Quantitativa de Materiais"

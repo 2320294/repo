@@ -38,9 +38,152 @@ from upload_cad import (
 )
 
 
+
+def _chave_projeto(
+    sufixo
+):
+    """
+    Estado temporário isolado por projeto.
+    Permite navegar entre as etapas sem perder alterações ainda não salvas.
+    """
+    projeto = str(
+        st.session_state.get(
+            "projeto_ativo",
+            "SEM_PROJETO"
+        )
+    )
+
+    return (
+        "fase8_16_"
+        f"{projeto}_"
+        f"{sufixo}"
+    )
+
+
+def _inicializar_cache_etapas(
+    dados_ambientes,
+    config_salva,
+    local_qdc_salvo,
+    tensao_projeto_salva,
+    pe_direito_salvo
+):
+    chave_tabela = _chave_projeto(
+        "tabela_editada"
+    )
+    chave_config = _chave_projeto(
+        "config_eletrica"
+    )
+    chave_qdc = _chave_projeto(
+        "local_qdc"
+    )
+    chave_parametros = _chave_projeto(
+        "parametros"
+    )
+
+    if chave_tabela not in st.session_state:
+        st.session_state[
+            chave_tabela
+        ] = list(
+            dados_ambientes
+            or []
+        )
+
+    if chave_config not in st.session_state:
+        st.session_state[
+            chave_config
+        ] = dict(
+            config_salva
+            or {}
+        )
+
+    if chave_qdc not in st.session_state:
+        st.session_state[
+            chave_qdc
+        ] = local_qdc_salvo
+
+    if chave_parametros not in st.session_state:
+        try:
+            tensao = int(
+                tensao_projeto_salva
+                if tensao_projeto_salva is not None
+                else 110
+            )
+        except Exception:
+            tensao = 110
+
+        try:
+            pe = float(
+                pe_direito_salvo
+                if pe_direito_salvo is not None
+                else 2.80
+            )
+        except Exception:
+            pe = 2.80
+
+        st.session_state[
+            chave_parametros
+        ] = {
+            "tensao_projeto":
+                tensao,
+            "pe_direito":
+                pe
+        }
+
+    return (
+        chave_tabela,
+        chave_config,
+        chave_qdc,
+        chave_parametros
+    )
+
+
+def _navegacao_etapas():
+    etapas = [
+        "⚙️ Parâmetros",
+        "📊 Cargas",
+        "⚡ QDC",
+        "💡 Interruptores",
+        "🔌 Tomadas Altas",
+        "📦 Materiais",
+        "📐 Gerar Projeto"
+    ]
+
+    chave = _chave_projeto(
+        "etapa_ativa"
+    )
+
+    if chave not in st.session_state:
+        st.session_state[
+            chave
+        ] = etapas[0]
+
+    etapa = st.radio(
+        "Etapas do projeto",
+        etapas,
+        horizontal=True,
+        key=chave,
+        label_visibility="collapsed"
+    )
+
+    indice = (
+        etapas.index(
+            etapa
+        )
+        + 1
+    )
+
+    st.caption(
+        f"Etapa {indice} de {len(etapas)}"
+    )
+
+    return etapa
+
+
 def renderizar_painel_principal():
 
-    st.title("⚡ Painel de Projetos Elétricos")
+    st.title(
+        "⚡ Painel de Projetos Elétricos"
+    )
 
     if (
         st.session_state.projeto_ativo
@@ -99,7 +242,9 @@ def renderizar_painel_principal():
             st.stop()
 
     dxf_bytes = converter_dxf_do_supabase(
-        dados_obj.get("dxf_bytes")
+        dados_obj.get(
+            "dxf_bytes"
+        )
     )
 
     dados_ambientes = (
@@ -134,87 +279,259 @@ def renderizar_painel_principal():
         )
     )
 
-    # ========================================================
-    # PARÂMETROS GERAIS DO PROJETO
-    # ========================================================
-    # Esta seção aparece SEMPRE que um projeto estiver ativo,
-    # mesmo antes de existir uma planta DXF processada.
-    parametros_projeto = (
-        renderizar_parametros_projeto(
-            tensao_projeto_salva,
-            pe_direito_salvo
+    (
+        chave_tabela,
+        chave_config,
+        chave_qdc,
+        chave_parametros
+    ) = _inicializar_cache_etapas(
+        dados_ambientes,
+        config_salva,
+        local_qdc_salvo,
+        tensao_projeto_salva,
+        pe_direito_salvo
+    )
+
+    etapa = _navegacao_etapas()
+
+    # --------------------------------------------------------
+    # ETAPA 1 — PARÂMETROS E PLANTA
+    # --------------------------------------------------------
+    if etapa == "⚙️ Parâmetros":
+        st.subheader(
+            "⚙️ Parâmetros e Planta do Projeto"
         )
-    )
 
-    # ========================================================
-    # UPLOAD / REENVIO DO DXF
-    # ========================================================
-    renderizar_upload_dxf(
-        dxf_bytes=dxf_bytes,
-        dados_ambientes=dados_ambientes,
-        config_salva=config_salva
-    )
+        parametros = (
+            renderizar_parametros_projeto(
+                st.session_state[
+                    chave_parametros
+                ].get(
+                    "tensao_projeto"
+                ),
+                st.session_state[
+                    chave_parametros
+                ].get(
+                    "pe_direito"
+                )
+            )
+        )
 
+        st.session_state[
+            chave_parametros
+        ] = parametros
+
+        renderizar_upload_dxf(
+            dxf_bytes=dxf_bytes,
+            dados_ambientes=dados_ambientes,
+            config_salva=config_salva
+        )
+
+        if not dxf_bytes:
+            st.info(
+                "Envie uma planta DXF para liberar "
+                "as próximas etapas."
+            )
+
+        return
+
+    # Da etapa 2 em diante é necessária uma planta processada.
     if not dados_ambientes:
-        st.info(
-            "Envie/processse uma planta DXF para liberar "
-            "o quadro de cargas, QDC, interruptores e materiais."
+        st.warning(
+            "⚠️ Primeiro envie e processe uma planta DXF "
+            "na etapa **Parâmetros**."
         )
         return
 
+    # --------------------------------------------------------
+    # ETAPA 2 — PREVISÃO DE CARGAS
+    # --------------------------------------------------------
+    if etapa == "📊 Cargas":
+        st.subheader(
+            "📊 Quadro de Previsão de Cargas"
+        )
+
+        tabela_editada = (
+            renderizar_edicao_cargas(
+                st.session_state[
+                    chave_tabela
+                ]
+            )
+        )
+
+        st.session_state[
+            chave_tabela
+        ] = tabela_editada
+
+        renderizar_tabela_consolidada(
+            tabela_editada
+        )
+
+        return
+
+    # Valores correntes compartilhados pelas demais etapas.
     tabela_editada = (
-        renderizar_edicao_cargas(
-            dados_ambientes
+        st.session_state[
+            chave_tabela
+        ]
+        or dados_ambientes
+    )
+
+    config_atual = dict(
+        st.session_state[
+            chave_config
+        ]
+        or {}
+    )
+
+    local_qdc = (
+        st.session_state[
+            chave_qdc
+        ]
+    )
+
+    parametros_projeto = (
+        st.session_state[
+            chave_parametros
+        ]
+    )
+
+    # --------------------------------------------------------
+    # ETAPA 3 — QDC
+    # --------------------------------------------------------
+    if etapa == "⚡ QDC":
+        st.subheader(
+            "⚡ Posicionamento do QDC"
         )
-    )
 
-    renderizar_tabela_consolidada(
-        tabela_editada
-    )
-
-    local_qdc = renderizar_qdc(
-        dados_ambientes,
-        local_qdc_salvo,
-        dxf_bytes=dxf_bytes
-    )
-
-    config_interruptores_usuario = (
-        renderizar_interruptores(
+        local_qdc = renderizar_qdc(
             dados_ambientes,
-            config_salva,
+            local_qdc,
             dxf_bytes=dxf_bytes
         )
-    )
 
-    # Fase 8.15 — as tomadas altas usam a mesma persistência
-    # do bloco de configuração para evitar alteração de schema no banco.
-    config_tomadas_altas = (
-        renderizar_tomadas_altas(
+        st.session_state[
+            chave_qdc
+        ] = local_qdc
+
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 4 — INTERRUPTORES
+    # --------------------------------------------------------
+    if etapa == "💡 Interruptores":
+        st.subheader(
+            "💡 Posicionamento dos Interruptores"
+        )
+
+        config_interruptores = (
+            renderizar_interruptores(
+                dados_ambientes,
+                config_atual,
+                dxf_bytes=dxf_bytes
+            )
+        )
+
+        # Preserva a configuração das tomadas altas enquanto
+        # a etapa de interruptores é editada.
+        if (
+            CHAVE_TOMADAS_ALTAS
+            in config_atual
+        ):
+            config_interruptores[
+                CHAVE_TOMADAS_ALTAS
+            ] = config_atual[
+                CHAVE_TOMADAS_ALTAS
+            ]
+
+        st.session_state[
+            chave_config
+        ] = config_interruptores
+
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 5 — TOMADAS ALTAS
+    # --------------------------------------------------------
+    if etapa == "🔌 Tomadas Altas":
+        st.subheader(
+            "🔌 Posicionamento das Tomadas Altas"
+        )
+
+        config_tomadas_altas = (
+            renderizar_tomadas_altas(
+                tabela_editada,
+                config_atual,
+                dxf_bytes=dxf_bytes
+            )
+        )
+
+        config_atual[
+            CHAVE_TOMADAS_ALTAS
+        ] = config_tomadas_altas
+
+        st.session_state[
+            chave_config
+        ] = config_atual
+
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 6 — MATERIAIS
+    # --------------------------------------------------------
+    if etapa == "📦 Materiais":
+        st.subheader(
+            "📦 Circuitos e Quantitativo de Materiais"
+        )
+
+        renderizar_materiais(
             tabela_editada,
-            config_salva,
-            dxf_bytes=dxf_bytes
+            config_atual,
+            local_qdc,
+            tensao_projeto=(
+                parametros_projeto[
+                    "tensao_projeto"
+                ]
+            ),
+            pe_direito=(
+                parametros_projeto[
+                    "pe_direito"
+                ]
+            )
         )
-    )
 
-    config_interruptores_usuario[
-        CHAVE_TOMADAS_ALTAS
-    ] = config_tomadas_altas
+        return
 
-    renderizar_materiais(
-        tabela_editada,
-        config_interruptores_usuario,
-        local_qdc,
-        tensao_projeto=parametros_projeto["tensao_projeto"],
-        pe_direito=parametros_projeto["pe_direito"]
-    )
+    # --------------------------------------------------------
+    # ETAPA 7 — SALVAR / EXPORTAR / GERAR CAD
+    # --------------------------------------------------------
+    if etapa == "📐 Gerar Projeto":
+        st.subheader(
+            "📐 Salvar, Exportar e Gerar Projeto"
+        )
 
-    renderizar_salvar_e_gerar_cad(
-        dxf_bytes=dxf_bytes,
-        tabela_editada=tabela_editada,
-        local_qdc=local_qdc,
-        config_interruptores_usuario=(
-            config_interruptores_usuario
-        ),
-        tensao_projeto=parametros_projeto["tensao_projeto"],
-        pe_direito=parametros_projeto["pe_direito"]
-    )
+        st.markdown(
+            "Revise as etapas anteriores e, quando estiver tudo "
+            "correto, salve as configurações e gere os arquivos."
+        )
+
+        renderizar_salvar_e_gerar_cad(
+            dxf_bytes=dxf_bytes,
+            tabela_editada=tabela_editada,
+            local_qdc=local_qdc,
+            config_interruptores_usuario=(
+                config_atual
+            ),
+            tensao_projeto=(
+                parametros_projeto[
+                    "tensao_projeto"
+                ]
+            ),
+            pe_direito=(
+                parametros_projeto[
+                    "pe_direito"
+                ]
+            )
+        )
+
+        return
