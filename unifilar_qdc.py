@@ -759,22 +759,22 @@ def desenhar_unifilar_qdc(
     margem_esq = 0.45
     margem_dir = 0.45
 
-    largura = 21.5
+    largura = 20.2
 
-    x_rede = x0 + 1.45
-    x_main = x0 + 4.05
-    x_dr = x0 + 5.55
-    x_bus = x0 + 6.65
-    x_cabo_fim = x0 + 9.15
-    x_dj = x0 + 9.85
-    x_info = x0 + 10.75
-    x_saida = x0 + 17.35
+    x_rede = x0 + 1.20
+    x_main = x0 + 3.55
+    x_dr = x0 + 5.05
+    x_bus = x0 + 6.05
+    x_cabo_fim = x0 + 8.25
+    x_dj = x0 + 8.95
+    x_info = x0 + 9.85
+    x_saida = x0 + 16.35
 
     # N/PE calculados com o mesmo "respiro" visual da esquerda.
     # O primeiro barramento N fica próximo ao fim da coluna de identificação,
     # em vez de preso à borda direita do quadro.
-    x_n = x0 + 18.15
-    x_pe = x0 + 18.95
+    x_n = x0 + 17.05
+    x_pe = x0 + 17.75
 
     # A moldura termina com respiro curto após PE.
     x2 = x0 + largura
@@ -831,12 +831,12 @@ def desenhar_unifilar_qdc(
     _text(
         msp,
         "QDC - QUADRO DE DISTRIBUICAO DE CIRCUITOS",
-        x0 + 5.30,
+        x0 + 4.65,
         y0 - 0.42,
-        0.22
+        0.24
     )
 
-    linha_fase = "FASE 10.0"
+    linha_fase = "FASE 10.1"
 
     tipo_for = str(
         parametros_rede.get(
@@ -867,7 +867,7 @@ def desenhar_unifilar_qdc(
     _text(
         msp,
         linha_fase,
-        x0 + 5.30,
+        x0 + 4.55,
         y0 - 0.78,
         0.105
     )
@@ -890,7 +890,7 @@ def desenhar_unifilar_qdc(
         _text(
             msp,
             f"BALANCEAMENTO | {texto_cargas}",
-            x0 + 5.30,
+            x0 + 4.55,
             y0 - 1.06,
             0.095
         )
@@ -904,30 +904,16 @@ def desenhar_unifilar_qdc(
     _text(
         msp,
         "REDE",
-        x_rede - 0.22,
+        x_rede - 0.16,
         y_entrada + 0.48,
         0.12
     )
 
-    # Traço de referência vertical da rede.
+    # Entrada horizontal limpa, como no modelo de referência.
     _line(
         msp,
         (
-            x_rede + 0.70,
-            y_entrada + 0.70
-        ),
-        (
-            x_rede + 0.70,
-            ybase + rodape_h + 0.55
-        ),
-        layer=LAYER_UNIFILAR_GUIA
-    )
-
-    # Entrada horizontal.
-    _line(
-        msp,
-        (
-            x_rede - 0.55,
+            x_rede - 0.35,
             y_entrada
         ),
         (
