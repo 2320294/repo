@@ -1231,84 +1231,260 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df):
     return buffer.getvalue()
 
 
-def _pdf_tabela(df, larguras):
-    dados = [[str(c) for c in df.columns]]
-    dados.extend([[str(v) for v in row.tolist()] for _, row in df.iterrows()])
+def _pdf_paragrafo_celula(valor, estilo):
+    texto = "" if valor is None else str(valor)
+    texto = texto.replace("<br/>", " ").replace("<br>", " ")
+    texto = texto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return Paragraph(texto, estilo)
+
+
+def _pdf_tabela(df, larguras, cabecalhos=None, fonte=6.2):
+    styles = getSampleStyleSheet()
+    estilo_header = ParagraphStyle(
+        "TabelaHeader",
+        parent=styles["BodyText"],
+        fontName="Helvetica-Bold",
+        fontSize=max(5.4, fonte - 0.2),
+        leading=max(6.3, fonte + 0.7),
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#172033"),
+    )
+    estilo_corpo = ParagraphStyle(
+        "TabelaCorpo",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=fonte,
+        leading=fonte + 1.0,
+        textColor=colors.HexColor("#111827"),
+    )
+
+    nomes = list(df.columns)
+    exibidos = [cabecalhos.get(c, c) if cabecalhos else c for c in nomes]
+    dados = [[_pdf_paragrafo_celula(c, estilo_header) for c in exibidos]]
+    for _, row in df.iterrows():
+        dados.append([
+            _pdf_paragrafo_celula(row[c], estilo_corpo)
+            for c in nomes
+        ])
+
     tabela = Table(dados, repeatRows=1, colWidths=larguras)
     tabela.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#EAF2FF")),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
         ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#8A8A8A")),
-        ("FONTSIZE", (0,0), (-1,-1), 6.5),
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
-        ("LEFTPADDING", (0,0), (-1,-1), 3),
-        ("RIGHTPADDING", (0,0), (-1,-1), 3),
-        ("TOPPADDING", (0,0), (-1,-1), 3),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("LEFTPADDING", (0,0), (-1,-1), 2.2),
+        ("RIGHTPADDING", (0,0), (-1,-1), 2.2),
+        ("TOPPADDING", (0,0), (-1,-1), 3.2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3.2),
     ]))
     return tabela
 
 
+def _tabela_resumo_pdf(linhas, largura_total=26.5*cm):
+    df = pd.DataFrame(linhas, columns=["Parâmetro", "Resultado"])
+    return _pdf_tabela(
+        df,
+        [7.0*cm, largura_total-7.0*cm],
+        fonte=7.2
+    )
+
+
 def _gerar_pdf_materiais_circuitos(
-    nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito
+    nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito,
+    resumo_balanceamento=None, resumo_protecao=None, resumo_drs=None,
+    resultado_demanda=None, parametros_rede=None
 ):
+    resumo_balanceamento = dict(resumo_balanceamento or {})
+    resumo_protecao = dict(resumo_protecao or {})
+    resumo_drs = list(resumo_drs or [])
+    resultado_demanda = dict(resultado_demanda or {})
+    parametros_rede = dict(parametros_rede or {})
+
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=landscape(A4),
-        rightMargin=1.0*cm, leftMargin=1.0*cm,
-        topMargin=1.0*cm, bottomMargin=1.0*cm
+        rightMargin=0.8*cm, leftMargin=0.8*cm,
+        topMargin=0.8*cm, bottomMargin=0.8*cm
     )
     styles = getSampleStyleSheet()
     titulo = ParagraphStyle(
         "TituloMateriais", parent=styles["Title"],
-        alignment=TA_CENTER, fontSize=15, spaceAfter=8
+        alignment=TA_CENTER, fontSize=15, leading=18, spaceAfter=8
     )
     secao = ParagraphStyle(
         "SecaoMateriais", parent=styles["Heading2"],
-        fontSize=11, spaceBefore=8, spaceAfter=5
+        fontSize=11, leading=13, spaceBefore=9, spaceAfter=5
     )
     texto = ParagraphStyle(
         "TextoMateriais", parent=styles["BodyText"],
         fontSize=8, leading=10, spaceAfter=6
     )
 
+    tensao_fornecimento = parametros_rede.get("tensao_fornecimento")
+    tipo_fornecimento = parametros_rede.get("tipo_fornecimento")
+    alimentacao = tensao_fornecimento or f"{int(tensao_projeto)} V"
+
     story = [
         Paragraph("CIRCUITOS E QUANTITATIVO DE MATERIAIS", titulo),
         Paragraph(
             f"<b>Projeto:</b> {nome_projeto} &nbsp;&nbsp; "
-            f"<b>Alimentação:</b> {int(tensao_projeto)} V &nbsp;&nbsp; "
+            f"<b>Fornecimento:</b> {tipo_fornecimento or 'A definir'} - {alimentacao} &nbsp;&nbsp; "
             f"<b>Pé-direito:</b> {float(pe_direito):.2f} m", texto
         ),
         Paragraph("1. QUANTITATIVO DE MATERIAIS", secao)
     ]
+
     if materiais_df.empty:
         story.append(Paragraph("Nenhum material foi identificado.", texto))
     else:
         story.append(_pdf_tabela(
             materiais_df,
-            [2.5*cm, 4.2*cm, 7.0*cm, 1.5*cm, 2.0*cm, 8.0*cm]
+            [2.3*cm, 4.0*cm, 6.5*cm, 1.4*cm, 1.8*cm, 10.4*cm],
+            fonte=6.2
         ))
 
-    story += [Spacer(1,10), Paragraph("2. CIRCUITOS CONSIDERADOS NO QUANTITATIVO", secao)]
+    story += [Spacer(1,8), Paragraph("2. CIRCUITOS CONSIDERADOS NO QUANTITATIVO", secao)]
     if circuitos_df.empty:
         story.append(Paragraph("Nenhum circuito foi identificado.", texto))
     else:
+        cabecalhos = {
+            "Circuito": "Tipo",
+            "Ambiente": "Ambiente",
+            "Potência (W)": "Potência<br/>(W)",
+            "Tensão (V)": "Tensão<br/>(V)",
+            "Corrente estimada (A)": "Corrente<br/>estimada (A)",
+            "Bitola preliminar (mm²)": "Bitola<br/>prelim. (mm²)",
+            "Disjuntor preliminar (A)": "Disjuntor<br/>prelim. (A)",
+            "Nº": "Nº",
+            "Fase(s)": "Fase(s)",
+            "Polos": "Polos",
+            "DR": "DR",
+        }
+        larguras_por_coluna = {
+            "Circuito": 1.55*cm,
+            "Ambiente": 3.15*cm,
+            "Potência (W)": 1.75*cm,
+            "Tensão (V)": 1.45*cm,
+            "Corrente estimada (A)": 1.85*cm,
+            "Bitola preliminar (mm²)": 1.85*cm,
+            "Disjuntor preliminar (A)": 2.05*cm,
+            "Nº": 1.25*cm,
+            "Fase(s)": 1.45*cm,
+            "Polos": 1.35*cm,
+            "DR": 1.35*cm,
+        }
+        larguras = [larguras_por_coluna.get(c, 1.8*cm) for c in circuitos_df.columns]
         story.append(_pdf_tabela(
-            circuitos_df,
-            [1.1*cm, 2.1*cm, 2.6*cm, 1.5*cm, 1.3*cm, 1.3*cm, 2.1*cm, 2.4*cm, 2.6*cm, 2.6*cm]
-            [:len(circuitos_df.columns)]
+            circuitos_df, larguras, cabecalhos=cabecalhos, fonte=5.8
+        ))
+
+    story += [Spacer(1,10), Paragraph("3. BALANCEAMENTO AUTOMÁTICO DE FASES", secao)]
+    if resumo_balanceamento.get("status") == "ok":
+        linhas = []
+        for fase, potencia in resumo_balanceamento.get("fases", {}).items():
+            linhas.append((f"Fase {fase}", f"{float(potencia)/1000:.2f} kW"))
+        linhas.extend([
+            ("Diferença máxima entre fases", f"{float(resumo_balanceamento.get('diferenca_max_w', 0) or 0)/1000:.2f} kW"),
+            ("Desequilíbrio preliminar", f"{float(resumo_balanceamento.get('desequilibrio_pct', 0) or 0):.1f}%"),
+            ("Critério", "Balanceamento automático pela potência instalada dos circuitos."),
+        ])
+        story.append(_tabela_resumo_pdf(linhas))
+    else:
+        story.append(Paragraph(
+            "Balanceamento indisponível: complete o tipo de fornecimento nos parâmetros do projeto.",
+            texto
+        ))
+
+    story += [Spacer(1,8), Paragraph("4. PROTEÇÃO GERAL E ALIMENTADOR", secao)]
+    if resumo_protecao.get("status") == "pre_dimensionado":
+        sf = resumo_protecao.get("alimentador_fase_mm2")
+        sn = resumo_protecao.get("alimentador_neutro_mm2")
+        spe = resumo_protecao.get("alimentador_pe_mm2")
+        demanda_w = resultado_demanda.get("potencia_demanda_w")
+        ib = resumo_protecao.get("corrente_projeto_a")
+        linhas = [
+            ("Potência instalada", f"{float(resultado_demanda.get('total_w', 0) or 0)/1000:.2f} kW"),
+            ("Fator de demanda", f"{float(resultado_demanda.get('fator_demanda_pct', 0) or 0):.1f}%"),
+            ("Potência de demanda", f"{float(demanda_w or 0)/1000:.2f} kW" if demanda_w is not None else "A definir"),
+            ("Corrente de projeto", f"{float(ib):.2f} A" if ib is not None else "A definir"),
+            ("Disjuntor geral", f"{resumo_protecao.get('dg_a')} A {resumo_protecao.get('dg_polos','')}".strip()),
+            ("Composição do alimentador", resumo_protecao.get("alimentador_composicao", "")),
+            ("Condutor(es) de fase", f"{float(sf):g} mm²" if sf is not None else "A definir"),
+            ("Condutor neutro", f"{float(sn):g} mm²" if sn is not None else "A definir"),
+            ("Condutor PE", f"{float(spe):g} mm²" if spe is not None else "A definir"),
+            ("Hierarquia DG x circuitos", resumo_protecao.get("hierarquia_dg_circuitos", "")),
+            ("Hierarquia DR x circuitos", resumo_protecao.get("hierarquia_dr_circuitos", "")),
+            ("Seletividade", resumo_protecao.get("seletividade", "")),
+            ("Capacidade de interrupção", resumo_protecao.get("capacidade_interrupcao", "")),
+        ]
+        story.append(_tabela_resumo_pdf(linhas))
+        story.append(Spacer(1,4))
+        story.append(Paragraph(
+            "Pré-dimensionamento condicionado ao método de instalação, temperatura, "
+            "agrupamento, queda de tensão, curto-circuito e dados dos fabricantes.",
+            texto
+        ))
+    else:
+        story.append(Paragraph(
+            "Proteção geral/alimentador ainda incompletos. Complete os parâmetros de fornecimento e demanda.",
+            texto
+        ))
+
+    story += [Spacer(1,8), Paragraph("5. AGRUPAMENTO DOS DRS", secao)]
+    if resumo_drs:
+        linhas_dr = []
+        for grupo in resumo_drs:
+            circuitos_txt = ", ".join(f"C{int(n):02d}" for n in grupo.get("circuitos", []))
+            nominal = grupo.get("corrente_nominal_a")
+            sens = grupo.get("sensibilidade_ma")
+            linhas_dr.append({
+                "DR": grupo.get("dr", ""),
+                "Aplicação": grupo.get("descricao", ""),
+                "Circuitos": circuitos_txt,
+                "Potência (W)": f"{float(grupo.get('potencia_w', 0) or 0):.0f}",
+                "Maior DJ (A)": grupo.get("maior_dj_a", ""),
+                "Nominal (A)": nominal if nominal is not None else "A definir",
+                "Sensib. (mA)": sens if sens is not None else "",
+                "Coordenação": grupo.get("coordenacao_basica", ""),
+            })
+        df_dr = pd.DataFrame(linhas_dr)
+        story.append(_pdf_tabela(
+            df_dr,
+            [1.25*cm, 5.0*cm, 5.1*cm, 2.0*cm, 1.8*cm, 1.8*cm, 1.9*cm, 2.1*cm],
+            cabecalhos={
+                "Potência (W)": "Potência<br/>(W)",
+                "Maior DJ (A)": "Maior DJ<br/>(A)",
+                "Nominal (A)": "Nominal<br/>(A)",
+                "Sensib. (mA)": "Sensib.<br/>(mA)",
+            },
+            fonte=6.4
+        ))
+        story.append(Spacer(1,4))
+        story.append(Paragraph(
+            "Sensibilidade adotada: 30 mA para os grupos definidos pelo sistema. "
+            "A corrente nominal é pré-dimensionada a partir dos disjuntores a jusante. "
+            "A seletividade definitiva depende das curvas/tabelas dos fabricantes.",
+            texto
+        ))
+    else:
+        story.append(Paragraph(
+            "Nenhum circuito de tomada/TUE foi identificado para agrupamento em DR.",
+            texto
         ))
 
     story += [
         Spacer(1,8),
         Paragraph(
-            "Observação: comprimentos de cabos/eletrodutos e alguns dispositivos "
-            "de proteção ainda são pré-dimensionamentos enquanto o roteamento "
-            "completo dos circuitos não estiver implementado. O dimensionamento "
-            "executivo deve ser confirmado conforme os critérios aplicáveis da NBR 5410.",
+            "Observação geral: comprimentos de cabos/eletrodutos e alguns dispositivos "
+            "de proteção permanecem pré-dimensionados enquanto o roteamento completo "
+            "dos circuitos não estiver implementado. O dimensionamento executivo deve "
+            "ser confirmado conforme os critérios aplicáveis da NBR 5410 e os dados "
+            "dos fabricantes/concessionária.",
             texto
         )
     ]
+
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
@@ -1437,7 +1613,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 10.6: corrente nominal pré-dimensionada pelo maior "
+            "Fase 10.7: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1478,7 +1654,12 @@ def renderizar_materiais(
         materiais_df,
         df_circuitos,
         tensao_projeto,
-        pe_direito
+        pe_direito,
+        resumo_balanceamento=resumo_balanceamento,
+        resumo_protecao=resumo_protecao,
+        resumo_drs=resumo_drs,
+        resultado_demanda=resultado_demanda_materiais,
+        parametros_rede=parametros_rede
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -1487,7 +1668,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_6.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_7.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1496,7 +1677,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_6.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_7.pdf",
             mime="application/pdf",
             use_container_width=True
         )
