@@ -1,11 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.5
-IDENTIFICADOR: Fase_8_5
+VERSÃO ATUAL: Fase 8.6
+IDENTIFICADOR: Fase_8_6
 
-[OK] Sistema Fase 8.5
-[OK] Gerador CAD Fase 8.5
-[OK] DXF Fase_8_5
-[OK] tomada alta por mini planta
-[OK] seleção de trecho por clique
-[OK] centralização no trecho selecionado
+[OK] Sistema Fase 8.6
+[OK] Gerador CAD Fase 8.6
+[OK] DXF Fase_8_6
+[OK] ar-condicionado centralizado no trecho
+[OK] chuveiro com ponto escolhido na parede
+[OK] posição do chuveiro persistida proporcionalmente
 [OK] orientação interna preservada

@@ -233,7 +233,7 @@ def _selecao_tomada_alta(
     )
 
 
-def _parede_e_centro_selecionados(
+def _parede_e_posicao_selecionados(
     logical_walls,
     selecao
 ):
@@ -297,9 +297,28 @@ def _parede_e_centro_selecionados(
             t0
         )
 
-    tm = (
-        t0 + t1
-    ) / 2.0
+    posicao_t = (
+        selecao.get(
+            "posicao_t"
+        )
+    )
+
+    try:
+        tm = float(
+            posicao_t
+        )
+    except Exception:
+        tm = (
+            t0 + t1
+        ) / 2.0
+
+    tm = max(
+        t0,
+        min(
+            t1,
+            tm
+        )
+    )
 
     pt1 = parede[
         "p1"
@@ -430,7 +449,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.5 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.6 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -506,7 +525,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 8.5:
+            # Fase 8.6:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
@@ -520,7 +539,7 @@ def desenhar_tomadas(
             )
 
             escolhido = (
-                _parede_e_centro_selecionados(
+                _parede_e_posicao_selecionados(
                     logical_walls,
                     selecao_alta
                 )
