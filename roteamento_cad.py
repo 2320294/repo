@@ -669,6 +669,54 @@ def _arestas_luminarias_secundarias(
 
 
 
+
+def _linha_parede_entre_tugs(
+    msp,
+    tug_origem,
+    tug_destino,
+    layer=LAYER_ROTA
+):
+    """
+    Desenha o trecho TUG -> TUG como conduíte na parede.
+
+    Usa o ponto interno do traço central de 10 cm de cada símbolo.
+    Quando ambas estão na mesma parede o resultado é uma reta.
+    Quando estão em paredes diferentes, o percurso acompanha os
+    segmentos do perímetro entre as posições das TUGs.
+    """
+    p1 = (
+        tug_origem.get(
+            "ponto_conexao_parede"
+        )
+        or tug_origem.get(
+            "ponto"
+        )
+    )
+    p2 = (
+        tug_destino.get(
+            "ponto_conexao_parede"
+        )
+        or tug_destino.get(
+            "ponto"
+        )
+    )
+
+    if not p1 or not p2:
+        return None
+
+    # O ponto de conexão fica 5 cm para dentro da face da parede.
+    # Uma LWPOLYLINE direta deixa o conduíte visualmente colado à parede.
+    return msp.add_lwpolyline(
+        [
+            tuple(p1),
+            tuple(p2)
+        ],
+        dxfattribs={
+            "layer": layer
+        }
+    )
+
+
 def _arestas_tugs_internas(
     nos,
     pontos_eletricos,
@@ -814,7 +862,7 @@ def _arestas_tugs_internas(
                 tug["ponto"]
             )
 
-            arestas.append({
+            aresta = {
                 "origem_ambiente":
                     ambiente,
                 "destino_ambiente":
@@ -832,7 +880,25 @@ def _arestas_tugs_internas(
                         and interruptor is not None
                         else "CADEIA_TUG"
                     ),
-            })
+                "tug_destino":
+                    tug,
+            }
+
+            if (
+                indice > 1
+                and tugs[
+                    indice - 2
+                ]
+            ):
+                aresta[
+                    "tug_origem"
+                ] = tugs[
+                    indice - 2
+                ]
+
+            arestas.append(
+                aresta
+            )
 
             atual = destino
 
@@ -943,13 +1009,34 @@ def desenhar_rotas_qdc_iluminacao(
     for indice, trecho in enumerate(
         todas_arestas
     ):
-        entidade = _arco_suave(
-            msp,
-            trecho["inicio"],
-            trecho["fim"],
-            indice=indice,
-            layer=LAYER_ROTA
-        )
+        if (
+            trecho.get(
+                "criterio"
+            )
+            == "CADEIA_TUG"
+            and trecho.get(
+                "tug_origem"
+            )
+            and trecho.get(
+                "tug_destino"
+            )
+        ):
+            entidade = _linha_parede_entre_tugs(
+                msp,
+                trecho["tug_origem"],
+                trecho["tug_destino"],
+                layer=LAYER_ROTA
+            )
+            tipo_entidade = "LWPOLYLINE"
+        else:
+            entidade = _arco_suave(
+                msp,
+                trecho["inicio"],
+                trecho["fim"],
+                indice=indice,
+                layer=LAYER_ROTA
+            )
+            tipo_entidade = "ARC"
 
         if entidade is None:
             continue
@@ -1000,7 +1087,7 @@ def desenhar_rotas_qdc_iluminacao(
                     ""
                 ),
             "entidade":
-                "ARC",
+                tipo_entidade,
         })
 
     return rotas

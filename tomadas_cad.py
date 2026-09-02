@@ -615,8 +615,9 @@ def _interruptor_referencia_ambiente(
     return candidatos[0]
 
 
-def _ponto_valido_a_frente(
+def _ponto_valido_no_sentido(
     distancia_inicial,
+    sentido,
     comp_total,
     segmentos_crus,
     polilinha,
@@ -625,13 +626,13 @@ def _ponto_valido_a_frente(
     max_busca=None
 ):
     """
-    Busca SOMENTE para frente no sentido do perímetro.
-    Assim a primeira TUG nasce depois do interruptor e as demais
-    mantêm a ordem física da parede.
+    Busca um ponto válido exclusivamente no sentido escolhido
+    (+1 ou -1) ao longo do perímetro.
     """
     if comp_total <= 0:
         return None
 
+    sentido = 1 if sentido >= 0 else -1
     passo = 0.05
     limite = (
         float(max_busca)
@@ -644,14 +645,12 @@ def _ponto_valido_a_frente(
     while desloc <= limite + 1e-9:
         d = (
             float(distancia_inicial)
-            + desloc
+            + sentido * desloc
         ) % float(comp_total)
 
-        px, py, vx, vy = (
-            get_ponto_perimetro(
-                d,
-                segmentos_crus
-            )
+        px, py, vx, vy = get_ponto_perimetro(
+            d,
+            segmentos_crus
         )
 
         if ponto_tomada_valido(
@@ -674,6 +673,86 @@ def _ponto_valido_a_frente(
     return None
 
 
+def _avaliar_sentido_saida_interruptor(
+    d_int,
+    sentido,
+    comp_total,
+    segmentos_crus,
+    polilinha,
+    portas_raw,
+    soleiras_raw
+):
+    """
+    Avalia qual lado do interruptor é o lado útil da parede.
+
+    Prioridades:
+    - conseguir a primeira TUG o mais próximo possível dos 20 cm;
+    - não atravessar imediatamente porta/soleira;
+    - manter maior trecho livre contínuo após o interruptor.
+    """
+    sentido = 1 if sentido >= 0 else -1
+
+    primeira = _ponto_valido_no_sentido(
+        d_int + sentido * 0.20,
+        sentido,
+        comp_total,
+        segmentos_crus,
+        polilinha,
+        portas_raw,
+        soleiras_raw,
+        max_busca=min(
+            comp_total,
+            2.50
+        )
+    )
+
+    if primeira is None:
+        return None
+
+    # Distância efetiva percorrida desde o interruptor até a primeira TUG.
+    delta = (
+        (primeira[0] - d_int)
+        if sentido > 0
+        else (d_int - primeira[0])
+    ) % comp_total
+
+    # Mede quanto do caminho logo após o interruptor permanece utilizável.
+    # Quanto maior, melhor o lado para iniciar a distribuição.
+    amostras_validas = 0
+    for k in range(1, 17):
+        d = (
+            d_int
+            + sentido * (
+                0.20
+                + k * 0.20
+            )
+        ) % comp_total
+
+        px, py, _, _ = get_ponto_perimetro(
+            d,
+            segmentos_crus
+        )
+
+        if ponto_tomada_valido(
+            px,
+            py,
+            polilinha,
+            portas_raw,
+            soleiras_raw
+        ):
+            amostras_validas += 1
+        else:
+            # Obstáculo cedo reduz fortemente a preferência por este lado.
+            break
+
+    return {
+        "sentido": sentido,
+        "primeira": primeira,
+        "delta_primeira": delta,
+        "trecho_livre": amostras_validas,
+    }
+
+
 def _distancias_tugs_desde_interruptor(
     qtd_tugs,
     comp_total,
@@ -684,12 +763,15 @@ def _distancias_tugs_desde_interruptor(
     ponto_interruptor
 ):
     """
-    Fase 11.4.
+    Fase 11.4 REV.2
 
-    1ª TUG: 20 cm após o interruptor, no sentido do perímetro.
-    Demais TUGs: seguem o mesmo sentido até completar a quantidade.
-    O espaçamento-base usa o perímetro restante após a primeira TUG.
-    Pontos inválidos avançam pela parede até o primeiro ponto válido.
+    O sistema testa os DOIS lados do interruptor.
+    Escolhe o lado que oferece saída útil pela parede, evitando começar
+    pelo lado da soleira/porta.
+
+    A primeira TUG fica a 20 cm quando esse ponto é válido.
+    Se houver obstáculo, desloca somente no sentido escolhido.
+    As demais continuam nesse mesmo sentido.
     """
     if (
         qtd_tugs <= 0
@@ -698,49 +780,60 @@ def _distancias_tugs_desde_interruptor(
     ):
         return []
 
-    d_int = (
-        _distancia_perimetro_do_ponto(
-            ponto_interruptor,
-            segmentos_crus
-        )
+    d_int = _distancia_perimetro_do_ponto(
+        ponto_interruptor,
+        segmentos_crus
     )
 
     if d_int is None:
         return []
 
-    # A intenção é 20 cm. Se porta/soleira/canto tornar o ponto inválido,
-    # avança no mesmo sentido até achar posição permitida.
-    primeira = (
-        _ponto_valido_a_frente(
-            d_int + 0.20,
+    opcoes = []
+
+    for sentido in (1, -1):
+        avaliacao = _avaliar_sentido_saida_interruptor(
+            d_int,
+            sentido,
             comp_total,
             segmentos_crus,
             polilinha,
             portas_raw,
-            soleiras_raw,
-            max_busca=comp_total
+            soleiras_raw
+        )
+        if avaliacao:
+            opcoes.append(avaliacao)
+
+    if not opcoes:
+        return []
+
+    # Primeiro privilegia o maior corredor livre.
+    # Em empate, privilegia a TUG mais próxima dos 20 cm.
+    melhor = max(
+        opcoes,
+        key=lambda a: (
+            a["trecho_livre"],
+            -abs(
+                a["delta_primeira"]
+                - 0.20
+            )
         )
     )
 
-    if primeira is None:
-        return []
+    sentido = melhor["sentido"]
+    primeira = melhor["primeira"]
 
-    resultados = [
-        primeira
-    ]
+    resultados = [primeira]
 
     if qtd_tugs == 1:
         return resultados
 
     d_primeira = primeira[0]
-
-    # Distribui as restantes no restante de uma volta do perímetro,
-    # deixando uma pequena reserva antes de retornar ao interruptor.
     reserva_final = 0.35
+
     comprimento_restante = max(
         0.0,
         comp_total
-        - 0.20
+        - melhor["delta_primeira"]
         - reserva_final
     )
 
@@ -749,22 +842,43 @@ def _distancias_tugs_desde_interruptor(
         / qtd_tugs
     )
 
-    usados = [
-        d_primeira
-    ]
+    usados = [d_primeira]
 
-    for i in range(
-        1,
-        qtd_tugs
-    ):
+    for i in range(1, qtd_tugs):
         alvo = (
             d_primeira
-            + i * passo_base
+            + sentido * i * passo_base
+        ) % comp_total
+
+        achado = _ponto_valido_no_sentido(
+            alvo,
+            sentido,
+            comp_total,
+            segmentos_crus,
+            polilinha,
+            portas_raw,
+            soleiras_raw,
+            max_busca=max(
+                0.60,
+                passo_base
+            )
         )
 
-        achado = (
-            _ponto_valido_a_frente(
-                alvo,
+        if achado is None:
+            continue
+
+        d = achado[0]
+
+        if any(
+            min(
+                abs(d-u),
+                comp_total-abs(d-u)
+            ) < 0.35
+            for u in usados
+        ):
+            achado = _ponto_valido_no_sentido(
+                d + sentido * 0.35,
+                sentido,
                 comp_total,
                 segmentos_crus,
                 polilinha,
@@ -775,50 +889,14 @@ def _distancias_tugs_desde_interruptor(
                     passo_base
                 )
             )
-        )
-
-        if achado is None:
-            continue
-
-        d = achado[0]
-
-        # Evita duas tomadas praticamente no mesmo local após desvios
-        # causados por porta/soleira/canto.
-        if any(
-            min(
-                abs(d-u),
-                comp_total
-                - abs(d-u)
-            ) < 0.35
-            for u in usados
-        ):
-            achado = (
-                _ponto_valido_a_frente(
-                    d + 0.35,
-                    comp_total,
-                    segmentos_crus,
-                    polilinha,
-                    portas_raw,
-                    soleiras_raw,
-                    max_busca=max(
-                        0.60,
-                        passo_base
-                    )
-                )
-            )
 
             if achado is None:
                 continue
 
             d = achado[0]
 
-        usados.append(
-            d
-        )
-
-        resultados.append(
-            achado
-        )
+        usados.append(d)
+        resultados.append(achado)
 
     return resultados
 
@@ -1403,6 +1481,8 @@ def desenhar_tomadas(
                     "TUG",
                 "ponto":
                     (px, py),
+                "ponto_conexao_parede":
+                    ponto_traco_interno,
                 "potencia":
                     (
                         600
