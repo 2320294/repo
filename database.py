@@ -216,10 +216,15 @@ def salvar_dados_projeto(
             config_interruptores
         )
 
-    if tensao_projeto is not None:
-        registro["tensao_projeto"] = int(
-            tensao_projeto
-        )
+    # Fase 10.3:
+    # "tensao_projeto" é uma coluna legada do banco, com CHECK histórico
+    # limitado aos valores antigos (110/220). A partir da Fase 10.3,
+    # a fonte de verdade é parametros_rede["tensao_fornecimento"],
+    # persistida dentro de config_interruptores.
+    #
+    # Portanto NÃO atualizamos mais esta coluna durante o salvamento.
+    # Isso evita violação do CHECK ao trabalhar corretamente com
+    # fornecimentos 127/220 V ou 220/380 V.
 
     if pe_direito is not None:
         registro["pe_direito"] = float(

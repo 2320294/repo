@@ -1437,7 +1437,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 10.2: corrente nominal pré-dimensionada pelo maior "
+            "Fase 10.3: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1487,7 +1487,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_2.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_3.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1496,7 +1496,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_2.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_10_3.pdf",
             mime="application/pdf",
             use_container_width=True
         )
