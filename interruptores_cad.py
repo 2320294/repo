@@ -1,3 +1,4 @@
+import unicodedata
 
 import math
 
@@ -565,6 +566,12 @@ def _preencher_circulo_interruptor(
         return None
 
 
+def _ambiente_sem_interruptor_proprio(nome):
+    txt = unicodedata.normalize("NFKD", str(nome or "")).encode("ascii", "ignore").decode("ascii").casefold()
+    compacto = "".join(ch for ch in txt if ch.isalnum())
+    return any(chave in compacto for chave in ("varanda", "terraco", "garagem"))
+
+
 def desenhar_interruptores(
     msp,
     polilinhas,
@@ -595,6 +602,12 @@ def desenhar_interruptores(
         )
     ):
         nome = ambiente["nome"]
+
+        # Fase 8.4: varanda, terraço e garagem têm comando de iluminação
+        # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
+        # mesmo que exista configuração antiga salva no projeto.
+        if _ambiente_sem_interruptor_proprio(nome):
+            continue
 
         portas = portas_do_ambiente(
             nome,

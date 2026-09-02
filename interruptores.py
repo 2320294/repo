@@ -1,3 +1,4 @@
+import unicodedata
 
 import os
 import tempfile
@@ -1319,6 +1320,13 @@ def _ids_salvos_ambiente(config_salva, amb, portas):
         if pid in ids_validos
     ]
 
+def _ambiente_sem_interruptor_proprio(nome):
+    """Fase 8.4: iluminação comandada pelo ambiente interno adjacente."""
+    txt = unicodedata.normalize("NFKD", str(nome or "")).encode("ascii", "ignore").decode("ascii").casefold()
+    compacto = "".join(ch for ch in txt if ch.isalnum())
+    return any(chave in compacto for chave in ("varanda", "terraco", "garagem"))
+
+
 def renderizar_interruptores(
     dados_ambientes,
     config_salva,
@@ -1340,6 +1348,16 @@ def renderizar_interruptores(
     for amb in nomes:
         portas = analise.get(amb, {}).get("portas", [])
         qtd = len(portas)
+
+        if _ambiente_sem_interruptor_proprio(amb):
+            config[amb] = {
+                "quantidade": 0,
+                "portas_ids": [],
+                "portas_detectadas": qtd,
+                "automatico": True,
+                "comando_externo": True
+            }
+            continue
 
         if qtd == 0:
             config[amb] = {

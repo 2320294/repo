@@ -152,6 +152,34 @@ def get_inside_normal(
     )
 
 
+def get_inside_normal_polygon(vx, vy, start_x, start_y, polilinha, probe=0.05, cx=None, cy=None):
+    """
+    Fase 8.4: retorna a normal que aponta realmente para dentro do polígono.
+    Em ambientes côncavos (L/U/T/recuos), não depende do centro global.
+    Testa as duas faces da parede com pequenos deslocamentos progressivos.
+    """
+    n1 = (-vy, vx)
+    n2 = (vy, -vx)
+
+    norma1 = math.hypot(n1[0], n1[1]) or 1.0
+    norma2 = math.hypot(n2[0], n2[1]) or 1.0
+    n1 = (n1[0] / norma1, n1[1] / norma1)
+    n2 = (n2[0] / norma2, n2[1] / norma2)
+
+    for d in (probe, 0.02, 0.01, 0.10):
+        p1 = (start_x + n1[0] * d, start_y + n1[1] * d)
+        p2 = (start_x + n2[0] * d, start_y + n2[1] * d)
+        dentro1 = ponto_em_poligono(p1[0], p1[1], polilinha)
+        dentro2 = ponto_em_poligono(p2[0], p2[1], polilinha)
+        if dentro1 != dentro2:
+            return n1 if dentro1 else n2
+
+    # Fallback apenas para geometrias degeneradas/limítrofes.
+    if cx is None or cy is None:
+        cx, cy = centro_poligono(polilinha)
+    return get_inside_normal(vx, vy, start_x, start_y, cx, cy)
+
+
 def centro_poligono(poly):
     return (
         sum(pt[0] for pt in poly) / len(poly),

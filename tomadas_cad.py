@@ -3,7 +3,8 @@ import math
 from geometria import (
     point_seg_dist,
     get_ponto_perimetro,
-    get_inside_normal
+    get_inside_normal,
+    get_inside_normal_polygon
 )
 
 
@@ -286,7 +287,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.3 — classificação explícita por altura.
+    # Fase 8.4 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -445,13 +446,9 @@ def desenhar_tomadas(
             vx = p_alvo["vx"]
             vy = p_alvo["vy"]
 
-            nx, ny = get_inside_normal(
-                vx,
-                vy,
-                px,
-                py,
-                centro_x,
-                centro_y
+            nx, ny = get_inside_normal_polygon(
+                vx, vy, px, py, polilinha,
+                probe=0.05, cx=centro_x, cy=centro_y
             )
 
             ponto_b1 = (
@@ -627,13 +624,9 @@ def desenhar_tomadas(
                 distancia_desejada
             )
 
-            nx, ny = get_inside_normal(
-                seg_vx,
-                seg_vy,
-                px,
-                py,
-                centro_x,
-                centro_y
+            nx, ny = get_inside_normal_polygon(
+                seg_vx, seg_vy, px, py, polilinha,
+                probe=0.05, cx=centro_x, cy=centro_y
             )
 
             ponto_b1 = (
