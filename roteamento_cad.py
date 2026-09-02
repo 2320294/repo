@@ -4,314 +4,668 @@ import math
 LAYER_ROTA = "PROJ_ELETRICA_ROTEAMENTO"
 LAYER_ROTA_TEXTO = "PROJ_ELETRICA_ROTEAMENTO_TEXTO"
 
+# Se o caminho pela rede existente ultrapassar este fator em relação
+# à ligação direta QDC -> ambiente, abre-se um novo tronco a partir do QDC.
+FATOR_MAX_DESVIO_REDE = 1.28
+
 
 def _dist(a, b):
-    return math.hypot(float(b[0])-float(a[0]), float(b[1])-float(a[1]))
+    return math.hypot(
+        float(b[0]) - float(a[0]),
+        float(b[1]) - float(a[1])
+    )
 
 
 def _angulo(cx, cy, p):
     return math.degrees(
-        math.atan2(float(p[1])-cy, float(p[0])-cx)
+        math.atan2(
+            float(p[1]) - cy,
+            float(p[0]) - cx
+        )
     ) % 360.0
 
 
-def _arco_suave(msp, p1, p2, indice=0, layer=LAYER_ROTA):
+def _arco_suave(
+    msp,
+    p1,
+    p2,
+    indice=0,
+    layer=LAYER_ROTA
+):
     """
-    ARC circular real, de baixa curvatura.
-    Não cria LINE.
-
-    A flecha é pequena para o traçado continuar visualmente quase direto,
-    porém reconhecível como eletroduto em arco.
+    Desenha ARC circular real, de baixa curvatura.
+    Não usa LINE.
     """
     x1, y1 = map(float, p1)
     x2, y2 = map(float, p2)
-    dx, dy = x2-x1, y2-y1
+
+    dx = x2 - x1
+    dy = y2 - y1
     corda = math.hypot(dx, dy)
 
     if corda < 0.05:
         return None
 
-    # Fase 11.2: ainda mais discreto que na 11.1.
-    flecha = min(0.24, max(0.06, corda * 0.032))
-    sinal = 1.0 if int(indice) % 2 == 0 else -1.0
+    # Curvatura discreta: quase direto, mas sem virar segmento reto.
+    flecha = min(
+        0.22,
+        max(
+            0.055,
+            corda * 0.030
+        )
+    )
 
-    nx, ny = -dy/corda, dx/corda
-    mx, my = (x1+x2)/2.0, (y1+y2)/2.0
+    sinal = (
+        1.0
+        if int(indice) % 2 == 0
+        else -1.0
+    )
 
-    raio = (corda*corda)/(8.0*flecha) + flecha/2.0
+    nx = -dy / corda
+    ny = dx / corda
+
+    mx = (x1 + x2) / 2.0
+    my = (y1 + y2) / 2.0
+
+    raio = (
+        (corda * corda)
+        / (8.0 * flecha)
+        + flecha / 2.0
+    )
+
     centro_offset = raio - flecha
 
-    cx = mx - sinal * nx * centro_offset
-    cy = my - sinal * ny * centro_offset
+    cx = (
+        mx
+        - sinal
+        * nx
+        * centro_offset
+    )
 
-    a1 = _angulo(cx, cy, (x1, y1))
-    a2 = _angulo(cx, cy, (x2, y2))
-    delta = (a2-a1) % 360.0
+    cy = (
+        my
+        - sinal
+        * ny
+        * centro_offset
+    )
 
-    # add_arc percorre CCW; escolhe sempre o arco menor.
+    a1 = _angulo(
+        cx,
+        cy,
+        (x1, y1)
+    )
+
+    a2 = _angulo(
+        cx,
+        cy,
+        (x2, y2)
+    )
+
+    delta = (
+        a2 - a1
+    ) % 360.0
+
+    # add_arc percorre CCW: escolhe sempre o arco menor.
     if delta <= 180.0:
-        inicio, fim = a1, a2
+        inicio = a1
+        fim = a2
     else:
-        inicio, fim = a2, a1
+        inicio = a2
+        fim = a1
 
     return msp.add_arc(
         center=(cx, cy),
         radius=raio,
         start_angle=inicio,
         end_angle=fim,
-        dxfattribs={"layer": layer}
+        dxfattribs={
+            "layer": layer
+        }
     )
 
 
 def _normalizar_nome(nome):
-    return " ".join(str(nome or "").upper().strip().split())
+    return " ".join(
+        str(nome or "")
+        .upper()
+        .strip()
+        .split()
+    )
 
 
 def _ambientes_circuito(circuito):
-    lista = circuito.get("ambientes")
-    if isinstance(lista, (list, tuple)) and lista:
+    lista = circuito.get(
+        "ambientes"
+    )
+
+    if (
+        isinstance(
+            lista,
+            (list, tuple)
+        )
+        and lista
+    ):
         return [
             str(x).strip()
             for x in lista
             if str(x).strip()
         ]
 
-    amb = str(circuito.get("ambiente", "") or "")
-    if not amb:
+    ambiente = str(
+        circuito.get(
+            "ambiente",
+            ""
+        )
+        or ""
+    )
+
+    if not ambiente:
         return []
 
     return [
         x.strip()
-        for x in amb.split("+")
+        for x in ambiente.split("+")
         if x.strip()
     ]
 
 
-def _ponto_distribuicao_por_ambiente(pontos_eletricos, qdc):
-    """
-    O nó de distribuição de cada ambiente continua sendo uma luminária.
-    Se houver mais de uma luminária, usa a que fica mais próxima do QDC
-    como ponto de entrada/distribuição do ambiente nesta fase.
-    """
-    candidatos = {}
-
-    for p in pontos_eletricos or []:
-        if str(p.get("tipo", "")).upper() != "ILUMINACAO":
-            continue
-
-        ambiente = _normalizar_nome(p.get("ambiente"))
-        ponto = p.get("ponto")
-
-        if not ambiente or not ponto:
-            continue
-
-        candidatos.setdefault(
-            ambiente,
-            []
-        ).append(tuple(ponto))
-
+def _luminarias_por_ambiente(
+    pontos_eletricos
+):
     saida = {}
 
-    for ambiente, pts in candidatos.items():
-        saida[ambiente] = min(
-            pts,
-            key=lambda pt: _dist(qdc, pt)
+    for ponto in (
+        pontos_eletricos
+        or []
+    ):
+        if (
+            str(
+                ponto.get(
+                    "tipo",
+                    ""
+                )
+            ).upper()
+            != "ILUMINACAO"
+        ):
+            continue
+
+        ambiente = (
+            _normalizar_nome(
+                ponto.get(
+                    "ambiente"
+                )
+            )
+        )
+
+        xy = ponto.get(
+            "ponto"
+        )
+
+        if (
+            not ambiente
+            or not xy
+        ):
+            continue
+
+        saida.setdefault(
+            ambiente,
+            []
+        ).append(
+            tuple(xy)
         )
 
     return saida
 
 
-def _nos_necessarios(circuitos, pontos_por_ambiente):
-    """
-    Reúne cada ambiente apenas uma vez, independentemente da quantidade
-    de circuitos que o atravessarão. Isto é o que elimina o efeito
-    'estrela' da Fase 11.2.
-    """
-    usados = {}
-
-    for circuito in circuitos or []:
-        numero = int(
-            circuito.get("numero", 0)
-            or 0
-        )
-
-        for ambiente in _ambientes_circuito(circuito):
-            chave = _normalizar_nome(ambiente)
-            ponto = pontos_por_ambiente.get(chave)
-
-            if ponto is None:
-                continue
-
-            if chave not in usados:
-                usados[chave] = {
-                    "ambiente": ambiente,
-                    "ponto": ponto,
-                    "circuitos": set(),
-                }
-
-            if numero > 0:
-                usados[chave]["circuitos"].add(numero)
-
-    return list(usados.values())
-
-
-def _montar_arvore_troncal(qdc, nos):
-    """
-    Constrói uma árvore física compartilhada enraizada no QDC.
-
-    Estratégia:
-    - começa no QDC;
-    - a cada passo conecta o nó ainda não atendido ao ponto já pertencente
-      à rede que produza o menor novo trecho;
-    - cada ambiente entra na rede uma única vez.
-
-    É uma árvore de expansão incremental (estilo Prim), portanto reduz
-    drasticamente duplicidade de trajetos e cruzamentos quando comparada
-    ao modelo estrela QDC -> cada carga.
-    """
-    if not nos:
-        return []
-
-    conectados = [{
-        "id": "QDC",
-        "ambiente": "QDC",
-        "ponto": tuple(qdc),
-    }]
-
-    restantes = [
-        {
-            "id": f"A{i}",
-            "ambiente": n["ambiente"],
-            "ponto": tuple(n["ponto"]),
-            "circuitos": set(n.get("circuitos", set())),
-        }
-        for i, n in enumerate(nos, start=1)
-    ]
-
-    arestas = []
-
-    while restantes:
-        melhor = None
-
-        for origem in conectados:
-            for destino in restantes:
-                d = _dist(
-                    origem["ponto"],
-                    destino["ponto"]
-                )
-
-                candidato = (
-                    d,
-                    origem["id"],
-                    destino["id"],
-                    origem,
-                    destino
-                )
-
-                if (
-                    melhor is None
-                    or candidato[:3] < melhor[:3]
-                ):
-                    melhor = candidato
-
-        _, _, _, origem, destino = melhor
-
-        arestas.append({
-            "origem_id": origem["id"],
-            "destino_id": destino["id"],
-            "origem_ambiente": origem["ambiente"],
-            "destino_ambiente": destino["ambiente"],
-            "inicio": origem["ponto"],
-            "fim": destino["ponto"],
-        })
-
-        conectados.append(destino)
-        restantes.remove(destino)
-
-    return arestas
-
-
-def _indexar_arvore(qdc, nos, arestas):
-    """
-    Cria parent map para sabermos quais circuitos utilizam cada trecho.
-    Isso ainda não é desenhado como texto, mas já prepara a Fase 11.3.
-    """
-    nodes = {
-        "QDC": {
-            "ambiente": "QDC",
-            "ponto": tuple(qdc),
-        }
-    }
-
-    for i, n in enumerate(nos, start=1):
-        nodes[f"A{i}"] = {
-            "ambiente": n["ambiente"],
-            "ponto": tuple(n["ponto"]),
-            "circuitos": set(n.get("circuitos", set())),
-        }
-
-    parent = {}
-    edge_by_child = {}
-
-    for idx, a in enumerate(arestas):
-        child = a["destino_id"]
-        parent[child] = a["origem_id"]
-        edge_by_child[child] = idx
-
-    return nodes, parent, edge_by_child
-
-
-def _atribuir_circuitos_aos_trechos(
-    circuitos,
-    nos,
-    arestas,
-    parent,
-    edge_by_child
+def _circuitos_por_ambiente(
+    circuitos
 ):
     """
-    Para cada circuito, sobe de cada ambiente atendido até o QDC,
-    marcando os trechos físicos usados. Assim um mesmo ARC pode transportar
-    vários circuitos sem ser desenhado várias vezes.
+    Retorna todos os circuitos que precisam chegar ao nó
+    de distribuição de cada ambiente.
     """
-    ambiente_para_id = {}
+    mapa = {}
 
-    for i, n in enumerate(nos, start=1):
-        ambiente_para_id[
-            _normalizar_nome(
-                n["ambiente"]
-            )
-        ] = f"A{i}"
-
-    for a in arestas:
-        a["circuitos"] = set()
-
-    for circuito in circuitos or []:
+    for circuito in (
+        circuitos
+        or []
+    ):
         numero = int(
-            circuito.get("numero", 0)
+            circuito.get(
+                "numero",
+                0
+            )
             or 0
         )
 
         if numero <= 0:
             continue
 
-        for ambiente in _ambientes_circuito(circuito):
-            atual = ambiente_para_id.get(
-                _normalizar_nome(ambiente)
+        for ambiente in (
+            _ambientes_circuito(
+                circuito
+            )
+        ):
+            chave = (
+                _normalizar_nome(
+                    ambiente
+                )
             )
 
-            while atual and atual != "QDC":
-                edge_idx = edge_by_child.get(atual)
+            mapa.setdefault(
+                chave,
+                set()
+            ).add(
+                numero
+            )
 
-                if edge_idx is None:
-                    break
+    return mapa
 
-                arestas[edge_idx]["circuitos"].add(
-                    numero
+
+def _circuitos_iluminacao_por_ambiente(
+    circuitos
+):
+    """
+    Nas derivações entre luminárias do mesmo ambiente
+    transitam somente os circuitos de iluminação daquele ambiente.
+    """
+    mapa = {}
+
+    for circuito in (
+        circuitos
+        or []
+    ):
+        if (
+            str(
+                circuito.get(
+                    "tipo",
+                    ""
                 )
+            ).upper()
+            != "ILUMINAÇÃO".upper()
+        ):
+            continue
 
-                atual = parent.get(atual)
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        if numero <= 0:
+            continue
+
+        for ambiente in (
+            _ambientes_circuito(
+                circuito
+            )
+        ):
+            chave = (
+                _normalizar_nome(
+                    ambiente
+                )
+            )
+
+            mapa.setdefault(
+                chave,
+                set()
+            ).add(
+                numero
+            )
+
+    return mapa
+
+
+def _selecionar_luminaria_principal(
+    luminarias,
+    qdc
+):
+    """
+    Escolhe como nó principal do ambiente a luminária
+    geometricamente mais próxima do QDC.
+    """
+    return min(
+        luminarias,
+        key=lambda pt:
+            _dist(
+                qdc,
+                pt
+            )
+    )
+
+
+def _nos_principais(
+    qdc,
+    luminarias_por_ambiente,
+    circuitos_por_ambiente
+):
+    nos = []
+
+    for ambiente, nums in (
+        circuitos_por_ambiente.items()
+    ):
+        luminarias = (
+            luminarias_por_ambiente.get(
+                ambiente,
+                []
+            )
+        )
+
+        if not luminarias:
+            continue
+
+        principal = (
+            _selecionar_luminaria_principal(
+                luminarias,
+                qdc
+            )
+        )
+
+        nos.append({
+            "id":
+                f"AMB_{len(nos)+1}",
+            "ambiente":
+                ambiente,
+            "ponto":
+                tuple(principal),
+            "luminarias":
+                list(luminarias),
+            "circuitos":
+                set(nums),
+            "dist_qdc":
+                _dist(
+                    qdc,
+                    principal
+                ),
+        })
+
+    # Mais próximos primeiro. Assim o tronco cresce da origem para fora.
+    nos.sort(
+        key=lambda n: (
+            n["dist_qdc"],
+            n["ambiente"]
+        )
+    )
+
+    return nos
+
+
+def _construir_rede_hibrida(
+    qdc,
+    nos
+):
+    """
+    Fase 11.3 — rede híbrida.
+
+    Para cada ambiente compara:
+    1) caminho direto QDC -> ambiente;
+    2) melhor caminho usando um nó já pertencente à rede.
+
+    A conexão pela rede só é aceita se o percurso total desde o QDC
+    não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
+
+    Isso permite vários troncos saindo do QDC quando necessário,
+    evitando a volta excessiva observada na Fase 11.3.
+    """
+    conectados = [{
+        "id": "QDC",
+        "ambiente": "QDC",
+        "ponto": tuple(qdc),
+        "dist_raiz": 0.0,
+    }]
+
+    arestas = []
+
+    for no in nos:
+        direto = float(
+            no["dist_qdc"]
+        )
+
+        melhor_parent = None
+        melhor_total = None
+        melhor_trecho = None
+
+        # Procura a melhor alternativa pela REDE EXISTENTE.
+        # O QDC é comparado separadamente como caminho direto; se ele
+        # participar desta busca, pela desigualdade triangular sempre
+        # venceria e impediria qualquer compartilhamento.
+        for candidato in conectados:
+            if candidato["id"] == "QDC":
+                continue
+
+            trecho = _dist(
+                candidato["ponto"],
+                no["ponto"]
+            )
+
+            total = (
+                float(
+                    candidato.get(
+                        "dist_raiz",
+                        0.0
+                    )
+                )
+                + trecho
+            )
+
+            if (
+                melhor_total is None
+                or total < melhor_total
+            ):
+                melhor_total = total
+                melhor_trecho = trecho
+                melhor_parent = candidato
+
+        # Evita "pegar carona" numa rede que torne o percurso total
+        # significativamente maior que sair diretamente do QDC.
+        usar_rede = (
+            melhor_parent is not None
+            and melhor_parent["id"] != "QDC"
+            and melhor_total
+                <= direto
+                * FATOR_MAX_DESVIO_REDE
+        )
+
+        if usar_rede:
+            origem = melhor_parent
+            dist_raiz = melhor_total
+            criterio = "REDE_EXISTENTE"
+        else:
+            origem = conectados[0]
+            dist_raiz = direto
+            criterio = "NOVO_TRONCO_QDC"
+
+        arestas.append({
+            "origem_id":
+                origem["id"],
+            "destino_id":
+                no["id"],
+            "origem_ambiente":
+                origem["ambiente"],
+            "destino_ambiente":
+                no["ambiente"],
+            "inicio":
+                origem["ponto"],
+            "fim":
+                no["ponto"],
+            "circuitos":
+                set(
+                    no["circuitos"]
+                ),
+            "criterio":
+                criterio,
+            "dist_raiz":
+                dist_raiz,
+            "dist_direta":
+                direto,
+        })
+
+        conectado = dict(no)
+        conectado[
+            "dist_raiz"
+        ] = dist_raiz
+
+        conectados.append(
+            conectado
+        )
 
     return arestas
+
+
+def _acumular_circuitos_ate_qdc(
+    arestas
+):
+    """
+    Um circuito que atende um ambiente deve aparecer em todos
+    os trechos ancestrais até o QDC.
+    """
+    por_destino = {
+        a["destino_id"]: a
+        for a in arestas
+    }
+
+    parent = {
+        a["destino_id"]:
+            a["origem_id"]
+        for a in arestas
+    }
+
+    cargas_finais = {
+        a["destino_id"]:
+            set(
+                a.get(
+                    "circuitos",
+                    set()
+                )
+            )
+        for a in arestas
+    }
+
+    for destino_id, circuitos in list(
+        cargas_finais.items()
+    ):
+        atual = destino_id
+
+        while (
+            atual
+            and atual != "QDC"
+        ):
+            aresta = (
+                por_destino.get(
+                    atual
+                )
+            )
+
+            if aresta is None:
+                break
+
+            aresta[
+                "circuitos"
+            ].update(
+                circuitos
+            )
+
+            atual = parent.get(
+                atual
+            )
+
+    return arestas
+
+
+def _arestas_luminarias_secundarias(
+    nos,
+    circuitos_iluminacao
+):
+    """
+    Liga TODAS as luminárias de cada ambiente.
+
+    A luminária principal já recebe a rede troncal.
+    As demais são conectadas internamente por uma pequena árvore
+    incremental, sempre em ARC, evitando deixar ponto de luz solto.
+    """
+    saida = []
+
+    for no in nos:
+        ambiente = no[
+            "ambiente"
+        ]
+
+        principal = tuple(
+            no["ponto"]
+        )
+
+        restantes = [
+            tuple(pt)
+            for pt in no.get(
+                "luminarias",
+                []
+            )
+            if _dist(
+                pt,
+                principal
+            ) > 1e-6
+        ]
+
+        conectados = [
+            principal
+        ]
+
+        while restantes:
+            melhor = None
+
+            for origem in conectados:
+                for destino in restantes:
+                    d = _dist(
+                        origem,
+                        destino
+                    )
+
+                    candidato = (
+                        d,
+                        origem,
+                        destino
+                    )
+
+                    if (
+                        melhor is None
+                        or candidato[0]
+                            < melhor[0]
+                    ):
+                        melhor = candidato
+
+            _, origem, destino = melhor
+
+            saida.append({
+                "origem_ambiente":
+                    ambiente,
+                "destino_ambiente":
+                    ambiente,
+                "inicio":
+                    origem,
+                "fim":
+                    destino,
+                "circuitos":
+                    set(
+                        circuitos_iluminacao.get(
+                            ambiente,
+                            set()
+                        )
+                    ),
+                "criterio":
+                    "LUMINARIA_SECUNDARIA",
+            })
+
+            conectados.append(
+                destino
+            )
+
+            restantes.remove(
+                destino
+            )
+
+    return saida
 
 
 def desenhar_rotas_qdc_iluminacao(
@@ -321,72 +675,97 @@ def desenhar_rotas_qdc_iluminacao(
     circuitos,
 ):
     """
-    Fase 11.2 — REDE TRONCAL COMPARTILHADA
+    Fase 11.3
 
-    Diferenças fundamentais em relação à 11.1:
-    - não desenha uma rota independente para cada circuito;
-    - cada ponto de distribuição entra na rede apenas uma vez;
-    - um único ARC físico pode transportar vários circuitos;
-    - o primeiro trecho sai do QDC e os demais derivam da própria rede;
-    - não desenha etiquetas C01/C02 no meio da planta;
-    - não usa LINE.
+    - Rede troncal híbrida.
+    - Pode criar mais de uma saída no QDC quando a rede existente
+      causaria percurso excessivo.
+    - Considera comprimento acumulado desde o QDC.
+    - Liga todas as luminárias do ambiente.
+    - Soleiras e portas não são nós.
+    - Somente ARC; nenhuma LINE.
     """
-    if not qdc_info or not circuitos:
+    if (
+        not qdc_info
+        or not circuitos
+    ):
         return []
 
     qdc = tuple(
-        qdc_info.get("centro_externo")
-        or qdc_info.get("centro")
+        qdc_info.get(
+            "centro_externo"
+        )
+        or qdc_info.get(
+            "centro"
+        )
         or ()
     )
 
     if len(qdc) < 2:
         return []
 
-    pontos_por_ambiente = (
-        _ponto_distribuicao_por_ambiente(
-            pontos_eletricos,
-            qdc
+    luminarias = (
+        _luminarias_por_ambiente(
+            pontos_eletricos
         )
     )
 
-    nos = _nos_necessarios(
-        circuitos,
-        pontos_por_ambiente
+    circuitos_ambiente = (
+        _circuitos_por_ambiente(
+            circuitos
+        )
+    )
+
+    circuitos_luz = (
+        _circuitos_iluminacao_por_ambiente(
+            circuitos
+        )
+    )
+
+    nos = _nos_principais(
+        qdc,
+        luminarias,
+        circuitos_ambiente
     )
 
     if not nos:
         return []
 
-    arestas = _montar_arvore_troncal(
-        qdc,
-        nos
-    )
-
-    _, parent, edge_by_child = (
-        _indexar_arvore(
+    tronco = (
+        _construir_rede_hibrida(
             qdc,
-            nos,
-            arestas
+            nos
         )
     )
 
-    arestas = _atribuir_circuitos_aos_trechos(
-        circuitos,
-        nos,
-        arestas,
-        parent,
-        edge_by_child
+    tronco = (
+        _acumular_circuitos_ate_qdc(
+            tronco
+        )
+    )
+
+    secundarias = (
+        _arestas_luminarias_secundarias(
+            nos,
+            circuitos_luz
+        )
     )
 
     rotas = []
 
-    for idx, trecho in enumerate(arestas):
+    todas_arestas = (
+        tronco
+        + secundarias
+    )
+
+    for indice, trecho in enumerate(
+        todas_arestas
+    ):
         entidade = _arco_suave(
             msp,
             trecho["inicio"],
             trecho["fim"],
-            indice=idx,
+            indice=indice,
             layer=LAYER_ROTA
         )
 
@@ -394,17 +773,43 @@ def desenhar_rotas_qdc_iluminacao(
             continue
 
         rotas.append({
-            "tipo_rede": "TRONCAL_COMPARTILHADA",
+            "tipo_rede":
+                (
+                    "LUMINARIA_INTERNA"
+                    if trecho.get(
+                        "criterio"
+                    )
+                    == "LUMINARIA_SECUNDARIA"
+                    else "TRONCAL_HIBRIDA"
+                ),
             "origem_ambiente":
-                trecho["origem_ambiente"],
+                trecho[
+                    "origem_ambiente"
+                ],
             "destino_ambiente":
-                trecho["destino_ambiente"],
+                trecho[
+                    "destino_ambiente"
+                ],
             "inicio":
-                trecho["inicio"],
+                trecho[
+                    "inicio"
+                ],
             "fim":
-                trecho["fim"],
+                trecho[
+                    "fim"
+                ],
             "circuitos":
-                sorted(trecho["circuitos"]),
+                sorted(
+                    trecho.get(
+                        "circuitos",
+                        set()
+                    )
+                ),
+            "criterio":
+                trecho.get(
+                    "criterio",
+                    ""
+                ),
             "entidade":
                 "ARC",
         })
