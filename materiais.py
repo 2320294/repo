@@ -6,6 +6,7 @@ import streamlit as st
 
 from concessionarias import CHAVE_PARAMETROS_REDE
 from balanceamento_fases import balancear_circuitos
+from agrupamento_dr import agrupar_circuitos_dr
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -1147,6 +1148,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
             "ambiente": "Ambiente",
             "fase": "Fase(s)",
             "polos": "Polos",
+            "dr": "DR",
             "potencia": "Potência (W)",
             "corrente": "Corrente estimada (A)",
             "bitola": "Bitola preliminar (mm²)",
@@ -1256,7 +1258,7 @@ def _gerar_pdf_materiais_circuitos(
     else:
         story.append(_pdf_tabela(
             circuitos_df,
-            [1.2*cm, 2.3*cm, 2.8*cm, 1.6*cm, 1.4*cm, 2.2*cm, 2.6*cm, 2.8*cm, 2.8*cm]
+            [1.1*cm, 2.1*cm, 2.6*cm, 1.5*cm, 1.3*cm, 1.3*cm, 2.1*cm, 2.4*cm, 2.6*cm, 2.6*cm]
             [:len(circuitos_df.columns)]
         ))
 
@@ -1303,6 +1305,9 @@ def renderizar_materiais(
         circuitos,
         parametros_rede
     )
+    circuitos, resumo_drs = agrupar_circuitos_dr(
+        circuitos
+    )
 
     st.caption(
         f"Parâmetros usados: alimentação {int(tensao_projeto)} V | "
@@ -1343,6 +1348,24 @@ def renderizar_materiais(
             "Informe o tipo de fornecimento na etapa Parâmetros "
             "para liberar o balanceamento automático."
         )
+
+    st.markdown("#### 🛡️ Agrupamento dos DRs")
+
+    if resumo_drs:
+        for grupo in resumo_drs:
+            lista = ", ".join(
+                f"C{n:02d}" for n in grupo["circuitos"]
+            )
+            st.write(
+                f"**{grupo['dr']}** — {grupo['descricao']} — {lista}"
+            )
+        st.caption(
+            "Agrupamento funcional da Fase 9.4. Corrente nominal, "
+            "sensibilidade e coordenação dos DRs serão consolidadas "
+            "com a seletividade."
+        )
+    else:
+        st.info("Nenhum circuito de tomada/TUE foi identificado para agrupamento em DR.")
 
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
@@ -1386,7 +1409,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_3.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_4.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1395,7 +1418,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_3.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_4.pdf",
             mime="application/pdf",
             use_container_width=True
         )

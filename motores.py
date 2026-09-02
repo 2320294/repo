@@ -58,6 +58,10 @@ from balanceamento_fases import (
     balancear_circuitos
 )
 
+from agrupamento_dr import (
+    agrupar_circuitos_dr
+)
+
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -453,7 +457,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 9.3:
+                # Fase 9.4:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -503,7 +507,7 @@ def gerar_cad_unifilar(
         
         
         # ====================================================
-        # FASE 9.3 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # FASE 9.4 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
         # ====================================================
         _, circuitos_unifilar = calcular_quantitativo_materiais(
             tabela_editada=dados_editados,
@@ -532,6 +536,12 @@ def gerar_cad_unifilar(
             )
         )
 
+        circuitos_unifilar, resumo_drs_unifilar = (
+            agrupar_circuitos_dr(
+                circuitos_unifilar
+            )
+        )
+
         desenhar_unifilar_qdc(
             msp=msp,
             circuitos=circuitos_unifilar,
@@ -539,7 +549,8 @@ def gerar_cad_unifilar(
             tensao_projeto=tensao_projeto,
             parametros_rede=parametros_rede_unifilar,
             resultado_demanda=resultado_demanda_unifilar,
-            resumo_balanceamento=resumo_balanceamento_unifilar
+            resumo_balanceamento=resumo_balanceamento_unifilar,
+            resumo_drs=resumo_drs_unifilar
         )
 
         doc.saveas(
