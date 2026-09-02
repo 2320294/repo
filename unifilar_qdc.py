@@ -490,12 +490,17 @@ def _notas(
     _text(
         msp,
         "NOTAS",
-        x1 + 0.25,
-        y2 - 0.30,
-        0.12
+        x1 + 0.22,
+        y2 - 0.28,
+        0.105
     )
 
-    y = y2 - 0.68
+    # Duas colunas independentes. Nenhum texto técnico é concatenado
+    # na mesma linha de outra informação.
+    col1 = x1 + 0.25
+    col2 = x1 + (x2 - x1) * 0.55
+    y = y2 - 0.62
+    passo = 0.25
 
     tipo = str(
         parametros_rede.get(
@@ -503,7 +508,7 @@ def _notas(
             ""
         )
         or ""
-    )
+    ).strip()
 
     tensao = str(
         parametros_rede.get(
@@ -511,42 +516,46 @@ def _notas(
             ""
         )
         or ""
-    )
+    ).strip()
 
-    if tipo or tensao:
-        texto = "FORNECIMENTO"
-        if tipo:
-            texto += (
-                f": {tipo}"
-            )
-        if tensao:
-            texto += (
-                f" | {tensao}"
-            )
-
+    if tipo:
         _text(
             msp,
-            texto,
-            x1 + 0.28,
+            f"FORNECIMENTO: {tipo}",
+            col1,
             y,
-            0.080
+            0.068
         )
+        y -= passo
+
+    if tensao:
+        _text(
+            msp,
+            f"TENSAO: {tensao}",
+            col1,
+            y,
+            0.068
+        )
+        y -= passo
 
     _text(
         msp,
-        "N - NEUTRO",
-        x1 + 0.28,
-        y - 0.24,
-        0.080
+        "N: NEUTRO",
+        col1,
+        y,
+        0.068
     )
+    y -= passo
 
     _text(
         msp,
-        "PE - PROTECAO / TERRA",
-        x1 + 0.28,
-        y - 0.48,
-        0.080
+        "PE: PROTECAO / TERRA",
+        col1,
+        y,
+        0.068
     )
+
+    y2c = y2 - 0.62
 
     seletividade = str(
         resumo_protecao.get(
@@ -554,16 +563,7 @@ def _notas(
             ""
         )
         or ""
-    )
-
-    if seletividade:
-        _text(
-            msp,
-            seletividade.upper(),
-            x1 + 4.35,
-            y,
-            0.074
-        )
+    ).strip()
 
     capacidade = str(
         resumo_protecao.get(
@@ -571,15 +571,42 @@ def _notas(
             ""
         )
         or ""
-    )
+    ).strip()
+
+    # Rótulos curtos evitam textos longos atravessando a moldura.
+    if seletividade:
+        _text(
+            msp,
+            "SELETIVIDADE:",
+            col2,
+            y2c,
+            0.068
+        )
+        y2c -= passo
+        _text(
+            msp,
+            seletividade[:48].upper(),
+            col2,
+            y2c,
+            0.060
+        )
+        y2c -= passo * 1.25
 
     if capacidade:
         _text(
             msp,
-            capacidade.upper(),
-            x1 + 4.35,
-            y - 0.24,
-            0.074
+            "CAPACIDADE DE INTERRUPCAO:",
+            col2,
+            y2c,
+            0.068
+        )
+        y2c -= passo
+        _text(
+            msp,
+            capacidade[:48].upper(),
+            col2,
+            y2c,
+            0.060
         )
 
 
@@ -785,10 +812,10 @@ def desenhar_unifilar_qdc(
 
     titulo_h = 1.65
     entrada_h = 2.25
-    sec_header = 1.08
+    sec_header = 1.30
     circ_pitch = 1.02
-    gap_sec = 0.62
-    rodape_h = 1.65
+    gap_sec = 0.78
+    rodape_h = 2.25
 
     corpo_h = 0.0
 
@@ -840,7 +867,7 @@ def desenhar_unifilar_qdc(
         0.24
     )
 
-    linha_fase = "FASE 10.3"
+    linha_fase = "FASE 10.4"
 
     tipo_for = str(
         parametros_rede.get(
@@ -1174,25 +1201,25 @@ def desenhar_unifilar_qdc(
             _rect(
                 msp,
                 x_dr - 0.55,
-                y_header - 0.36,
+                y_header - 0.28,
                 x_dr + 1.20,
-                y_header + 0.36
+                y_header + 0.42
             )
 
             _text(
                 msp,
                 "CIRCUITOS",
                 x_dr - 0.34,
-                y_header + 0.08,
-                0.095
+                y_header + 0.16,
+                0.085
             )
 
             _text(
                 msp,
                 "SEM DR",
                 x_dr - 0.22,
-                y_header - 0.15,
-                0.095
+                y_header - 0.06,
+                0.085
             )
 
             _line(
@@ -1336,9 +1363,9 @@ def desenhar_unifilar_qdc(
     )
 
     legenda_x1 = x0 + 0.25
-    legenda_x2 = x0 + 13.70
+    legenda_x2 = x0 + 11.80
 
-    notas_x1 = x0 + 13.95
+    notas_x1 = x0 + 12.05
     notas_x2 = x2 - 0.25
 
     _legenda(
