@@ -18,7 +18,8 @@ from geometria import (
     bbox_poligono,
     ponto_central_interno,
     ponto_interno_proximo,
-    pontos_iluminacao_internos
+    pontos_iluminacao_internos,
+    pontos_iluminacao_por_decomposicao
 )
 
 from interruptores_cad import (
@@ -223,7 +224,7 @@ def gerar_cad_unifilar(
                 "polilinha": list(polilinha),
             })
 
-            # Fase 8.1:
+            # Fase 8.2:
             # centro operacional sempre DENTRO do ambiente.
             # Em geometrias côncavas/irregulares, o centro da bounding
             # box pode cair perto de um recorte ou até fora do polígono.
@@ -334,17 +335,29 @@ def gerar_cad_unifilar(
                 )
 
                 if qtd_ilum > 0:
-                    # Fase 8.1:
-                    # usa o interior real do ambiente, inclusive em
-                    # polígonos côncavos e geometrias em L.
+                    # Fase 8.2:
+                    # Em polígonos ortogonais irregulares (L/T/U),
+                    # primeiro divide o ambiente em retângulos internos.
+                    # Ex.: cozinha em L com 2 luminárias -> 1 em cada bloco.
                     pontos_luz = (
-                        pontos_iluminacao_internos(
+                        pontos_iluminacao_por_decomposicao(
                             polilinha,
                             qtd_ilum,
                             afastamento_minimo=
                                 0.35
                         )
                     )
+
+                    # Fallback para ambientes diagonais/orgânicos.
+                    if not pontos_luz:
+                        pontos_luz = (
+                            pontos_iluminacao_internos(
+                                polilinha,
+                                qtd_ilum,
+                                afastamento_minimo=
+                                    0.35
+                            )
+                        )
 
                     for lx, ly in pontos_luz:
                         pontos_eletricos.append({
@@ -443,7 +456,7 @@ def gerar_cad_unifilar(
             pontos_interruptores=pontos_interruptores,
         )
 
-        # Fase 8.1: limpar conduítes/comandos para foco nos pontos elétricos.
+        # Fase 8.2: limpar conduítes/comandos para foco nos pontos elétricos.
         camadas_ocultar = {"PROJ_ELETRICA_ELETRODUTO", "PROJ_ELETRICA_ELETRODUTO_TEXTO", "PROJ_ELETRICA_COMANDO"}
         for entidade in list(msp):
             if entidade.dxf.layer in camadas_ocultar:

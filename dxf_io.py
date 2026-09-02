@@ -173,7 +173,7 @@ def ler_elementos(msp):
                         ]
 
                     if len(pts) >= 2:
-                        # Fase 8.1: preserva os quatro vértices para que
+                        # Fase 8.2: preserva os quatro vértices para que
                         # P1/P2/P3/P4 e o interruptor usem a MESMA geometria.
                         vertices_unicos = []
                         for pt in pts:

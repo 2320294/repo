@@ -728,3 +728,715 @@ def pontos_iluminacao_internos(
             :quantidade
         ]
     )
+
+
+def _poligono_ortogonal(
+    poly,
+    tolerancia=1e-8
+):
+    """
+    True quando todas as arestas são horizontais ou verticais.
+    """
+    if not poly or len(poly) < 4:
+        return False
+
+    for i in range(len(poly)):
+        x1, y1 = poly[i]
+        x2, y2 = poly[
+            (i + 1)
+            % len(poly)
+        ]
+
+        dx = abs(
+            float(x2)
+            - float(x1)
+        )
+        dy = abs(
+            float(y2)
+            - float(y1)
+        )
+
+        if (
+            dx > tolerancia
+            and dy > tolerancia
+        ):
+            return False
+
+    return True
+
+
+def _celulas_ortogonais_internas(
+    poly
+):
+    """
+    Cria a grade mínima definida pelos X/Y dos vértices e retorna
+    somente células retangulares cujo centro está dentro do polígono.
+
+    Para um ambiente em L, isso naturalmente produz os blocos internos
+    que formam o L.
+    """
+    xs = sorted(
+        {
+            float(p[0])
+            for p in poly
+        }
+    )
+
+    ys = sorted(
+        {
+            float(p[1])
+            for p in poly
+        }
+    )
+
+    celulas = []
+
+    for ix in range(
+        len(xs) - 1
+    ):
+        x0 = xs[ix]
+        x1 = xs[
+            ix + 1
+        ]
+
+        if (
+            x1 - x0
+            <= 1e-9
+        ):
+            continue
+
+        for iy in range(
+            len(ys) - 1
+        ):
+            y0 = ys[iy]
+            y1 = ys[
+                iy + 1
+            ]
+
+            if (
+                y1 - y0
+                <= 1e-9
+            ):
+                continue
+
+            cx = (
+                x0 + x1
+            ) / 2.0
+
+            cy = (
+                y0 + y1
+            ) / 2.0
+
+            if ponto_em_poligono(
+                cx,
+                cy,
+                poly
+            ):
+                celulas.append({
+                    "ix":
+                        ix,
+                    "iy":
+                        iy,
+                    "x0":
+                        x0,
+                    "x1":
+                        x1,
+                    "y0":
+                        y0,
+                    "y1":
+                        y1,
+                    "area":
+                        (
+                            x1 - x0
+                        )
+                        * (
+                            y1 - y0
+                        )
+                })
+
+    return (
+        celulas,
+        xs,
+        ys
+    )
+
+
+def _retangulo_bbox_de_indices(
+    indices,
+    xs,
+    ys
+):
+    ixs = [
+        p[0]
+        for p in indices
+    ]
+    iys = [
+        p[1]
+        for p in indices
+    ]
+
+    ix0 = min(ixs)
+    ix1 = max(ixs)
+    iy0 = min(iys)
+    iy1 = max(iys)
+
+    return {
+        "ix0":
+            ix0,
+        "ix1":
+            ix1,
+        "iy0":
+            iy0,
+        "iy1":
+            iy1,
+        "x0":
+            xs[ix0],
+        "x1":
+            xs[
+                ix1 + 1
+            ],
+        "y0":
+            ys[iy0],
+        "y1":
+            ys[
+                iy1 + 1
+            ]
+    }
+
+
+def decompor_poligono_ortogonal_em_retangulos(
+    poly
+):
+    """
+    Decompõe ambiente ortogonal (L, T, U, recortado etc.) em retângulos.
+
+    Estratégia:
+    1. cria células internas pela grade dos vértices;
+    2. cresce retângulos máximos a partir de cada célula livre;
+    3. escolhe sempre o maior retângulo disponível;
+    4. repete até cobrir todas as células.
+
+    Não desenha nada no DXF: é apenas geometria interna de cálculo.
+    """
+    if not _poligono_ortogonal(
+        poly
+    ):
+        return []
+
+    celulas, xs, ys = (
+        _celulas_ortogonais_internas(
+            poly
+        )
+    )
+
+    if not celulas:
+        return []
+
+    livres = {
+        (
+            c["ix"],
+            c["iy"]
+        )
+        for c in celulas
+    }
+
+    def area_indices(
+        ix0,
+        ix1,
+        iy0,
+        iy1
+    ):
+        return (
+            xs[ix1 + 1]
+            - xs[ix0]
+        ) * (
+            ys[iy1 + 1]
+            - ys[iy0]
+        )
+
+    retangulos = []
+
+    while livres:
+        melhor = None
+        melhor_area = -1.0
+
+        # Procura maior retângulo totalmente formado por células livres.
+        ix_values = sorted(
+            {
+                p[0]
+                for p in livres
+            }
+        )
+
+        iy_values = sorted(
+            {
+                p[1]
+                for p in livres
+            }
+        )
+
+        for ix0 in ix_values:
+            for ix1 in ix_values:
+                if ix1 < ix0:
+                    continue
+
+                for iy0 in iy_values:
+                    for iy1 in iy_values:
+                        if iy1 < iy0:
+                            continue
+
+                        bloco = {
+                            (
+                                ix,
+                                iy
+                            )
+                            for ix in range(
+                                ix0,
+                                ix1 + 1
+                            )
+                            for iy in range(
+                                iy0,
+                                iy1 + 1
+                            )
+                        }
+
+                        if not bloco:
+                            continue
+
+                        if not bloco.issubset(
+                            livres
+                        ):
+                            continue
+
+                        area = area_indices(
+                            ix0,
+                            ix1,
+                            iy0,
+                            iy1
+                        )
+
+                        if (
+                            area
+                            > melhor_area
+                            + 1e-9
+                        ):
+                            melhor_area = area
+                            melhor = (
+                                ix0,
+                                ix1,
+                                iy0,
+                                iy1,
+                                bloco
+                            )
+
+        if melhor is None:
+            # segurança: consome uma célula isolada
+            ix, iy = next(
+                iter(
+                    livres
+                )
+            )
+
+            melhor = (
+                ix,
+                ix,
+                iy,
+                iy,
+                {
+                    (
+                        ix,
+                        iy
+                    )
+                }
+            )
+
+        (
+            ix0,
+            ix1,
+            iy0,
+            iy1,
+            bloco
+        ) = melhor
+
+        ret = {
+            "x0":
+                xs[ix0],
+            "x1":
+                xs[
+                    ix1 + 1
+                ],
+            "y0":
+                ys[iy0],
+            "y1":
+                ys[
+                    iy1 + 1
+                ]
+        }
+
+        ret["largura"] = (
+            ret["x1"]
+            - ret["x0"]
+        )
+
+        ret["altura"] = (
+            ret["y1"]
+            - ret["y0"]
+        )
+
+        ret["area"] = (
+            ret["largura"]
+            * ret["altura"]
+        )
+
+        ret["centro"] = (
+            (
+                ret["x0"]
+                + ret["x1"]
+            ) / 2.0,
+            (
+                ret["y0"]
+                + ret["y1"]
+            ) / 2.0
+        )
+
+        retangulos.append(
+            ret
+        )
+
+        livres -= bloco
+
+    # Maiores primeiro: em um L simples teremos os 2 blocos principais.
+    retangulos.sort(
+        key=lambda r:
+            r["area"],
+        reverse=True
+    )
+
+    return retangulos
+
+
+def _alocar_quantidades_por_area(
+    retangulos,
+    quantidade
+):
+    """
+    Distribui a quantidade de luminárias entre retângulos.
+    Se quantidade >= nº de retângulos, garante pelo menos 1 em cada.
+    """
+    quantidade = int(
+        quantidade
+    )
+
+    n = len(
+        retangulos
+    )
+
+    if (
+        quantidade <= 0
+        or n == 0
+    ):
+        return [
+            0
+            for _ in retangulos
+        ]
+
+    # Menos luminárias que regiões: prioriza maiores regiões.
+    if quantidade < n:
+        saida = [
+            0
+            for _ in retangulos
+        ]
+
+        for i in range(
+            quantidade
+        ):
+            saida[i] = 1
+
+        return saida
+
+    saida = [
+        1
+        for _ in retangulos
+    ]
+
+    restantes = (
+        quantidade
+        - n
+    )
+
+    if restantes <= 0:
+        return saida
+
+    areas = [
+        max(
+            0.0,
+            r["area"]
+        )
+        for r in retangulos
+    ]
+
+    total = sum(
+        areas
+    )
+
+    if total <= 1e-12:
+        for i in range(
+            restantes
+        ):
+            saida[
+                i % n
+            ] += 1
+
+        return saida
+
+    quotas = [
+        restantes
+        * area / total
+        for area in areas
+    ]
+
+    inteiros = [
+        int(
+            math.floor(
+                q
+            )
+        )
+        for q in quotas
+    ]
+
+    for i, valor in enumerate(
+        inteiros
+    ):
+        saida[i] += valor
+
+    faltam = (
+        restantes
+        - sum(
+            inteiros
+        )
+    )
+
+    ordem = sorted(
+        range(n),
+        key=lambda i:
+            (
+                quotas[i]
+                - inteiros[i],
+                areas[i]
+            ),
+        reverse=True
+    )
+
+    for i in range(
+        faltam
+    ):
+        saida[
+            ordem[
+                i % n
+            ]
+        ] += 1
+
+    return saida
+
+
+def _pontos_em_retangulo(
+    retangulo,
+    quantidade,
+    afastamento_minimo=0.35
+):
+    """
+    Distribui pontos dentro de um único retângulo.
+    1 ponto -> centro.
+    vários -> ao longo do maior eixo.
+    """
+    quantidade = int(
+        quantidade
+    )
+
+    if quantidade <= 0:
+        return []
+
+    x0 = retangulo[
+        "x0"
+    ]
+    x1 = retangulo[
+        "x1"
+    ]
+    y0 = retangulo[
+        "y0"
+    ]
+    y1 = retangulo[
+        "y1"
+    ]
+
+    largura = (
+        x1 - x0
+    )
+
+    altura = (
+        y1 - y0
+    )
+
+    if quantidade == 1:
+        return [
+            (
+                (
+                    x0 + x1
+                ) / 2.0,
+                (
+                    y0 + y1
+                ) / 2.0
+            )
+        ]
+
+    # Folga nunca pode consumir o retângulo inteiro.
+    folga_x = min(
+        afastamento_minimo,
+        largura * 0.20
+    )
+
+    folga_y = min(
+        afastamento_minimo,
+        altura * 0.20
+    )
+
+    pontos = []
+
+    if largura >= altura:
+        ini = (
+            x0 + folga_x
+        )
+        fim = (
+            x1 - folga_x
+        )
+
+        passo = (
+            fim - ini
+        ) / (
+            quantidade + 1
+        )
+
+        cy = (
+            y0 + y1
+        ) / 2.0
+
+        for i in range(
+            1,
+            quantidade + 1
+        ):
+            pontos.append(
+                (
+                    ini
+                    + passo * i,
+                    cy
+                )
+            )
+
+    else:
+        ini = (
+            y0 + folga_y
+        )
+        fim = (
+            y1 - folga_y
+        )
+
+        passo = (
+            fim - ini
+        ) / (
+            quantidade + 1
+        )
+
+        cx = (
+            x0 + x1
+        ) / 2.0
+
+        for i in range(
+            1,
+            quantidade + 1
+        ):
+            pontos.append(
+                (
+                    cx,
+                    ini
+                    + passo * i
+                )
+            )
+
+    return pontos
+
+
+def pontos_iluminacao_por_decomposicao(
+    poly,
+    quantidade,
+    afastamento_minimo=0.35
+):
+    """
+    Regra Fase 8.2.
+
+    Para ambientes ortogonais:
+    - retângulo/quadrado -> distribuição normal no próprio retângulo;
+    - L/T/U/recortados -> decompõe em retângulos e distribui por região.
+
+    Para geometrias não ortogonais, retorna [] para permitir fallback
+    à rotina genérica pontos_iluminacao_internos().
+    """
+    quantidade = max(
+        0,
+        int(
+            quantidade or 0
+        )
+    )
+
+    if quantidade <= 0:
+        return []
+
+    retangulos = (
+        decompor_poligono_ortogonal_em_retangulos(
+            poly
+        )
+    )
+
+    if not retangulos:
+        return []
+
+    alocacao = (
+        _alocar_quantidades_por_area(
+            retangulos,
+            quantidade
+        )
+    )
+
+    pontos = []
+
+    for retangulo, qtd in zip(
+        retangulos,
+        alocacao
+    ):
+        pontos.extend(
+            _pontos_em_retangulo(
+                retangulo,
+                qtd,
+                afastamento_minimo=
+                    afastamento_minimo
+            )
+        )
+
+    # Segurança geométrica final.
+    pontos_validos = []
+
+    for ponto in pontos:
+        if ponto_em_poligono(
+            ponto[0],
+            ponto[1],
+            poly
+        ):
+            pontos_validos.append(
+                ponto
+            )
+
+    if len(
+        pontos_validos
+    ) == quantidade:
+        return pontos_validos
+
+    return []
