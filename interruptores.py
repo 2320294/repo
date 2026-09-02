@@ -1321,11 +1321,16 @@ def _ids_salvos_ambiente(config_salva, amb, portas):
     ]
 
 def _ambiente_sem_interruptor_proprio(nome):
-    """Fase 8.12: iluminação comandada pelo ambiente interno adjacente."""
+    """Fase 8.13: iluminação comandada pelo ambiente interno adjacente."""
     txt = unicodedata.normalize("NFKD", str(nome or "")).encode("ascii", "ignore").decode("ascii").casefold()
     compacto = "".join(ch for ch in txt if ch.isalnum())
     return any(chave in compacto for chave in ("varanda", "terraco", "garagem"))
 
+
+def _token_projeto_ui():
+    import hashlib
+    projeto = str(st.session_state.get("projeto_ativo", "SEM_PROJETO"))
+    return hashlib.sha1(projeto.encode("utf-8")).hexdigest()[:10]
 
 def renderizar_interruptores(
     dados_ambientes,
@@ -1406,13 +1411,38 @@ def renderizar_interruptores(
             portas = analise[amb]["portas"]
             poly = analise[amb]["poly"]
     
-            chave_estado = f"fase7_3_portas_interruptor_selecionadas_{amb}"
+            token_projeto = _token_projeto_ui()
+
+
+    
+            chave_estado = (
+
+    
+                "fase8_13_portas_interruptor_"
+
+    
+                f"{token_projeto}_{amb}"
+
+    
+            )
+
+
     
             if chave_estado not in st.session_state:
+
+    
                 st.session_state[chave_estado] = _ids_salvos_ambiente(
+
+    
                     config_salva,
+
+    
                     amb,
+
+    
                     portas
+
+    
                 )
     
             # Remove IDs que deixaram de existir após troca do DXF.
@@ -1449,7 +1479,7 @@ def renderizar_interruptores(
                 evento = st.vega_lite_chart(
                     fig,
                     use_container_width=False,
-                    key=f"fase7_3_planta_portas_{amb}",
+                    key=f"fase8_13_planta_portas_{token_projeto}_{amb}",
                     on_select="rerun"
                 )
     

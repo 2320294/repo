@@ -1,10 +1,9 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.12
-IDENTIFICADOR: Fase_8_12
+VERSÃO ATUAL: Fase 8.13
+IDENTIFICADOR: Fase_8_13
 
-[OK] QDC adapta profundidade à espessura real da parede
-[OK] medição entre faces paralelas de ambientes
-[OK] fallback de 15 cm para parede externa/sem face oposta
-[OK] largura do QDC = 40 cm preservada
-[OK] seleção QDC azul/verde preservada
-[OK] tomadas da Fase 8.10 preservadas
+[OK] interruptores restaurados por projeto
+[OK] tomadas altas restauradas por projeto
+[OK] posição de chuveiro restaurada por projeto
+[OK] Vega-Lite isolado por projeto
+[OK] persistência Supabase preservada

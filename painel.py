@@ -187,7 +187,7 @@ def renderizar_painel_principal():
         )
     )
 
-    # Fase 8.12 — as tomadas altas usam a mesma persistência
+    # Fase 8.13 — as tomadas altas usam a mesma persistência
     # do bloco de configuração para evitar alteração de schema no banco.
     config_tomadas_altas = (
         renderizar_tomadas_altas(

@@ -149,7 +149,7 @@ def _limpar_aparencia_selecao_paredes(
             )
         ]
 
-        # Fase 8.12: identidade visual igual ao QDC.
+        # Fase 8.13: identidade visual igual ao QDC.
         # Disponível = azul; selecionada confirmada = verde.
         cor[
             "value"
@@ -530,13 +530,18 @@ def _extrair_ponto_chuveiro(
 
 
 
+def _token_projeto_ui():
+    import hashlib
+    projeto = str(st.session_state.get("projeto_ativo", "SEM_PROJETO"))
+    return hashlib.sha1(projeto.encode("utf-8")).hexdigest()[:10]
+
 def renderizar_tomadas_altas(
     dados_ambientes,
     config_salva,
     dxf_bytes=None
 ):
     """
-    Fase 8.12:
+    Fase 8.13:
     posicionamento interativo das TUEs altas.
 
     Ar-condicionado: seleção do trecho e centralização automática.\n    Chuveiro: seleção do trecho e depois de um ponto específico na parede.\n    Portas dividem a parede em trechos independentes, como no QDC.
@@ -588,6 +593,8 @@ def renderizar_tomadas_altas(
     )
 
     resultado = {}
+
+    token_projeto = _token_projeto_ui()
 
     colunas = st.columns(
         2,
@@ -718,8 +725,8 @@ def renderizar_tomadas_altas(
                     )
 
                     chave = (
-                        "fase8_8_tomada_alta_"
-                        f"{ambiente}_{idx}"
+                        "fase8_13_tomada_alta_"
+                        f"{token_projeto}_{ambiente}_{idx}"
                     )
 
                     if chave not in st.session_state:
@@ -754,8 +761,8 @@ def renderizar_tomadas_altas(
                         ] = candidato
 
                     chave_posicao = (
-                        "fase8_8_posicao_chuveiro_"
-                        f"{ambiente}_{idx}"
+                        "fase8_13_posicao_chuveiro_"
+                        f"{token_projeto}_{ambiente}_{idx}"
                     )
 
                     if chave_posicao not in st.session_state:
@@ -816,7 +823,7 @@ def renderizar_tomadas_altas(
                         )
                     )
 
-                    # Fase 8.12: nenhuma parede disponível parece selecionada.
+                    # Fase 8.13: nenhuma parede disponível parece selecionada.
                     # Somente a parede confirmada no session_state fica verde.
                     fig = (
                         _limpar_aparencia_selecao_paredes(
@@ -828,8 +835,8 @@ def renderizar_tomadas_altas(
                         fig,
                         use_container_width=False,
                         key=(
-                            "fase8_8_grafico_tomada_alta_"
-                            f"{ambiente}_{idx}"
+                            "fase8_13_grafico_tomada_alta_"
+                            f"{token_projeto}_{ambiente}_{idx}"
                         ),
                         on_select="rerun"
                     )
@@ -915,8 +922,8 @@ def renderizar_tomadas_altas(
                                 fig_pontos,
                                 use_container_width=False,
                                 key=(
-                                    "fase8_8_grafico_ponto_chuveiro_"
-                                    f"{ambiente}_{idx}"
+                                    "fase8_13_grafico_ponto_chuveiro_"
+                                    f"{token_projeto}_{ambiente}_{idx}"
                                 ),
                                 on_select="rerun"
                             )

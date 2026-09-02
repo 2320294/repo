@@ -36,7 +36,7 @@ def _geometria_simbolo_tomada(
     ny
 ):
     """
-    Fase 8.12.
+    Fase 8.13.
 
     px,py continuam sendo o ponto da parede.
 
@@ -577,7 +577,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.12 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.13 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -653,7 +653,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 8.12:
+            # Fase 8.13:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
