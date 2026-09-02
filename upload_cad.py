@@ -24,7 +24,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 11.4 Rev.4:
+    Fase 11.4 Rev.5:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -421,12 +421,23 @@ def renderizar_salvar_e_gerar_cad(
 
         st.download_button(
             label=f"📥 Baixar Projeto DXF Atualizado — {VERSAO_CAD}",
-            data=cad_salvo,
+            data=bytes(cad_salvo),
             file_name=(
                 f"{nome_seguro}_Projeto_Eletrico_{VERSAO_ARQUIVO}.dxf"
             ),
-            mime="application/dxf",
+            # application/octet-stream força o navegador a tratar o DXF
+            # como arquivo para download, sem tentar interpretá-lo.
+            mime="application/octet-stream",
             use_container_width=True,
             key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
+            # Fase 11.4 Rev.5:
+            # impede o rerun do Streamlit no clique do download.
+            # O rerun podia reconstruir a página antes de o navegador
+            # iniciar a transferência do DXF.
+            on_click="ignore",
+        )
+
+        st.caption(
+            f"Arquivo DXF pronto para download: {tamanho / 1024:.1f} KB"
         )
 

@@ -1,2 +1,2 @@
-VERSAO_SISTEMA = "Fase 11.4 Rev.4"
-VERSAO_ARQUIVO = "Fase_11_4_Rev_4"
+VERSAO_SISTEMA = "Fase 11.4 Rev.5"
+VERSAO_ARQUIVO = "Fase_11_4_Rev_5"

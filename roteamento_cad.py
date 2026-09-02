@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.4 Rev.4 — rede híbrida.
+    Fase 11.4 Rev.5 — rede híbrida.
 
     Para cada ambiente compara:
     1) caminho direto QDC -> ambiente;
@@ -407,7 +407,7 @@ def _construir_rede_hibrida(
     não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
 
     Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.4 Rev.4.
+    evitando a volta excessiva observada na Fase 11.4 Rev.5.
     """
     conectados = [{
         "id": "QDC",
@@ -709,6 +709,278 @@ def _segmentos_eixo_parede(segmentos_crus, centro, afastamento=0.05):
     return out
 
 
+
+def _orientacao(a, b, c):
+    return (
+        (float(b[0]) - float(a[0]))
+        * (float(c[1]) - float(a[1]))
+        -
+        (float(b[1]) - float(a[1]))
+        * (float(c[0]) - float(a[0]))
+    )
+
+
+def _segmentos_intersectam(a, b, c, d, tol=1e-8):
+    o1 = _orientacao(a, b, c)
+    o2 = _orientacao(a, b, d)
+    o3 = _orientacao(c, d, a)
+    o4 = _orientacao(c, d, b)
+
+    if (
+        ((o1 > tol and o2 < -tol) or (o1 < -tol and o2 > tol))
+        and
+        ((o3 > tol and o4 < -tol) or (o3 < -tol and o4 > tol))
+    ):
+        return True
+
+    return False
+
+
+def _dist_ponto_segmento(p, a, b):
+    px, py = map(float, p)
+    ax, ay = map(float, a)
+    bx, by = map(float, b)
+    dx = bx - ax
+    dy = by - ay
+    l2 = dx * dx + dy * dy
+
+    if l2 <= 1e-12:
+        return math.hypot(px - ax, py - ay)
+
+    t = (
+        (px - ax) * dx
+        + (py - ay) * dy
+    ) / l2
+
+    t = max(0.0, min(1.0, t))
+    qx = ax + t * dx
+    qy = ay + t * dy
+    return math.hypot(px - qx, py - qy)
+
+
+def _segmentos_obstaculo(item):
+    """
+    Converte porta/soleira em segmentos geométricos utilizáveis.
+    """
+    verts = item.get("vertices") or []
+
+    if len(verts) >= 2:
+        pontos = [
+            (float(p[0]), float(p[1]))
+            for p in verts
+        ]
+        return [
+            (
+                pontos[i],
+                pontos[(i + 1) % len(pontos)]
+            )
+            for i in range(len(pontos))
+        ]
+
+    if (
+        item.get("p1") is not None
+        and item.get("p2") is not None
+    ):
+        return [
+            (
+                tuple(item["p1"]),
+                tuple(item["p2"])
+            )
+        ]
+
+    return []
+
+
+def _rota_encontra_porta_ou_soleira(
+    pontos_rota,
+    portas_raw,
+    soleiras_raw,
+    tolerancia=0.10
+):
+    """
+    Retorna True quando o caminho embutido na parede cruza ou passa
+    muito próximo de uma porta/soleira.
+
+    A tolerância cobre a diferença entre a face interna e o eixo da parede.
+    """
+    if len(pontos_rota) < 2:
+        return False
+
+    obstaculos = []
+
+    for item in (portas_raw or []):
+        obstaculos.extend(
+            _segmentos_obstaculo(item)
+        )
+
+    for item in (soleiras_raw or []):
+        obstaculos.extend(
+            _segmentos_obstaculo(item)
+        )
+
+    for a, b in zip(
+        pontos_rota[:-1],
+        pontos_rota[1:]
+    ):
+        for c, d in obstaculos:
+            if _segmentos_intersectam(
+                a, b, c, d
+            ):
+                return True
+
+            # Aproximação suficiente para detectar o vão mesmo quando
+            # a linha do conduíte corre no eixo da espessura da parede.
+            if min(
+                _dist_ponto_segmento(c, a, b),
+                _dist_ponto_segmento(d, a, b),
+                _dist_ponto_segmento(a, c, d),
+                _dist_ponto_segmento(b, c, d),
+            ) <= tolerancia:
+                return True
+
+    return False
+
+
+def _pontos_linha_parede_entre_tugs(
+    tug_origem,
+    tug_destino,
+    segmentos_crus=None,
+    comp_total=0.0,
+    centro_ambiente=None
+):
+    """
+    Calcula os pontos do conduíte TUG -> TUG sem desenhar.
+    """
+    p1 = (
+        tug_origem.get("ponto_conexao_parede")
+        or tug_origem.get("ponto")
+    )
+    p2 = (
+        tug_destino.get("ponto_conexao_parede")
+        or tug_destino.get("ponto")
+    )
+
+    if not p1 or not p2:
+        return []
+
+    segs = segmentos_crus or []
+
+    if (
+        not segs
+        or comp_total <= 0
+        or not centro_ambiente
+    ):
+        return [
+            tuple(p1),
+            tuple(p2)
+        ]
+
+    afast = max(
+        0.01,
+        min(
+            0.25,
+            _dist(
+                tug_origem.get("ponto"),
+                p1
+            )
+        )
+    )
+
+    eixos = _segmentos_eixo_parede(
+        segs,
+        centro_ambiente,
+        afast
+    )
+
+    d1 = float(
+        tug_origem.get(
+            "distancia_perimetro",
+            0.0
+        )
+        or 0.0
+    ) % comp_total
+
+    d2 = float(
+        tug_destino.get(
+            "distancia_perimetro",
+            0.0
+        )
+        or 0.0
+    ) % comp_total
+
+    def localizar(d):
+        acc = 0.0
+        for i, (_, _, L) in enumerate(segs):
+            if d <= acc + float(L) + 1e-9:
+                return i
+            acc += float(L)
+        return len(segs) - 1
+
+    i1 = localizar(d1)
+    i2 = localizar(d2)
+
+    if i1 == i2:
+        pts = [
+            tuple(p1),
+            tuple(p2)
+        ]
+    else:
+        dm = (d2 - d1) % comp_total
+        dn = (d1 - d2) % comp_total
+        sentido = 1 if dm <= dn else -1
+
+        pts = [tuple(p1)]
+        i = i1
+        guard = 0
+
+        while (
+            i != i2
+            and guard <= len(segs)
+        ):
+            j = (
+                i + sentido
+            ) % len(segs)
+
+            inter = _intersecao_retas(
+                eixos[i][0],
+                eixos[i][1],
+                eixos[j][0],
+                eixos[j][1]
+            )
+
+            if inter is None:
+                inter = (
+                    eixos[i][1]
+                    if sentido > 0
+                    else eixos[i][0]
+                )
+
+            pts.append(
+                tuple(inter)
+            )
+
+            i = j
+            guard += 1
+
+        pts.append(
+            tuple(p2)
+        )
+
+    limpos = []
+
+    for pt in pts:
+        if (
+            not limpos
+            or _dist(
+                limpos[-1],
+                pt
+            ) > 1e-7
+        ):
+            limpos.append(pt)
+
+    return limpos
+
+
 def _linha_parede_entre_tugs(
     msp,
     tug_origem,
@@ -719,50 +991,27 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 11.4 Rev.4:
-    o conduíte TUG->TUG percorre o EIXO DA PAREDE. Nos cantos, o ponto
-    de mudança de direção é a interseção dos eixos das duas paredes,
-    e não o vértice da face interna do ambiente.
+    Fase 11.4 Rev.5:
+    desenha TUG -> TUG pelo eixo da parede.
     """
-    p1=tug_origem.get('ponto_conexao_parede') or tug_origem.get('ponto')
-    p2=tug_destino.get('ponto_conexao_parede') or tug_destino.get('ponto')
-    if not p1 or not p2: return None
-    segs=segmentos_crus or []
-    if not segs or comp_total<=0 or not centro_ambiente:
-        return msp.add_lwpolyline([tuple(p1),tuple(p2)],dxfattribs={'layer':layer})
+    pontos = _pontos_linha_parede_entre_tugs(
+        tug_origem,
+        tug_destino,
+        segmentos_crus=segmentos_crus,
+        comp_total=comp_total,
+        centro_ambiente=centro_ambiente
+    )
 
-    # O próprio símbolo já informa a profundidade correta do eixo: distância
-    # entre o ponto da TUG (face do ambiente) e o extremo embutido do traço.
-    afast=max(0.01,min(0.25,_dist(tug_origem.get('ponto'),p1)))
-    eixos=_segmentos_eixo_parede(segs,centro_ambiente,afast)
-    d1=float(tug_origem.get('distancia_perimetro',0.0) or 0.0)%comp_total
-    d2=float(tug_destino.get('distancia_perimetro',0.0) or 0.0)%comp_total
-    def localizar(d):
-        acc=0.0
-        for i,(_,_,L) in enumerate(segs):
-            if d<=acc+float(L)+1e-9:return i
-            acc+=float(L)
-        return len(segs)-1
-    i1,i2=localizar(d1),localizar(d2)
-    if i1==i2:
-        pts=[tuple(p1),tuple(p2)]
-    else:
-        dm=(d2-d1)%comp_total; dn=(d1-d2)%comp_total
-        sentido=1 if dm<=dn else -1
-        pts=[tuple(p1)]; i=i1; guard=0
-        while i!=i2 and guard<=len(segs):
-            j=(i+sentido)%len(segs)
-            inter=_intersecao_retas(eixos[i][0],eixos[i][1],eixos[j][0],eixos[j][1])
-            if inter is None:
-                # fallback ainda no eixo da parede, nunca no canto interno cru
-                inter=eixos[i][1] if sentido>0 else eixos[i][0]
-            pts.append(tuple(inter))
-            i=j; guard+=1
-        pts.append(tuple(p2))
-    limpos=[]
-    for pt in pts:
-        if not limpos or _dist(limpos[-1],pt)>1e-7:limpos.append(pt)
-    return msp.add_lwpolyline(limpos,dxfattribs={'layer':layer})
+    if len(pontos) < 2:
+        return None
+
+    return msp.add_lwpolyline(
+        pontos,
+        dxfattribs={
+            "layer": layer
+        }
+    )
+
 
 def _arestas_tugs_internas(
     nos,
@@ -774,7 +1023,7 @@ def _arestas_tugs_internas(
     Liga:
       luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
 
-    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.4.
+    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.5.
     Para ambientes sem interruptor próprio, liga a luminária principal
     diretamente à primeira TUG.
     """
@@ -960,9 +1209,11 @@ def desenhar_rotas_qdc_iluminacao(
     circuitos,
     pontos_interruptores=None,
     ambientes_geom=None,
+    portas_raw=None,
+    soleiras_raw=None,
 ):
     """
-    Fase 11.4 Rev.4
+    Fase 11.4 Rev.5
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -1049,9 +1300,18 @@ def desenhar_rotas_qdc_iluminacao(
 
     geometria_ambiente = {}
     for item in (ambientes_geom or []):
-        chave = _normalizar_nome(item.get("nome") or item.get("ambiente"))
+        chave = _normalizar_nome(
+            item.get("nome")
+            or item.get("ambiente")
+        )
         if chave:
             geometria_ambiente[chave] = item
+
+    luminarias_por_ambiente = (
+        _luminarias_por_ambiente(
+            pontos_eletricos
+        )
+    )
 
     rotas = []
 
@@ -1080,16 +1340,108 @@ def desenhar_rotas_qdc_iluminacao(
                 _normalizar_nome(trecho.get("destino_ambiente")),
                 {}
             )
-            entidade = _linha_parede_entre_tugs(
-                msp,
-                trecho["tug_origem"],
-                trecho["tug_destino"],
-                segmentos_crus=geo.get("segmentos_crus", []),
-                comp_total=geo.get("comp_total", 0.0),
-                centro_ambiente=geo.get("centro"),
-                layer=LAYER_ROTA
+            pontos_parede = (
+                _pontos_linha_parede_entre_tugs(
+                    trecho["tug_origem"],
+                    trecho["tug_destino"],
+                    segmentos_crus=geo.get(
+                        "segmentos_crus",
+                        []
+                    ),
+                    comp_total=geo.get(
+                        "comp_total",
+                        0.0
+                    ),
+                    centro_ambiente=geo.get(
+                        "centro"
+                    )
+                )
             )
-            tipo_entidade = "LWPOLYLINE"
+
+            encontrou_vao = (
+                _rota_encontra_porta_ou_soleira(
+                    pontos_parede,
+                    portas_raw,
+                    soleiras_raw
+                )
+            )
+
+            if encontrou_vao:
+                ambiente_chave = (
+                    _normalizar_nome(
+                        trecho.get(
+                            "destino_ambiente"
+                        )
+                    )
+                )
+
+                destino = (
+                    trecho["tug_destino"].get(
+                        "ponto_conexao_parede"
+                    )
+                    or trecho["tug_destino"].get(
+                        "ponto"
+                    )
+                )
+
+                candidatos_luz = (
+                    luminarias_por_ambiente.get(
+                        ambiente_chave,
+                        []
+                    )
+                )
+
+                if candidatos_luz:
+                    origem_luz = min(
+                        candidatos_luz,
+                        key=lambda pt:
+                            _dist(
+                                pt,
+                                destino
+                            )
+                    )
+                else:
+                    origem_luz = (
+                        trecho["inicio"]
+                    )
+
+                entidade = _arco_suave(
+                    msp,
+                    origem_luz,
+                    destino,
+                    indice=indice,
+                    layer=LAYER_ROTA
+                )
+
+                tipo_entidade = "ARC"
+                trecho[
+                    "criterio"
+                ] = "REINICIO_TUG_APOS_VAO"
+                trecho[
+                    "inicio"
+                ] = origem_luz
+                trecho[
+                    "fim"
+                ] = destino
+            else:
+                entidade = _linha_parede_entre_tugs(
+                    msp,
+                    trecho["tug_origem"],
+                    trecho["tug_destino"],
+                    segmentos_crus=geo.get(
+                        "segmentos_crus",
+                        []
+                    ),
+                    comp_total=geo.get(
+                        "comp_total",
+                        0.0
+                    ),
+                    centro_ambiente=geo.get(
+                        "centro"
+                    ),
+                    layer=LAYER_ROTA
+                )
+                tipo_entidade = "LWPOLYLINE"
         else:
             entidade = _arco_suave(
                 msp,
@@ -1116,6 +1468,7 @@ def desenhar_rotas_qdc_iluminacao(
                             "LUZ_PARA_INTERRUPTOR",
                             "INTERRUPTOR_PARA_TUG1",
                             "CADEIA_TUG",
+                            "REINICIO_TUG_APOS_VAO",
                         }
                         else "TRONCAL_HIBRIDA"
                     )
