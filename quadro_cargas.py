@@ -196,7 +196,7 @@ def renderizar_edicao_cargas(dados_ambientes):
 
 def renderizar_tabela_consolidada(tabela_editada):
     """
-    Fase 7.7 — ordem definitiva das colunas:
+    Fase 7.8 — ordem definitiva das colunas:
 
     1. Ambiente
     2. Área (m²)

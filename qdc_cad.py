@@ -312,7 +312,7 @@ def desenhar_qdc(
         }
     )
 
-    # Fase 7.7: somente o símbolo do QDC, sem texto/legenda.
+    # Fase 7.8: somente o símbolo do QDC, sem texto/legenda.
 
     return {
         "centro": (mx, my),

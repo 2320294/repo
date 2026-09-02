@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unicodedata
+import math
 
 import ezdxf
 import streamlit as st
@@ -101,6 +102,66 @@ def _ambiente_circulacao_qdc(nome):
     )
 
 
+
+def _amostrar_arco_qdc(entidade, passos=24):
+    centro=(float(entidade.dxf.center.x),float(entidade.dxf.center.y))
+    raio=float(entidade.dxf.radius)
+    inicio=float(entidade.dxf.start_angle)
+    fim=float(entidade.dxf.end_angle)
+    while fim < inicio:
+        fim += 360.0
+    pontos=[]
+    for i in range(passos+1):
+        ang=inicio+(fim-inicio)*i/passos
+        rad=math.radians(ang)
+        pontos.append((centro[0]+raio*math.cos(rad),centro[1]+raio*math.sin(rad)))
+    return pontos
+
+
+def _geometrias_portas_qdc(msp):
+    geometrias=[]
+    for ent in msp:
+        if str(getattr(ent.dxf,"layer","")).upper().strip() != "IA_PORTAS":
+            continue
+        tipo=ent.dxftype(); pontos=[]
+        try:
+            if tipo=="LINE":
+                pontos=[(float(ent.dxf.start.x),float(ent.dxf.start.y)),(float(ent.dxf.end.x),float(ent.dxf.end.y))]
+            elif tipo=="LWPOLYLINE":
+                pontos=[(float(x),float(y)) for x,y in ent.get_points("xy")]
+            elif tipo=="POLYLINE":
+                pontos=[(float(v.dxf.location.x),float(v.dxf.location.y)) for v in ent.vertices]
+            elif tipo=="ARC":
+                pontos=_amostrar_arco_qdc(ent)
+        except Exception:
+            pontos=[]
+        if len(pontos)>=2:
+            geometrias.append({"tipo":tipo,"pontos":pontos})
+    return geometrias
+
+
+def _distancia_ponto_segmento_qdc(px,py,a,b):
+    ax,ay=float(a[0]),float(a[1]); bx,by=float(b[0]),float(b[1])
+    vx,vy=bx-ax,by-ay; den=vx*vx+vy*vy
+    if den<=1e-12: return math.hypot(px-ax,py-ay)
+    t=((px-ax)*vx+(py-ay)*vy)/den; t=max(0.0,min(1.0,t))
+    qx,qy=ax+t*vx,ay+t*vy
+    return math.hypot(px-qx,py-qy)
+
+
+def _geometrias_portas_no_ambiente(poly, geometrias, tolerancia=0.35):
+    saida=[]
+    for geo in geometrias:
+        pts=geo.get("pontos") or []
+        if not pts: continue
+        menor=float("inf")
+        for px,py in pts:
+            for i in range(len(poly)):
+                d=_distancia_ponto_segmento_qdc(px,py,poly[i],poly[(i+1)%len(poly)])
+                if d<menor: menor=d
+        if menor<=tolerancia: saida.append(geo)
+    return saida
+
 def _ambientes_do_dxf(
     dxf_bytes
 ):
@@ -121,8 +182,16 @@ def _ambientes_do_dxf(
             caminho
         )
 
+        msp = doc.modelspace()
+
         elementos = ler_elementos(
-            doc.modelspace()
+            msp
+        )
+
+        geometrias_portas = (
+            _geometrias_portas_qdc(
+                msp
+            )
         )
 
         polilinhas = elementos[
@@ -214,7 +283,12 @@ def _ambientes_do_dxf(
                 "poly":
                     list(poly),
                 "paredes":
-                    paredes
+                    paredes,
+                "geometrias_portas":
+                    _geometrias_portas_no_ambiente(
+                        poly,
+                        geometrias_portas
+                    )
             }
 
         return saida
@@ -233,7 +307,8 @@ def _figura_paredes_qdc(
     nome,
     poly,
     paredes,
-    selecionada=None
+    selecionada=None,
+    geometrias_portas=None
 ):
     xs = [
         float(p[0])
@@ -316,6 +391,17 @@ def _figura_paredes_qdc(
             "y": y,
             "ordem": ordem
         })
+
+    dados_portas = []
+
+    for indice, geo in enumerate(geometrias_portas or []):
+        pontos = geo.get("pontos") or []
+        if len(pontos) < 2:
+            continue
+        grupo = f"PORTA_{indice}"
+        for ordem, ponto in enumerate(pontos):
+            x, y = tr(ponto)
+            dados_portas.append({"grupo":grupo,"ordem":ordem,"x":x,"y":y})
 
     dados_paredes = []
     marcadores = []
@@ -491,6 +577,23 @@ def _figura_paredes_qdc(
                         "field":
                             "ordem"
                     }
+                }
+            },
+            {
+                "data": {
+                    "values":
+                        dados_portas
+                },
+                "mark": {
+                    "type": "line",
+                    "stroke": "#111827",
+                    "strokeWidth": 2.2
+                },
+                "encoding": {
+                    "x": {"field":"x","type":"quantitative","axis":None,"scale":sx},
+                    "y": {"field":"y","type":"quantitative","axis":None,"scale":sy},
+                    "detail": {"field":"grupo"},
+                    "order": {"field":"ordem"}
                 }
             },
             {
@@ -753,7 +856,7 @@ def renderizar_qdc(
             "Ambiente"
         ]
 
-        # Fase 7.7:
+        # Fase 7.8:
         # filtro normalizado. Ex.: W.C. -> wc e A.S. -> as.
         if _ambiente_molhado_qdc(
             nome
@@ -818,7 +921,7 @@ def renderizar_qdc(
         "instalado o QDC:",
         opcoes,
         index=indice,
-        key="fase7_7_select_qdc"
+        key="fase7_8_select_qdc"
     )
 
     ambiente = (
@@ -860,7 +963,7 @@ def renderizar_qdc(
     ]
 
     chave = (
-        "fase7_7_qdc_parede_"
+        "fase7_8_qdc_parede_"
         + ambiente
     )
 
@@ -901,14 +1004,18 @@ def renderizar_qdc(
         ambiente,
         item["poly"],
         paredes,
-        selecionada
+        selecionada,
+        geometrias_portas=item.get(
+            "geometrias_portas",
+            []
+        )
     )
 
     evento = st.vega_lite_chart(
         fig,
         use_container_width=False,
         key=(
-            "fase7_7_qdc_grafico_"
+            "fase7_8_qdc_grafico_"
             + ambiente
         ),
         on_select="rerun"
