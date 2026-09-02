@@ -768,6 +768,13 @@ def gerar_memorial_pdf(
         cabecalho
     ]
 
+    total_qtd_ilum = 0
+    total_pot_ilum = 0
+    total_qtd_tug = 0
+    total_pot_tug = 0
+    total_qtd_tue = 0
+    total_pot_tue = 0
+
     for row in sorted(
         tabela_editada,
         key=lambda x: str(
@@ -777,6 +784,60 @@ def gerar_memorial_pdf(
             )
         ).casefold()
     ):
+        qtd_ilum = int(
+            row.get(
+                "Qtd Ilum.",
+                0
+            )
+            or 0
+        )
+
+        pot_ilum_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. Ilum (W)",
+                "Pot. Unit. Ilum (VA)",
+                0
+            )
+        )
+
+        qtd_tug = int(
+            row.get(
+                "Qtd TUG",
+                row.get(
+                    "TUGs (Qtd)",
+                    0
+                )
+            )
+            or 0
+        )
+
+        pot_tug_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. TUG (W)",
+                "Pot. Unit. TUG (VA)",
+                0
+            )
+        )
+
+        qtd_tue = int(
+            row.get(
+                "Qtd TUE",
+                0
+            )
+            or 0
+        )
+
+        pot_tue_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. TUE (W)",
+                "Pot. Unit. TUE (VA)",
+                0
+            )
+        )
+
         dados_tabela.append([
             str(
                 row.get(
@@ -784,64 +845,44 @@ def gerar_memorial_pdf(
                     ""
                 )
             ),
-            str(
-                int(
-                    row.get(
-                        "Qtd Ilum.",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    _valor_w(
-                        row,
-                        "Pot. Unit. Ilum (W)",
-                        "Pot. Unit. Ilum (VA)",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    row.get(
-                        "Qtd TUG",
-                        row.get(
-                            "TUGs (Qtd)",
-                            0
-                        )
-                    )
-                )
-            ),
-            str(
-                int(
-                    _valor_w(
-                        row,
-                        "Pot. Unit. TUG (W)",
-                        "Pot. Unit. TUG (VA)",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    row.get(
-                        "Qtd TUE",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    _valor_w(
-                        row,
-                        "Pot. Unit. TUE (W)",
-                        "Pot. Unit. TUE (VA)",
-                        0
-                    )
-                )
-            )
+            str(qtd_ilum),
+            str(pot_ilum_unit),
+            str(qtd_tug),
+            str(pot_tug_unit),
+            str(qtd_tue),
+            str(pot_tue_unit)
         ])
+
+        total_qtd_ilum += qtd_ilum
+        total_pot_ilum += (
+            qtd_ilum
+            * pot_ilum_unit
+        )
+
+        total_qtd_tug += qtd_tug
+        total_pot_tug += (
+            qtd_tug
+            * pot_tug_unit
+        )
+
+        total_qtd_tue += qtd_tue
+        total_pot_tue += (
+            qtd_tue
+            * pot_tue_unit
+        )
+
+    # Linha de totais do Quadro de Cargas.
+    # As potências totais seguem a mesma lógica já usada no quadro
+    # consolidado e no Excel: quantidade x potência unitária.
+    dados_tabela.append([
+        "TOTAL GERAL",
+        str(total_qtd_ilum),
+        str(total_pot_ilum),
+        str(total_qtd_tug),
+        str(total_pot_tug),
+        str(total_qtd_tue),
+        str(total_pot_tue)
+    ])
 
     tabela = Table(
         dados_tabela,
@@ -891,6 +932,29 @@ def gerar_memorial_pdf(
                 (0, 0),
                 (-1, -1),
                 "MIDDLE"
+            ),
+            (
+                "BACKGROUND",
+                (0, -1),
+                (-1, -1),
+                colors.HexColor(
+                    "#E8EEF8"
+                )
+            ),
+            (
+                "FONTNAME",
+                (0, -1),
+                (-1, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "LINEABOVE",
+                (0, -1),
+                (-1, -1),
+                0.8,
+                colors.HexColor(
+                    "#4A5568"
+                )
             )
         ])
     )
