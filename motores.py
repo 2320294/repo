@@ -17,7 +17,8 @@ from geometria import (
     point_seg_dist,
     bbox_poligono,
     ponto_central_interno,
-    ponto_interno_proximo
+    ponto_interno_proximo,
+    pontos_iluminacao_internos
 )
 
 from interruptores_cad import (
@@ -222,7 +223,7 @@ def gerar_cad_unifilar(
                 "polilinha": list(polilinha),
             })
 
-            # Fase 8.0:
+            # Fase 8.1:
             # centro operacional sempre DENTRO do ambiente.
             # Em geometrias côncavas/irregulares, o centro da bounding
             # box pode cair perto de um recorte ou até fora do polígono.
@@ -333,64 +334,17 @@ def gerar_cad_unifilar(
                 )
 
                 if qtd_ilum > 0:
-                    pontos_luz = []
-
-                    if qtd_ilum == 1:
-                        # Ponto visualmente central, mas sempre interno.
-                        pontos_luz.append(
-                            (
-                                centro_x,
-                                centro_y
-                            )
+                    # Fase 8.1:
+                    # usa o interior real do ambiente, inclusive em
+                    # polígonos côncavos e geometrias em L.
+                    pontos_luz = (
+                        pontos_iluminacao_internos(
+                            polilinha,
+                            qtd_ilum,
+                            afastamento_minimo=
+                                0.35
                         )
-
-                    elif largura >= comprimento:
-                        step = (
-                            largura
-                            /
-                            (qtd_ilum + 1)
-                        )
-
-                        for i in range(
-                            1,
-                            qtd_ilum + 1
-                        ):
-                            alvo = (
-                                min_x
-                                + step * i,
-                                centro_y
-                            )
-
-                            pontos_luz.append(
-                                ponto_interno_proximo(
-                                    polilinha,
-                                    alvo
-                                )
-                            )
-
-                    else:
-                        step = (
-                            comprimento
-                            /
-                            (qtd_ilum + 1)
-                        )
-
-                        for i in range(
-                            1,
-                            qtd_ilum + 1
-                        ):
-                            alvo = (
-                                centro_x,
-                                min_y
-                                + step * i
-                            )
-
-                            pontos_luz.append(
-                                ponto_interno_proximo(
-                                    polilinha,
-                                    alvo
-                                )
-                            )
+                    )
 
                     for lx, ly in pontos_luz:
                         pontos_eletricos.append({
@@ -489,7 +443,7 @@ def gerar_cad_unifilar(
             pontos_interruptores=pontos_interruptores,
         )
 
-        # Fase 8.0: limpar conduítes/comandos para foco nos pontos elétricos.
+        # Fase 8.1: limpar conduítes/comandos para foco nos pontos elétricos.
         camadas_ocultar = {"PROJ_ELETRICA_ELETRODUTO", "PROJ_ELETRICA_ELETRODUTO_TEXTO", "PROJ_ELETRICA_COMANDO"}
         for entidade in list(msp):
             if entidade.dxf.layer in camadas_ocultar:

@@ -217,7 +217,7 @@ def _ponto_10cm_com_regra_de_canto(
     tolerancia_parede=0.035
 ):
     """
-    Regra Fase 8.0.
+    Regra Fase 8.1.
 
     1) Tenta a regra normal: 10 cm após P2/P3, na continuação
        origem -> referência.
@@ -413,7 +413,7 @@ def _geometria_interruptor(
     porta_geom
 ):
     """
-    Regra Fase 8.0:
+    Regra Fase 8.1:
 
     - lado do ambiente correspondente à face P1-P2:
       ponto de referência = P2;
@@ -574,7 +574,7 @@ def desenhar_interruptores(
     config_interruptores
 ):
     """
-    Fase 8.0:
+    Fase 8.1:
     - 1 porta: automático.
     - 2+ portas: somente IDs selecionados.
     - mesma porta selecionada pelos dois ambientes:

@@ -431,3 +431,300 @@ def ponto_interno_proximo(
         if melhor is not None
         else ponto_central_interno(poly)
     )
+
+
+def pontos_iluminacao_internos(
+    poly,
+    quantidade,
+    afastamento_minimo=0.35,
+    grade=36
+):
+    """
+    Distribui pontos de iluminação no interior real do polígono.
+
+    - nunca aceita ponto fora do ambiente;
+    - prefere pelo menos afastamento_minimo das paredes;
+    - para vários pontos, espalha os pontos pelo interior útil;
+    - em ambientes estreitos relaxa a folga, mas continua interno.
+    """
+    quantidade = max(
+        0,
+        int(
+            quantidade or 0
+        )
+    )
+
+    if quantidade <= 0:
+        return []
+
+    if not poly or len(poly) < 3:
+        return []
+
+    if quantidade == 1:
+        return [
+            ponto_central_interno(
+                poly
+            )
+        ]
+
+    min_x, max_x, min_y, max_y = (
+        bbox_poligono(
+            poly
+        )
+    )
+
+    largura = max(
+        max_x - min_x,
+        1e-9
+    )
+
+    altura = max(
+        max_y - min_y,
+        1e-9
+    )
+
+    n = max(
+        18,
+        int(
+            grade
+        )
+    )
+
+    centro = (
+        ponto_central_interno(
+            poly
+        )
+    )
+
+    def gerar_candidatos(
+        folga
+    ):
+        candidatos = []
+
+        for ix in range(
+            n + 1
+        ):
+            x = (
+                min_x
+                + largura
+                * ix / n
+            )
+
+            for iy in range(
+                n + 1
+            ):
+                y = (
+                    min_y
+                    + altura
+                    * iy / n
+                )
+
+                if not ponto_em_poligono(
+                    x,
+                    y,
+                    poly
+                ):
+                    continue
+
+                dist_borda = (
+                    distancia_borda_poligono(
+                        x,
+                        y,
+                        poly
+                    )
+                )
+
+                if (
+                    dist_borda
+                    + 1e-9
+                    < folga
+                ):
+                    continue
+
+                candidatos.append(
+                    (
+                        x,
+                        y,
+                        dist_borda
+                    )
+                )
+
+        return candidatos
+
+    folgas = [
+        float(
+            afastamento_minimo
+        ),
+        float(
+            afastamento_minimo
+        ) * 0.80,
+        float(
+            afastamento_minimo
+        ) * 0.60,
+        float(
+            afastamento_minimo
+        ) * 0.40,
+        0.10,
+        0.05,
+        0.0
+    ]
+
+    candidatos = []
+
+    for folga in folgas:
+        candidatos = (
+            gerar_candidatos(
+                max(
+                    0.0,
+                    folga
+                )
+            )
+        )
+
+        if (
+            len(
+                candidatos
+            )
+            >= quantidade
+        ):
+            break
+
+    if not candidatos:
+        return [
+            ponto_central_interno(
+                poly
+            )
+        ]
+
+    def score_primeiro(
+        cand
+    ):
+        x, y, dist_borda = (
+            cand
+        )
+
+        dist_centro = math.hypot(
+            x - centro[0],
+            y - centro[1]
+        )
+
+        return (
+            dist_borda * 4.0
+            - dist_centro * 0.25
+        )
+
+    primeiro = max(
+        candidatos,
+        key=score_primeiro
+    )
+
+    escolhidos = [
+        (
+            primeiro[0],
+            primeiro[1]
+        )
+    ]
+
+    restantes = [
+        c
+        for c in candidatos
+        if (
+            abs(
+                c[0]
+                - primeiro[0]
+            )
+            > 1e-9
+            or abs(
+                c[1]
+                - primeiro[1]
+            )
+            > 1e-9
+        )
+    ]
+
+    while (
+        len(
+            escolhidos
+        )
+        < quantidade
+        and restantes
+    ):
+        melhor = None
+        melhor_score = (
+            -float(
+                "inf"
+            )
+        )
+
+        for cand in restantes:
+            x, y, dist_borda = (
+                cand
+            )
+
+            dist_outros = min(
+                math.hypot(
+                    x - ex,
+                    y - ey
+                )
+                for ex, ey
+                in escolhidos
+            )
+
+            score = (
+                dist_outros
+                + dist_borda * 1.25
+            )
+
+            if (
+                score
+                > melhor_score
+            ):
+                melhor_score = (
+                    score
+                )
+                melhor = cand
+
+        if melhor is None:
+            break
+
+        escolhidos.append(
+            (
+                melhor[0],
+                melhor[1]
+            )
+        )
+
+        restantes = [
+            c
+            for c in restantes
+            if not (
+                abs(
+                    c[0]
+                    - melhor[0]
+                )
+                <= 1e-9
+                and abs(
+                    c[1]
+                    - melhor[1]
+                )
+                <= 1e-9
+            )
+        ]
+
+    while (
+        len(
+            escolhidos
+        )
+        < quantidade
+    ):
+        escolhidos.append(
+            ponto_central_interno(
+                poly
+            )
+        )
+
+    return (
+        escolhidos[
+            :quantidade
+        ]
+    )

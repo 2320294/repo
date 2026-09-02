@@ -395,7 +395,7 @@ def desenhar_qdc(
         }
     )
 
-    # Fase 8.0:
+    # Fase 8.1:
     # somente o símbolo do QDC, sem legenda textual.
 
     return {

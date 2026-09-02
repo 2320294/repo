@@ -826,7 +826,7 @@ def _figura_paredes_qdc(
             "ordem": ordem
         })
 
-    # Fase 8.0: mesmas portas da mini planta dos interruptores.
+    # Fase 8.1: mesmas portas da mini planta dos interruptores.
     dados_portas = []
 
     for indice, porta in enumerate(portas or []):
@@ -1459,7 +1459,7 @@ def renderizar_qdc(
             "Ambiente"
         ]
 
-        # Fase 8.0:
+        # Fase 8.1:
         # filtro normalizado. Ex.: W.C. -> wc e A.S. -> as.
         if _ambiente_molhado_qdc(
             nome

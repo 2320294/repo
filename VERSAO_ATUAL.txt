@@ -1,11 +1,10 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.0
-IDENTIFICADOR: Fase_8_0
+VERSÃO ATUAL: Fase 8.1
+IDENTIFICADOR: Fase_8_1
 
-[OK] Sistema Fase 8.0
-[OK] Gerador CAD Fase 8.0
-[OK] DXF Fase_8_0
-[OK] parede dividida por porta
-[OK] trechos A/B/C selecionáveis
-[OK] QDC centralizado no trecho selecionado
-[OK] persistência t0/t1
+[OK] Sistema Fase 8.1
+[OK] Gerador CAD Fase 8.1
+[OK] DXF Fase_8_1
+[OK] iluminação distribuída no interior real do polígono
+[OK] preferência de 35 cm de folga das paredes
+[OK] QDC Fase 8.0 preservado
