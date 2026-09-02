@@ -57,7 +57,7 @@ def desenhar_unifilar_qdc(
 
     # Cabeçalho: corrigido para não sobrepor textos.
     _text(msp,"DIAGRAMA UNIFILAR DO QDC",x0+0.55,y0-0.42,0.24)
-    _text(msp,f"FASE 9.4 | FORNECIMENTO: {tipo_for} | {tensao_for}",
+    _text(msp,f"FASE 9.5 | FORNECIMENTO: {tipo_for} | {tensao_for}",
           x0+0.55,y0-0.82,0.135)
     _text(msp,f"TENSAO DE PROJETO DOS CIRCUITOS: {int(tensao_projeto)} V",
           x0+0.55,y0-1.12,0.125)
@@ -107,7 +107,10 @@ def desenhar_unifilar_qdc(
             _rect(msp,xdr-0.30,ydr-0.18,xdr+0.30,ydr+0.18)
             _text(msp,g["dr"],xdr-0.16,ydr-0.05,0.11)
             nums=", ".join(f"C{n:02d}" for n in g["circuitos"])
-            _text(msp,f"{g['dr']}: {nums}",xdr-0.30,ydr-0.42,0.09)
+            nominal=g.get("corrente_nominal_a")
+            sens=g.get("sensibilidade_ma",30)
+            spec=(f"{nominal} A / {sens} mA" if nominal is not None else f"{sens} mA")
+            _text(msp,f"{spec} | {nums}",xdr-0.30,ydr-0.42,0.085)
             xdr+=3.00
     else:
         _rect(msp,xp-0.30,ydr-0.18,xp+0.30,ydr+0.18)
@@ -136,12 +139,15 @@ def desenhar_unifilar_qdc(
         dj=int(c.get("disjuntor",0) or 0)
         fase=str(c.get("fase","A definir"))
         polos=str(c.get("polos","A definir"))
-        dr=str(c.get("dr","—"))
+        dr=str(c.get("dr","") or "").strip()
         numero=int(c.get("numero",idx))
         cond="2F + PE" if tipo.upper()=="TUE" else "F + N + PE"
 
-        _text(msp,f"C{numero:02d} | {tipo} | {amb} | FASE {fase} | {dr}",
-              xt,cy+0.11,0.125)
+        linha1=f"C{numero:02d} | {tipo} | {amb} | FASE {fase}"
+        if dr:
+            linha1 += f" | {dr}"
+
+        _text(msp,linha1,xt,cy+0.11,0.125)
         _text(msp,f"{pot:.0f} W | {cor:.2f} A | DJ {dj} A {polos} | {bit:g} mm2 | {cond}",
               xt,cy-0.13,0.10)
 
