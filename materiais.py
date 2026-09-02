@@ -890,15 +890,93 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 11.7 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 11.8 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 11.7/11.2, quando o
+    # cargas elementares por ambiente até a Fase 11.8/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
+
+    # Fase 11.8 — se o CAD desta versão já calculou correções por
+    # queda de tensão, a tabela de circuitos passa a refletir a seção final.
+    correcoes_por_numero = {}
+
+    if isinstance(
+        resumo_rotas,
+        dict
+    ):
+        for item in (
+            resumo_rotas.get(
+                "correcoes_bitola",
+                []
+            )
+            or []
+        ):
+            numero = int(
+                item.get(
+                    "numero",
+                    0
+                )
+                or 0
+            )
+
+            if numero > 0:
+                correcoes_por_numero[
+                    numero
+                ] = item
+
+    for circuito in circuitos:
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        correcao = correcoes_por_numero.get(
+            numero
+        )
+
+        if (
+            correcao
+            and correcao.get(
+                "status"
+            )
+            == "CORRIGIDA"
+        ):
+            circuito[
+                "bitola_original"
+            ] = correcao.get(
+                "bitola_original_mm2"
+            )
+
+            circuito[
+                "bitola"
+            ] = correcao.get(
+                "bitola_final_mm2"
+            )
+
+            circuito[
+                "queda_tensao_antes_pct"
+            ] = correcao.get(
+                "queda_antes_pct"
+            )
+
+            circuito[
+                "queda_tensao_depois_pct"
+            ] = correcao.get(
+                "queda_depois_pct"
+            )
+
+            circuito[
+                "criterio_bitola"
+            ] = (
+                "Seção elevada automaticamente por queda de tensão"
+            )
 
 # ========================================================
     # CABOS POR BITOLA, FUNÇÃO E COR
@@ -1179,7 +1257,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 11.7 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 11.8 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1371,7 +1449,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 11.7: dados estruturais usados pelo roteamento continuam
+        # Fase 11.8: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1380,7 +1458,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
     return materiais_df, circuitos_df
 
 
-def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None):
+def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None, correcoes_df=None):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         materiais_df.to_excel(writer, sheet_name="Materiais", index=False)
@@ -1404,6 +1482,22 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=No
                 (
                     "Validacao_Rotas",
                     validacao_df
+                )
+            )
+
+        if (
+            correcoes_df is not None
+            and not correcoes_df.empty
+        ):
+            correcoes_df.to_excel(
+                writer,
+                sheet_name="Correcoes_Queda",
+                index=False
+            )
+            abas.append(
+                (
+                    "Correcoes_Queda",
+                    correcoes_df
                 )
             )
 
@@ -1493,7 +1587,7 @@ def _tabela_resumo_pdf(linhas, largura_total=26.5*cm):
 def _gerar_pdf_materiais_circuitos(
     nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito,
     resumo_balanceamento=None, resumo_protecao=None, resumo_drs=None,
-    resultado_demanda=None, parametros_rede=None, validacao_df=None
+    resultado_demanda=None, parametros_rede=None, validacao_df=None, correcoes_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -1674,13 +1768,68 @@ def _gerar_pdf_materiais_circuitos(
         ))
 
     if (
+        correcoes_df is not None
+        and not correcoes_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "6. CORREÇÕES AUTOMÁTICAS POR QUEDA DE TENSÃO",
+                secao
+            )
+        ]
+
+        cols_corr_pdf = [
+            c
+            for c in [
+                "Nº",
+                "Circuito",
+                "Ambiente",
+                "Percurso máx. (m)",
+                "Bitola anterior (mm²)",
+                "Bitola corrigida (mm²)",
+                "Queda antes (%)",
+                "Queda depois (%)",
+            ]
+            if c in correcoes_df.columns
+        ]
+
+        story.append(
+            _pdf_tabela(
+                correcoes_df[
+                    cols_corr_pdf
+                ],
+                [
+                    1.1*cm,
+                    2.0*cm,
+                    4.0*cm,
+                    2.2*cm,
+                    2.3*cm,
+                    2.4*cm,
+                    2.0*cm,
+                    2.0*cm,
+                ][:len(cols_corr_pdf)],
+                fonte=6.1
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "A seção é elevada para a primeira bitola padronizada que "
+                "atende ao limite preliminar de queda de tensão. O eletroduto "
+                "é recalculado considerando as novas dimensões dos condutores.",
+                texto
+            )
+        )
+
+    if (
         validacao_df is not None
         and not validacao_df.empty
     ):
         story += [
             Spacer(1,8),
             Paragraph(
-                "6. QUEDA DE TENSÃO E VALIDAÇÃO DAS ROTAS",
+                "7. QUEDA DE TENSÃO E VALIDAÇÃO DAS ROTAS",
                 secao
             )
         ]
@@ -1905,7 +2054,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 11.7: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.8: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1949,6 +2098,77 @@ def renderizar_materiais(
                 df_eletrodutos_rota,
                 use_container_width=True,
                 hide_index=True
+            )
+
+        correcoes_queda = (
+            resumo_rotas.get(
+                "correcoes_bitola",
+                []
+            )
+            or []
+        )
+
+        corrigidas = [
+            item
+            for item in correcoes_queda
+            if item.get(
+                "status"
+            )
+            == "CORRIGIDA"
+        ]
+
+        if corrigidas:
+            st.markdown(
+                "#### 🔧 Correções automáticas por queda de tensão"
+            )
+
+            df_correcoes = pd.DataFrame(
+                corrigidas
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "comprimento_max_m": "Percurso máx. (m)",
+                    "corrente_a": "Corrente (A)",
+                    "bitola_original_mm2": "Bitola anterior (mm²)",
+                    "bitola_final_mm2": "Bitola corrigida (mm²)",
+                    "queda_antes_pct": "Queda antes (%)",
+                    "queda_depois_pct": "Queda depois (%)",
+                    "status": "Status",
+                }
+            )
+
+            cols_corr = [
+                c
+                for c in [
+                    "Nº",
+                    "Circuito",
+                    "Ambiente",
+                    "Percurso máx. (m)",
+                    "Corrente (A)",
+                    "Bitola anterior (mm²)",
+                    "Bitola corrigida (mm²)",
+                    "Queda antes (%)",
+                    "Queda depois (%)",
+                    "Status",
+                ]
+                if c in df_correcoes.columns
+            ]
+
+            st.dataframe(
+                df_correcoes[
+                    cols_corr
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.success(
+                f"{len(corrigidas)} circuito(s) tiveram a seção elevada "
+                "automaticamente para atender ao limite preliminar de "
+                "queda de tensão. Os eletrodutos dos trechos afetados "
+                "foram recalculados com as novas seções."
             )
 
         validacao = (
@@ -2058,7 +2278,7 @@ def renderizar_materiais(
     )
 
     st.caption(
-        "Fase 11.7: os circuitos abaixo já são consolidados. "
+        "Fase 11.8: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -2077,6 +2297,7 @@ def renderizar_materiais(
 
 
     validacao_export_df = None
+    correcoes_export_df = None
 
     if resumo_rotas:
         dados_validacao_export = (
@@ -2110,6 +2331,39 @@ def renderizar_materiais(
                 }
             )
 
+        dados_correcoes_export = [
+            item
+            for item in (
+                resumo_rotas.get(
+                    "correcoes_bitola",
+                    []
+                )
+                or []
+            )
+            if item.get(
+                "status"
+            )
+            == "CORRIGIDA"
+        ]
+
+        if dados_correcoes_export:
+            correcoes_export_df = pd.DataFrame(
+                dados_correcoes_export
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "comprimento_max_m": "Percurso máx. (m)",
+                    "corrente_a": "Corrente (A)",
+                    "bitola_original_mm2": "Bitola anterior (mm²)",
+                    "bitola_final_mm2": "Bitola corrigida (mm²)",
+                    "queda_antes_pct": "Queda antes (%)",
+                    "queda_depois_pct": "Queda depois (%)",
+                    "status": "Status",
+                }
+            )
+
     nome_projeto = str(
         st.session_state.get(
             "projeto_ativo",
@@ -2121,7 +2375,8 @@ def renderizar_materiais(
     excel_bytes = _gerar_excel_materiais_circuitos(
         materiais_df,
         df_circuitos,
-        validacao_df=validacao_export_df
+        validacao_df=validacao_export_df,
+        correcoes_df=correcoes_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -2134,7 +2389,8 @@ def renderizar_materiais(
         resumo_drs=resumo_drs,
         resultado_demanda=resultado_demanda_materiais,
         parametros_rede=parametros_rede,
-        validacao_df=validacao_export_df
+        validacao_df=validacao_export_df,
+        correcoes_df=correcoes_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -2143,7 +2399,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_7.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_8.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -2152,7 +2408,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_7.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_8.pdf",
             mime="application/pdf",
             use_container_width=True
         )

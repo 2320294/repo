@@ -550,7 +550,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 11.7 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 11.8 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -757,12 +757,273 @@ def _queda_tensao_pct(
     )
 
 
+
+SECOES_PADRONIZADAS_MM2 = [
+    1.5,
+    2.5,
+    4.0,
+    6.0,
+    10.0,
+    16.0,
+    25.0,
+    35.0,
+    50.0,
+]
+
+
+def _secao_minima_funcional(
+    circuito
+):
+    tipo = _tipo(
+        circuito
+    )
+
+    if tipo == "ILUMINAÇÃO".upper():
+        return 1.5
+
+    if tipo == "TUG":
+        return 2.5
+
+    return max(
+        0.0,
+        _bitola(
+            circuito
+        )
+    )
+
+
+def _proxima_secao_padronizada(
+    secao_atual,
+    secao_minima=0.0
+):
+    referencia = max(
+        float(
+            secao_atual
+        ),
+        float(
+            secao_minima
+        )
+    )
+
+    for secao in SECOES_PADRONIZADAS_MM2:
+        if secao > referencia + 1e-9:
+            return secao
+
+    return None
+
+
+def corrigir_bitolas_por_queda(
+    rotas,
+    circuitos,
+    limite_queda_pct=QUEDA_REFERENCIA_PCT
+):
+    """
+    Fase 11.8.
+
+    Corrige automaticamente APENAS a seção necessária por queda de tensão.
+
+    Para cada circuito:
+    1. calcula o maior percurso físico;
+    2. testa a seção atual;
+    3. se exceder o limite, sobe para a próxima seção padronizada;
+    4. repete até atender ou acabar a tabela.
+
+    Não reduz nenhuma seção existente.
+    Não altera o disjuntor nesta etapa.
+    """
+    corrigidos = [
+        dict(c)
+        for c in (
+            circuitos
+            or []
+        )
+    ]
+
+    relatorio = []
+
+    for circuito in corrigidos:
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        if numero <= 0:
+            continue
+
+        potencia = _numero(
+            circuito.get(
+                "potencia",
+                0.0
+            )
+        )
+
+        tensao = _numero(
+            circuito.get(
+                "tensao",
+                0.0
+            )
+        )
+
+        corrente = _numero(
+            circuito.get(
+                "corrente",
+                0.0
+            )
+        )
+
+        if (
+            corrente <= 0
+            and potencia > 0
+            and tensao > 0
+        ):
+            corrente = (
+                potencia
+                / tensao
+            )
+
+        comprimento = _comprimento_maximo_circuito(
+            numero,
+            rotas
+        )
+
+        original = _bitola(
+            circuito
+        )
+
+        minimo = _secao_minima_funcional(
+            circuito
+        )
+
+        secao = max(
+            original,
+            minimo
+        )
+
+        queda_inicial = _queda_tensao_pct(
+            comprimento,
+            corrente,
+            secao,
+            tensao
+        )
+
+        queda_final = queda_inicial
+        status = "MANTIDA"
+
+        while (
+            queda_final
+            > float(
+                limite_queda_pct
+            )
+        ):
+            proxima = _proxima_secao_padronizada(
+                secao,
+                minimo
+            )
+
+            if proxima is None:
+                status = "SEM_SECAO_NA_TABELA"
+                break
+
+            secao = proxima
+
+            queda_final = _queda_tensao_pct(
+                comprimento,
+                corrente,
+                secao,
+                tensao
+            )
+
+            status = "CORRIGIDA"
+
+        if secao > original + 1e-9:
+            circuito[
+                "bitola_original"
+            ] = original
+
+            circuito[
+                "bitola"
+            ] = secao
+
+            circuito[
+                "criterio_bitola"
+            ] = (
+                "Seção elevada automaticamente por queda de tensão"
+            )
+
+            circuito[
+                "queda_tensao_antes_pct"
+            ] = round(
+                queda_inicial,
+                2
+            )
+
+            circuito[
+                "queda_tensao_depois_pct"
+            ] = round(
+                queda_final,
+                2
+            )
+
+        relatorio.append({
+            "numero":
+                numero,
+            "tipo":
+                circuito.get(
+                    "tipo",
+                    ""
+                ),
+            "ambiente":
+                circuito.get(
+                    "ambiente",
+                    ""
+                ),
+            "comprimento_max_m":
+                round(
+                    comprimento,
+                    2
+                ),
+            "corrente_a":
+                round(
+                    corrente,
+                    2
+                ),
+            "bitola_original_mm2":
+                original,
+            "bitola_final_mm2":
+                secao,
+            "queda_antes_pct":
+                round(
+                    queda_inicial,
+                    2
+                ),
+            "queda_depois_pct":
+                round(
+                    queda_final,
+                    2
+                ),
+            "limite_pct":
+                float(
+                    limite_queda_pct
+                ),
+            "status":
+                status,
+        })
+
+    return (
+        corrigidos,
+        relatorio
+    )
+
+
 def validar_eletrica_rotas(
     resumo_rotas,
     circuitos
 ):
     """
-    Validação preliminar da Fase 11.7.
+    Validação preliminar da Fase 11.8.
 
     Verifica:
     - maior percurso físico de cada circuito;
