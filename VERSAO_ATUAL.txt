@@ -1,11 +1,12 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.7
-IDENTIFICADOR: Fase_8_7
+VERSÃO ATUAL: Fase 8.8
+IDENTIFICADOR: Fase_8_8
 
-[OK] paredes disponíveis neutras
-[OK] somente parede selecionada fica verde
-[OK] mini planta do chuveiro somente após selecionar parede
-[OK] clique do ponto do chuveiro com parser robusto
-[OK] aviso desaparece após a seleção
-[OK] ar-condicionado permanece centralizado
-[OK] orientação interna preservada
+[OK] paredes disponíveis em azul
+[OK] parede selecionada em verde
+[OK] segunda mini planta do chuveiro somente após seleção da parede
+[OK] tomadas baixas com símbolo de 10 cm
+[OK] tomadas médias com símbolo de 10 cm
+[OK] tomadas altas com símbolo de 10 cm
+[OK] traço central de 5 cm na base
+[OK] orientação para dentro do ambiente preservada

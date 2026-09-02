@@ -94,7 +94,7 @@ def _limpar_aparencia_selecao_paredes(
     """
     Mantém o parâmetro Vega usado para detectar cliques, mas não usa
     a seleção interna do Vega para pintar paredes. Assim:
-      - disponível = cinza;
+      - disponível = azul;
       - selecionada no session_state = verde.
     Evita a impressão de que várias paredes já vêm selecionadas.
     """
@@ -149,13 +149,11 @@ def _limpar_aparencia_selecao_paredes(
             )
         ]
 
-        # Paredes ainda não escolhidas ficam neutras.
-        if cor.get(
+        # Fase 8.8: identidade visual igual ao QDC.
+        # Disponível = azul; selecionada confirmada = verde.
+        cor[
             "value"
-        ) == "#2563eb":
-            cor[
-                "value"
-            ] = "#9ca3af"
+        ] = "#2563eb"
 
     return fig
 
@@ -538,7 +536,7 @@ def renderizar_tomadas_altas(
     dxf_bytes=None
 ):
     """
-    Fase 8.7:
+    Fase 8.8:
     posicionamento interativo das TUEs altas.
 
     Ar-condicionado: seleção do trecho e centralização automática.\n    Chuveiro: seleção do trecho e depois de um ponto específico na parede.\n    Portas dividem a parede em trechos independentes, como no QDC.
@@ -720,7 +718,7 @@ def renderizar_tomadas_altas(
                     )
 
                     chave = (
-                        "fase8_7_tomada_alta_"
+                        "fase8_8_tomada_alta_"
                         f"{ambiente}_{idx}"
                     )
 
@@ -756,7 +754,7 @@ def renderizar_tomadas_altas(
                         ] = candidato
 
                     chave_posicao = (
-                        "fase8_7_posicao_chuveiro_"
+                        "fase8_8_posicao_chuveiro_"
                         f"{ambiente}_{idx}"
                     )
 
@@ -799,7 +797,7 @@ def renderizar_tomadas_altas(
 
                     st.caption(
                         "Clique no trecho desejado. "
-                        "⚪ disponível | 🟢 selecionado"
+                        "🔵 disponível | 🟢 selecionado"
                     )
 
                     fig = (
@@ -818,7 +816,7 @@ def renderizar_tomadas_altas(
                         )
                     )
 
-                    # Fase 8.7: nenhuma parede disponível parece selecionada.
+                    # Fase 8.8: nenhuma parede disponível parece selecionada.
                     # Somente a parede confirmada no session_state fica verde.
                     fig = (
                         _limpar_aparencia_selecao_paredes(
@@ -830,7 +828,7 @@ def renderizar_tomadas_altas(
                         fig,
                         use_container_width=False,
                         key=(
-                            "fase8_7_grafico_tomada_alta_"
+                            "fase8_8_grafico_tomada_alta_"
                             f"{ambiente}_{idx}"
                         ),
                         on_select="rerun"
@@ -917,7 +915,7 @@ def renderizar_tomadas_altas(
                                 fig_pontos,
                                 use_container_width=False,
                                 key=(
-                                    "fase8_7_grafico_ponto_chuveiro_"
+                                    "fase8_8_grafico_ponto_chuveiro_"
                                     f"{ambiente}_{idx}"
                                 ),
                                 on_select="rerun"

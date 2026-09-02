@@ -1,5 +1,17 @@
 import math
 
+# ============================================================
+# FASE 8.8 — PADRÃO GEOMÉTRICO DAS TOMADAS
+# ============================================================
+# Símbolo triangular:
+#   - base total: 10 cm
+#   - profundidade para dentro do ambiente: 10 cm
+#   - pequeno traço central a partir da base: 5 cm
+TOMADA_MEIA_BASE = 0.05
+TOMADA_PROFUNDIDADE = 0.10
+TOMADA_TRACO_BASE = 0.05
+
+
 from geometria import (
     point_seg_dist,
     get_ponto_perimetro,
@@ -7,6 +19,87 @@ from geometria import (
     get_inside_normal_polygon
 )
 
+
+
+
+def _geometria_simbolo_tomada(
+    px,
+    py,
+    vx,
+    vy,
+    nx,
+    ny
+):
+    """
+    Retorna a geometria padronizada do símbolo de tomada da Fase 8.8.
+
+    A base tem 10 cm no total, o vértice entra 10 cm no ambiente e
+    o pequeno traço central tem 5 cm, também voltado para dentro.
+    """
+    ponto_b1 = (
+        px
+        - vx
+        * TOMADA_MEIA_BASE,
+        py
+        - vy
+        * TOMADA_MEIA_BASE
+    )
+
+    ponto_b2 = (
+        px
+        + vx
+        * TOMADA_MEIA_BASE,
+        py
+        + vy
+        * TOMADA_MEIA_BASE
+    )
+
+    ponto_pt = (
+        px
+        + nx
+        * TOMADA_PROFUNDIDADE,
+        py
+        + ny
+        * TOMADA_PROFUNDIDADE
+    )
+
+    ponto_traco = (
+        px
+        + nx
+        * TOMADA_TRACO_BASE,
+        py
+        + ny
+        * TOMADA_TRACO_BASE
+    )
+
+    return (
+        ponto_b1,
+        ponto_b2,
+        ponto_pt,
+        ponto_traco
+    )
+
+
+def _adicionar_traco_base_tomada(
+    msp,
+    px,
+    py,
+    ponto_traco
+):
+    """
+    Traço de 5 cm partindo do centro da base do símbolo.
+    """
+    msp.add_line(
+        (
+            px,
+            py
+        ),
+        ponto_traco,
+        dxfattribs={
+            "layer":
+                "PROJ_ELETRICA_TOMADA"
+        }
+    )
 
 
 def _segmentos_soleira(soleira):
@@ -449,7 +542,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.7 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.8 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -525,7 +618,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 8.7:
+            # Fase 8.8:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
@@ -653,19 +746,18 @@ def desenhar_tomadas(
                 probe=0.05, cx=centro_x, cy=centro_y
             )
 
-            ponto_b1 = (
-                px - vx * 0.10,
-                py - vy * 0.10
-            )
-
-            ponto_b2 = (
-                px + vx * 0.10,
-                py + vy * 0.10
-            )
-
-            ponto_pt = (
-                px + nx * 0.20,
-                py + ny * 0.20
+            (
+                ponto_b1,
+                ponto_b2,
+                ponto_pt,
+                ponto_traco
+            ) = _geometria_simbolo_tomada(
+                px,
+                py,
+                vx,
+                vy,
+                nx,
+                ny
             )
 
             msp.add_lwpolyline(
@@ -680,6 +772,13 @@ def desenhar_tomadas(
                     "layer":
                         "PROJ_ELETRICA_TOMADA"
                 }
+            )
+
+            _adicionar_traco_base_tomada(
+                msp,
+                px,
+                py,
+                ponto_traco
             )
 
             if is_chuveiro_ou_ac:
@@ -836,19 +935,18 @@ def desenhar_tomadas(
                 probe=0.05, cx=centro_x, cy=centro_y
             )
 
-            ponto_b1 = (
-                px - seg_vx * 0.10,
-                py - seg_vy * 0.10
-            )
-
-            ponto_b2 = (
-                px + seg_vx * 0.10,
-                py + seg_vy * 0.10
-            )
-
-            ponto_pt = (
-                px + nx * 0.20,
-                py + ny * 0.20
+            (
+                ponto_b1,
+                ponto_b2,
+                ponto_pt,
+                ponto_traco
+            ) = _geometria_simbolo_tomada(
+                px,
+                py,
+                seg_vx,
+                seg_vy,
+                nx,
+                ny
             )
 
             msp.add_lwpolyline(
@@ -863,6 +961,13 @@ def desenhar_tomadas(
                     "layer":
                         "PROJ_ELETRICA_TOMADA"
                 }
+            )
+
+            _adicionar_traco_base_tomada(
+                msp,
+                px,
+                py,
+                ponto_traco
             )
 
             if is_ambiente_molhado:
