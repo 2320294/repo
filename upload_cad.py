@@ -5,7 +5,7 @@ import streamlit as st
 
 import motores
 
-from versao import VERSAO_SISTEMA, VERSAO_ARQUIVO
+from versao import VERSAO_SISTEMA, VERSAO_ARQUIVO, BUILD_ID
 
 from database import (
     salvar_dados_projeto
@@ -276,7 +276,7 @@ def renderizar_salvar_e_gerar_cad(
     # do arquivo upload_cad.py foi realmente publicada/carregada.
     VERSAO_CAD = VERSAO_SISTEMA
     st.info(
-        f"🔖 Versão atual do gerador CAD: **{VERSAO_CAD}**",
+        f"🔖 Versão atual do gerador CAD: **{VERSAO_CAD}** — Build **{BUILD_ID}**",
         icon="ℹ️",
     )
 

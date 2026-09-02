@@ -15,7 +15,7 @@ from auth import (
 from projetos import renderizar_gerenciador_projetos
 from painel import renderizar_painel_principal
 from tema_login import aplicar_fundo_login
-from versao import VERSAO_SISTEMA
+from versao import VERSAO_SISTEMA, BUILD_ID
 
 
 def aplicar_tema_sistema():
@@ -121,7 +121,7 @@ aplicar_tema_sistema()
 
 with st.sidebar:
     st.markdown("## ⚡ AutoElétrica Profissional")
-    st.caption(f"🔖 Sistema: {VERSAO_SISTEMA}")
+    st.caption(f"🔖 Sistema: {VERSAO_SISTEMA}  •  Build {BUILD_ID}")
     st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown(
