@@ -469,7 +469,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 11.4:
+                # Fase 11.4 Rev.2:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -504,7 +504,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 11.4 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 11.4 REV.2 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.

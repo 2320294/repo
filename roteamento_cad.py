@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.4 — rede híbrida.
+    Fase 11.4 Rev.2 — rede híbrida.
 
     Para cada ambiente compara:
     1) caminho direto QDC -> ambiente;
@@ -407,7 +407,7 @@ def _construir_rede_hibrida(
     não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
 
     Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.4.
+    evitando a volta excessiva observada na Fase 11.4 Rev.2.
     """
     conectados = [{
         "id": "QDC",
@@ -727,7 +727,7 @@ def _arestas_tugs_internas(
     Liga:
       luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
 
-    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4.
+    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.2.
     Para ambientes sem interruptor próprio, liga a luminária principal
     diretamente à primeira TUG.
     """
@@ -913,7 +913,7 @@ def desenhar_rotas_qdc_iluminacao(
     pontos_interruptores=None,
 ):
     """
-    Fase 11.4
+    Fase 11.4 Rev.2
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
