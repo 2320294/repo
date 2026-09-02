@@ -21,7 +21,7 @@ def renderizar_parametros_projeto(
     """
     Parâmetros gerais e perfil de fornecimento do projeto.
 
-    Fase 11.4 Rev.2:
+    Fase 11.4 Rev.3:
     - localização;
     - concessionária;
     - tipo/tensão de fornecimento;
@@ -318,7 +318,7 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto, mas nesta Fase 11.4 Rev.2 o cálculo de demanda "
+            "no projeto, mas nesta Fase 11.4 Rev.3 o cálculo de demanda "
             "ainda não é aplicado automaticamente. "
             "O perfil normativo será ativado somente quando "
             "a regra oficial dessa concessionária estiver "

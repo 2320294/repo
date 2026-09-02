@@ -264,7 +264,9 @@ def gerar_cad_unifilar(
                 ),
                 "bbox": (min_x, max_x, min_y, max_y),
                 "polilinha": list(polilinha),
-            })
+                    "segmentos_crus": segmentos_crus,
+                    "comp_total": comp_total
+                })
 
             # Fase 8.2:
             # centro operacional sempre DENTRO do ambiente.
@@ -469,7 +471,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 11.4 Rev.2:
+                # Fase 11.4 Rev.3:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -504,7 +506,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 11.4 REV.2 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 11.4 REV.3 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -561,6 +563,7 @@ def gerar_cad_unifilar(
             pontos_eletricos=pontos_eletricos,
             circuitos=circuitos_unifilar,
             pontos_interruptores=pontos_interruptores,
+            ambientes_geom=ambientes_geom,
         )
 
         # As camadas legadas continuam removidas para não misturar o

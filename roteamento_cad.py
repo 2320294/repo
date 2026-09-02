@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.4 Rev.2 — rede híbrida.
+    Fase 11.4 Rev.3 — rede híbrida.
 
     Para cada ambiente compara:
     1) caminho direto QDC -> ambiente;
@@ -407,7 +407,7 @@ def _construir_rede_hibrida(
     não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
 
     Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.4 Rev.2.
+    evitando a volta excessiva observada na Fase 11.4 Rev.3.
     """
     conectados = [{
         "id": "QDC",
@@ -674,47 +674,58 @@ def _linha_parede_entre_tugs(
     msp,
     tug_origem,
     tug_destino,
+    segmentos_crus=None,
+    comp_total=0.0,
     layer=LAYER_ROTA
 ):
     """
-    Desenha o trecho TUG -> TUG como conduíte na parede.
-
-    Usa o ponto interno do traço central de 10 cm de cada símbolo.
-    Quando ambas estão na mesma parede o resultado é uma reta.
-    Quando estão em paredes diferentes, o percurso acompanha os
-    segmentos do perímetro entre as posições das TUGs.
+    Fase 11.4 Rev.3:
+    conecta pelo extremo do traço central embutido na parede.
+    Se mudar de parede, acompanha os cantos do perímetro.
     """
-    p1 = (
-        tug_origem.get(
-            "ponto_conexao_parede"
-        )
-        or tug_origem.get(
-            "ponto"
-        )
-    )
-    p2 = (
-        tug_destino.get(
-            "ponto_conexao_parede"
-        )
-        or tug_destino.get(
-            "ponto"
-        )
-    )
-
+    p1 = tug_origem.get("ponto_conexao_parede") or tug_origem.get("ponto")
+    p2 = tug_destino.get("ponto_conexao_parede") or tug_destino.get("ponto")
     if not p1 or not p2:
         return None
 
-    # O ponto de conexão fica 5 cm para dentro da face da parede.
-    # Uma LWPOLYLINE direta deixa o conduíte visualmente colado à parede.
-    return msp.add_lwpolyline(
-        [
-            tuple(p1),
-            tuple(p2)
-        ],
-        dxfattribs={
-            "layer": layer
-        }
-    )
+    segs = segmentos_crus or []
+    if not segs or comp_total <= 0:
+        return msp.add_lwpolyline([tuple(p1), tuple(p2)], dxfattribs={"layer": layer})
+
+    d1 = float(tug_origem.get("distancia_perimetro", 0.0) or 0.0) % comp_total
+    d2 = float(tug_destino.get("distancia_perimetro", 0.0) or 0.0) % comp_total
+
+    # Locate each distance in the perimeter.
+    def localizar(d):
+        acc=0.0
+        for i,(a,b,L) in enumerate(segs):
+            L=float(L)
+            if d <= acc+L+1e-9:
+                return i
+            acc+=L
+        return len(segs)-1
+
+    i1=localizar(d1); i2=localizar(d2)
+    if i1==i2:
+        pts=[tuple(p1),tuple(p2)]
+    else:
+        dm=(d2-d1)%comp_total
+        dn=(d1-d2)%comp_total
+        sentido=1 if dm<=dn else -1
+        pts=[tuple(p1)]
+        i=i1
+        guard=0
+        while i!=i2 and guard<=len(segs):
+            pts.append(tuple(segs[i][1] if sentido>0 else segs[i][0]))
+            i=(i+sentido)%len(segs)
+            guard+=1
+        pts.append(tuple(p2))
+
+    limpos=[]
+    for pt in pts:
+        if not limpos or _dist(limpos[-1],pt)>1e-7:
+            limpos.append(pt)
+    return msp.add_lwpolyline(limpos,dxfattribs={"layer":layer})
 
 
 def _arestas_tugs_internas(
@@ -727,7 +738,7 @@ def _arestas_tugs_internas(
     Liga:
       luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
 
-    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.2.
+    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.3.
     Para ambientes sem interruptor próprio, liga a luminária principal
     diretamente à primeira TUG.
     """
@@ -911,9 +922,10 @@ def desenhar_rotas_qdc_iluminacao(
     pontos_eletricos,
     circuitos,
     pontos_interruptores=None,
+    ambientes_geom=None,
 ):
     """
-    Fase 11.4 Rev.2
+    Fase 11.4 Rev.3
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -998,6 +1010,12 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
+    geometria_ambiente = {}
+    for item in (ambientes_geom or []):
+        chave = _normalizar_nome(item.get("nome") or item.get("ambiente"))
+        if chave:
+            geometria_ambiente[chave] = item
+
     rotas = []
 
     todas_arestas = (
@@ -1021,10 +1039,16 @@ def desenhar_rotas_qdc_iluminacao(
                 "tug_destino"
             )
         ):
+            geo = geometria_ambiente.get(
+                _normalizar_nome(trecho.get("destino_ambiente")),
+                {}
+            )
             entidade = _linha_parede_entre_tugs(
                 msp,
                 trecho["tug_origem"],
                 trecho["tug_destino"],
+                segmentos_crus=geo.get("segmentos_crus", []),
+                comp_total=geo.get("comp_total", 0.0),
                 layer=LAYER_ROTA
             )
             tipo_entidade = "LWPOLYLINE"

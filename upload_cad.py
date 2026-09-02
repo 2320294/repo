@@ -24,7 +24,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 11.4 Rev.2:
+    Fase 11.4 Rev.3:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
