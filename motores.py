@@ -254,20 +254,6 @@ def gerar_cad_unifilar(
                 )
             )
 
-            ambientes_geom.append({
-                "nome": nome_busca,
-                "nome_base": nome,
-                "centro": (
-                    ponto_central_interno(
-                        polilinha
-                    )
-                ),
-                "bbox": (min_x, max_x, min_y, max_y),
-                "polilinha": list(polilinha),
-                    "segmentos_crus": segmentos_crus,
-                    "comp_total": comp_total
-                })
-
             # Fase 8.2:
             # centro operacional sempre DENTRO do ambiente.
             # Em geometrias côncavas/irregulares, o centro da bounding
@@ -319,6 +305,33 @@ def gerar_cad_unifilar(
                     )
 
                     comp_total += dst
+
+            # Fase 11.4 Rev.3 — a geometria do ambiente só pode ser
+            # registrada depois que segmentos_crus e comp_total forem calculados.
+            ambientes_geom.append({
+                "nome": nome_busca,
+                "nome_base": nome,
+                "centro": (
+                    ponto_central_interno(
+                        polilinha
+                    )
+                ),
+                "bbox": (
+                    min_x,
+                    max_x,
+                    min_y,
+                    max_y
+                ),
+                "polilinha": list(
+                    polilinha
+                ),
+                "segmentos_crus": list(
+                    segmentos_crus
+                ),
+                "comp_total": float(
+                    comp_total
+                ),
+            })
 
             logical_walls = []
 
