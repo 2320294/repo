@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.4 Rev.5 — rede híbrida.
+    Fase 11.5 — rede híbrida.
 
     Para cada ambiente compara:
     1) caminho direto QDC -> ambiente;
@@ -407,7 +407,7 @@ def _construir_rede_hibrida(
     não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
 
     Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.4 Rev.5.
+    evitando a volta excessiva observada na Fase 11.5.
     """
     conectados = [{
         "id": "QDC",
@@ -991,7 +991,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 11.4 Rev.5:
+    Fase 11.5:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1023,7 +1023,7 @@ def _arestas_tugs_internas(
     Liga:
       luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
 
-    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.5.
+    As TUGs já chegam ordenadas pelo perímetro na Fase 11.5.
     Para ambientes sem interruptor próprio, liga a luminária principal
     diretamente à primeira TUG.
     """
@@ -1202,6 +1202,173 @@ def _arestas_tugs_internas(
     return arestas
 
 
+
+def _arestas_tues_dedicadas(
+    pontos_eletricos,
+    circuitos
+):
+    """
+    Fase 11.5 — ramais dedicados das TUEs.
+
+    Cada TUE parte da luminária mais próxima do mesmo ambiente.
+    Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
+    """
+    luminarias = _luminarias_por_ambiente(
+        pontos_eletricos
+    )
+
+    tues_por_ambiente = {}
+
+    for ponto in (pontos_eletricos or []):
+        if str(
+            ponto.get(
+                "tipo",
+                ""
+            )
+        ).upper() != "TUE":
+            continue
+
+        ambiente = _normalizar_nome(
+            ponto.get(
+                "ambiente"
+            )
+        )
+
+        if (
+            not ambiente
+            or not ponto.get(
+                "ponto"
+            )
+        ):
+            continue
+
+        tues_por_ambiente.setdefault(
+            ambiente,
+            []
+        ).append(
+            ponto
+        )
+
+    circuitos_tue = {}
+
+    for circuito in (circuitos or []):
+        if str(
+            circuito.get(
+                "tipo",
+                ""
+            )
+        ).upper() != "TUE":
+            continue
+
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        if numero <= 0:
+            continue
+
+        for ambiente in _ambientes_circuito(
+            circuito
+        ):
+            chave = _normalizar_nome(
+                ambiente
+            )
+
+            circuitos_tue.setdefault(
+                chave,
+                []
+            ).append(
+                numero
+            )
+
+    for ambiente in circuitos_tue:
+        circuitos_tue[
+            ambiente
+        ] = sorted(
+            set(
+                circuitos_tue[
+                    ambiente
+                ]
+            )
+        )
+
+    arestas = []
+
+    for ambiente, tues in tues_por_ambiente.items():
+        luzes = luminarias.get(
+            ambiente,
+            []
+        )
+
+        if not luzes:
+            # Sem ponto de iluminação não inventa origem elétrica.
+            continue
+
+        nums = circuitos_tue.get(
+            ambiente,
+            []
+        )
+
+        for indice, tue in enumerate(
+            tues
+        ):
+            destino = (
+                tue.get(
+                    "ponto_conexao_parede"
+                )
+                or tue.get(
+                    "ponto"
+                )
+            )
+
+            origem = min(
+                luzes,
+                key=lambda pt:
+                    _dist(
+                        pt,
+                        destino
+                    )
+            )
+
+            if nums:
+                # TUE é circuito dedicado. Em ambientes com mais de uma,
+                # associa em ordem aos circuitos disponíveis.
+                numero = nums[
+                    min(
+                        indice,
+                        len(nums) - 1
+                    )
+                ]
+                circuitos_trecho = {
+                    numero
+                }
+            else:
+                circuitos_trecho = set()
+
+            arestas.append({
+                "origem_ambiente":
+                    ambiente,
+                "destino_ambiente":
+                    ambiente,
+                "inicio":
+                    tuple(origem),
+                "fim":
+                    tuple(destino),
+                "circuitos":
+                    circuitos_trecho,
+                "criterio":
+                    "LUMINARIA_PARA_TUE",
+                "tue_destino":
+                    tue,
+            })
+
+    return arestas
+
+
 def desenhar_rotas_qdc_iluminacao(
     msp,
     qdc_info,
@@ -1213,7 +1380,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 11.4 Rev.5
+    Fase 11.5
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -1298,6 +1465,13 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
+    tues_dedicadas = (
+        _arestas_tues_dedicadas(
+            pontos_eletricos,
+            circuitos
+        )
+    )
+
     geometria_ambiente = {}
     for item in (ambientes_geom or []):
         chave = _normalizar_nome(
@@ -1319,6 +1493,7 @@ def desenhar_rotas_qdc_iluminacao(
         tronco
         + secundarias
         + tugs_internas
+        + tues_dedicadas
     )
 
     for indice, trecho in enumerate(
@@ -1470,7 +1645,12 @@ def desenhar_rotas_qdc_iluminacao(
                             "CADEIA_TUG",
                             "REINICIO_TUG_APOS_VAO",
                         }
-                        else "TRONCAL_HIBRIDA"
+                        else (
+                            "TUE_DEDICADA"
+                            if trecho.get("criterio")
+                            == "LUMINARIA_PARA_TUE"
+                            else "TRONCAL_HIBRIDA"
+                        )
                     )
                 ),
             "origem_ambiente":
