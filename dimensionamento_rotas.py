@@ -550,7 +550,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 11.8 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 11.8 REV.1 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -818,7 +818,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 11.8.
+    Fase 11.8 Rev.1.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1023,7 +1023,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 11.8.
+    Validação preliminar da Fase 11.8 Rev.1.
 
     Verifica:
     - maior percurso físico de cada circuito;
