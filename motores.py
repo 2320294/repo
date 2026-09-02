@@ -42,6 +42,11 @@ from roteamento_cad import (
     desenhar_rotas_qdc_iluminacao
 )
 
+from dimensionamento_rotas import (
+    dimensionar_rotas,
+    desenhar_dimensionamento_rotas
+)
+
 from materiais import (
     calcular_quantitativo_materiais
 )
@@ -77,7 +82,8 @@ def gerar_cad_unifilar(
     local_qdc,
     config_interruptores=None,
     tensao_projeto=220,
-    pe_direito=2.80
+    pe_direito=2.80,
+    retornar_resumo_rotas=False
 ):
     tmp_in_path = ""
 
@@ -115,6 +121,7 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_ELETRODUTO_TEXTO": 3,
             "PROJ_ELETRICA_ROTEAMENTO": 3,
             "PROJ_ELETRICA_ROTEAMENTO_TEXTO": 3,
+            "PROJ_ELETRICA_DIMENSIONAMENTO": 6,
             "PROJ_ELETRICA_COMANDO": 6,
             "PROJ_ELETRICA_UNIFILAR_QDC": 7,
             "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO": 7,
@@ -306,7 +313,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 11.5 Rev.2 — a geometria do ambiente só pode ser
+            # Fase 11.6 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -484,7 +491,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 11.5 Rev.2:
+                # Fase 11.6:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -519,7 +526,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 11.5 REV.2 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 11.6 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -570,7 +577,7 @@ def gerar_cad_unifilar(
         # compara caminho acumulado pela rede com ligação direta ao QDC.
         # Abre novo tronco quando a rede existente provocar desvio excessivo.
         # Todas as luminárias do ambiente são conectadas. Somente ARC.
-        desenhar_rotas_qdc_iluminacao(
+        rotas_fisicas = desenhar_rotas_qdc_iluminacao(
             msp=msp,
             qdc_info=qdc_info,
             pontos_eletricos=pontos_eletricos,
@@ -580,6 +587,27 @@ def gerar_cad_unifilar(
             portas_raw=portas_raw,
             soleiras_raw=soleiras_raw,
         )
+
+        resumo_rotas = dimensionar_rotas(
+            rotas_fisicas,
+            circuitos_unifilar
+        )
+
+        # Etiquetas de auditoria: Ø do eletroduto e circuitos por trecho.
+        # Ficam em camada congelada para manter a planta limpa.
+        desenhar_dimensionamento_rotas(
+            msp,
+            resumo_rotas,
+            layer="PROJ_ELETRICA_DIMENSIONAMENTO"
+        )
+
+        try:
+            layer_dim = doc.layers.get(
+                "PROJ_ELETRICA_DIMENSIONAMENTO"
+            )
+            layer_dim.freeze()
+        except Exception:
+            pass
 
         # As camadas legadas continuam removidas para não misturar o
         # roteamento antigo com a nova rede da Fase 11.
@@ -614,6 +642,12 @@ def gerar_cad_unifilar(
             "rb"
         ) as f:
             out_bytes = f.read()
+
+        if retornar_resumo_rotas:
+            return (
+                out_bytes,
+                resumo_rotas
+            )
 
         return out_bytes
 

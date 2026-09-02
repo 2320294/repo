@@ -11,6 +11,7 @@ from demanda_qdc import calcular_demanda_qdc
 from protecao_alimentador import avaliar_protecoes_alimentador
 from tensoes_circuitos import tensao_circuito, tensao_base_fornecimento
 from formacao_circuitos import formar_circuitos_definitivos
+from versao import VERSAO_SISTEMA
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -313,7 +314,8 @@ def calcular_quantitativo_materiais(
     config_interruptores_usuario,
     local_qdc=None,
     tensao_projeto=110,
-    pe_direito=2.80
+    pe_direito=2.80,
+    resumo_rotas=None
 ):
     materiais = []
 
@@ -888,10 +890,10 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 11.5 REV.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 11.6 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 11.5 Rev.2/11.2, quando o
+    # cargas elementares por ambiente até a Fase 11.6/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
@@ -1176,6 +1178,163 @@ def calcular_quantitativo_materiais(
         "Identificação dos condutores e circuitos"
     )
 
+    # ========================================================
+    # FASE 11.6 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
+    # ========================================================
+    if (
+        isinstance(
+            resumo_rotas,
+            dict
+        )
+        and resumo_rotas.get(
+            "status"
+        )
+        == "pre_dimensionado_por_rota"
+    ):
+        # Remove somente as linhas antigas de comprimento estimado.
+        # Pontos, caixas, proteções e demais materiais permanecem.
+        materiais = [
+            item
+            for item in materiais
+            if not (
+                item.get(
+                    "Categoria"
+                ) == "Condutores"
+                and "Comprimento estimado" in str(
+                    item.get(
+                        "Critério",
+                        ""
+                    )
+                )
+            )
+            and not (
+                item.get(
+                    "Categoria"
+                ) == "Infraestrutura"
+                and item.get(
+                    "Material"
+                )
+                == "Eletroduto corrugado flexível"
+            )
+        ]
+
+        # Cabos medidos pelo caminho físico dos trechos.
+        agregados_cabos = {}
+
+        for cabo in (
+            resumo_rotas.get(
+                "cabos",
+                []
+            )
+            or []
+        ):
+            chave = (
+                float(
+                    cabo.get(
+                        "bitola_mm2",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                str(
+                    cabo.get(
+                        "funcao",
+                        ""
+                    )
+                ),
+                str(
+                    cabo.get(
+                        "cor",
+                        ""
+                    )
+                ),
+            )
+
+            agregados_cabos[
+                chave
+            ] = (
+                agregados_cabos.get(
+                    chave,
+                    0.0
+                )
+                + float(
+                    cabo.get(
+                        "comprimento_com_folga_m",
+                        0.0
+                    )
+                    or 0.0
+                )
+            )
+
+        for (
+            bitola,
+            funcao,
+            cor
+        ), comprimento in sorted(
+            agregados_cabos.items()
+        ):
+            _adicionar_material(
+                materiais,
+                "Condutores",
+                "Cabo de cobre isolado",
+                (
+                    f"{bitola:g} mm² — "
+                    f"{funcao} — "
+                    f"{cor}"
+                ),
+                "m",
+                math.ceil(
+                    comprimento
+                ),
+                (
+                    "Comprimento obtido do roteamento físico "
+                    "+ 15% de folga"
+                )
+            )
+
+        for eletroduto in (
+            resumo_rotas.get(
+                "eletrodutos",
+                []
+            )
+            or []
+        ):
+            diametro = int(
+                eletroduto.get(
+                    "diametro_mm",
+                    0
+                )
+                or 0
+            )
+
+            if diametro <= 0:
+                continue
+
+            _adicionar_material(
+                materiais,
+                "Infraestrutura",
+                "Eletroduto corrugado flexível",
+                (
+                    f"Ø {diametro} mm — "
+                    "pré-dimensionado por ocupação"
+                ),
+                "m",
+                math.ceil(
+                    float(
+                        eletroduto.get(
+                            "comprimento_com_folga_m",
+                            0.0
+                        )
+                        or 0.0
+                    )
+                ),
+                (
+                    "Comprimento do traçado físico + 10% de folga; "
+                    "diâmetro preliminar pela ocupação dos condutores"
+                )
+            )
+
     return materiais, circuitos
 
 
@@ -1212,7 +1371,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 11.5 Rev.2: dados estruturais usados pelo roteamento continuam
+        # Fase 11.6: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1518,13 +1677,32 @@ def renderizar_materiais(
     pe_direito=2.80
 ):
 
+    resumo_rotas = None
+
+    if (
+        st.session_state.get(
+            "dimensionamento_rotas_projeto"
+        )
+        == st.session_state.get(
+            "projeto_ativo"
+        )
+        and st.session_state.get(
+            "dimensionamento_rotas_versao"
+        )
+        == VERSAO_SISTEMA
+    ):
+        resumo_rotas = st.session_state.get(
+            "dimensionamento_rotas"
+        )
+
     materiais, circuitos = (
         calcular_quantitativo_materiais(
             tabela_editada,
             config_interruptores_usuario,
             local_qdc,
             tensao_projeto,
-            pe_direito
+            pe_direito,
+            resumo_rotas=resumo_rotas
         )
     )
 
@@ -1553,15 +1731,25 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    st.caption(
-        f"Parâmetros usados: tensão derivada do perfil de fornecimento | "
-        f"pé-direito {float(pe_direito):.2f} m. "
-        "Quantidades de pontos e caixas são calculadas diretamente do projeto. "
-        "Comprimentos de cabos/eletrodutos e alguns dispositivos de proteção "
-        "ainda são pré-dimensionamentos, pois o CAD ainda não possui o "
-        "roteamento completo dos circuitos nem todos os parâmetros exigidos "
-        "para o dimensionamento final pela NBR 5410."
-    )
+    if resumo_rotas:
+        st.success(
+            "📐 Comprimentos de cabos e eletrodutos atualizados pelo "
+            "roteamento físico do último CAD gerado nesta versão."
+        )
+        st.caption(
+            "O diâmetro dos eletrodutos é um pré-dimensionamento por ocupação. "
+            "Diâmetros reais dos cabos/eletrodutos, método de instalação, "
+            "agrupamento, temperatura, queda de tensão e dados do fabricante "
+            "ainda precisam ser confirmados no dimensionamento executivo."
+        )
+    else:
+        st.caption(
+            f"Parâmetros usados: tensão derivada do perfil de fornecimento | "
+            f"pé-direito {float(pe_direito):.2f} m. "
+            "Os comprimentos ainda usam estimativa geométrica. Gere o CAD "
+            "na etapa 7 para registrar o roteamento físico e depois retorne "
+            "a Materiais para atualizar os comprimentos reais do traçado."
+        )
 
     materiais_df, df_circuitos = _dataframes_materiais_circuitos(
         materiais,
@@ -1633,7 +1821,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 11.5 Rev.2: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.6: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1641,12 +1829,50 @@ def renderizar_materiais(
     else:
         st.info("Nenhum circuito de tomada/TUE foi identificado para agrupamento em DR.")
 
+    if resumo_rotas:
+        st.markdown(
+            "#### 📐 Dimensionamento dos trechos roteados"
+        )
+
+        st.write(
+            f"**{int(resumo_rotas.get('total_trechos', 0))} "
+            "trecho(s) físico(s)** analisados."
+        )
+
+        diametros = (
+            resumo_rotas.get(
+                "eletrodutos",
+                []
+            )
+            or []
+        )
+
+        if diametros:
+            df_eletrodutos_rota = pd.DataFrame(
+                diametros
+            ).rename(
+                columns={
+                    "diametro_mm":
+                        "Ø nominal (mm)",
+                    "comprimento_rota_m":
+                        "Traçado (m)",
+                    "comprimento_com_folga_m":
+                        "Com folga (m)",
+                }
+            )
+
+            st.dataframe(
+                df_eletrodutos_rota,
+                use_container_width=True,
+                hide_index=True
+            )
+
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
     )
 
     st.caption(
-        "Fase 11.5 Rev.2: os circuitos abaixo já são consolidados. "
+        "Fase 11.6: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -1695,7 +1921,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_5_Rev_2.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_6.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1704,7 +1930,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_5_Rev_2.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_6.pdf",
             mime="application/pdf",
             use_container_width=True
         )

@@ -124,6 +124,84 @@ def _arco_suave(
     )
 
 
+
+def _comprimento_entidade_rota(
+    entidade,
+    tipo_entidade,
+    inicio,
+    fim
+):
+    """
+    Comprimento geométrico do elemento efetivamente desenhado.
+    """
+    try:
+        if (
+            tipo_entidade == "ARC"
+            and hasattr(
+                entidade,
+                "dxf"
+            )
+        ):
+            raio = float(
+                entidade.dxf.radius
+            )
+            a1 = float(
+                entidade.dxf.start_angle
+            )
+            a2 = float(
+                entidade.dxf.end_angle
+            )
+
+            delta = (
+                a2 - a1
+            ) % 360.0
+
+            if delta > 180.0:
+                delta = 360.0 - delta
+
+            return (
+                raio
+                * math.radians(
+                    delta
+                )
+            )
+
+        if (
+            tipo_entidade == "LWPOLYLINE"
+            and hasattr(
+                entidade,
+                "get_points"
+            )
+        ):
+            pts = [
+                (
+                    float(p[0]),
+                    float(p[1])
+                )
+                for p in entidade.get_points(
+                    "xy"
+                )
+            ]
+
+            return sum(
+                _dist(
+                    a,
+                    b
+                )
+                for a, b in zip(
+                    pts[:-1],
+                    pts[1:]
+                )
+            )
+    except Exception:
+        pass
+
+    return _dist(
+        inicio,
+        fim
+    )
+
+
 def _normalizar_nome(nome):
     return " ".join(
         str(nome or "")
@@ -397,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.5 Rev.2 — rede híbrida com múltiplas saídas do QDC.
+    Fase 11.6 — rede híbrida com múltiplas saídas do QDC.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -1075,7 +1153,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 11.5 Rev.2:
+    Fase 11.6:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1104,7 +1182,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 11.5 Rev.2
+    Fase 11.6
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -1210,14 +1288,38 @@ def _arestas_tugs_internas(
             )
 
     tug_circuitos = {}
+    iluminacao_circuitos = {}
 
     for c in circuitos or []:
-        if str(
+        tipo_c = str(
             c.get(
                 "tipo",
                 ""
             )
-        ).upper() != "TUG":
+        ).upper()
+
+        if tipo_c == "ILUMINAÇÃO".upper():
+            numero = int(
+                c.get(
+                    "numero",
+                    0
+                )
+                or 0
+            )
+
+            for amb in _ambientes_circuito(
+                c
+            ):
+                iluminacao_circuitos.setdefault(
+                    _normalizar_nome(
+                        amb
+                    ),
+                    set()
+                ).add(
+                    numero
+                )
+
+        if tipo_c != "TUG":
             continue
 
         numero = int(
@@ -1259,10 +1361,19 @@ def _arestas_tugs_internas(
         if not luzes:
             continue
 
-        circuitos_amb = set(
-            tug_circuitos.get(
-                ambiente,
-                set()
+        circuitos_amb = (
+            set(
+                tug_circuitos.get(
+                    ambiente,
+                    set()
+                )
+            )
+            |
+            set(
+                iluminacao_circuitos.get(
+                    ambiente,
+                    set()
+                )
             )
         )
 
@@ -1317,10 +1428,19 @@ def _arestas_tugs_internas(
             []
         )
 
-        circuitos_amb = set(
-            tug_circuitos.get(
-                ambiente,
-                set()
+        circuitos_amb = (
+            set(
+                tug_circuitos.get(
+                    ambiente,
+                    set()
+                )
+            )
+            |
+            set(
+                iluminacao_circuitos.get(
+                    ambiente,
+                    set()
+                )
             )
         )
 
@@ -1671,10 +1791,11 @@ def _arestas_iluminacao_ambiente_controlado(
     pontos_eletricos,
     pontos_interruptores,
     ambientes_geom,
-    soleiras_raw
+    soleiras_raw,
+    circuitos=None
 ):
     """
-    Fase 11.5 Rev.2.
+    Fase 11.6.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -1687,6 +1808,12 @@ def _arestas_iluminacao_ambiente_controlado(
     """
     luminarias = _luminarias_por_ambiente(
         pontos_eletricos
+    )
+
+    circuitos_ilum = (
+        _circuitos_iluminacao_por_ambiente(
+            circuitos
+        )
     )
 
     ints_por_ambiente = {}
@@ -1818,7 +1945,12 @@ def _arestas_iluminacao_ambiente_controlado(
                 "fim":
                     tuple(luz_destino),
                 "circuitos":
-                    set(),
+                    set(
+                        circuitos_ilum.get(
+                            ambiente,
+                            set()
+                        )
+                    ),
                 "criterio":
                     criterio,
             })
@@ -1831,7 +1963,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 11.5 Rev.2 — ramais dedicados das TUEs.
+    Fase 11.6 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2003,7 +2135,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 11.5 Rev.2
+    Fase 11.6
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -2100,7 +2232,8 @@ def desenhar_rotas_qdc_iluminacao(
             pontos_eletricos,
             pontos_interruptores,
             ambientes_geom,
-            soleiras_raw
+            soleiras_raw,
+            circuitos
         )
     )
 
@@ -2263,7 +2396,21 @@ def desenhar_rotas_qdc_iluminacao(
         if entidade is None:
             continue
 
+        comprimento_m = (
+            _comprimento_entidade_rota(
+                entidade,
+                tipo_entidade,
+                trecho["inicio"],
+                trecho["fim"]
+            )
+        )
+
         rotas.append({
+            "comprimento_m":
+                round(
+                    comprimento_m,
+                    4
+                ),
             "tipo_rede":
                 (
                     "LUMINARIA_INTERNA"

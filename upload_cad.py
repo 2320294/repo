@@ -24,7 +24,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 11.5 Rev.2:
+    Fase 11.6:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -287,6 +287,9 @@ def renderizar_salvar_e_gerar_cad(
         st.session_state.pop("cad_gerado_projeto", None)
         st.session_state.pop("cad_gerado_tamanho", None)
         st.session_state.pop("cad_gerado_versao", None)
+        st.session_state.pop("dimensionamento_rotas", None)
+        st.session_state.pop("dimensionamento_rotas_projeto", None)
+        st.session_state.pop("dimensionamento_rotas_versao", None)
 
     # --------------------------------------------------------
     # O clique apenas grava uma solicitação persistente.
@@ -336,7 +339,7 @@ def renderizar_salvar_e_gerar_cad(
                         pe_direito=pe_direito,
                     )
 
-                    cad_bytes_out = motores.gerar_cad_unifilar(
+                    resultado_cad = motores.gerar_cad_unifilar(
                         dxf_bytes=dxf_bytes,
                         dados_editados=tabela_editada,
                         local_qdc=local_qdc,
@@ -345,7 +348,25 @@ def renderizar_salvar_e_gerar_cad(
                         ),
                         tensao_projeto=tensao_projeto,
                         pe_direito=pe_direito,
+                        retornar_resumo_rotas=True,
                     )
+
+                    if (
+                        isinstance(
+                            resultado_cad,
+                            tuple
+                        )
+                        and len(
+                            resultado_cad
+                        ) == 2
+                    ):
+                        (
+                            cad_bytes_out,
+                            resumo_rotas
+                        ) = resultado_cad
+                    else:
+                        cad_bytes_out = resultado_cad
+                        resumo_rotas = None
 
                     if cad_bytes_out is None:
                         raise RuntimeError(
@@ -377,6 +398,18 @@ def renderizar_salvar_e_gerar_cad(
                     cad_bytes_out
                 )
                 st.session_state["cad_gerado_versao"] = VERSAO_CAD
+
+                if resumo_rotas:
+                    st.session_state[
+                        "dimensionamento_rotas"
+                    ] = resumo_rotas
+                    st.session_state[
+                        "dimensionamento_rotas_projeto"
+                    ] = st.session_state.projeto_ativo
+                    st.session_state[
+                        "dimensionamento_rotas_versao"
+                    ] = VERSAO_CAD
+
                 st.session_state.pop("cad_gerado_erro", None)
                 cad_gerado_neste_ciclo = True
 
@@ -430,7 +463,7 @@ def renderizar_salvar_e_gerar_cad(
             mime="application/octet-stream",
             use_container_width=True,
             key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
-            # Fase 11.5 Rev.2:
+            # Fase 11.6:
             # impede o rerun do Streamlit no clique do download.
             # O rerun podia reconstruir a página antes de o navegador
             # iniciar a transferência do DXF.
