@@ -12,7 +12,6 @@ from database import (
 )
 
 from exportacoes import (
-    gerar_excel_projeto,
     gerar_memorial_pdf
 )
 
@@ -25,7 +24,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 8.19:
+    Fase 8.21:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -203,7 +202,7 @@ def renderizar_salvar_e_gerar_cad(
 ):
 
     st.subheader(
-        "🖨️ Exportação e Relatórios"
+        "💾 Finalização do Projeto"
     )
 
     if st.button(
@@ -236,72 +235,38 @@ def renderizar_salvar_e_gerar_cad(
             )
 
     # ========================================================
-    # EXCEL E MEMORIAL DESCRITIVO
+    # MEMORIAL DESCRITIVO
     # ========================================================
 
-    col_excel, col_pdf = st.columns(2)
+    try:
+        pdf_bytes = gerar_memorial_pdf(
+            nome_projeto=(
+                st.session_state.projeto_ativo
+            ),
+            tabela_editada=tabela_editada,
+            config_interruptores_usuario=(
+                config_interruptores_usuario
+            ),
+            local_qdc=local_qdc,
+            tensao_projeto=tensao_projeto,
+            pe_direito=pe_direito
+        )
 
-    with col_excel:
-        try:
-            excel_bytes = gerar_excel_projeto(
-                tabela_editada=tabela_editada,
-                config_interruptores_usuario=(
-                    config_interruptores_usuario
-                ),
-                local_qdc=local_qdc,
-                tensao_projeto=tensao_projeto,
-                pe_direito=pe_direito
-            )
+        st.download_button(
+            label="📄 Baixar Memorial Descritivo (PDF)",
+            data=pdf_bytes,
+            file_name=(
+                f"{st.session_state.projeto_ativo}"
+                "_Memorial_Descritivo.pdf"
+            ),
+            mime="application/pdf",
+            use_container_width=True
+        )
 
-            st.download_button(
-                label="📊 Baixar Planilha (Excel)",
-                data=excel_bytes,
-                file_name=(
-                    f"{st.session_state.projeto_ativo}"
-                    "_Quadro_Cargas.xlsx"
-                ),
-                mime=(
-                    "application/vnd.openxmlformats-officedocument."
-                    "spreadsheetml.sheet"
-                ),
-                use_container_width=True
-            )
-
-        except Exception as e:
-            st.error(
-                f"❌ Erro ao preparar Excel: {e}"
-            )
-
-    with col_pdf:
-        try:
-            pdf_bytes = gerar_memorial_pdf(
-                nome_projeto=(
-                    st.session_state.projeto_ativo
-                ),
-                tabela_editada=tabela_editada,
-                config_interruptores_usuario=(
-                    config_interruptores_usuario
-                ),
-                local_qdc=local_qdc,
-                tensao_projeto=tensao_projeto,
-                pe_direito=pe_direito
-            )
-
-            st.download_button(
-                label="📄 Baixar Memorial Descritivo (PDF)",
-                data=pdf_bytes,
-                file_name=(
-                    f"{st.session_state.projeto_ativo}"
-                    "_Memorial_Descritivo.pdf"
-                ),
-                mime="application/pdf",
-                use_container_width=True
-            )
-
-        except Exception as e:
-            st.error(
-                f"❌ Erro ao preparar memorial PDF: {e}"
-            )
+    except Exception as e:
+        st.error(
+            f"❌ Erro ao preparar memorial PDF: {e}"
+        )
 
     st.markdown(
         "### Projeto Unifilar (DXF)"

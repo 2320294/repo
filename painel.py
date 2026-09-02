@@ -38,6 +38,10 @@ from upload_cad import (
 )
 
 
+from exportacoes import (
+    gerar_excel_projeto
+)
+
 
 def _chave_projeto(
     sufixo
@@ -367,6 +371,58 @@ def renderizar_painel_principal():
             tabela_editada
         )
 
+        st.markdown(
+            "#### 📥 Exportação do Quadro de Cargas"
+        )
+
+        try:
+            excel_bytes = gerar_excel_projeto(
+                tabela_editada=tabela_editada,
+                config_interruptores_usuario=(
+                    st.session_state[
+                        chave_config
+                    ]
+                ),
+                local_qdc=(
+                    st.session_state[
+                        chave_qdc
+                    ]
+                ),
+                tensao_projeto=(
+                    st.session_state[
+                        chave_parametros
+                    ][
+                        "tensao_projeto"
+                    ]
+                ),
+                pe_direito=(
+                    st.session_state[
+                        chave_parametros
+                    ][
+                        "pe_direito"
+                    ]
+                )
+            )
+
+            st.download_button(
+                label="📊 Exportar Cargas para Excel",
+                data=excel_bytes,
+                file_name=(
+                    f"{st.session_state.projeto_ativo}"
+                    "_Quadro_Cargas.xlsx"
+                ),
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
+                use_container_width=True
+            )
+
+        except Exception as e:
+            st.error(
+                f"❌ Erro ao preparar Excel: {e}"
+            )
+
         return
 
     # Valores correntes compartilhados pelas demais etapas.
@@ -507,7 +563,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "📐 Gerar Projeto":
         st.subheader(
-            "📐 Salvar, Exportar e Gerar Projeto"
+            "📐 Salvar e Gerar Projeto"
         )
 
         st.markdown(
