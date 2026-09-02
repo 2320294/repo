@@ -427,7 +427,10 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                nome=nome,
+                # Fase 8.14:
+                # usar o identificador único do ambiente (ex.: "WC 2")
+                # também dentro da lógica de tomadas.
+                nome=nome_busca,
                 polilinha=polilinha,
                 logical_walls=logical_walls,
                 segmentos_crus=segmentos_crus,
@@ -449,9 +452,9 @@ def gerar_cad_unifilar(
             )
 
             if pontos_tomadas:
-                # A função de tomadas usa o nome base recebido; normalizamos
-                # para o mesmo identificador empregado em dados_editados.
                 for ponto in pontos_tomadas:
+                    # Garante o identificador único do ambiente também
+                    # para a futura distribuição de circuitos.
                     ponto["ambiente"] = nome_busca
                     pontos_eletricos.append(ponto)
 
