@@ -219,6 +219,17 @@ def _pontos_do_circuito(circuito, pontos_eletricos):
         and _normalizar_tipo(p.get("tipo")) == _normalizar_tipo(tipo)
     ]
 
+    # Fase 8.3: a altura passa a fazer parte do ponto elétrico.
+    # TUG baixa, TUG média e TUE alta/média não são misturadas numa
+    # mesma sequência física por acidente. Para circuitos que declarem
+    # altura, filtramos estritamente o grupo correspondente.
+    altura_circuito = _normalizar_tipo(circuito.get("altura"))
+    if altura_circuito:
+        candidatos = [
+            p for p in candidatos
+            if _normalizar_tipo(p.get("altura")) == altura_circuito
+        ]
+
     if tipo == "TUE":
         indice = max(1, int(circuito.get("indice_tue", 1))) - 1
         if candidatos:

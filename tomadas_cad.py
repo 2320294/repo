@@ -286,6 +286,12 @@ def desenhar_tomadas(
         ]
     )
 
+    # Fase 8.3 — classificação explícita por altura.
+    # ALTA: pontos dedicados de chuveiro e ar-condicionado.
+    # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
+    # As TUGs são classificadas mais abaixo conforme o ambiente.
+    altura_tue = "ALTA" if is_chuveiro_ou_ac else "MEDIA"
+
     nome_lower_env = (
         nome.casefold().strip()
     )
@@ -527,6 +533,8 @@ def desenhar_tomadas(
                 "ponto": (px, py),
                 "potencia": pot_tue_val,
                 "equipamento": eq_tue_nome,
+                "altura": altura_tue,
+                "grupo_distribuicao": f"TOMADA_{altura_tue}",
             })
 
     # TUG
@@ -675,6 +683,10 @@ def desenhar_tomadas(
                 "tipo": "TUG",
                 "ponto": (px, py),
                 "potencia": 600 if is_ambiente_molhado else 100,
+                "altura": "MEDIA" if is_ambiente_molhado else "BAIXA",
+                "grupo_distribuicao": (
+                    "TOMADA_MEDIA" if is_ambiente_molhado else "TOMADA_BAIXA"
+                ),
             })
 
     return pontos_gerados
