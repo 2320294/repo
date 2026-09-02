@@ -31,6 +31,10 @@ from demanda_qdc import (
     calcular_demanda_qdc
 )
 
+from balanceamento_fases import (
+    balancear_circuitos
+)
+
 def _valor_w(row, campo_w, campo_va, padrao=0):
     if campo_w in row:
         return float(row.get(campo_w, padrao) or 0)
@@ -251,6 +255,16 @@ def gerar_excel_projeto(
         )
     )
 
+    circuitos_balanceados, resumo_balanceamento = balancear_circuitos(
+        circuitos,
+        parametros_rede
+    )
+    df_circuitos = pd.DataFrame(circuitos_balanceados)
+    if not df_circuitos.empty and "numero" in df_circuitos.columns:
+        df_circuitos["numero"] = df_circuitos["numero"].apply(
+            lambda valor: f"C{int(valor):02d}"
+        )
+
     df_parametros = pd.concat(
         [
             df_parametros,
@@ -331,6 +345,23 @@ def gerar_excel_projeto(
         [df_parametros, pd.DataFrame(linhas_demanda)],
         ignore_index=True
     )
+
+    linhas_balanceamento = []
+    for fase, potencia_fase in resumo_balanceamento.get("fases", {}).items():
+        linhas_balanceamento.append({
+            "Parâmetro": f"Potência instalada - Fase {fase}",
+            "Valor": f"{potencia_fase/1000:.2f} kW"
+        })
+    if resumo_balanceamento.get("desequilibrio_pct") is not None:
+        linhas_balanceamento.append({
+            "Parâmetro": "Desequilíbrio preliminar entre fases",
+            "Valor": f"{resumo_balanceamento['desequilibrio_pct']:.1f} %"
+        })
+    if linhas_balanceamento:
+        df_parametros = pd.concat(
+            [df_parametros, pd.DataFrame(linhas_balanceamento)],
+            ignore_index=True
+        )
 
     linhas_interruptores = []
 

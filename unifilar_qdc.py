@@ -36,7 +36,8 @@ def desenhar_unifilar_qdc(
     polilinhas_ambientes,
     tensao_projeto=220,
     parametros_rede=None,
-    resultado_demanda=None
+    resultado_demanda=None,
+    resumo_balanceamento=None
 ):
     circuitos = list(circuitos or [])
     if not circuitos:
@@ -67,11 +68,26 @@ def desenhar_unifilar_qdc(
 
     _text(
         msp,
-        f"FASE 9.2 - {tipo} - {tensao}",
+        f"FASE 9.3 - {tipo} - {tensao}",
         x0+0.45,
         y0-1.10,
         0.12
     )
+
+    resumo_balanceamento = dict(resumo_balanceamento or {})
+    cargas_fases = resumo_balanceamento.get("fases", {})
+    if cargas_fases:
+        texto_bal = " | ".join(
+            f"{fase}: {pot/1000:.2f} kW"
+            for fase, pot in cargas_fases.items()
+        )
+        _text(
+            msp,
+            f"BALANCEAMENTO: {texto_bal}",
+            x0+0.45,
+            y0-1.30,
+            0.105
+        )
 
     xp = x0 + 1.25
     y = y0 - 1.55
@@ -136,11 +152,18 @@ def desenhar_unifilar_qdc(
         bit = float(c.get("bitola",0) or 0)
         dj = int(c.get("disjuntor",0) or 0)
         cond = "2F + PE" if tipo.upper()=="TUE" else "F + N + PE"
+        fase = str(c.get("fase", "A definir"))
+        polos = str(c.get("polos", "A definir"))
+        numero = int(c.get("numero", idx))
 
-        _text(msp, f"C{idx:02d}  {tipo} - {amb}", xt, cy+0.10, 0.135)
         _text(
             msp,
-            f"{pot:.0f} W | {cor:.2f} A | DJ {dj} A | {bit:g} mm2 | {cond}",
+            f"C{numero:02d}  {tipo} - {amb} - FASE {fase}",
+            xt, cy+0.10, 0.135
+        )
+        _text(
+            msp,
+            f"{pot:.0f} W | {cor:.2f} A | DJ {dj} A {polos} | {bit:g} mm2 | {cond}",
             xt, cy-0.14, 0.105
         )
 

@@ -4,6 +4,9 @@ from io import BytesIO
 import pandas as pd
 import streamlit as st
 
+from concessionarias import CHAVE_PARAMETROS_REDE
+from balanceamento_fases import balancear_circuitos
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4, landscape
@@ -1139,8 +1142,11 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
     circuitos_df = pd.DataFrame(circuitos)
     if not circuitos_df.empty:
         circuitos_df = circuitos_df.rename(columns={
+            "numero": "Nº",
             "tipo": "Circuito",
             "ambiente": "Ambiente",
+            "fase": "Fase(s)",
+            "polos": "Polos",
             "potencia": "Potência (W)",
             "corrente": "Corrente estimada (A)",
             "bitola": "Bitola preliminar (mm²)",
@@ -1149,6 +1155,10 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
         circuitos_df["Corrente estimada (A)"] = (
             circuitos_df["Corrente estimada (A)"].round(2)
         )
+        if "Nº" in circuitos_df.columns:
+            circuitos_df["Nº"] = circuitos_df["Nº"].apply(
+                lambda valor: f"C{int(valor):02d}"
+            )
     return materiais_df, circuitos_df
 
 
@@ -1246,7 +1256,8 @@ def _gerar_pdf_materiais_circuitos(
     else:
         story.append(_pdf_tabela(
             circuitos_df,
-            [2.5*cm, 4.0*cm, 3.0*cm, 3.5*cm, 4.0*cm, 4.0*cm]
+            [1.2*cm, 2.3*cm, 2.8*cm, 1.6*cm, 1.4*cm, 2.2*cm, 2.6*cm, 2.8*cm, 2.8*cm]
+            [:len(circuitos_df.columns)]
         ))
 
     story += [
@@ -1282,6 +1293,17 @@ def renderizar_materiais(
         )
     )
 
+    parametros_rede = (
+        (config_interruptores_usuario or {}).get(
+            CHAVE_PARAMETROS_REDE,
+            {}
+        )
+    )
+    circuitos, resumo_balanceamento = balancear_circuitos(
+        circuitos,
+        parametros_rede
+    )
+
     st.caption(
         f"Parâmetros usados: alimentação {int(tensao_projeto)} V | "
         f"pé-direito {float(pe_direito):.2f} m. "
@@ -1302,6 +1324,24 @@ def renderizar_materiais(
             materiais_df,
             use_container_width=True,
             hide_index=True
+        )
+
+    st.markdown("#### ⚖️ Balanceamento automático de fases")
+
+    if resumo_balanceamento.get("status") == "ok":
+        fases_resumo = resumo_balanceamento.get("fases", {})
+        cols = st.columns(max(1, len(fases_resumo)))
+        for col, (fase, pot) in zip(cols, fases_resumo.items()):
+            col.metric(f"Fase {fase}", f"{pot/1000:.2f} kW")
+        st.caption(
+            "Desequilíbrio preliminar entre fases: "
+            f"{resumo_balanceamento.get('desequilibrio_pct', 0):.1f}% "
+            "com base na potência instalada."
+        )
+    else:
+        st.info(
+            "Informe o tipo de fornecimento na etapa Parâmetros "
+            "para liberar o balanceamento automático."
         )
 
     st.markdown(
@@ -1346,7 +1386,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_2.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_3.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1355,7 +1395,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_2.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_3.pdf",
             mime="application/pdf",
             use_container_width=True
         )
