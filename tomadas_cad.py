@@ -36,7 +36,7 @@ def _geometria_simbolo_tomada(
     ny
 ):
     """
-    Fase 11.0.
+    Fase 11.1.
 
     px,py continuam sendo o ponto da parede.
 
@@ -336,7 +336,7 @@ def _selecao_tomada_alta(
         or []
     )
 
-    # Fase 11.0:
+    # Fase 11.1:
     # prioridade absoluta para o identificador único (ex.: "WC 2").
     # Compatibilidade somente para projetos antigos que tenham salvo
     # a configuração usando o nome-base.
@@ -600,7 +600,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 11.0 — classificação por altura preservada da Fase 8.3.
+    # Fase 11.1 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -676,7 +676,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 11.0:
+            # Fase 11.1:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(

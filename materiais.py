@@ -888,7 +888,7 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 11.0 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 11.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
     # cargas elementares por ambiente até a Fase 11.1/11.2, quando o
@@ -1211,6 +1211,13 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
             circuitos_df["Nº"] = circuitos_df["Nº"].apply(
                 lambda valor: f"C{int(valor):02d}"
             )
+
+        # Fase 11.1: dados estruturais usados pelo roteamento continuam
+        # dentro dos circuitos em memória, mas não são expostos ao usuário.
+        circuitos_df = circuitos_df.drop(
+            columns=["ambientes", "origens"],
+            errors="ignore"
+        )
     return materiais_df, circuitos_df
 
 
@@ -1626,7 +1633,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 11.0: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.1: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1639,7 +1646,7 @@ def renderizar_materiais(
     )
 
     st.caption(
-        "Fase 11.0: os circuitos abaixo já são consolidados. "
+        "Fase 11.1: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -1688,7 +1695,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_0.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1697,7 +1704,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_0.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )

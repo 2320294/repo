@@ -572,7 +572,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 11.0. O DG depende da validação "
+                "Pré-dimensionamento da Fase 11.1. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 

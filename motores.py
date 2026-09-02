@@ -38,6 +38,10 @@ from eletrodutos_cad import (
     desenhar_rede_eletrodutos
 )
 
+from roteamento_cad import (
+    desenhar_rotas_qdc_iluminacao
+)
+
 from materiais import (
     calcular_quantitativo_materiais
 )
@@ -109,6 +113,8 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_DEBUG": 6,
             "PROJ_ELETRICA_ELETRODUTO": 3,
             "PROJ_ELETRICA_ELETRODUTO_TEXTO": 3,
+            "PROJ_ELETRICA_ROTEAMENTO": 3,
+            "PROJ_ELETRICA_ROTEAMENTO_TEXTO": 3,
             "PROJ_ELETRICA_COMANDO": 6,
             "PROJ_ELETRICA_UNIFILAR_QDC": 7,
             "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO": 7,
@@ -149,6 +155,8 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_DEBUG",
                     "PROJ_ELETRICA_ELETRODUTO",
                     "PROJ_ELETRICA_ELETRODUTO_TEXTO",
+                    "PROJ_ELETRICA_ROTEAMENTO",
+                    "PROJ_ELETRICA_ROTEAMENTO_TEXTO",
                     "PROJ_ELETRICA_COMANDO",
                     "PROJ_ELETRICA_UNIFILAR_QDC",
                     "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO",
@@ -461,7 +469,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 11.0:
+                # Fase 11.1:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -492,27 +500,11 @@ def gerar_cad_unifilar(
                     ponto["ambiente"] = nome_busca
                     pontos_eletricos.append(ponto)
 
-        # Rede física/simbólica de eletrodutos / circuitos
-        desenhar_rede_eletrodutos(
-            msp=msp,
-            dados_editados=dados_editados,
-            ambientes_geom=ambientes_geom,
-            qdc_info=qdc_info,
-            pontos_eletricos=pontos_eletricos,
-            soleiras_raw=soleiras_raw,
-            pontos_interruptores=pontos_interruptores,
-        )
-
-        # Fase 8.2: limpar conduítes/comandos para foco nos pontos elétricos.
-        camadas_ocultar = {"PROJ_ELETRICA_ELETRODUTO", "PROJ_ELETRICA_ELETRODUTO_TEXTO", "PROJ_ELETRICA_COMANDO"}
-        for entidade in list(msp):
-            if entidade.dxf.layer in camadas_ocultar:
-                msp.delete_entity(entidade)
-        
-        
         # ====================================================
-        # FASE 11.0 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # FASE 11.1 — CIRCUITOS CONSOLIDADOS + ROTEAMENTO FÍSICO INICIAL
         # ====================================================
+        # A rede antiga permanece desativada. A partir desta fase o CAD usa
+        # um novo roteamento, baseado nos circuitos consolidados.
         _, circuitos_unifilar = calcular_quantitativo_materiais(
             tabela_editada=dados_editados,
             config_interruptores_usuario=(config_interruptores or {}),
@@ -555,6 +547,28 @@ def gerar_cad_unifilar(
             circuitos_unifilar,
             resumo_drs_unifilar
         )
+
+        # Primeiro caminho físico:
+        # QDC -> ponto de iluminação/distribuição dos ambientes do circuito.
+        # O desenho é feito exclusivamente com entidades ARC de baixa curvatura.
+        desenhar_rotas_qdc_iluminacao(
+            msp=msp,
+            qdc_info=qdc_info,
+            pontos_eletricos=pontos_eletricos,
+            circuitos=circuitos_unifilar,
+        )
+
+        # As camadas legadas continuam removidas para não misturar o
+        # roteamento antigo com a nova rede da Fase 11.
+        camadas_ocultar = {
+            "PROJ_ELETRICA_ELETRODUTO",
+            "PROJ_ELETRICA_ELETRODUTO_TEXTO",
+            "PROJ_ELETRICA_COMANDO"
+        }
+        for entidade in list(msp):
+            if entidade.dxf.layer in camadas_ocultar:
+                msp.delete_entity(entidade)
+
 
         desenhar_unifilar_qdc(
             msp=msp,
