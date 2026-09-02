@@ -24,7 +24,8 @@ def _breaker(msp,x,y):
 def desenhar_unifilar_qdc(
     msp,circuitos,polilinhas_ambientes,tensao_projeto=220,
     parametros_rede=None,resultado_demanda=None,
-    resumo_balanceamento=None,resumo_drs=None
+    resumo_balanceamento=None,resumo_drs=None,
+    resumo_protecao=None
 ):
     circuitos=list(circuitos or [])
     if not circuitos:
@@ -51,13 +52,14 @@ def desenhar_unifilar_qdc(
     resultado_demanda=dict(resultado_demanda or {})
     resumo_balanceamento=dict(resumo_balanceamento or {})
     resumo_drs=list(resumo_drs or [])
+    resumo_protecao=dict(resumo_protecao or {})
 
     tipo_for=str(parametros_rede.get("tipo_fornecimento","A definir"))
     tensao_for=str(parametros_rede.get("tensao_fornecimento","A definir"))
 
     # Cabeçalho: corrigido para não sobrepor textos.
     _text(msp,"DIAGRAMA UNIFILAR DO QDC",x0+0.55,y0-0.42,0.24)
-    _text(msp,f"FASE 9.6 | FORNECIMENTO: {tipo_for} | {tensao_for}",
+    _text(msp,f"FASE 9.6.1 | FORNECIMENTO: {tipo_for} | {tensao_for}",
           x0+0.55,y0-0.82,0.135)
     _text(msp,f"TENSAO DE PROJETO DOS CIRCUITOS: {int(tensao_projeto)} V",
           x0+0.55,y0-1.12,0.125)
