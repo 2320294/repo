@@ -168,6 +168,246 @@ def _centro_fallback_parede(
     )
 
 
+
+def _segmentos_poligono(
+    poligono
+):
+    pts = list(
+        poligono
+        or []
+    )
+
+    if len(
+        pts
+    ) < 2:
+        return []
+
+    segmentos = []
+
+    for i in range(
+        len(
+            pts
+        )
+    ):
+        a = pts[
+            i
+        ]
+        b = pts[
+            (
+                i + 1
+            )
+            % len(
+                pts
+            )
+        ]
+
+        dx = (
+            b[0]
+            - a[0]
+        )
+        dy = (
+            b[1]
+            - a[1]
+        )
+
+        comprimento = (
+            dx * dx
+            + dy * dy
+        ) ** 0.5
+
+        if comprimento > 1e-9:
+            segmentos.append(
+                (
+                    a,
+                    b
+                )
+            )
+
+    return segmentos
+
+
+def _intersecao_raio_segmento(
+    origem,
+    direcao,
+    a,
+    b
+):
+    """
+    Interseção 2D entre:
+      origem + t * direcao, t >= 0
+    e
+      a + u * (b-a), 0 <= u <= 1.
+
+    Retorna t (distância, pois direcao é unitária) ou None.
+    """
+    ox, oy = origem
+    dx, dy = direcao
+
+    sx = (
+        b[0]
+        - a[0]
+    )
+    sy = (
+        b[1]
+        - a[1]
+    )
+
+    det = (
+        dx * sy
+        - dy * sx
+    )
+
+    if abs(
+        det
+    ) < 1e-9:
+        return None
+
+    ax = (
+        a[0]
+        - ox
+    )
+    ay = (
+        a[1]
+        - oy
+    )
+
+    t = (
+        ax * sy
+        - ay * sx
+    ) / det
+
+    u = (
+        ax * dy
+        - ay * dx
+    ) / det
+
+    if (
+        t >= 0.0
+        and -1e-9 <= u <= 1.0 + 1e-9
+    ):
+        return t
+
+    return None
+
+
+def _espessura_parede_qdc(
+    mx,
+    my,
+    out_nx,
+    out_ny,
+    vx,
+    vy,
+    polilinhas_ambientes,
+    espessura_padrao=0.15,
+    espessura_min=0.05,
+    espessura_max=0.50
+):
+    """
+    Fase 8.12.
+
+    Mede o vão entre a face do ambiente do QDC e a face paralela
+    mais próxima de outro ambiente, no sentido externo da parede.
+
+    A busca é feita por um raio normal à parede. Somente segmentos
+    aproximadamente paralelos à parede selecionada são aceitos.
+
+    Se não houver uma segunda face confiável (ex.: parede externa),
+    preserva o padrão histórico de 15 cm.
+    """
+    origem = (
+        mx
+        + out_nx
+        * 0.002,
+        my
+        + out_ny
+        * 0.002
+    )
+
+    candidatos = []
+
+    for poligono in (
+        polilinhas_ambientes
+        or []
+    ):
+        for a, b in _segmentos_poligono(
+            poligono
+        ):
+            sx = (
+                b[0]
+                - a[0]
+            )
+            sy = (
+                b[1]
+                - a[1]
+            )
+
+            comp = (
+                sx * sx
+                + sy * sy
+            ) ** 0.5
+
+            if comp < 1e-9:
+                continue
+
+            svx = (
+                sx / comp
+            )
+            svy = (
+                sy / comp
+            )
+
+            # Paralelismo absoluto: aceita mesma direção ou oposta.
+            paralelo = abs(
+                svx * vx
+                + svy * vy
+            )
+
+            if paralelo < 0.985:
+                continue
+
+            t = _intersecao_raio_segmento(
+                origem,
+                (
+                    out_nx,
+                    out_ny
+                ),
+                a,
+                b
+            )
+
+            if t is None:
+                continue
+
+            # Compensa o deslocamento de 2 mm da origem.
+            distancia = (
+                t + 0.002
+            )
+
+            if (
+                espessura_min
+                <= distancia
+                <= espessura_max
+            ):
+                candidatos.append(
+                    distancia
+                )
+
+    if not candidatos:
+        return (
+            float(
+                espessura_padrao
+            ),
+            "PADRAO_15CM"
+        )
+
+    return (
+        min(
+            candidatos
+        ),
+        "MEDIDA_ENTRE_AMBIENTES"
+    )
+
+
 def desenhar_qdc(
     msp,
     logical_walls,
@@ -175,7 +415,8 @@ def desenhar_qdc(
     local_qdc,
     nome,
     centro_x,
-    centro_y
+    centro_y,
+    polilinhas_ambientes=None
 ):
     dados_qdc = (
         decodificar_qdc_completo(
@@ -346,6 +587,22 @@ def desenhar_qdc(
     out_nx = -nx
     out_ny = -ny
 
+    # =========================================================
+    # FASE 8.12 — QDC ADAPTADO À ESPESSURA REAL DA PAREDE
+    # =========================================================
+    qdc_d, criterio_espessura = (
+        _espessura_parede_qdc(
+            mx,
+            my,
+            out_nx,
+            out_ny,
+            vx,
+            vy,
+            polilinhas_ambientes,
+            espessura_padrao=0.15
+        )
+    )
+
     p1_qdc = (
         mx - vx * qdc_w / 2,
         my - vy * qdc_w / 2
@@ -425,6 +682,10 @@ def desenhar_qdc(
             trecho_t1,
         "criterio_posicao":
             criterio_posicao,
+        "espessura_parede":
+            qdc_d,
+        "criterio_espessura":
+            criterio_espessura,
         "parede": {
             "p1":
                 pt1,

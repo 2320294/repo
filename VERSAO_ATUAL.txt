@@ -1,9 +1,10 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.11
-IDENTIFICADOR: Fase_8_11
+VERSÃO ATUAL: Fase 8.12
+IDENTIFICADOR: Fase_8_12
 
-[OK] título da seção QDC
-[OK] trechos disponíveis azuis
-[OK] somente trecho salvo fica verde
-[OK] seleção persistida ao reabrir projeto
-[OK] símbolos de tomadas da Fase 8.10 preservados
+[OK] QDC adapta profundidade à espessura real da parede
+[OK] medição entre faces paralelas de ambientes
+[OK] fallback de 15 cm para parede externa/sem face oposta
+[OK] largura do QDC = 40 cm preservada
+[OK] seleção QDC azul/verde preservada
+[OK] tomadas da Fase 8.10 preservadas

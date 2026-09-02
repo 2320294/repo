@@ -416,7 +416,8 @@ def gerar_cad_unifilar(
                 local_qdc=local_qdc,
                 nome=nome,
                 centro_x=centro_x,
-                centro_y=centro_y
+                centro_y=centro_y,
+                polilinhas_ambientes=polilinhas
             )
 
             if qdc_resultado:
