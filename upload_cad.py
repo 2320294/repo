@@ -24,7 +24,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 11.6:
+    Fase 11.7:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -463,7 +463,7 @@ def renderizar_salvar_e_gerar_cad(
             mime="application/octet-stream",
             use_container_width=True,
             key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
-            # Fase 11.6:
+            # Fase 11.7:
             # impede o rerun do Streamlit no clique do download.
             # O rerun podia reconstruir a página antes de o navegador
             # iniciar a transferência do DXF.

@@ -890,10 +890,10 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 11.6 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 11.7 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 11.6/11.2, quando o
+    # cargas elementares por ambiente até a Fase 11.7/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
@@ -1179,7 +1179,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 11.6 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 11.7 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1371,7 +1371,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 11.6: dados estruturais usados pelo roteamento continuam
+        # Fase 11.7: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1380,11 +1380,32 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
     return materiais_df, circuitos_df
 
 
-def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df):
+def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         materiais_df.to_excel(writer, sheet_name="Materiais", index=False)
         circuitos_df.to_excel(writer, sheet_name="Circuitos", index=False)
+
+        abas = [
+            ("Materiais", materiais_df),
+            ("Circuitos", circuitos_df),
+        ]
+
+        if (
+            validacao_df is not None
+            and not validacao_df.empty
+        ):
+            validacao_df.to_excel(
+                writer,
+                sheet_name="Validacao_Rotas",
+                index=False
+            )
+            abas.append(
+                (
+                    "Validacao_Rotas",
+                    validacao_df
+                )
+            )
 
         workbook = writer.book
         cabecalho = workbook.add_format({
@@ -1393,7 +1414,7 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df):
         })
         borda = workbook.add_format({"border": 1, "valign": "top"})
 
-        for nome_aba, df in [("Materiais", materiais_df), ("Circuitos", circuitos_df)]:
+        for nome_aba, df in abas:
             ws = writer.sheets[nome_aba]
             ws.freeze_panes(1, 0)
             for col, coluna in enumerate(df.columns):
@@ -1472,7 +1493,7 @@ def _tabela_resumo_pdf(linhas, largura_total=26.5*cm):
 def _gerar_pdf_materiais_circuitos(
     nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito,
     resumo_balanceamento=None, resumo_protecao=None, resumo_drs=None,
-    resultado_demanda=None, parametros_rede=None
+    resultado_demanda=None, parametros_rede=None, validacao_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -1652,12 +1673,75 @@ def _gerar_pdf_materiais_circuitos(
             texto
         ))
 
+    if (
+        validacao_df is not None
+        and not validacao_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "6. QUEDA DE TENSÃO E VALIDAÇÃO DAS ROTAS",
+                secao
+            )
+        ]
+
+        colunas_validacao = [
+            c
+            for c in [
+                "Nº",
+                "Circuito",
+                "Ambiente",
+                "Corrente (A)",
+                "Bitola (mm²)",
+                "Disjuntor (A)",
+                "Percurso máx. (m)",
+                "Queda (%)",
+                "Status",
+            ]
+            if c in validacao_df.columns
+        ]
+
+        df_pdf_validacao = validacao_df[
+            colunas_validacao
+        ].copy()
+
+        larguras_validacao = [
+            1.1*cm,
+            2.0*cm,
+            4.0*cm,
+            2.0*cm,
+            2.0*cm,
+            2.1*cm,
+            2.4*cm,
+            1.8*cm,
+            1.7*cm,
+        ][:len(colunas_validacao)]
+
+        story.append(
+            _pdf_tabela(
+                df_pdf_validacao,
+                larguras_validacao,
+                fonte=6.1
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "A queda de tensão é preliminar e usa o maior percurso físico "
+                "do circuito. Capacidade de condução, agrupamento, temperatura, "
+                "curto-circuito e dados reais dos fabricantes ainda devem ser "
+                "confirmados no dimensionamento executivo.",
+                texto
+            )
+        )
+
     story += [
         Spacer(1,8),
         Paragraph(
-            "Observação geral: comprimentos de cabos/eletrodutos e alguns dispositivos "
-            "de proteção permanecem pré-dimensionados enquanto o roteamento completo "
-            "dos circuitos não estiver implementado. O dimensionamento executivo deve "
+            "Observação geral: os comprimentos de cabos/eletrodutos passam a usar "
+            "o roteamento físico quando disponível. Os dispositivos e verificações "
+            "de proteção permanecem pré-dimensionados porque ainda dependem de método "
+            "de instalação, agrupamento e dados reais dos fabricantes. O dimensionamento executivo deve "
             "ser confirmado conforme os critérios aplicáveis da NBR 5410 e os dados "
             "dos fabricantes/concessionária.",
             texto
@@ -1821,7 +1905,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 11.6: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.7: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1867,12 +1951,114 @@ def renderizar_materiais(
                 hide_index=True
             )
 
+        validacao = (
+            resumo_rotas.get(
+                "validacao_eletrica",
+                {}
+            )
+            or {}
+        )
+
+        if validacao:
+            st.markdown(
+                "#### 📉 Queda de tensão e consistência dos circuitos"
+            )
+
+            max_compartilhados = int(
+                validacao.get(
+                    "max_circuitos_mesmo_trecho",
+                    0
+                )
+                or 0
+            )
+
+            st.caption(
+                f"Maior concentração encontrada: "
+                f"{max_compartilhados} circuito(s) no mesmo trecho. "
+                "A correção de capacidade por agrupamento será aplicada "
+                "quando o método de instalação e os dados reais dos cabos "
+                "forem definidos."
+            )
+
+            dados_validacao = (
+                validacao.get(
+                    "circuitos",
+                    []
+                )
+                or []
+            )
+
+            if dados_validacao:
+                df_validacao = pd.DataFrame(
+                    dados_validacao
+                ).rename(
+                    columns={
+                        "numero": "Nº",
+                        "tipo": "Circuito",
+                        "ambiente": "Ambiente",
+                        "corrente_a": "Corrente (A)",
+                        "bitola_mm2": "Bitola (mm²)",
+                        "disjuntor_a": "Disjuntor (A)",
+                        "comprimento_max_m": "Percurso máx. (m)",
+                        "queda_tensao_pct": "Queda (%)",
+                        "status": "Status",
+                    }
+                )
+
+                colunas = [
+                    c
+                    for c in [
+                        "Nº",
+                        "Circuito",
+                        "Ambiente",
+                        "Corrente (A)",
+                        "Bitola (mm²)",
+                        "Disjuntor (A)",
+                        "Percurso máx. (m)",
+                        "Queda (%)",
+                        "Status",
+                    ]
+                    if c in df_validacao.columns
+                ]
+
+                st.dataframe(
+                    df_validacao[
+                        colunas
+                    ],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+                if (
+                    validacao.get(
+                        "status"
+                    )
+                    == "alerta"
+                ):
+                    st.warning(
+                        "Há circuitos com alerta preliminar de queda de "
+                        "tensão, proteção ou seção mínima. Revise a tabela "
+                        "antes do dimensionamento executivo."
+                    )
+                else:
+                    st.success(
+                        "Os circuitos passaram nas verificações preliminares "
+                        "implementadas nesta fase."
+                    )
+
+            st.caption(
+                "A queda de tensão é estimada pelo maior percurso físico "
+                "do circuito. A validação final depende também do método "
+                "de instalação, temperatura, agrupamento, capacidade de "
+                "condução, curto-circuito e dados do fabricante."
+            )
+
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
     )
 
     st.caption(
-        "Fase 11.6: os circuitos abaixo já são consolidados. "
+        "Fase 11.7: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -1890,6 +2076,40 @@ def renderizar_materiais(
         )
 
 
+    validacao_export_df = None
+
+    if resumo_rotas:
+        dados_validacao_export = (
+            (
+                resumo_rotas.get(
+                    "validacao_eletrica",
+                    {}
+                )
+                or {}
+            ).get(
+                "circuitos",
+                []
+            )
+            or []
+        )
+
+        if dados_validacao_export:
+            validacao_export_df = pd.DataFrame(
+                dados_validacao_export
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "corrente_a": "Corrente (A)",
+                    "bitola_mm2": "Bitola (mm²)",
+                    "disjuntor_a": "Disjuntor (A)",
+                    "comprimento_max_m": "Percurso máx. (m)",
+                    "queda_tensao_pct": "Queda (%)",
+                    "status": "Status",
+                }
+            )
+
     nome_projeto = str(
         st.session_state.get(
             "projeto_ativo",
@@ -1900,7 +2120,8 @@ def renderizar_materiais(
 
     excel_bytes = _gerar_excel_materiais_circuitos(
         materiais_df,
-        df_circuitos
+        df_circuitos,
+        validacao_df=validacao_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -1912,7 +2133,8 @@ def renderizar_materiais(
         resumo_protecao=resumo_protecao,
         resumo_drs=resumo_drs,
         resultado_demanda=resultado_demanda_materiais,
-        parametros_rede=parametros_rede
+        parametros_rede=parametros_rede,
+        validacao_df=validacao_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -1921,7 +2143,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_6.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_7.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1930,7 +2152,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_6.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_7.pdf",
             mime="application/pdf",
             use_container_width=True
         )

@@ -547,3 +547,480 @@ def desenhar_dimensionamento_rotas(
                     (mx, my),
             }
         )
+
+
+# ============================================================
+# FASE 11.7 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# ============================================================
+
+RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
+QUEDA_REFERENCIA_PCT = 4.0   # referência de projeto; confirmar no executivo
+
+
+def _ponto_chave(pt):
+    if not pt:
+        return None
+    return (
+        round(float(pt[0]), 4),
+        round(float(pt[1]), 4),
+    )
+
+
+def _disjuntor_a(circuito):
+    valor = circuito.get(
+        "disjuntor",
+        0
+    )
+
+    try:
+        return float(valor)
+    except Exception:
+        txt = str(valor or "")
+        numero = ""
+        for ch in txt:
+            if (
+                ch.isdigit()
+                or ch in ".,"
+            ):
+                numero += ch
+            elif numero:
+                break
+
+        try:
+            return float(
+                numero.replace(",", ".")
+            )
+        except Exception:
+            return 0.0
+
+
+def _comprimento_maximo_circuito(
+    numero,
+    rotas
+):
+    """
+    Reconstrói o caminho dirigido do circuito usando a própria topologia
+    do roteamento e retorna a maior distância acumulada da origem até
+    qualquer ponto terminal.
+
+    É mais adequado para queda de tensão do que somar todos os ramos.
+    """
+    arestas = []
+
+    for rota in (
+        rotas
+        or []
+    ):
+        if numero not in (
+            rota.get(
+                "circuitos",
+                []
+            )
+            or []
+        ):
+            continue
+
+        a = _ponto_chave(
+            rota.get(
+                "inicio"
+            )
+        )
+        b = _ponto_chave(
+            rota.get(
+                "fim"
+            )
+        )
+
+        if (
+            a is None
+            or b is None
+        ):
+            continue
+
+        arestas.append({
+            "a": a,
+            "b": b,
+            "l": max(
+                0.0,
+                _numero(
+                    rota.get(
+                        "comprimento_m",
+                        0.0
+                    )
+                )
+            ),
+        })
+
+    if not arestas:
+        return 0.0
+
+    entradas = {
+        e["b"]
+        for e in arestas
+    }
+
+    origens = [
+        e["a"]
+        for e in arestas
+        if e["a"] not in entradas
+    ]
+
+    if not origens:
+        origens = [
+            arestas[0]["a"]
+        ]
+
+    saidas = {}
+
+    for e in arestas:
+        saidas.setdefault(
+            e["a"],
+            []
+        ).append(
+            e
+        )
+
+    memo = {}
+
+    def maior_a_partir(no, visitando=None):
+        if no in memo:
+            return memo[no]
+
+        visitando = set(
+            visitando
+            or set()
+        )
+
+        if no in visitando:
+            return 0.0
+
+        visitando.add(
+            no
+        )
+
+        melhor = 0.0
+
+        for e in saidas.get(
+            no,
+            []
+        ):
+            melhor = max(
+                melhor,
+                e["l"]
+                + maior_a_partir(
+                    e["b"],
+                    visitando
+                )
+            )
+
+        memo[
+            no
+        ] = melhor
+
+        return melhor
+
+    return max(
+        maior_a_partir(
+            origem
+        )
+        for origem in origens
+    )
+
+
+def _queda_tensao_pct(
+    comprimento_m,
+    corrente_a,
+    bitola_mm2,
+    tensao_v
+):
+    if (
+        comprimento_m <= 0
+        or corrente_a <= 0
+        or bitola_mm2 <= 0
+        or tensao_v <= 0
+    ):
+        return 0.0
+
+    # Circuitos monofásicos/bifásicos: percurso elétrico de ida e volta.
+    delta_v = (
+        2.0
+        * RHO_COBRE_OPERACAO
+        * comprimento_m
+        * corrente_a
+        / bitola_mm2
+    )
+
+    return (
+        delta_v
+        / tensao_v
+        * 100.0
+    )
+
+
+def validar_eletrica_rotas(
+    resumo_rotas,
+    circuitos
+):
+    """
+    Validação preliminar da Fase 11.7.
+
+    Verifica:
+    - maior percurso físico de cada circuito;
+    - queda de tensão estimada;
+    - disjuntor >= corrente de projeto;
+    - seção mínima funcional (iluminação/TUG);
+    - maior número de circuitos compartilhando um mesmo eletroduto.
+
+    NÃO substitui verificação executiva de capacidade de condução,
+    método de instalação, agrupamento, temperatura e curto-circuito.
+    """
+    rotas = (
+        resumo_rotas.get(
+            "rotas",
+            []
+        )
+        if isinstance(
+            resumo_rotas,
+            dict
+        )
+        else []
+    )
+
+    resultados = []
+    alertas = []
+
+    max_circuitos_trecho = 0
+    trecho_mais_carregado = None
+
+    for rota in rotas:
+        qtd = len(
+            set(
+                rota.get(
+                    "circuitos",
+                    []
+                )
+                or []
+            )
+        )
+
+        if qtd > max_circuitos_trecho:
+            max_circuitos_trecho = qtd
+            trecho_mais_carregado = rota.get(
+                "trecho_id"
+            )
+
+    for circuito in (
+        circuitos
+        or []
+    ):
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        if numero <= 0:
+            continue
+
+        tipo = str(
+            circuito.get(
+                "tipo",
+                ""
+            )
+            or ""
+        )
+
+        potencia = _numero(
+            circuito.get(
+                "potencia",
+                0.0
+            )
+        )
+
+        tensao = _numero(
+            circuito.get(
+                "tensao",
+                0.0
+            )
+        )
+
+        corrente = _numero(
+            circuito.get(
+                "corrente",
+                0.0
+            )
+        )
+
+        if (
+            corrente <= 0
+            and potencia > 0
+            and tensao > 0
+        ):
+            corrente = (
+                potencia
+                / tensao
+            )
+
+        bitola = _bitola(
+            circuito
+        )
+
+        disjuntor = _disjuntor_a(
+            circuito
+        )
+
+        comprimento_max = (
+            _comprimento_maximo_circuito(
+                numero,
+                rotas
+            )
+        )
+
+        queda_pct = _queda_tensao_pct(
+            comprimento_max,
+            corrente,
+            bitola,
+            tensao
+        )
+
+        if (
+            str(tipo).upper()
+            == "ILUMINAÇÃO".upper()
+        ):
+            secao_min = 1.5
+        elif (
+            str(tipo).upper()
+            == "TUG"
+        ):
+            secao_min = 2.5
+        else:
+            secao_min = 0.0
+
+        status_queda = (
+            "OK"
+            if queda_pct
+            <= QUEDA_REFERENCIA_PCT
+            else "ALERTA"
+        )
+
+        status_disjuntor = (
+            "OK"
+            if (
+                disjuntor <= 0
+                or corrente <= disjuntor
+            )
+            else "ALERTA"
+        )
+
+        status_secao = (
+            "OK"
+            if (
+                secao_min <= 0
+                or bitola >= secao_min
+            )
+            else "ALERTA"
+        )
+
+        status = (
+            "OK"
+            if all(
+                x == "OK"
+                for x in [
+                    status_queda,
+                    status_disjuntor,
+                    status_secao,
+                ]
+            )
+            else "ALERTA"
+        )
+
+        resultado = {
+            "numero":
+                numero,
+            "tipo":
+                tipo,
+            "ambiente":
+                circuito.get(
+                    "ambiente",
+                    ""
+                ),
+            "potencia_w":
+                round(
+                    potencia,
+                    1
+                ),
+            "tensao_v":
+                round(
+                    tensao,
+                    1
+                ),
+            "corrente_a":
+                round(
+                    corrente,
+                    2
+                ),
+            "bitola_mm2":
+                bitola,
+            "disjuntor_a":
+                disjuntor,
+            "comprimento_max_m":
+                round(
+                    comprimento_max,
+                    2
+                ),
+            "queda_tensao_pct":
+                round(
+                    queda_pct,
+                    2
+                ),
+            "status_queda":
+                status_queda,
+            "status_disjuntor":
+                status_disjuntor,
+            "status_secao":
+                status_secao,
+            "status":
+                status,
+        }
+
+        resultados.append(
+            resultado
+        )
+
+        if status == "ALERTA":
+            alertas.append(
+                numero
+            )
+
+    return {
+        "status":
+            (
+                "ok_preliminar"
+                if not alertas
+                else "alerta"
+            ),
+        "queda_referencia_pct":
+            QUEDA_REFERENCIA_PCT,
+        "criterio_queda":
+            (
+                "Estimativa pelo maior percurso físico dirigido do circuito, "
+                "cobre com resistividade preliminar de operação "
+                f"{RHO_COBRE_OPERACAO:g} ohm.mm²/m."
+            ),
+        "max_circuitos_mesmo_trecho":
+            max_circuitos_trecho,
+        "trecho_mais_carregado":
+            trecho_mais_carregado,
+        "circuitos_alerta":
+            alertas,
+        "circuitos":
+            resultados,
+        "observacao":
+            (
+                "A capacidade de condução de corrente ainda não é validada "
+                "porque depende do método de instalação, temperatura, "
+                "agrupamento real e dados do fabricante."
+            ),
+    }
