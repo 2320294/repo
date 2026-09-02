@@ -1,10 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 7.6
-IDENTIFICADOR: Fase_7_6
+VERSÃO ATUAL: Fase 7.7
+IDENTIFICADOR: Fase_7_7
 
-[OK] Sistema 7.6
-[OK] Gerador CAD 7.6
-[OK] DXF Fase_7_6
-[OK] QDC seleciona ambiente + parede
-[OK] parede persistente
-[OK] texto QDC removido
+[OK] Sistema Fase 7.7
+[OK] Gerador CAD Fase 7.7
+[OK] DXF Fase_7_7
+[OK] mini planta QDC em estrutura Vega estável
+[OK] W.C. excluído das opções do QDC
+[OK] demais áreas molhadas excluídas
+[OK] símbolo QDC sem texto

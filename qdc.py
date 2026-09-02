@@ -1,5 +1,6 @@
 import os
 import tempfile
+import unicodedata
 
 import ezdxf
 import streamlit as st
@@ -15,6 +16,89 @@ from qdc_config import (
     codificar_qdc,
     decodificar_qdc
 )
+
+
+
+def _normalizar_nome_ambiente(nome):
+    """
+    Normaliza nomes como:
+    W.C. -> wc
+    A.S. -> as
+    Área de Serviço -> areadeservico
+    """
+    texto = unicodedata.normalize(
+        "NFKD",
+        str(nome or "")
+    )
+
+    texto = "".join(
+        ch
+        for ch in texto
+        if not unicodedata.combining(ch)
+    )
+
+    return "".join(
+        ch
+        for ch in texto.casefold()
+        if ch.isalnum()
+    )
+
+
+def _ambiente_molhado_qdc(nome):
+    """
+    Ambientes molhados/serviço não podem aparecer
+    como opção para o QDC.
+    """
+    n = _normalizar_nome_ambiente(
+        nome
+    )
+
+    if not n:
+        return False
+
+    if n in {
+        "wc",
+        "bwc",
+        "as",
+        "areadeservico",
+        "areaservico",
+        "banheiro",
+        "sanitario",
+        "lavabo",
+        "lavanderia",
+        "cozinha",
+        "servico"
+    }:
+        return True
+
+    return any(
+        termo in n
+        for termo in [
+            "coz",
+            "banh",
+            "sanit",
+            "lavand",
+            "lavabo",
+            "servico",
+            "areadeserv"
+        ]
+    )
+
+
+def _ambiente_circulacao_qdc(nome):
+    n = _normalizar_nome_ambiente(
+        nome
+    )
+
+    return any(
+        termo in n
+        for termo in [
+            "hall",
+            "corredor",
+            "circul",
+            "circ"
+        ]
+    )
 
 
 def _ambientes_do_dxf(
@@ -326,25 +410,6 @@ def _figura_paredes_qdc(
             altura_grafico,
         "background":
             "#ffffff",
-        "params": [
-            {
-                "name":
-                    "parede",
-                "select": {
-                    "type":
-                        "point",
-                    "fields": [
-                        "parede_id"
-                    ],
-                    "on":
-                        "click",
-                    "toggle":
-                        False,
-                    "clear":
-                        False
-                }
-            }
-        ],
         "config": {
             "view": {
                 "stroke":
@@ -433,6 +498,27 @@ def _figura_paredes_qdc(
                     "values":
                         dados_paredes
                 },
+                # Mesma estratégia estável usada nas mini plantas
+                # dos interruptores: o parâmetro fica DENTRO da layer.
+                "params": [
+                    {
+                        "name":
+                            "parede",
+                        "select": {
+                            "type":
+                                "point",
+                            "fields": [
+                                "parede_id"
+                            ],
+                            "on":
+                                "click",
+                            "toggle":
+                                "false",
+                            "clear":
+                                False
+                        }
+                    }
+                ],
                 "mark": {
                     "type":
                         "line",
@@ -667,37 +753,17 @@ def renderizar_qdc(
             "Ambiente"
         ]
 
-        lower = (
+        # Fase 7.7:
+        # filtro normalizado. Ex.: W.C. -> wc e A.S. -> as.
+        if _ambiente_molhado_qdc(
             nome
-            .casefold()
-        )
-
-        molhado = any(
-            x in lower
-            for x in [
-                "coz",
-                "serv",
-                "banh",
-                "lav",
-                "sanit",
-                "wc",
-                "a.s",
-                "área",
-                "area"
-            ]
-        )
-
-        if molhado:
+        ):
             continue
 
-        circulacao = any(
-            x in lower
-            for x in [
-                "hall",
-                "corredor",
-                "circul",
-                "circ"
-            ]
+        circulacao = (
+            _ambiente_circulacao_qdc(
+                nome
+            )
         )
 
         if circulacao:
@@ -752,7 +818,7 @@ def renderizar_qdc(
         "instalado o QDC:",
         opcoes,
         index=indice,
-        key="fase7_6_select_qdc"
+        key="fase7_7_select_qdc"
     )
 
     ambiente = (
@@ -794,7 +860,7 @@ def renderizar_qdc(
     ]
 
     chave = (
-        "fase7_6_qdc_parede_"
+        "fase7_7_qdc_parede_"
         + ambiente
     )
 
@@ -827,6 +893,10 @@ def renderizar_qdc(
         "🔵 disponível | 🟢 selecionada"
     )
 
+    st.markdown(
+        f"**Mini planta — {ambiente}**"
+    )
+
     fig = _figura_paredes_qdc(
         ambiente,
         item["poly"],
@@ -838,7 +908,7 @@ def renderizar_qdc(
         fig,
         use_container_width=False,
         key=(
-            "fase7_6_qdc_grafico_"
+            "fase7_7_qdc_grafico_"
             + ambiente
         ),
         on_select="rerun"
