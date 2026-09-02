@@ -7,6 +7,8 @@ import streamlit as st
 from concessionarias import CHAVE_PARAMETROS_REDE
 from balanceamento_fases import balancear_circuitos
 from agrupamento_dr import agrupar_circuitos_dr
+from demanda_qdc import calcular_demanda_qdc
+from protecao_alimentador import avaliar_protecoes_alimentador
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -1305,8 +1307,19 @@ def renderizar_materiais(
         circuitos,
         parametros_rede
     )
+    resultado_demanda_materiais = calcular_demanda_qdc(
+        tabela_editada,
+        parametros_rede
+    )
     circuitos, resumo_drs = agrupar_circuitos_dr(
-        circuitos
+        circuitos,
+        resultado_demanda_materiais.get("disjuntor_geral_a")
+    )
+    resumo_protecao = avaliar_protecoes_alimentador(
+        resultado_demanda_materiais,
+        parametros_rede,
+        circuitos,
+        resumo_drs
     )
 
     st.caption(
@@ -1349,6 +1362,27 @@ def renderizar_materiais(
             "para liberar o balanceamento automático."
         )
 
+    st.markdown("#### 🔧 Proteção geral e alimentador")
+
+    if resumo_protecao.get("status") == "pre_dimensionado":
+        c1, c2, c3 = st.columns(3)
+        dg = resumo_protecao.get("dg_a")
+        polos = resumo_protecao.get("dg_polos","")
+        sf = resumo_protecao.get("alimentador_fase_mm2")
+        spe = resumo_protecao.get("alimentador_pe_mm2")
+        c1.metric("Disjuntor geral", f"{dg} A {polos}".strip())
+        c2.metric("Condutor fase preliminar", f"{sf:g} mm²")
+        c3.metric("Condutor PE preliminar", f"{spe:g} mm²")
+        st.caption(
+            "Pré-dimensionamento condicionado ao método de instalação, "
+            "temperatura, agrupamento, queda de tensão e curto-circuito."
+        )
+    else:
+        st.info(
+            "Complete os parâmetros de fornecimento/demanda para "
+            "pré-dimensionar o alimentador e o DG."
+        )
+
     st.markdown("#### 🛡️ Agrupamento dos DRs")
 
     if resumo_drs:
@@ -1368,7 +1402,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 9.5: corrente nominal pré-dimensionada pelo maior "
+            "Fase 9.6: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1418,7 +1452,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_5.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_6.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1427,7 +1461,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_5.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_6.pdf",
             mime="application/pdf",
             use_container_width=True
         )

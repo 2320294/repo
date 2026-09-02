@@ -35,6 +35,14 @@ from balanceamento_fases import (
     balancear_circuitos
 )
 
+from agrupamento_dr import (
+    agrupar_circuitos_dr
+)
+
+from protecao_alimentador import (
+    avaliar_protecoes_alimentador
+)
+
 def _valor_w(row, campo_w, campo_va, padrao=0):
     if campo_w in row:
         return float(row.get(campo_w, padrao) or 0)
@@ -312,6 +320,22 @@ def gerar_excel_projeto(
         parametros_rede
     )
 
+    circuitos_dr_export, resumo_drs_export = agrupar_circuitos_dr(
+        circuitos_balanceados,
+        resultado_demanda.get("disjuntor_geral_a")
+    )
+    resumo_protecao_export = avaliar_protecoes_alimentador(
+        resultado_demanda,
+        parametros_rede,
+        circuitos_dr_export,
+        resumo_drs_export
+    )
+    df_circuitos = pd.DataFrame(circuitos_dr_export)
+    if not df_circuitos.empty and "numero" in df_circuitos.columns:
+        df_circuitos["numero"] = df_circuitos["numero"].apply(
+            lambda valor: f"C{int(valor):02d}"
+        )
+
     linhas_demanda = [{
         "Parâmetro": "Potência instalada",
         "Valor": f"{resultado_demanda['total_w']/1000:.2f} kW"
@@ -360,6 +384,27 @@ def gerar_excel_projeto(
     if linhas_balanceamento:
         df_parametros = pd.concat(
             [df_parametros, pd.DataFrame(linhas_balanceamento)],
+            ignore_index=True
+        )
+
+    linhas_protecao = []
+    rp = resumo_protecao_export
+    if rp.get("dg_a") is not None:
+        linhas_protecao.append({
+            "Parâmetro": "Disjuntor geral consolidado preliminar",
+            "Valor": f"{rp['dg_a']} A {rp.get('dg_polos','')}".strip()
+        })
+    if rp.get("alimentador_fase_mm2") is not None:
+        linhas_protecao.extend([
+            {"Parâmetro":"Alimentador - fase","Valor":f"{rp['alimentador_fase_mm2']:g} mm²"},
+            {"Parâmetro":"Alimentador - neutro","Valor":f"{rp['alimentador_neutro_mm2']:g} mm²"},
+            {"Parâmetro":"Alimentador - PE","Valor":f"{rp['alimentador_pe_mm2']:g} mm²"},
+            {"Parâmetro":"Capacidade de interrupção","Valor":rp["capacidade_interrupcao"]},
+            {"Parâmetro":"Seletividade","Valor":rp["seletividade"]},
+        ])
+    if linhas_protecao:
+        df_parametros = pd.concat(
+            [df_parametros, pd.DataFrame(linhas_protecao)],
             ignore_index=True
         )
 

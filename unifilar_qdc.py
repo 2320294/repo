@@ -57,7 +57,7 @@ def desenhar_unifilar_qdc(
 
     # Cabeçalho: corrigido para não sobrepor textos.
     _text(msp,"DIAGRAMA UNIFILAR DO QDC",x0+0.55,y0-0.42,0.24)
-    _text(msp,f"FASE 9.5 | FORNECIMENTO: {tipo_for} | {tensao_for}",
+    _text(msp,f"FASE 9.6 | FORNECIMENTO: {tipo_for} | {tensao_for}",
           x0+0.55,y0-0.82,0.135)
     _text(msp,f"TENSAO DE PROJETO DOS CIRCUITOS: {int(tensao_projeto)} V",
           x0+0.55,y0-1.12,0.125)

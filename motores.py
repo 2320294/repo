@@ -62,6 +62,10 @@ from agrupamento_dr import (
     agrupar_circuitos_dr
 )
 
+from protecao_alimentador import (
+    avaliar_protecoes_alimentador
+)
+
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -457,7 +461,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 9.5:
+                # Fase 9.6:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -507,7 +511,7 @@ def gerar_cad_unifilar(
         
         
         # ====================================================
-        # FASE 9.5 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # FASE 9.6 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
         # ====================================================
         _, circuitos_unifilar = calcular_quantitativo_materiais(
             tabela_editada=dados_editados,
@@ -545,6 +549,13 @@ def gerar_cad_unifilar(
             )
         )
 
+        resumo_protecao_unifilar = avaliar_protecoes_alimentador(
+            resultado_demanda_unifilar,
+            parametros_rede_unifilar,
+            circuitos_unifilar,
+            resumo_drs_unifilar
+        )
+
         desenhar_unifilar_qdc(
             msp=msp,
             circuitos=circuitos_unifilar,
@@ -553,7 +564,8 @@ def gerar_cad_unifilar(
             parametros_rede=parametros_rede_unifilar,
             resultado_demanda=resultado_demanda_unifilar,
             resumo_balanceamento=resumo_balanceamento_unifilar,
-            resumo_drs=resumo_drs_unifilar
+            resumo_drs=resumo_drs_unifilar,
+            resumo_protecao=resumo_protecao_unifilar
         )
 
         doc.saveas(
