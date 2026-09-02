@@ -449,7 +449,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.6 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.7 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -525,7 +525,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 8.6:
+            # Fase 8.7:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(

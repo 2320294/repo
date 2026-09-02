@@ -87,6 +87,79 @@ def _eh_chuveiro(
     )
 
 
+
+def _limpar_aparencia_selecao_paredes(
+    figura
+):
+    """
+    Mantém o parâmetro Vega usado para detectar cliques, mas não usa
+    a seleção interna do Vega para pintar paredes. Assim:
+      - disponível = cinza;
+      - selecionada no session_state = verde.
+    Evita a impressão de que várias paredes já vêm selecionadas.
+    """
+    import copy
+
+    fig = copy.deepcopy(
+        figura
+    )
+
+    for layer in fig.get(
+        "layer",
+        []
+    ):
+        enc = layer.get(
+            "encoding",
+            {}
+        )
+
+        cor = enc.get(
+            "color"
+        )
+
+        if not isinstance(
+            cor,
+            dict
+        ):
+            continue
+
+        condicoes = cor.get(
+            "condition"
+        )
+
+        if not isinstance(
+            condicoes,
+            list
+        ):
+            continue
+
+        # Remove somente a condição visual baseada no parâmetro Vega "parede".
+        cor["condition"] = [
+            c
+            for c in condicoes
+            if not (
+                isinstance(
+                    c,
+                    dict
+                )
+                and c.get(
+                    "param"
+                )
+                == "parede"
+            )
+        ]
+
+        # Paredes ainda não escolhidas ficam neutras.
+        if cor.get(
+            "value"
+        ) == "#2563eb":
+            cor[
+                "value"
+            ] = "#9ca3af"
+
+    return fig
+
+
 def _figura_pontos_chuveiro(
     figura_base,
     trecho,
@@ -292,12 +365,6 @@ def _figura_pontos_chuveiro(
             "color": {
                 "condition": [
                     {
-                        "param":
-                            "ponto_chuveiro",
-                        "value":
-                            "#16a34a"
-                    },
-                    {
                         "test":
                             (
                                 "datum."
@@ -328,29 +395,33 @@ def _figura_pontos_chuveiro(
 def _extrair_ponto_chuveiro(
     evento
 ):
+    """
+    Normaliza os diferentes formatos do evento de seleção retornados
+    por versões distintas do Streamlit/Vega-Lite.
+    """
     try:
-        sel = (
-            evento
-            .selection
-            .ponto_chuveiro
+        selecoes = evento.selection
+    except Exception:
+        try:
+            selecoes = evento.get(
+                "selection",
+                {}
+            )
+        except Exception:
+            selecoes = {}
+
+    try:
+        sel = getattr(
+            selecoes,
+            "ponto_chuveiro"
         )
     except Exception:
         try:
-            sel = (
-                evento[
-                    "selection"
-                ][
-                    "ponto_chuveiro"
-                ]
+            sel = selecoes.get(
+                "ponto_chuveiro"
             )
         except Exception:
             sel = None
-
-    if sel is None:
-        return (
-            False,
-            None
-        )
 
     if hasattr(
         sel,
@@ -361,60 +432,104 @@ def _extrair_ponto_chuveiro(
         except Exception:
             pass
 
-    if isinstance(
-        sel,
-        dict
+    if sel in (
+        None,
+        {},
+        []
     ):
-        valor = sel.get(
-            "t"
-        )
-
-        if isinstance(
-            valor,
-            (list, tuple)
-        ):
-            valor = (
-                valor[0]
-                if valor
-                else None
-            )
-
-        if valor is None:
-            for item in (
-                sel.get(
-                    "values"
-                )
-                or []
-            ):
-                if isinstance(
-                    item,
-                    dict
-                ) and "t" in item:
-                    valor = item[
-                        "t"
-                    ]
-                    break
-
-        if valor is not None:
-            try:
-                return (
-                    True,
-                    float(
-                        valor
-                    )
-                )
-            except Exception:
-                pass
-
         return (
-            True,
+            False,
             None
         )
 
-    return (
-        False,
-        None
+    def _achar_t(
+        obj
+    ):
+        if obj is None:
+            return None
+
+        if hasattr(
+            obj,
+            "to_dict"
+        ):
+            try:
+                obj = obj.to_dict()
+            except Exception:
+                pass
+
+        if isinstance(
+            obj,
+            dict
+        ):
+            if "t" in obj:
+                valor = obj[
+                    "t"
+                ]
+
+                if isinstance(
+                    valor,
+                    (list, tuple)
+                ):
+                    valor = (
+                        valor[-1]
+                        if valor
+                        else None
+                    )
+
+                try:
+                    return float(
+                        valor
+                    )
+                except Exception:
+                    pass
+
+            # Streamlit pode devolver value/values/listas internas.
+            for chave in (
+                "values",
+                "value",
+                "points",
+                "vlPoint"
+            ):
+                if chave in obj:
+                    achado = _achar_t(
+                        obj[
+                            chave
+                        ]
+                    )
+                    if achado is not None:
+                        return achado
+
+            for valor in obj.values():
+                achado = _achar_t(
+                    valor
+                )
+                if achado is not None:
+                    return achado
+
+        if isinstance(
+            obj,
+            (list, tuple)
+        ):
+            for item in reversed(
+                obj
+            ):
+                achado = _achar_t(
+                    item
+                )
+                if achado is not None:
+                    return achado
+
+        return None
+
+    valor_t = _achar_t(
+        sel
     )
+
+    return (
+        True,
+        valor_t
+    )
+
 
 
 def renderizar_tomadas_altas(
@@ -423,7 +538,7 @@ def renderizar_tomadas_altas(
     dxf_bytes=None
 ):
     """
-    Fase 8.6:
+    Fase 8.7:
     posicionamento interativo das TUEs altas.
 
     Ar-condicionado: seleção do trecho e centralização automática.\n    Chuveiro: seleção do trecho e depois de um ponto específico na parede.\n    Portas dividem a parede em trechos independentes, como no QDC.
@@ -605,7 +720,7 @@ def renderizar_tomadas_altas(
                     )
 
                     chave = (
-                        "fase8_6_tomada_alta_"
+                        "fase8_7_tomada_alta_"
                         f"{ambiente}_{idx}"
                     )
 
@@ -641,7 +756,7 @@ def renderizar_tomadas_altas(
                         ] = candidato
 
                     chave_posicao = (
-                        "fase8_6_posicao_chuveiro_"
+                        "fase8_7_posicao_chuveiro_"
                         f"{ambiente}_{idx}"
                     )
 
@@ -684,7 +799,7 @@ def renderizar_tomadas_altas(
 
                     st.caption(
                         "Clique no trecho desejado. "
-                        "🔵 disponível | 🟢 selecionado"
+                        "⚪ disponível | 🟢 selecionado"
                     )
 
                     fig = (
@@ -703,11 +818,19 @@ def renderizar_tomadas_altas(
                         )
                     )
 
+                    # Fase 8.7: nenhuma parede disponível parece selecionada.
+                    # Somente a parede confirmada no session_state fica verde.
+                    fig = (
+                        _limpar_aparencia_selecao_paredes(
+                            fig
+                        )
+                    )
+
                     evento = st.vega_lite_chart(
                         fig,
                         use_container_width=False,
                         key=(
-                            "fase8_6_grafico_tomada_alta_"
+                            "fase8_7_grafico_tomada_alta_"
                             f"{ambiente}_{idx}"
                         ),
                         on_select="rerun"
@@ -761,7 +884,7 @@ def renderizar_tomadas_altas(
 
                     if trecho is None:
                         st.warning(
-                            "Selecione a parede desta tomada alta."
+                            "Selecione primeiro a parede desta tomada alta."
                         )
                         continue
 
@@ -794,7 +917,7 @@ def renderizar_tomadas_altas(
                                 fig_pontos,
                                 use_container_width=False,
                                 key=(
-                                    "fase8_6_grafico_ponto_chuveiro_"
+                                    "fase8_7_grafico_ponto_chuveiro_"
                                     f"{ambiente}_{idx}"
                                 ),
                                 on_select="rerun"
@@ -837,7 +960,7 @@ def renderizar_tomadas_altas(
 
                         if posicao_t is None:
                             st.warning(
-                                "Selecione também o ponto do chuveiro na parede."
+                                "Selecione o ponto do chuveiro na parede."
                             )
                             continue
 

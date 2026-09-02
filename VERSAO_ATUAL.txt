@@ -1,11 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.6
-IDENTIFICADOR: Fase_8_6
+VERSÃO ATUAL: Fase 8.7
+IDENTIFICADOR: Fase_8_7
 
-[OK] Sistema Fase 8.6
-[OK] Gerador CAD Fase 8.6
-[OK] DXF Fase_8_6
-[OK] ar-condicionado centralizado no trecho
-[OK] chuveiro com ponto escolhido na parede
-[OK] posição do chuveiro persistida proporcionalmente
+[OK] paredes disponíveis neutras
+[OK] somente parede selecionada fica verde
+[OK] mini planta do chuveiro somente após selecionar parede
+[OK] clique do ponto do chuveiro com parser robusto
+[OK] aviso desaparece após a seleção
+[OK] ar-condicionado permanece centralizado
 [OK] orientação interna preservada
