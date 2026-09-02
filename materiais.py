@@ -888,10 +888,10 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 11.5 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 11.5 REV.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 11.5 Rev.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 11.5 Rev.2/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
@@ -1212,7 +1212,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 11.5 Rev.1: dados estruturais usados pelo roteamento continuam
+        # Fase 11.5 Rev.2: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1633,7 +1633,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 11.5 Rev.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.5 Rev.2: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -1646,7 +1646,7 @@ def renderizar_materiais(
     )
 
     st.caption(
-        "Fase 11.5 Rev.1: os circuitos abaixo já são consolidados. "
+        "Fase 11.5 Rev.2: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -1695,7 +1695,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_5_Rev_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_5_Rev_2.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1704,7 +1704,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_5_Rev_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_5_Rev_2.pdf",
             mime="application/pdf",
             use_container_width=True
         )

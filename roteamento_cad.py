@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.5 Rev.1 — rede híbrida com múltiplas saídas do QDC.
+    Fase 11.5 Rev.2 — rede híbrida com múltiplas saídas do QDC.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -1075,7 +1075,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 11.5 Rev.1:
+    Fase 11.5 Rev.2:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1104,7 +1104,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 11.5 Rev.1
+    Fase 11.5 Rev.2
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -1418,21 +1418,305 @@ def _ambiente_sem_interruptor_proprio_rota(
     )
 
 
-def _arestas_iluminacao_ambiente_controlado(
-    pontos_eletricos
+def _ponto_segmento_dist_rota(
+    p,
+    a,
+    b
+):
+    px, py = map(float, p)
+    ax, ay = map(float, a)
+    bx, by = map(float, b)
+
+    dx = bx - ax
+    dy = by - ay
+    l2 = dx*dx + dy*dy
+
+    if l2 <= 1e-12:
+        return math.hypot(
+            px-ax,
+            py-ay
+        )
+
+    t = (
+        (px-ax)*dx
+        + (py-ay)*dy
+    ) / l2
+
+    t = max(
+        0.0,
+        min(
+            1.0,
+            t
+        )
+    )
+
+    qx = ax + t*dx
+    qy = ay + t*dy
+
+    return math.hypot(
+        px-qx,
+        py-qy
+    )
+
+
+def _centro_soleira_rota(
+    soleira
+):
+    verts = soleira.get(
+        "vertices"
+    ) or []
+
+    if verts:
+        xs = [
+            float(p[0])
+            for p in verts
+        ]
+        ys = [
+            float(p[1])
+            for p in verts
+        ]
+
+        return (
+            sum(xs)/len(xs),
+            sum(ys)/len(ys)
+        )
+
+    p1 = soleira.get(
+        "p1"
+    )
+    p2 = soleira.get(
+        "p2"
+    )
+
+    if p1 is not None and p2 is not None:
+        return (
+            (
+                float(p1[0])
+                + float(p2[0])
+            ) / 2.0,
+            (
+                float(p1[1])
+                + float(p2[1])
+            ) / 2.0,
+        )
+
+    return None
+
+
+def _distancia_ponto_poligono_rota(
+    ponto,
+    polilinha
+):
+    if not ponto or not polilinha:
+        return float("inf")
+
+    poly = [
+        tuple(p)
+        for p in polilinha
+    ]
+
+    if (
+        len(poly) >= 2
+        and poly[0] != poly[-1]
+    ):
+        poly.append(
+            poly[0]
+        )
+
+    melhor = float("inf")
+
+    for a, b in zip(
+        poly[:-1],
+        poly[1:]
+    ):
+        melhor = min(
+            melhor,
+            _ponto_segmento_dist_rota(
+                ponto,
+                a,
+                b
+            )
+        )
+
+    return melhor
+
+
+def _soleira_compartilhada_controladora(
+    ambiente_externo,
+    ambientes_geom,
+    soleiras_raw
 ):
     """
-    Fase 11.5 Rev.1.
+    Localiza a soleira/porta que realmente separa o ambiente externo
+    de um ambiente interno.
 
-    Ambientes externos sem interruptor próprio (varanda/terraço/garagem)
-    recebem ligação a partir da luminária mais próxima de outro ambiente,
-    representando o comando feito pelo ambiente interno adjacente.
+    Retorna:
+      (soleira, ambiente_controlador)
+    """
+    externos = {
+        _normalizar_nome(
+            ambiente_externo
+        )
+    }
 
-    A escolha é geométrica e privilegia o ponto de luz vizinho mais próximo.
+    geo_ext = None
+
+    for item in (
+        ambientes_geom
+        or []
+    ):
+        nome = _normalizar_nome(
+            item.get(
+                "nome"
+            )
+            or item.get(
+                "ambiente"
+            )
+        )
+
+        if nome in externos:
+            geo_ext = item
+            break
+
+    if geo_ext is None:
+        return (
+            None,
+            None
+        )
+
+    poly_ext = geo_ext.get(
+        "polilinha",
+        []
+    )
+
+    candidatos = []
+
+    for soleira in (
+        soleiras_raw
+        or []
+    ):
+        centro = _centro_soleira_rota(
+            soleira
+        )
+
+        if centro is None:
+            continue
+
+        d_ext = _distancia_ponto_poligono_rota(
+            centro,
+            poly_ext
+        )
+
+        # Soleira precisa efetivamente tocar o ambiente externo.
+        if d_ext > 0.35:
+            continue
+
+        for item in (
+            ambientes_geom
+            or []
+        ):
+            nome = _normalizar_nome(
+                item.get(
+                    "nome"
+                )
+                or item.get(
+                    "ambiente"
+                )
+            )
+
+            if (
+                not nome
+                or nome == ambiente_externo
+                or _ambiente_sem_interruptor_proprio_rota(
+                    nome
+                )
+            ):
+                continue
+
+            d_int = _distancia_ponto_poligono_rota(
+                centro,
+                item.get(
+                    "polilinha",
+                    []
+                )
+            )
+
+            if d_int <= 0.35:
+                candidatos.append((
+                    d_ext + d_int,
+                    soleira,
+                    nome,
+                    centro,
+                ))
+
+    if not candidatos:
+        return (
+            None,
+            None
+        )
+
+    _, soleira, controlador, _ = min(
+        candidatos,
+        key=lambda x:
+            x[0]
+    )
+
+    return (
+        soleira,
+        controlador
+    )
+
+
+def _arestas_iluminacao_ambiente_controlado(
+    pontos_eletricos,
+    pontos_interruptores,
+    ambientes_geom,
+    soleiras_raw
+):
+    """
+    Fase 11.5 Rev.2.
+
+    Varanda/terraço/garagem:
+    - identifica qual soleira/porta é realmente compartilhada com o
+      ambiente interno controlador;
+    - liga a iluminação externa ao INTERRUPTOR desse ambiente;
+    - se houver mais de um interruptor no controlador, escolhe o mais
+      próximo da soleira compartilhada;
+    - só usa fallback geométrico para luminária interna se não for
+      possível identificar interruptor válido.
     """
     luminarias = _luminarias_por_ambiente(
         pontos_eletricos
     )
+
+    ints_por_ambiente = {}
+
+    for p in (
+        pontos_interruptores
+        or []
+    ):
+        amb = _normalizar_nome(
+            p.get(
+                "ambiente"
+            )
+        )
+
+        pt = (
+            p.get(
+                "ponto_tangencia"
+            )
+            or p.get(
+                "ponto"
+            )
+        )
+
+        if amb and pt:
+            ints_por_ambiente.setdefault(
+                amb,
+                []
+            ).append(
+                tuple(pt)
+            )
 
     saida = []
 
@@ -1442,52 +1726,102 @@ def _arestas_iluminacao_ambiente_controlado(
         ):
             continue
 
-        candidatos = []
-
-        for outro_ambiente, outras_luzes in luminarias.items():
-            if outro_ambiente == ambiente:
-                continue
-
-            if _ambiente_sem_interruptor_proprio_rota(
-                outro_ambiente
-            ):
-                continue
-
-            for luz_origem in outras_luzes:
-                for luz_destino in luzes:
-                    candidatos.append((
-                        _dist(
-                            luz_origem,
-                            luz_destino
-                        ),
-                        outro_ambiente,
-                        tuple(luz_origem),
-                        tuple(luz_destino),
-                    ))
-
-        if not candidatos:
-            continue
-
-        _, controlador, origem, destino = min(
-            candidatos,
-            key=lambda item:
-                item[0]
+        soleira, controlador = (
+            _soleira_compartilhada_controladora(
+                ambiente,
+                ambientes_geom,
+                soleiras_raw
+            )
         )
 
-        saida.append({
-            "origem_ambiente":
-                controlador,
-            "destino_ambiente":
-                ambiente,
-            "inicio":
-                origem,
-            "fim":
-                destino,
-            "circuitos":
-                set(),
-            "criterio":
-                "ILUMINACAO_AMBIENTE_CONTROLADO",
-        })
+        origem = None
+        criterio = None
+
+        if (
+            soleira is not None
+            and controlador
+        ):
+            centro_soleira = (
+                _centro_soleira_rota(
+                    soleira
+                )
+            )
+
+            candidatos_int = (
+                ints_por_ambiente.get(
+                    controlador,
+                    []
+                )
+            )
+
+            if candidatos_int:
+                origem = min(
+                    candidatos_int,
+                    key=lambda pt:
+                        _dist(
+                            pt,
+                            centro_soleira
+                        )
+                )
+
+                criterio = (
+                    "INTERRUPTOR_CONTROLADOR_PARA_ILUMINACAO_EXTERNA"
+                )
+
+        # Fallback somente se não existir interruptor controlador válido.
+        if origem is None:
+            candidatos = []
+
+            for outro_ambiente, outras_luzes in luminarias.items():
+                if (
+                    outro_ambiente == ambiente
+                    or _ambiente_sem_interruptor_proprio_rota(
+                        outro_ambiente
+                    )
+                ):
+                    continue
+
+                for luz_origem in outras_luzes:
+                    for luz_destino in luzes:
+                        candidatos.append((
+                            _dist(
+                                luz_origem,
+                                luz_destino
+                            ),
+                            outro_ambiente,
+                            tuple(luz_origem),
+                            tuple(luz_destino),
+                        ))
+
+            if not candidatos:
+                continue
+
+            _, controlador, origem, _ = min(
+                candidatos,
+                key=lambda item:
+                    item[0]
+            )
+
+            criterio = (
+                "FALLBACK_ILUMINACAO_CONTROLADORA"
+            )
+
+        for luz_destino in luzes:
+            saida.append({
+                "origem_ambiente":
+                    controlador
+                    or "CONTROLADOR",
+                "destino_ambiente":
+                    ambiente,
+                "inicio":
+                    tuple(origem),
+                "fim":
+                    tuple(luz_destino),
+                "circuitos":
+                    set(),
+                "criterio":
+                    criterio,
+            })
 
     return saida
 
@@ -1497,7 +1831,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 11.5 Rev.1 — ramais dedicados das TUEs.
+    Fase 11.5 Rev.2 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -1669,7 +2003,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 11.5 Rev.1
+    Fase 11.5 Rev.2
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -1763,7 +2097,10 @@ def desenhar_rotas_qdc_iluminacao(
 
     iluminacao_controlada = (
         _arestas_iluminacao_ambiente_controlado(
-            pontos_eletricos
+            pontos_eletricos,
+            pontos_interruptores,
+            ambientes_geom,
+            soleiras_raw
         )
     )
 
@@ -1950,7 +2287,11 @@ def desenhar_rotas_qdc_iluminacao(
                             else (
                                 "ILUMINACAO_CONTROLADA"
                                 if trecho.get("criterio")
-                                == "ILUMINACAO_AMBIENTE_CONTROLADO"
+                                in {
+                                    "ILUMINACAO_AMBIENTE_CONTROLADO",
+                                    "INTERRUPTOR_CONTROLADOR_PARA_ILUMINACAO_EXTERNA",
+                                    "FALLBACK_ILUMINACAO_CONTROLADORA",
+                                }
                                 else "TRONCAL_HIBRIDA"
                             )
                         )
