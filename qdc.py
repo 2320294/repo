@@ -1116,12 +1116,7 @@ def _figura_paredes_qdc(
                     },
                     "color": {
                         "condition": [
-                            {
-                                "param":
-                                    "parede",
-                                "value":
-                                    "#16a34a"
-                            },
+                            
                             {
                                 "test":
                                     (
@@ -1182,12 +1177,7 @@ def _figura_paredes_qdc(
                     },
                     "color": {
                         "condition": [
-                            {
-                                "param":
-                                    "parede",
-                                "value":
-                                    "#16a34a"
-                            },
+                            
                             {
                                 "test":
                                     (
@@ -1537,8 +1527,13 @@ def renderizar_qdc(
             indice = n
             break
 
+    st.divider()
+    st.subheader(
+        "⚡ Posicionamento do Quadro de Distribuição (QDC)"
+    )
+
     escolha = st.selectbox(
-        "⚡ Selecione o ambiente onde ficará "
+        "Selecione o ambiente onde ficará "
         "instalado o QDC:",
         opcoes,
         index=indice,

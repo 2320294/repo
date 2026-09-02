@@ -1,11 +1,9 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.10
-IDENTIFICADOR: Fase_8_10
+VERSÃO ATUAL: Fase 8.11
+IDENTIFICADOR: Fase_8_11
 
-[OK] tomada baixa = triângulo vazio
-[OK] tomada média = metade do triângulo preenchida
-[OK] tomada alta = triângulo totalmente preenchido
-[OK] base triangular = 15 cm
-[OK] traço central = 10 cm
-[OK] centro do preenchimento médio na base do triângulo
-[OK] orientação para dentro do ambiente preservada
+[OK] título da seção QDC
+[OK] trechos disponíveis azuis
+[OK] somente trecho salvo fica verde
+[OK] seleção persistida ao reabrir projeto
+[OK] símbolos de tomadas da Fase 8.10 preservados
