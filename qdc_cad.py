@@ -2,7 +2,170 @@ from geometria import (
     point_seg_dist,
     get_inside_normal
 )
-from qdc_config import decodificar_qdc
+from qdc_config import (
+    decodificar_qdc_completo
+)
+
+
+def _centro_fallback_parede(
+    parede,
+    unique_portas
+):
+    """
+    Compatibilidade com projetos antigos:
+    quando não existem t0/t1 salvos, procura o maior trecho
+    livre de portas na parede escolhida.
+    """
+    pt1 = parede["p1"]
+    pt2 = parede["p2"]
+
+    is_vertical = (
+        abs(
+            pt1[0] - pt2[0]
+        )
+        <
+        abs(
+            pt1[1] - pt2[1]
+        )
+    )
+
+    cortes_portas = []
+
+    for porta in unique_portas:
+        d_p1 = point_seg_dist(
+            porta["p1"][0],
+            porta["p1"][1],
+            pt1,
+            pt2
+        )
+
+        d_p2 = point_seg_dist(
+            porta["p2"][0],
+            porta["p2"][1],
+            pt1,
+            pt2
+        )
+
+        if (
+            d_p1 < 0.6
+            or d_p2 < 0.6
+        ):
+            if is_vertical:
+                cortes_portas.append(
+                    (
+                        min(
+                            porta["p1"][1],
+                            porta["p2"][1]
+                        ),
+                        max(
+                            porta["p1"][1],
+                            porta["p2"][1]
+                        )
+                    )
+                )
+            else:
+                cortes_portas.append(
+                    (
+                        min(
+                            porta["p1"][0],
+                            porta["p2"][0]
+                        ),
+                        max(
+                            porta["p1"][0],
+                            porta["p2"][0]
+                        )
+                    )
+                )
+
+    cortes_portas.sort(
+        key=lambda item:
+            item[0]
+    )
+
+    if is_vertical:
+        parede_min = min(
+            pt1[1],
+            pt2[1]
+        )
+        parede_max = max(
+            pt1[1],
+            pt2[1]
+        )
+    else:
+        parede_min = min(
+            pt1[0],
+            pt2[0]
+        )
+        parede_max = max(
+            pt1[0],
+            pt2[0]
+        )
+
+    trechos_livres = []
+    cursor = parede_min
+
+    for corte_ini, corte_fim in cortes_portas:
+        if (
+            corte_ini
+            > cursor + 0.1
+        ):
+            trechos_livres.append(
+                (
+                    cursor,
+                    corte_ini
+                )
+            )
+
+        cursor = max(
+            cursor,
+            corte_fim
+        )
+
+    if (
+        cursor
+        < parede_max - 0.1
+    ):
+        trechos_livres.append(
+            (
+                cursor,
+                parede_max
+            )
+        )
+
+    if trechos_livres:
+        melhor = max(
+            trechos_livres,
+            key=lambda trecho:
+                trecho[1]
+                - trecho[0]
+        )
+
+        meio = (
+            melhor[0]
+            + melhor[1]
+        ) / 2.0
+
+        if is_vertical:
+            return (
+                pt1[0],
+                meio
+            )
+
+        return (
+            meio,
+            pt1[1]
+        )
+
+    return (
+        (
+            pt1[0]
+            + pt2[0]
+        ) / 2.0,
+        (
+            pt1[1]
+            + pt2[1]
+        ) / 2.0
+    )
 
 
 def desenhar_qdc(
@@ -14,10 +177,40 @@ def desenhar_qdc(
     centro_x,
     centro_y
 ):
-    ambiente_qdc, parede_numero = (
-        decodificar_qdc(
+    dados_qdc = (
+        decodificar_qdc_completo(
             local_qdc
         )
+    )
+
+    ambiente_qdc = (
+        dados_qdc[
+            "ambiente"
+        ]
+    )
+
+    parede_numero = (
+        dados_qdc[
+            "parede_numero"
+        ]
+    )
+
+    trecho_numero = (
+        dados_qdc[
+            "trecho_numero"
+        ]
+    )
+
+    trecho_t0 = (
+        dados_qdc[
+            "t0"
+        ]
+    )
+
+    trecho_t1 = (
+        dados_qdc[
+            "t1"
+        ]
     )
 
     qdc_formatado = (
@@ -53,205 +246,93 @@ def desenhar_qdc(
         and 1 <= parede_numero
         <= len(logical_walls)
     ):
-        maior_parede = (
+        parede = (
             logical_walls[
                 parede_numero - 1
             ]
         )
     else:
-        # Compatibilidade com projeto antigo sem parede salva.
-        maior_parede = max(
+        # Projeto antigo sem parede salva.
+        parede = max(
             logical_walls,
-            key=lambda w:
-                w["length"]
+            key=lambda wall:
+                wall["length"]
         )
 
-    pt1 = maior_parede["p1"]
-    pt2 = maior_parede["p2"]
+    pt1 = parede["p1"]
+    pt2 = parede["p2"]
 
-    is_vertical = (
-        abs(pt1[0] - pt2[0])
-        <
-        abs(pt1[1] - pt2[1])
-    )
-
-    cortes_portas = []
-
-    for p in unique_portas:
-        d_p1 = point_seg_dist(
-            p["p1"][0],
-            p["p1"][1],
-            pt1,
-            pt2
-        )
-
-        d_p2 = point_seg_dist(
-            p["p2"][0],
-            p["p2"][1],
-            pt1,
-            pt2
-        )
-
-        if d_p1 < 0.6 or d_p2 < 0.6:
-            if is_vertical:
-                cortes_portas.append(
-                    (
-                        min(
-                            p["p1"][1],
-                            p["p2"][1]
-                        ),
-                        max(
-                            p["p1"][1],
-                            p["p2"][1]
-                        )
-                    )
-                )
-            else:
-                cortes_portas.append(
-                    (
-                        min(
-                            p["p1"][0],
-                            p["p2"][0]
-                        ),
-                        max(
-                            p["p1"][0],
-                            p["p2"][0]
-                        )
-                    )
-                )
-
-    if is_vertical:
-        parede_min = min(
-            pt1[1],
-            pt2[1]
-        )
-
-        parede_max = max(
-            pt1[1],
-            pt2[1]
-        )
-
-        cortes_portas.sort(
-            key=lambda x:
-            x[0]
-        )
-
-        trechos_livres = []
-        cursor = parede_min
-
-        for c_inf, c_sup in cortes_portas:
-            if c_inf > cursor + 0.1:
-                trechos_livres.append(
-                    (
-                        cursor,
-                        c_inf
-                    )
-                )
-
-            cursor = max(
-                cursor,
-                c_sup
-            )
-
-        if cursor < parede_max - 0.1:
-            trechos_livres.append(
-                (
-                    cursor,
-                    parede_max
+    # =========================================================
+    # FASE 8.0 — CENTRO DO TRECHO ESCOLHIDO
+    # =========================================================
+    if (
+        trecho_t0 is not None
+        and trecho_t1 is not None
+    ):
+        t0 = max(
+            0.0,
+            min(
+                1.0,
+                float(
+                    trecho_t0
                 )
             )
+        )
 
-        if trechos_livres:
-            melhor_trecho = max(
-                trechos_livres,
-                key=lambda t:
-                t[1] - t[0]
+        t1 = max(
+            0.0,
+            min(
+                1.0,
+                float(
+                    trecho_t1
+                )
+            )
+        )
+
+        if t1 < t0:
+            t0, t1 = (
+                t1,
+                t0
             )
 
-            my = (
-                melhor_trecho[0]
-                +
-                melhor_trecho[1]
-            ) / 2
+        t_meio = (
+            t0 + t1
+        ) / 2.0
 
-            mx = pt1[0]
+        mx = (
+            pt1[0]
+            + (
+                pt2[0]
+                - pt1[0]
+            ) * t_meio
+        )
 
-        else:
-            mx = (
-                pt1[0] + pt2[0]
-            ) / 2
+        my = (
+            pt1[1]
+            + (
+                pt2[1]
+                - pt1[1]
+            ) * t_meio
+        )
 
-            my = (
-                pt1[1] + pt2[1]
-            ) / 2
+        criterio_posicao = (
+            "TRECHO_SELECIONADO"
+        )
 
     else:
-        parede_min = min(
-            pt1[0],
-            pt2[0]
+        mx, my = (
+            _centro_fallback_parede(
+                parede,
+                unique_portas
+            )
         )
 
-        parede_max = max(
-            pt1[0],
-            pt2[0]
+        criterio_posicao = (
+            "FALLBACK_AUTOMATICO"
         )
 
-        cortes_portas.sort(
-            key=lambda x:
-            x[0]
-        )
-
-        trechos_livres = []
-        cursor = parede_min
-
-        for c_inf, c_sup in cortes_portas:
-            if c_inf > cursor + 0.1:
-                trechos_livres.append(
-                    (
-                        cursor,
-                        c_inf
-                    )
-                )
-
-            cursor = max(
-                cursor,
-                c_sup
-            )
-
-        if cursor < parede_max - 0.1:
-            trechos_livres.append(
-                (
-                    cursor,
-                    parede_max
-                )
-            )
-
-        if trechos_livres:
-            melhor_trecho = max(
-                trechos_livres,
-                key=lambda t:
-                t[1] - t[0]
-            )
-
-            mx = (
-                melhor_trecho[0]
-                +
-                melhor_trecho[1]
-            ) / 2
-
-            my = pt1[1]
-
-        else:
-            mx = (
-                pt1[0] + pt2[0]
-            ) / 2
-
-            my = (
-                pt1[1] + pt2[1]
-            ) / 2
-
-    vx = maior_parede["vx"]
-    vy = maior_parede["vy"]
+    vx = parede["vx"]
+    vy = parede["vy"]
 
     nx, ny = get_inside_normal(
         vx,
@@ -297,7 +378,9 @@ def desenhar_qdc(
     ]
 
     msp.add_lwpolyline(
-        pts_qdc + [pts_qdc[0]],
+        pts_qdc + [
+            pts_qdc[0]
+        ],
         dxfattribs={
             "layer":
                 "PROJ_ELETRICA_QDC"
@@ -312,23 +395,44 @@ def desenhar_qdc(
         }
     )
 
-    # Fase 7.8: somente o símbolo do QDC, sem texto/legenda.
+    # Fase 8.0:
+    # somente o símbolo do QDC, sem legenda textual.
 
     return {
-        "centro": (mx, my),
-        "centro_externo": (
-            mx + out_nx * qdc_d / 2,
-            my + out_ny * qdc_d / 2
+        "centro": (
+            mx,
+            my
         ),
-        "pontos": pts_qdc,
-        "ambiente": nome,
+        "centro_externo": (
+            mx
+            + out_nx
+            * qdc_d / 2,
+            my
+            + out_ny
+            * qdc_d / 2
+        ),
+        "pontos":
+            pts_qdc,
+        "ambiente":
+            nome,
         "parede_numero":
             parede_numero,
+        "trecho_numero":
+            trecho_numero,
+        "trecho_t0":
+            trecho_t0,
+        "trecho_t1":
+            trecho_t1,
+        "criterio_posicao":
+            criterio_posicao,
         "parede": {
-            "p1": pt1,
-            "p2": pt2,
-            "vx": vx,
-            "vy": vy,
-        },
+            "p1":
+                pt1,
+            "p2":
+                pt2,
+            "vx":
+                vx,
+            "vy":
+                vy
+        }
     }
-
