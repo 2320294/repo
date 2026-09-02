@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.4 Rev.3 — rede híbrida.
+    Fase 11.4 Rev.4 — rede híbrida.
 
     Para cada ambiente compara:
     1) caminho direto QDC -> ambiente;
@@ -407,7 +407,7 @@ def _construir_rede_hibrida(
     não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
 
     Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.4 Rev.3.
+    evitando a volta excessiva observada na Fase 11.4 Rev.4.
     """
     conectados = [{
         "id": "QDC",
@@ -670,63 +670,99 @@ def _arestas_luminarias_secundarias(
 
 
 
+def _normal_externa_segmento(p1, p2, centro):
+    """Normal unitária do segmento apontando para fora do ambiente."""
+    x1, y1 = map(float, p1)
+    x2, y2 = map(float, p2)
+    cx, cy = map(float, centro)
+    dx, dy = x2-x1, y2-y1
+    L = math.hypot(dx, dy)
+    if L < 1e-9:
+        return (0.0, 0.0)
+    n1 = (-dy/L, dx/L)
+    mx, my = (x1+x2)/2.0, (y1+y2)/2.0
+    # A normal externa é a que aumenta a distância ao centro do ambiente.
+    a = (mx+n1[0]*0.10-cx)**2 + (my+n1[1]*0.10-cy)**2
+    b = (mx-n1[0]*0.10-cx)**2 + (my-n1[1]*0.10-cy)**2
+    return n1 if a >= b else (-n1[0], -n1[1])
+
+
+def _intersecao_retas(a1, a2, b1, b2):
+    x1,y1=map(float,a1); x2,y2=map(float,a2)
+    x3,y3=map(float,b1); x4,y4=map(float,b2)
+    den=(x1-x2)*(y3-y4)-(y1-y2)*(x3-x4)
+    if abs(den)<1e-10:
+        return None
+    px=((x1*y2-y1*x2)*(x3-x4)-(x1-x2)*(x3*y4-y3*x4))/den
+    py=((x1*y2-y1*x2)*(y3-y4)-(y1-y2)*(x3*y4-y3*x4))/den
+    return (px,py)
+
+
+def _segmentos_eixo_parede(segmentos_crus, centro, afastamento=0.05):
+    """Cria linhas paralelas ao perímetro no meio físico da parede."""
+    out=[]
+    for a,b,L in segmentos_crus or []:
+        nx,ny=_normal_externa_segmento(a,b,centro)
+        aa=(float(a[0])+nx*afastamento,float(a[1])+ny*afastamento)
+        bb=(float(b[0])+nx*afastamento,float(b[1])+ny*afastamento)
+        out.append((aa,bb,float(L)))
+    return out
+
+
 def _linha_parede_entre_tugs(
     msp,
     tug_origem,
     tug_destino,
     segmentos_crus=None,
     comp_total=0.0,
+    centro_ambiente=None,
     layer=LAYER_ROTA
 ):
     """
-    Fase 11.4 Rev.3:
-    conecta pelo extremo do traço central embutido na parede.
-    Se mudar de parede, acompanha os cantos do perímetro.
+    Fase 11.4 Rev.4:
+    o conduíte TUG->TUG percorre o EIXO DA PAREDE. Nos cantos, o ponto
+    de mudança de direção é a interseção dos eixos das duas paredes,
+    e não o vértice da face interna do ambiente.
     """
-    p1 = tug_origem.get("ponto_conexao_parede") or tug_origem.get("ponto")
-    p2 = tug_destino.get("ponto_conexao_parede") or tug_destino.get("ponto")
-    if not p1 or not p2:
-        return None
+    p1=tug_origem.get('ponto_conexao_parede') or tug_origem.get('ponto')
+    p2=tug_destino.get('ponto_conexao_parede') or tug_destino.get('ponto')
+    if not p1 or not p2: return None
+    segs=segmentos_crus or []
+    if not segs or comp_total<=0 or not centro_ambiente:
+        return msp.add_lwpolyline([tuple(p1),tuple(p2)],dxfattribs={'layer':layer})
 
-    segs = segmentos_crus or []
-    if not segs or comp_total <= 0:
-        return msp.add_lwpolyline([tuple(p1), tuple(p2)], dxfattribs={"layer": layer})
-
-    d1 = float(tug_origem.get("distancia_perimetro", 0.0) or 0.0) % comp_total
-    d2 = float(tug_destino.get("distancia_perimetro", 0.0) or 0.0) % comp_total
-
-    # Locate each distance in the perimeter.
+    # O próprio símbolo já informa a profundidade correta do eixo: distância
+    # entre o ponto da TUG (face do ambiente) e o extremo embutido do traço.
+    afast=max(0.01,min(0.25,_dist(tug_origem.get('ponto'),p1)))
+    eixos=_segmentos_eixo_parede(segs,centro_ambiente,afast)
+    d1=float(tug_origem.get('distancia_perimetro',0.0) or 0.0)%comp_total
+    d2=float(tug_destino.get('distancia_perimetro',0.0) or 0.0)%comp_total
     def localizar(d):
         acc=0.0
-        for i,(a,b,L) in enumerate(segs):
-            L=float(L)
-            if d <= acc+L+1e-9:
-                return i
-            acc+=L
+        for i,(_,_,L) in enumerate(segs):
+            if d<=acc+float(L)+1e-9:return i
+            acc+=float(L)
         return len(segs)-1
-
-    i1=localizar(d1); i2=localizar(d2)
+    i1,i2=localizar(d1),localizar(d2)
     if i1==i2:
         pts=[tuple(p1),tuple(p2)]
     else:
-        dm=(d2-d1)%comp_total
-        dn=(d1-d2)%comp_total
+        dm=(d2-d1)%comp_total; dn=(d1-d2)%comp_total
         sentido=1 if dm<=dn else -1
-        pts=[tuple(p1)]
-        i=i1
-        guard=0
+        pts=[tuple(p1)]; i=i1; guard=0
         while i!=i2 and guard<=len(segs):
-            pts.append(tuple(segs[i][1] if sentido>0 else segs[i][0]))
-            i=(i+sentido)%len(segs)
-            guard+=1
+            j=(i+sentido)%len(segs)
+            inter=_intersecao_retas(eixos[i][0],eixos[i][1],eixos[j][0],eixos[j][1])
+            if inter is None:
+                # fallback ainda no eixo da parede, nunca no canto interno cru
+                inter=eixos[i][1] if sentido>0 else eixos[i][0]
+            pts.append(tuple(inter))
+            i=j; guard+=1
         pts.append(tuple(p2))
-
     limpos=[]
     for pt in pts:
-        if not limpos or _dist(limpos[-1],pt)>1e-7:
-            limpos.append(pt)
-    return msp.add_lwpolyline(limpos,dxfattribs={"layer":layer})
-
+        if not limpos or _dist(limpos[-1],pt)>1e-7:limpos.append(pt)
+    return msp.add_lwpolyline(limpos,dxfattribs={'layer':layer})
 
 def _arestas_tugs_internas(
     nos,
@@ -738,7 +774,7 @@ def _arestas_tugs_internas(
     Liga:
       luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
 
-    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.3.
+    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4 Rev.4.
     Para ambientes sem interruptor próprio, liga a luminária principal
     diretamente à primeira TUG.
     """
@@ -870,7 +906,8 @@ def _arestas_tugs_internas(
             start=1
         ):
             destino = tuple(
-                tug["ponto"]
+                tug.get("ponto_conexao_parede")
+                or tug["ponto"]
             )
 
             aresta = {
@@ -925,7 +962,7 @@ def desenhar_rotas_qdc_iluminacao(
     ambientes_geom=None,
 ):
     """
-    Fase 11.4 Rev.3
+    Fase 11.4 Rev.4
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -1049,6 +1086,7 @@ def desenhar_rotas_qdc_iluminacao(
                 trecho["tug_destino"],
                 segmentos_crus=geo.get("segmentos_crus", []),
                 comp_total=geo.get("comp_total", 0.0),
+                centro_ambiente=geo.get("centro"),
                 layer=LAYER_ROTA
             )
             tipo_entidade = "LWPOLYLINE"
