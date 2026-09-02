@@ -1,6 +1,21 @@
 import math
+from io import BytesIO
+
 import pandas as pd
 import streamlit as st
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle
+)
 
 
 # ============================================================
@@ -479,8 +494,31 @@ def calcular_quantitativo_materiais(
     # ========================================================
 
     comprimentos_por_bitola = {}
+    comprimentos_cabos_cor = {}
     eletroduto_total = 0.0
     circuitos = []
+
+    def acumular_cabo_cor(
+        bitola,
+        funcao,
+        cor,
+        comprimento
+    ):
+        chave = (
+            float(bitola),
+            str(funcao),
+            str(cor)
+        )
+        comprimentos_cabos_cor[
+            chave
+        ] = (
+            comprimentos_cabos_cor.get(
+                chave,
+                0.0
+            )
+            +
+            float(comprimento)
+        )
 
     for row in tabela_editada:
         ambiente = str(
@@ -577,6 +615,30 @@ def calcular_quantitativo_materiais(
                 cabo
             )
 
+            comprimento_condutor = (
+                comprimento
+                *
+                FOLGA_CABOS
+            )
+            acumular_cabo_cor(
+                1.5,
+                "Fase",
+                "Vermelho",
+                comprimento_condutor
+            )
+            acumular_cabo_cor(
+                1.5,
+                "Neutro",
+                "Azul-claro",
+                comprimento_condutor
+            )
+            acumular_cabo_cor(
+                1.5,
+                "Proteção (PE)",
+                "Verde ou verde/amarelo",
+                comprimento_condutor
+            )
+
             corrente = (
                 potencia
                 /
@@ -636,6 +698,30 @@ def calcular_quantitativo_materiais(
                 )
                 +
                 cabo
+            )
+
+            comprimento_condutor = (
+                comprimento
+                *
+                FOLGA_CABOS
+            )
+            acumular_cabo_cor(
+                2.5,
+                "Fase",
+                "Vermelho",
+                comprimento_condutor
+            )
+            acumular_cabo_cor(
+                2.5,
+                "Neutro",
+                "Azul-claro",
+                comprimento_condutor
+            )
+            acumular_cabo_cor(
+                2.5,
+                "Proteção (PE)",
+                "Verde ou verde/amarelo",
+                comprimento_condutor
             )
 
             corrente = (
@@ -707,6 +793,30 @@ def calcular_quantitativo_materiais(
                 cabo
             )
 
+            comprimento_condutor = (
+                comprimento
+                *
+                FOLGA_CABOS
+            )
+            acumular_cabo_cor(
+                bitola,
+                "Fase L1",
+                "Vermelho",
+                comprimento_condutor
+            )
+            acumular_cabo_cor(
+                bitola,
+                "Fase L2",
+                "Preto",
+                comprimento_condutor
+            )
+            acumular_cabo_cor(
+                bitola,
+                "Proteção (PE)",
+                "Verde ou verde/amarelo",
+                comprimento_condutor
+            )
+
             corrente = (
                 potencia
                 /
@@ -728,24 +838,39 @@ def calcular_quantitativo_materiais(
             })
 
     # ========================================================
-    # CABOS POR BITOLA
+    # CABOS POR BITOLA, FUNÇÃO E COR
     # ========================================================
 
-    for bitola in sorted(
-        comprimentos_por_bitola
+    for (
+        bitola,
+        funcao,
+        cor
+    ) in sorted(
+        comprimentos_cabos_cor
     ):
         _adicionar_material(
             materiais,
             "Condutores",
             "Cabo de cobre isolado",
-            f"{bitola:g} mm² — fase/neutro/PE conforme circuito",
+            (
+                f"{bitola:g} mm² — "
+                f"{funcao} — "
+                f"{cor}"
+            ),
             "m",
             math.ceil(
-                comprimentos_por_bitola[
-                    bitola
+                comprimentos_cabos_cor[
+                    (
+                        bitola,
+                        funcao,
+                        cor
+                    )
                 ]
             ),
-            "Comprimento estimado pela geometria + 15% de folga"
+            (
+                "Comprimento estimado pela geometria "
+                "+ 15% de folga"
+            )
         )
 
     # ========================================================
@@ -993,6 +1118,143 @@ def calcular_quantitativo_materiais(
     return materiais, circuitos
 
 
+
+def _dataframes_materiais_circuitos(materiais, circuitos):
+    materiais_df = pd.DataFrame(materiais)
+    if not materiais_df.empty:
+        materiais_df = materiais_df.sort_values(
+            by=["Categoria", "Material", "Especificação"],
+            kind="stable"
+        ).reset_index(drop=True)
+
+    circuitos_df = pd.DataFrame(circuitos)
+    if not circuitos_df.empty:
+        circuitos_df = circuitos_df.rename(columns={
+            "tipo": "Circuito",
+            "ambiente": "Ambiente",
+            "potencia": "Potência (W)",
+            "corrente": "Corrente estimada (A)",
+            "bitola": "Bitola preliminar (mm²)",
+            "disjuntor": "Disjuntor preliminar (A)"
+        })
+        circuitos_df["Corrente estimada (A)"] = (
+            circuitos_df["Corrente estimada (A)"].round(2)
+        )
+    return materiais_df, circuitos_df
+
+
+def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df):
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        materiais_df.to_excel(writer, sheet_name="Materiais", index=False)
+        circuitos_df.to_excel(writer, sheet_name="Circuitos", index=False)
+
+        workbook = writer.book
+        cabecalho = workbook.add_format({
+            "bold": True, "bg_color": "#EAF2FF", "border": 1,
+            "align": "center", "valign": "vcenter"
+        })
+        borda = workbook.add_format({"border": 1, "valign": "top"})
+
+        for nome_aba, df in [("Materiais", materiais_df), ("Circuitos", circuitos_df)]:
+            ws = writer.sheets[nome_aba]
+            ws.freeze_panes(1, 0)
+            for col, coluna in enumerate(df.columns):
+                ws.write(0, col, coluna, cabecalho)
+                valores = df[coluna].astype(str).tolist() if not df.empty else []
+                largura = max([len(str(coluna))] + [len(v) for v in valores[:200]])
+                ws.set_column(col, col, min(max(largura + 2, 12), 42))
+            if not df.empty:
+                ws.conditional_format(
+                    1, 0, len(df), max(len(df.columns)-1, 0),
+                    {"type": "no_blanks", "format": borda}
+                )
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _pdf_tabela(df, larguras):
+    dados = [[str(c) for c in df.columns]]
+    dados.extend([[str(v) for v in row.tolist()] for _, row in df.iterrows()])
+    tabela = Table(dados, repeatRows=1, colWidths=larguras)
+    tabela.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#EAF2FF")),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("GRID", (0,0), (-1,-1), 0.35, colors.HexColor("#8A8A8A")),
+        ("FONTSIZE", (0,0), (-1,-1), 6.5),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("LEFTPADDING", (0,0), (-1,-1), 3),
+        ("RIGHTPADDING", (0,0), (-1,-1), 3),
+        ("TOPPADDING", (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+    ]))
+    return tabela
+
+
+def _gerar_pdf_materiais_circuitos(
+    nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito
+):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=landscape(A4),
+        rightMargin=1.0*cm, leftMargin=1.0*cm,
+        topMargin=1.0*cm, bottomMargin=1.0*cm
+    )
+    styles = getSampleStyleSheet()
+    titulo = ParagraphStyle(
+        "TituloMateriais", parent=styles["Title"],
+        alignment=TA_CENTER, fontSize=15, spaceAfter=8
+    )
+    secao = ParagraphStyle(
+        "SecaoMateriais", parent=styles["Heading2"],
+        fontSize=11, spaceBefore=8, spaceAfter=5
+    )
+    texto = ParagraphStyle(
+        "TextoMateriais", parent=styles["BodyText"],
+        fontSize=8, leading=10, spaceAfter=6
+    )
+
+    story = [
+        Paragraph("CIRCUITOS E QUANTITATIVO DE MATERIAIS", titulo),
+        Paragraph(
+            f"<b>Projeto:</b> {nome_projeto} &nbsp;&nbsp; "
+            f"<b>Alimentação:</b> {int(tensao_projeto)} V &nbsp;&nbsp; "
+            f"<b>Pé-direito:</b> {float(pe_direito):.2f} m", texto
+        ),
+        Paragraph("1. QUANTITATIVO DE MATERIAIS", secao)
+    ]
+    if materiais_df.empty:
+        story.append(Paragraph("Nenhum material foi identificado.", texto))
+    else:
+        story.append(_pdf_tabela(
+            materiais_df,
+            [2.5*cm, 4.2*cm, 7.0*cm, 1.5*cm, 2.0*cm, 8.0*cm]
+        ))
+
+    story += [Spacer(1,10), Paragraph("2. CIRCUITOS CONSIDERADOS NO QUANTITATIVO", secao)]
+    if circuitos_df.empty:
+        story.append(Paragraph("Nenhum circuito foi identificado.", texto))
+    else:
+        story.append(_pdf_tabela(
+            circuitos_df,
+            [2.5*cm, 4.0*cm, 3.0*cm, 3.5*cm, 4.0*cm, 4.0*cm]
+        ))
+
+    story += [
+        Spacer(1,8),
+        Paragraph(
+            "Observação: comprimentos de cabos/eletrodutos e alguns dispositivos "
+            "de proteção ainda são pré-dimensionamentos enquanto o roteamento "
+            "completo dos circuitos não estiver implementado. O dimensionamento "
+            "executivo deve ser confirmado conforme os critérios aplicáveis da NBR 5410.",
+            texto
+        )
+    ]
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def renderizar_materiais(
     tabela_editada,
     config_interruptores_usuario,
@@ -1021,66 +1283,69 @@ def renderizar_materiais(
         "para o dimensionamento final pela NBR 5410."
     )
 
-    materiais_df = pd.DataFrame(
-        materiais
+    materiais_df, df_circuitos = _dataframes_materiais_circuitos(
+        materiais,
+        circuitos
     )
 
     if not materiais_df.empty:
-        materiais_df = (
-            materiais_df.sort_values(
-                by=[
-                    "Categoria",
-                    "Material",
-                    "Especificação"
-                ],
-                kind="stable"
-            )
-            .reset_index(
-                drop=True
-            )
-        )
-
         st.dataframe(
             materiais_df,
             use_container_width=True,
             hide_index=True
         )
 
-    with st.expander(
-        "⚡ Ver circuitos considerados no quantitativo"
-    ):
-        if circuitos:
-            df_circuitos = pd.DataFrame(
-                circuitos
-            )
+    nome_projeto = str(
+        st.session_state.get(
+            "projeto_ativo",
+            "Projeto"
+        )
+    )
+    nome_arquivo = nome_projeto.strip().replace(" ", "_") or "Projeto"
 
-            df_circuitos = (
-                df_circuitos.rename(
-                    columns={
-                        "tipo": "Circuito",
-                        "ambiente": "Ambiente",
-                        "potencia": "Potência (W)",
-                        "corrente": "Corrente estimada (A)",
-                        "bitola": "Bitola preliminar (mm²)",
-                        "disjuntor": "Disjuntor preliminar (A)"
-                    }
-                )
-            )
+    excel_bytes = _gerar_excel_materiais_circuitos(
+        materiais_df,
+        df_circuitos
+    )
+    pdf_bytes = _gerar_pdf_materiais_circuitos(
+        nome_projeto,
+        materiais_df,
+        df_circuitos,
+        tensao_projeto,
+        pe_direito
+    )
 
-            df_circuitos[
-                "Corrente estimada (A)"
-            ] = (
-                df_circuitos[
-                    "Corrente estimada (A)"
-                ].round(2)
-            )
+    col_excel, col_pdf = st.columns(2)
 
-            st.dataframe(
-                df_circuitos,
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info(
-                "Nenhum circuito foi identificado."
-            )
+    with col_excel:
+        st.download_button(
+            "📊 Exportar para Excel",
+            data=excel_bytes,
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_8_19.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+    with col_pdf:
+        st.download_button(
+            "📄 Gerar PDF",
+            data=pdf_bytes,
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_8_19.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
+    st.markdown(
+        "#### ⚡ Circuitos considerados no quantitativo"
+    )
+
+    if circuitos:
+        st.dataframe(
+            df_circuitos,
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info(
+            "Nenhum circuito foi identificado."
+        )
