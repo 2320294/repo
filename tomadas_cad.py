@@ -36,7 +36,7 @@ def _geometria_simbolo_tomada(
     ny
 ):
     """
-    Fase 11.3.
+    Fase 11.4.
 
     px,py continuam sendo o ponto da parede.
 
@@ -336,7 +336,7 @@ def _selecao_tomada_alta(
         or []
     )
 
-    # Fase 11.3:
+    # Fase 11.4:
     # prioridade absoluta para o identificador único (ex.: "WC 2").
     # Compatibilidade somente para projetos antigos que tenham salvo
     # a configuração usando o nome-base.
@@ -501,6 +501,328 @@ def _parede_e_posicao_selecionados(
     )
 
 
+
+def _distancia_perimetro_do_ponto(
+    ponto,
+    segmentos_crus
+):
+    """
+    Projeta um ponto no segmento de perímetro mais próximo e retorna
+    a distância acumulada nesse perímetro.
+    """
+    if not ponto or not segmentos_crus:
+        return None
+
+    px, py = map(float, ponto)
+    acumulada = 0.0
+    melhor = None
+
+    for p1, p2, comprimento in segmentos_crus:
+        x1, y1 = map(float, p1)
+        x2, y2 = map(float, p2)
+        dx = x2 - x1
+        dy = y2 - y1
+        l2 = dx*dx + dy*dy
+
+        if l2 <= 1e-12:
+            acumulada += float(comprimento)
+            continue
+
+        t = (
+            (px-x1)*dx
+            + (py-y1)*dy
+        ) / l2
+
+        t = max(
+            0.0,
+            min(
+                1.0,
+                t
+            )
+        )
+
+        qx = x1 + t*dx
+        qy = y1 + t*dy
+        d = math.hypot(
+            px-qx,
+            py-qy
+        )
+
+        candidato = (
+            d,
+            acumulada
+            + t
+            * float(comprimento)
+        )
+
+        if (
+            melhor is None
+            or candidato[0]
+            < melhor[0]
+        ):
+            melhor = candidato
+
+        acumulada += float(
+            comprimento
+        )
+
+    return (
+        melhor[1]
+        if melhor
+        else None
+    )
+
+
+def _interruptor_referencia_ambiente(
+    nome,
+    pontos_interruptores
+):
+    """
+    Seleciona o interruptor do próprio ambiente.
+    Se houver paralelos, usa o primeiro encontrado no sentido
+    de cadastro; as TUGs continuam uma única sequência perimetral.
+    """
+    chave = str(
+        nome or ""
+    ).casefold().strip()
+
+    candidatos = [
+        p
+        for p in (
+            pontos_interruptores
+            or []
+        )
+        if (
+            str(
+                p.get(
+                    "ambiente",
+                    ""
+                )
+            ).casefold().strip()
+            == chave
+            and p.get(
+                "ponto_tangencia"
+                or p.get(
+                    "ponto"
+                )
+            )
+        )
+    ]
+
+    if not candidatos:
+        return None
+
+    return candidatos[0]
+
+
+def _ponto_valido_a_frente(
+    distancia_inicial,
+    comp_total,
+    segmentos_crus,
+    polilinha,
+    portas_raw,
+    soleiras_raw,
+    max_busca=None
+):
+    """
+    Busca SOMENTE para frente no sentido do perímetro.
+    Assim a primeira TUG nasce depois do interruptor e as demais
+    mantêm a ordem física da parede.
+    """
+    if comp_total <= 0:
+        return None
+
+    passo = 0.05
+    limite = (
+        float(max_busca)
+        if max_busca is not None
+        else float(comp_total)
+    )
+
+    desloc = 0.0
+
+    while desloc <= limite + 1e-9:
+        d = (
+            float(distancia_inicial)
+            + desloc
+        ) % float(comp_total)
+
+        px, py, vx, vy = (
+            get_ponto_perimetro(
+                d,
+                segmentos_crus
+            )
+        )
+
+        if ponto_tomada_valido(
+            px,
+            py,
+            polilinha,
+            portas_raw,
+            soleiras_raw
+        ):
+            return (
+                d,
+                px,
+                py,
+                vx,
+                vy
+            )
+
+        desloc += passo
+
+    return None
+
+
+def _distancias_tugs_desde_interruptor(
+    qtd_tugs,
+    comp_total,
+    segmentos_crus,
+    polilinha,
+    portas_raw,
+    soleiras_raw,
+    ponto_interruptor
+):
+    """
+    Fase 11.4.
+
+    1ª TUG: 20 cm após o interruptor, no sentido do perímetro.
+    Demais TUGs: seguem o mesmo sentido até completar a quantidade.
+    O espaçamento-base usa o perímetro restante após a primeira TUG.
+    Pontos inválidos avançam pela parede até o primeiro ponto válido.
+    """
+    if (
+        qtd_tugs <= 0
+        or comp_total <= 0
+        or not ponto_interruptor
+    ):
+        return []
+
+    d_int = (
+        _distancia_perimetro_do_ponto(
+            ponto_interruptor,
+            segmentos_crus
+        )
+    )
+
+    if d_int is None:
+        return []
+
+    # A intenção é 20 cm. Se porta/soleira/canto tornar o ponto inválido,
+    # avança no mesmo sentido até achar posição permitida.
+    primeira = (
+        _ponto_valido_a_frente(
+            d_int + 0.20,
+            comp_total,
+            segmentos_crus,
+            polilinha,
+            portas_raw,
+            soleiras_raw,
+            max_busca=comp_total
+        )
+    )
+
+    if primeira is None:
+        return []
+
+    resultados = [
+        primeira
+    ]
+
+    if qtd_tugs == 1:
+        return resultados
+
+    d_primeira = primeira[0]
+
+    # Distribui as restantes no restante de uma volta do perímetro,
+    # deixando uma pequena reserva antes de retornar ao interruptor.
+    reserva_final = 0.35
+    comprimento_restante = max(
+        0.0,
+        comp_total
+        - 0.20
+        - reserva_final
+    )
+
+    passo_base = (
+        comprimento_restante
+        / qtd_tugs
+    )
+
+    usados = [
+        d_primeira
+    ]
+
+    for i in range(
+        1,
+        qtd_tugs
+    ):
+        alvo = (
+            d_primeira
+            + i * passo_base
+        )
+
+        achado = (
+            _ponto_valido_a_frente(
+                alvo,
+                comp_total,
+                segmentos_crus,
+                polilinha,
+                portas_raw,
+                soleiras_raw,
+                max_busca=max(
+                    0.60,
+                    passo_base
+                )
+            )
+        )
+
+        if achado is None:
+            continue
+
+        d = achado[0]
+
+        # Evita duas tomadas praticamente no mesmo local após desvios
+        # causados por porta/soleira/canto.
+        if any(
+            min(
+                abs(d-u),
+                comp_total
+                - abs(d-u)
+            ) < 0.35
+            for u in usados
+        ):
+            achado = (
+                _ponto_valido_a_frente(
+                    d + 0.35,
+                    comp_total,
+                    segmentos_crus,
+                    polilinha,
+                    portas_raw,
+                    soleiras_raw,
+                    max_busca=max(
+                        0.60,
+                        passo_base
+                    )
+                )
+            )
+
+            if achado is None:
+                continue
+
+            d = achado[0]
+
+        usados.append(
+            d
+        )
+
+        resultados.append(
+            achado
+        )
+
+    return resultados
+
+
 def desenhar_tomadas(
     msp,
     row_data,
@@ -514,7 +836,8 @@ def desenhar_tomadas(
     soleiras_raw,
     centro_x,
     centro_y,
-    config_tomadas_altas=None
+    config_tomadas_altas=None,
+    pontos_interruptores=None
 ):
     if not row_data:
         return []
@@ -600,7 +923,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 11.3 — classificação por altura preservada da Fase 8.3.
+    # Fase 11.4 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -676,7 +999,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 11.3:
+            # Fase 11.4:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
@@ -898,82 +1221,112 @@ def desenhar_tomadas(
                 ),
             })
 
-    # TUG
+    # TUG — FASE 11.4
     if qtd_tugs > 0 and comp_total > 0:
-        margem_inicial = 0.35
-
-        comprimento_util = (
-            comp_total
-            -
-            2 * margem_inicial
+        interruptor_ref = (
+            _interruptor_referencia_ambiente(
+                nome,
+                pontos_interruptores
+            )
         )
 
-        if comprimento_util > 0:
-            passo = (
-                comprimento_util
-                /
-                qtd_tugs
+        resultados_tug = []
+
+        if interruptor_ref:
+            ponto_ref = (
+                interruptor_ref.get(
+                    "ponto_tangencia"
+                )
+                or interruptor_ref.get(
+                    "ponto"
+                )
             )
 
-            inicio_offset = (
-                margem_inicial
-                +
-                passo / 2
-            )
-
-        else:
-            passo = (
-                comp_total
-                /
-                qtd_tugs
-            )
-
-            inicio_offset = (
-                passo / 2
-            )
-
-        distancias_usadas = []
-
-        for i in range(
-            qtd_tugs
-        ):
-            distancia_desejada = (
-                inicio_offset
-                +
-                i * passo
-            )
-
-            if (
-                distancia_desejada <= 0
-                or distancia_desejada >= comp_total
-            ):
-                continue
-
-            resultado = (
-                procurar_ponto_valido_perimetro(
-                    distancia_desejada,
+            resultados_tug = (
+                _distancias_tugs_desde_interruptor(
+                    qtd_tugs,
                     comp_total,
                     segmentos_crus,
                     polilinha,
                     portas_raw,
-                    soleiras_raw
+                    soleiras_raw,
+                    ponto_ref
                 )
             )
 
-            if resultado is None:
-                continue
-
-            px, py, seg_vx, seg_vy = (
-                resultado
+        # Ambientes sem interruptor próprio ou eventual fallback geométrico
+        # preservam a distribuição anterior para não perder tomadas.
+        if not resultados_tug:
+            margem_inicial = 0.35
+            comprimento_util = (
+                comp_total
+                - 2 * margem_inicial
             )
 
-            if any(
-                abs(
-                    distancia_desejada - d
-                ) < 0.60
-                for d in distancias_usadas
+            if comprimento_util > 0:
+                passo = (
+                    comprimento_util
+                    / qtd_tugs
+                )
+                inicio_offset = (
+                    margem_inicial
+                    + passo / 2
+                )
+            else:
+                passo = (
+                    comp_total
+                    / qtd_tugs
+                )
+                inicio_offset = (
+                    passo / 2
+                )
+
+            for i in range(
+                qtd_tugs
             ):
-                continue
+                distancia_desejada = (
+                    inicio_offset
+                    + i * passo
+                )
+
+                resultado = (
+                    procurar_ponto_valido_perimetro(
+                        distancia_desejada,
+                        comp_total,
+                        segmentos_crus,
+                        polilinha,
+                        portas_raw,
+                        soleiras_raw
+                    )
+                )
+
+                if resultado is None:
+                    continue
+
+                px, py, seg_vx, seg_vy = resultado
+
+                resultados_tug.append(
+                    (
+                        distancia_desejada,
+                        px,
+                        py,
+                        seg_vx,
+                        seg_vy
+                    )
+                )
+
+        # Desenha na ordem perimetral calculada.
+        for ordem_tug, resultado in enumerate(
+            resultados_tug[:qtd_tugs],
+            start=1
+        ):
+            (
+                distancia_perimetro,
+                px,
+                py,
+                seg_vx,
+                seg_vy
+            ) = resultado
 
             if not ponto_tomada_valido(
                 px,
@@ -984,13 +1337,15 @@ def desenhar_tomadas(
             ):
                 continue
 
-            distancias_usadas.append(
-                distancia_desejada
-            )
-
             nx, ny = get_inside_normal_polygon(
-                seg_vx, seg_vy, px, py, polilinha,
-                probe=0.05, cx=centro_x, cy=centro_y
+                seg_vx,
+                seg_vy,
+                px,
+                py,
+                polilinha,
+                probe=0.05,
+                cx=centro_x,
+                cy=centro_y
             )
 
             (
@@ -1042,14 +1397,42 @@ def desenhar_tomadas(
                 )
 
             pontos_gerados.append({
-                "ambiente": nome,
-                "tipo": "TUG",
-                "ponto": (px, py),
-                "potencia": 600 if is_ambiente_molhado else 100,
-                "altura": "MEDIA" if is_ambiente_molhado else "BAIXA",
-                "grupo_distribuicao": (
-                    "TOMADA_MEDIA" if is_ambiente_molhado else "TOMADA_BAIXA"
-                ),
+                "ambiente":
+                    nome,
+                "tipo":
+                    "TUG",
+                "ponto":
+                    (px, py),
+                "potencia":
+                    (
+                        600
+                        if is_ambiente_molhado
+                        else 100
+                    ),
+                "altura":
+                    (
+                        "MEDIA"
+                        if is_ambiente_molhado
+                        else "BAIXA"
+                    ),
+                "grupo_distribuicao":
+                    (
+                        "TOMADA_MEDIA"
+                        if is_ambiente_molhado
+                        else "TOMADA_BAIXA"
+                    ),
+                "ordem_perimetro":
+                    ordem_tug,
+                "distancia_perimetro":
+                    float(
+                        distancia_perimetro
+                    ),
+                "origem_distribuicao":
+                    (
+                        "20CM_APOS_INTERRUPTOR"
+                        if interruptor_ref
+                        else "FALLBACK_DISTRIBUICAO"
+                    ),
             })
 
     return pontos_gerados

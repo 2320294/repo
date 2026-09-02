@@ -397,7 +397,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.3 — rede híbrida.
+    Fase 11.4 — rede híbrida.
 
     Para cada ambiente compara:
     1) caminho direto QDC -> ambiente;
@@ -407,7 +407,7 @@ def _construir_rede_hibrida(
     não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
 
     Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.3.
+    evitando a volta excessiva observada na Fase 11.4.
     """
     conectados = [{
         "id": "QDC",
@@ -668,14 +668,186 @@ def _arestas_luminarias_secundarias(
     return saida
 
 
+
+def _arestas_tugs_internas(
+    nos,
+    pontos_eletricos,
+    pontos_interruptores,
+    circuitos
+):
+    """
+    Liga:
+      luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
+
+    As TUGs já chegam ordenadas pelo perímetro na Fase 11.4.
+    Para ambientes sem interruptor próprio, liga a luminária principal
+    diretamente à primeira TUG.
+    """
+    principal_por_ambiente = {
+        n["ambiente"]: tuple(
+            n["ponto"]
+        )
+        for n in nos
+    }
+
+    tug_por_ambiente = {}
+    for p in pontos_eletricos or []:
+        if str(p.get("tipo", "")).upper() != "TUG":
+            continue
+        amb = _normalizar_nome(
+            p.get("ambiente")
+        )
+        if not amb or not p.get("ponto"):
+            continue
+        tug_por_ambiente.setdefault(
+            amb,
+            []
+        ).append(p)
+
+    for amb in tug_por_ambiente:
+        tug_por_ambiente[amb].sort(
+            key=lambda p: (
+                int(
+                    p.get(
+                        "ordem_perimetro",
+                        9999
+                    )
+                    or 9999
+                ),
+                float(
+                    p.get(
+                        "distancia_perimetro",
+                        0.0
+                    )
+                    or 0.0
+                )
+            )
+        )
+
+    int_por_ambiente = {}
+    for p in pontos_interruptores or []:
+        amb = _normalizar_nome(
+            p.get("ambiente")
+        )
+        pt = (
+            p.get(
+                "ponto_tangencia"
+            )
+            or p.get(
+                "ponto"
+            )
+        )
+        if amb and pt:
+            int_por_ambiente.setdefault(
+                amb,
+                tuple(pt)
+            )
+
+    tug_circuitos = {}
+    for c in circuitos or []:
+        if str(c.get("tipo", "")).upper() != "TUG":
+            continue
+        numero = int(
+            c.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+        for amb in _ambientes_circuito(c):
+            tug_circuitos.setdefault(
+                _normalizar_nome(amb),
+                set()
+            ).add(numero)
+
+    arestas = []
+
+    for ambiente, tugs in tug_por_ambiente.items():
+        if not tugs:
+            continue
+
+        principal = (
+            principal_por_ambiente.get(
+                ambiente
+            )
+        )
+        if principal is None:
+            continue
+
+        interruptor = (
+            int_por_ambiente.get(
+                ambiente
+            )
+        )
+
+        circuitos_amb = set(
+            tug_circuitos.get(
+                ambiente,
+                set()
+            )
+        )
+
+        atual = principal
+
+        if interruptor is not None:
+            arestas.append({
+                "origem_ambiente":
+                    ambiente,
+                "destino_ambiente":
+                    ambiente,
+                "inicio":
+                    atual,
+                "fim":
+                    interruptor,
+                "circuitos":
+                    circuitos_amb,
+                "criterio":
+                    "LUZ_PARA_INTERRUPTOR",
+            })
+            atual = interruptor
+
+        for indice, tug in enumerate(
+            tugs,
+            start=1
+        ):
+            destino = tuple(
+                tug["ponto"]
+            )
+
+            arestas.append({
+                "origem_ambiente":
+                    ambiente,
+                "destino_ambiente":
+                    ambiente,
+                "inicio":
+                    atual,
+                "fim":
+                    destino,
+                "circuitos":
+                    circuitos_amb,
+                "criterio":
+                    (
+                        "INTERRUPTOR_PARA_TUG1"
+                        if indice == 1
+                        and interruptor is not None
+                        else "CADEIA_TUG"
+                    ),
+            })
+
+            atual = destino
+
+    return arestas
+
+
 def desenhar_rotas_qdc_iluminacao(
     msp,
     qdc_info,
     pontos_eletricos,
     circuitos,
+    pontos_interruptores=None,
 ):
     """
-    Fase 11.3
+    Fase 11.4
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -751,11 +923,21 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
+    tugs_internas = (
+        _arestas_tugs_internas(
+            nos,
+            pontos_eletricos,
+            pontos_interruptores,
+            circuitos
+        )
+    )
+
     rotas = []
 
     todas_arestas = (
         tronco
         + secundarias
+        + tugs_internas
     )
 
     for indice, trecho in enumerate(
@@ -776,11 +958,18 @@ def desenhar_rotas_qdc_iluminacao(
             "tipo_rede":
                 (
                     "LUMINARIA_INTERNA"
-                    if trecho.get(
-                        "criterio"
-                    )
+                    if trecho.get("criterio")
                     == "LUMINARIA_SECUNDARIA"
-                    else "TRONCAL_HIBRIDA"
+                    else (
+                        "TUG_INTERNA"
+                        if trecho.get("criterio")
+                        in {
+                            "LUZ_PARA_INTERRUPTOR",
+                            "INTERRUPTOR_PARA_TUG1",
+                            "CADEIA_TUG",
+                        }
+                        else "TRONCAL_HIBRIDA"
+                    )
                 ),
             "origem_ambiente":
                 trecho[
