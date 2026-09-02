@@ -1,0 +1,85 @@
+FASE 11.7 — QUEDA DE TENSÃO E VALIDAÇÃO ELÉTRICA DAS ROTAS
+
+OBJETIVO
+- Usar o roteamento físico já validado para iniciar a verificação elétrica
+  dos circuitos, sem alterar a geometria aprovada do CAD.
+
+1. MAIOR PERCURSO ELÉTRICO POR CIRCUITO
+- O sistema reconstrói a topologia dirigida dos trechos que pertencem a
+  cada circuito.
+- Para queda de tensão é usado o maior caminho acumulado da origem até
+  um ponto terminal, e não a soma de todos os ramos.
+- Isso evita superestimar circuitos com derivações.
+
+2. QUEDA DE TENSÃO PRELIMINAR
+- Calculada com base em:
+  comprimento físico do maior percurso;
+  corrente do circuito;
+  tensão;
+  seção do condutor;
+  resistividade preliminar do cobre em operação.
+- Referência preliminar de projeto: 4%.
+- Circuitos acima da referência recebem ALERTA.
+- A verificação é preliminar e não representa certificação normativa.
+
+3. CONSISTÊNCIA ENTRE CORRENTE, DISJUNTOR E SEÇÃO
+- Verifica se a corrente calculada não supera o disjuntor definido.
+- Confere seção funcional mínima já adotada pelo sistema:
+  iluminação >= 1,5 mm²;
+  TUG >= 2,5 mm².
+- TUE mantém a seção calculada pela lógica dedicada existente.
+
+4. CONCENTRAÇÃO DE CIRCUITOS NOS ELETRODUTOS
+- O sistema identifica o maior número de circuitos compartilhando um
+  mesmo trecho físico.
+- Nesta fase essa informação é exibida como diagnóstico.
+- A correção de capacidade de condução por agrupamento NÃO é aplicada
+  automaticamente ainda, pois depende de método de instalação, temperatura
+  e dados reais dos cabos/eletrodutos.
+
+5. TELA DE MATERIAIS
+- Nova tabela:
+  Nº do circuito;
+  tipo;
+  ambiente;
+  corrente;
+  bitola;
+  disjuntor;
+  maior percurso físico;
+  queda de tensão;
+  status.
+- Alertas são destacados na interface.
+
+6. EXCEL E PDF
+- O Excel de Circuitos e Materiais recebe a aba Validacao_Rotas.
+- O PDF recebe a seção:
+  QUEDA DE TENSÃO E VALIDAÇÃO DAS ROTAS.
+- As observações deixam claro o caráter preliminar das verificações.
+
+MANTIDO DA FASE 11.6
+- Comprimentos reais obtidos do traçado.
+- Condutores por função/cor.
+- Pré-dimensionamento dos eletrodutos por ocupação.
+- Camada técnica PROJ_ELETRICA_DIMENSIONAMENTO congelada.
+- Topologia física validada na Fase 11.5 Rev.2.
+- Múltiplos troncos do QDC.
+- TUGs, TUEs, interruptores e ambientes externos conforme regras validadas.
+
+IMPORTANTE
+- Capacidade de condução de corrente ainda depende de:
+  método de instalação;
+  temperatura;
+  agrupamento;
+  características reais do cabo;
+  queda admissível conforme o trecho da instalação;
+  curto-circuito;
+  curvas e dados dos fabricantes.
+
+VERSÃO VISÍVEL
+- Sistema: Fase 11.7 • Build 11.7.
+- Arquivos: Fase_11_7.
+- Unifilar e camada AE_VERSAO atualizados.
+
+PACOTE
+- Nenhum DXF incluído.
+- requirements.txt mantido como arquivo técnico obrigatório.
