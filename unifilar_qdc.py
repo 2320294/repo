@@ -59,7 +59,7 @@ def desenhar_unifilar_qdc(
 
     # Cabeçalho: corrigido para não sobrepor textos.
     _text(msp,"DIAGRAMA UNIFILAR DO QDC",x0+0.55,y0-0.42,0.24)
-    _text(msp,f"FASE 9.6.1 | FORNECIMENTO: {tipo_for} | {tensao_for}",
+    _text(msp,f"FASE 9.7 | FORNECIMENTO: {tipo_for} | {tensao_for}",
           x0+0.55,y0-0.82,0.135)
     _text(msp,f"TENSAO DE PROJETO DOS CIRCUITOS: {int(tensao_projeto)} V",
           x0+0.55,y0-1.12,0.125)
@@ -85,12 +85,42 @@ def desenhar_unifilar_qdc(
     dg=resultado_demanda.get("disjuntor_geral_a")
     pd=resultado_demanda.get("potencia_demanda_w")
     ic=resultado_demanda.get("corrente_demanda_a")
-    _text(msp,(f"{int(dg)} A - PRE-SELECIONADO" if dg is not None else "A DEFINIR"),
-          xp+0.48,ydg-0.12,0.105)
+    polos_dg=str(resumo_protecao.get("dg_polos","") or "")
+    if dg is not None:
+        texto_dg=f"{int(dg)} A"
+        if polos_dg:
+            texto_dg += f" {polos_dg}"
+        _text(msp,texto_dg,xp+0.48,ydg-0.12,0.105)
+
     if pd is not None:
         _text(msp,f"DEMANDA: {pd/1000:.2f} kW",xp+4.10,ydg+0.07,0.105)
     if ic is not None:
         _text(msp,f"CORRENTE EQUIVALENTE: {ic:.1f} A",xp+4.10,ydg-0.14,0.105)
+
+    # Condutores do alimentador identificados no trecho antes do DG.
+    sf=resumo_protecao.get("alimentador_fase_mm2")
+    sn=resumo_protecao.get("alimentador_neutro_mm2")
+    spe=resumo_protecao.get("alimentador_pe_mm2")
+    comp=str(resumo_protecao.get("alimentador_composicao","") or "")
+    if sf is not None:
+        if comp.startswith("3F"):
+            partes=[f"3F x {sf:g} mm2"]
+        elif comp.startswith("2F"):
+            partes=[f"2F x {sf:g} mm2"]
+        else:
+            partes=[f"F {sf:g} mm2"]
+        if sn is not None:
+            partes.append(f"N {sn:g} mm2")
+        if spe is not None:
+            partes.append(f"PE {spe:g} mm2")
+        _text(
+            msp,
+            "ALIMENTADOR: " + " | ".join(partes),
+            xp+0.48,
+            yrede-0.15,
+            0.090
+        )
+
     _line(msp,(xp,yrede-0.22),(xp,ydg+0.16))
 
     ydps=ydg-0.82
@@ -129,9 +159,6 @@ def desenhar_unifilar_qdc(
 
     for idx,c in enumerate(circuitos,start=1):
         cy=ybar-(idx-1)*espac
-        _line(msp,(xp,cy),(xdj-0.28,cy))
-        _breaker(msp,xdj,cy)
-        _line(msp,(xdj+0.28,cy),(xt-0.18,cy))
 
         tipo=str(c.get("tipo","Circuito"))
         amb=str(c.get("ambiente",""))
@@ -145,12 +172,34 @@ def desenhar_unifilar_qdc(
         numero=int(c.get("numero",idx))
         cond="2F + PE" if tipo.upper()=="TUE" else "F + N + PE"
 
+        _line(msp,(xp,cy),(xdj-0.28,cy))
+
+        # Bitola fica no trecho a montante do disjuntor.
+        if bit > 0:
+            if tipo.upper()=="TUE":
+                texto_cabo=f"2F x {bit:g} mm2 + PE {bit:g} mm2"
+            else:
+                texto_cabo=f"F+N {bit:g} mm2 + PE {bit:g} mm2"
+            _text(msp,texto_cabo,xp+0.25,cy+0.13,0.082)
+
+        _breaker(msp,xdj,cy)
+
+        # Identificação do disjuntor junto ao símbolo.
+        if dj > 0:
+            texto_dj=f"DJ {dj} A"
+            if polos and polos!="A definir":
+                texto_dj += f" {polos}"
+            _text(msp,texto_dj,xdj-0.27,cy-0.31,0.082)
+
+        _line(msp,(xdj+0.28,cy),(xt-0.18,cy))
+
         linha1=f"C{numero:02d} | {tipo} | {amb} | FASE {fase}"
         if dr:
             linha1 += f" | {dr}"
-
         _text(msp,linha1,xt,cy+0.11,0.125)
-        _text(msp,f"{pot:.0f} W | {cor:.2f} A | DJ {dj} A {polos} | {bit:g} mm2 | {cond}",
+
+        # Sem repetir bitola e DJ depois do símbolo.
+        _text(msp,f"{pot:.0f} W | {cor:.2f} A | {cond}",
               xt,cy-0.13,0.10)
 
     xn=x0+largura-1.35
