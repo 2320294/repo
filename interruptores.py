@@ -1321,7 +1321,7 @@ def _ids_salvos_ambiente(config_salva, amb, portas):
     ]
 
 def _ambiente_sem_interruptor_proprio(nome):
-    """Fase 8.9: iluminação comandada pelo ambiente interno adjacente."""
+    """Fase 8.10: iluminação comandada pelo ambiente interno adjacente."""
     txt = unicodedata.normalize("NFKD", str(nome or "")).encode("ascii", "ignore").decode("ascii").casefold()
     compacto = "".join(ch for ch in txt if ch.isalnum())
     return any(chave in compacto for chave in ("varanda", "terraco", "garagem"))

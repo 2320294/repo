@@ -1,7 +1,7 @@
 import math
 
 # ============================================================
-# FASE 8.9 — PADRÃO GEOMÉTRICO DAS TOMADAS
+# FASE 8.10 — PADRÃO GEOMÉTRICO DAS TOMADAS
 # ============================================================
 # Novo padrão:
 #   - base total do triângulo: 15 cm
@@ -36,7 +36,7 @@ def _geometria_simbolo_tomada(
     ny
 ):
     """
-    Fase 8.9.
+    Fase 8.10.
 
     px,py continuam sendo o ponto da parede.
 
@@ -577,7 +577,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.9 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.10 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -653,7 +653,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 8.9:
+            # Fase 8.10:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
@@ -833,7 +833,7 @@ def desenhar_tomadas(
                 msp.add_solid(
                     [
                         ponto_b1,
-                        (px, py),
+                        ponto_traco_interno,
                         ponto_pt
                     ],
                     dxfattribs={
@@ -1009,7 +1009,7 @@ def desenhar_tomadas(
                 msp.add_solid(
                     [
                         ponto_b1,
-                        (px, py),
+                        ponto_traco_interno,
                         ponto_pt
                     ],
                     dxfattribs={

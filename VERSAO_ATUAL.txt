@@ -1,11 +1,11 @@
 AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.9
-IDENTIFICADOR: Fase_8_9
+VERSÃO ATUAL: Fase 8.10
+IDENTIFICADOR: Fase_8_10
 
-[OK] base das tomadas = 15 cm
-[OK] traço central total = 10 cm
-[OK] 5 cm do traço para dentro
-[OK] 5 cm do traço para fora
-[OK] base triangular na ponta interna do traço
-[OK] profundidade triangular = 15 cm
-[OK] orientação interna preservada
+[OK] tomada baixa = triângulo vazio
+[OK] tomada média = metade do triângulo preenchida
+[OK] tomada alta = triângulo totalmente preenchido
+[OK] base triangular = 15 cm
+[OK] traço central = 10 cm
+[OK] centro do preenchimento médio na base do triângulo
+[OK] orientação para dentro do ambiente preservada
