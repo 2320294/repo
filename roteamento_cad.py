@@ -397,17 +397,20 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 11.5 — rede híbrida.
+    Fase 11.5 Rev.1 — rede híbrida com múltiplas saídas do QDC.
 
-    Para cada ambiente compara:
-    1) caminho direto QDC -> ambiente;
-    2) melhor caminho usando um nó já pertencente à rede.
+    Além do critério de menor percurso total, força uma quantidade mínima
+    de troncos de saída do QDC para evitar concentrar todos os circuitos
+    da residência em um único eletroduto inicial.
 
-    A conexão pela rede só é aceita se o percurso total desde o QDC
-    não exceder FATOR_MAX_DESVIO_REDE vezes o caminho direto.
+    Regra preliminar:
+    - até 4 circuitos: pelo menos 2 troncos quando houver ambientes suficientes;
+    - 5 a 8 circuitos: pelo menos 2 troncos;
+    - acima de 8 circuitos: pelo menos 3 troncos;
+    - máximo preliminar: 3 troncos nesta fase.
 
-    Isso permite vários troncos saindo do QDC quando necessário,
-    evitando a volta excessiva observada na Fase 11.5.
+    O dimensionamento definitivo será refinado posteriormente pela ocupação
+    real dos eletrodutos e seção dos condutores.
     """
     conectados = [{
         "id": "QDC",
@@ -418,6 +421,86 @@ def _construir_rede_hibrida(
 
     arestas = []
 
+    circuitos_unicos = set()
+    for no in nos:
+        circuitos_unicos.update(
+            no.get(
+                "circuitos",
+                set()
+            )
+        )
+
+    qtd_circuitos = len(
+        circuitos_unicos
+    )
+
+    if len(nos) <= 1:
+        qtd_troncos_min = 1
+    elif qtd_circuitos > 8:
+        qtd_troncos_min = min(
+            3,
+            len(nos)
+        )
+    else:
+        qtd_troncos_min = min(
+            2,
+            len(nos)
+        )
+
+    # Escolhe âncoras distribuídas angularmente em torno do QDC.
+    # Isso evita que dois troncos forçados saiam para praticamente
+    # a mesma direção da planta.
+    ordenados_angulo = sorted(
+        nos,
+        key=lambda n:
+            math.atan2(
+                float(n["ponto"][1])
+                - float(qdc[1]),
+                float(n["ponto"][0])
+                - float(qdc[0])
+            )
+    )
+
+    anchors = set()
+
+    if qtd_troncos_min >= 1:
+        for k in range(
+            qtd_troncos_min
+        ):
+            inicio = int(
+                k
+                * len(ordenados_angulo)
+                / qtd_troncos_min
+            )
+            fim = int(
+                (k + 1)
+                * len(ordenados_angulo)
+                / qtd_troncos_min
+            )
+
+            grupo = ordenados_angulo[
+                inicio:
+                max(
+                    inicio + 1,
+                    fim
+                )
+            ]
+
+            escolhido = min(
+                grupo,
+                key=lambda n:
+                    float(
+                        n.get(
+                            "dist_qdc",
+                            0.0
+                        )
+                    )
+            )
+
+            anchors.add(
+                escolhido["id"]
+            )
+
     for no in nos:
         direto = float(
             no["dist_qdc"]
@@ -425,12 +508,7 @@ def _construir_rede_hibrida(
 
         melhor_parent = None
         melhor_total = None
-        melhor_trecho = None
 
-        # Procura a melhor alternativa pela REDE EXISTENTE.
-        # O QDC é comparado separadamente como caminho direto; se ele
-        # participar desta busca, pela desigualdade triangular sempre
-        # venceria e impediria qualquer compartilhamento.
         for candidato in conectados:
             if candidato["id"] == "QDC":
                 continue
@@ -455,14 +533,16 @@ def _construir_rede_hibrida(
                 or total < melhor_total
             ):
                 melhor_total = total
-                melhor_trecho = trecho
                 melhor_parent = candidato
 
-        # Evita "pegar carona" numa rede que torne o percurso total
-        # significativamente maior que sair diretamente do QDC.
+        forcar_qdc = (
+            no["id"]
+            in anchors
+        )
+
         usar_rede = (
-            melhor_parent is not None
-            and melhor_parent["id"] != "QDC"
+            not forcar_qdc
+            and melhor_parent is not None
             and melhor_total
                 <= direto
                 * FATOR_MAX_DESVIO_REDE
@@ -475,7 +555,11 @@ def _construir_rede_hibrida(
         else:
             origem = conectados[0]
             dist_raiz = direto
-            criterio = "NOVO_TRONCO_QDC"
+            criterio = (
+                "TRONCO_QDC_SETORIZADO"
+                if forcar_qdc
+                else "NOVO_TRONCO_QDC"
+            )
 
         arestas.append({
             "origem_id":
@@ -991,7 +1075,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 11.5:
+    Fase 11.5 Rev.1:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1020,12 +1104,12 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Liga:
-      luminária principal -> interruptor -> TUG 1 -> TUG 2 -> ...
+    Fase 11.5 Rev.1
 
-    As TUGs já chegam ordenadas pelo perímetro na Fase 11.5.
-    Para ambientes sem interruptor próprio, liga a luminária principal
-    diretamente à primeira TUG.
+    - todo interruptor do ambiente recebe ligação;
+    - interruptores paralelos não podem ficar soltos;
+    - mesmo ambientes sem TUG mantêm luminária -> interruptor;
+    - para iniciar a cadeia de TUGs, usa o interruptor mais próximo da TUG 1.
     """
     principal_por_ambiente = {
         n["ambiente"]: tuple(
@@ -1034,22 +1118,53 @@ def _arestas_tugs_internas(
         for n in nos
     }
 
+    luminarias_por_ambiente = {
+        n["ambiente"]: [
+            tuple(pt)
+            for pt in n.get(
+                "luminarias",
+                []
+            )
+        ]
+        for n in nos
+    }
+
     tug_por_ambiente = {}
+
     for p in pontos_eletricos or []:
-        if str(p.get("tipo", "")).upper() != "TUG":
+        if str(
+            p.get(
+                "tipo",
+                ""
+            )
+        ).upper() != "TUG":
             continue
+
         amb = _normalizar_nome(
-            p.get("ambiente")
+            p.get(
+                "ambiente"
+            )
         )
-        if not amb or not p.get("ponto"):
+
+        if (
+            not amb
+            or not p.get(
+                "ponto"
+            )
+        ):
             continue
+
         tug_por_ambiente.setdefault(
             amb,
             []
-        ).append(p)
+        ).append(
+            p
+        )
 
     for amb in tug_por_ambiente:
-        tug_por_ambiente[amb].sort(
+        tug_por_ambiente[
+            amb
+        ].sort(
             key=lambda p: (
                 int(
                     p.get(
@@ -1068,11 +1183,15 @@ def _arestas_tugs_internas(
             )
         )
 
-    int_por_ambiente = {}
+    ints_por_ambiente = {}
+
     for p in pontos_interruptores or []:
         amb = _normalizar_nome(
-            p.get("ambiente")
+            p.get(
+                "ambiente"
+            )
         )
+
         pt = (
             p.get(
                 "ponto_tangencia"
@@ -1081,16 +1200,26 @@ def _arestas_tugs_internas(
                 "ponto"
             )
         )
+
         if amb and pt:
-            int_por_ambiente.setdefault(
+            ints_por_ambiente.setdefault(
                 amb,
+                []
+            ).append(
                 tuple(pt)
             )
 
     tug_circuitos = {}
+
     for c in circuitos or []:
-        if str(c.get("tipo", "")).upper() != "TUG":
+        if str(
+            c.get(
+                "tipo",
+                ""
+            )
+        ).upper() != "TUG":
             continue
+
         numero = int(
             c.get(
                 "numero",
@@ -1098,30 +1227,94 @@ def _arestas_tugs_internas(
             )
             or 0
         )
-        for amb in _ambientes_circuito(c):
+
+        for amb in _ambientes_circuito(
+            c
+        ):
             tug_circuitos.setdefault(
-                _normalizar_nome(amb),
+                _normalizar_nome(
+                    amb
+                ),
                 set()
-            ).add(numero)
+            ).add(
+                numero
+            )
 
     arestas = []
 
+    # Primeiro conecta TODOS os interruptores existentes.
+    for ambiente, interruptores in ints_por_ambiente.items():
+        luzes = luminarias_por_ambiente.get(
+            ambiente,
+            []
+        )
+
+        principal = principal_por_ambiente.get(
+            ambiente
+        )
+
+        if not luzes and principal:
+            luzes = [principal]
+
+        if not luzes:
+            continue
+
+        circuitos_amb = set(
+            tug_circuitos.get(
+                ambiente,
+                set()
+            )
+        )
+
+        for indice_int, interruptor in enumerate(
+            interruptores,
+            start=1
+        ):
+            origem_luz = min(
+                luzes,
+                key=lambda pt:
+                    _dist(
+                        pt,
+                        interruptor
+                    )
+            )
+
+            arestas.append({
+                "origem_ambiente":
+                    ambiente,
+                "destino_ambiente":
+                    ambiente,
+                "inicio":
+                    origem_luz,
+                "fim":
+                    interruptor,
+                "circuitos":
+                    circuitos_amb,
+                "criterio":
+                    (
+                        "LUZ_PARA_INTERRUPTOR"
+                        if len(interruptores) == 1
+                        else "LUZ_PARA_INTERRUPTOR_PARALELO"
+                    ),
+                "indice_interruptor":
+                    indice_int,
+            })
+
+    # Depois cria a cadeia das TUGs.
     for ambiente, tugs in tug_por_ambiente.items():
         if not tugs:
             continue
 
-        principal = (
-            principal_por_ambiente.get(
-                ambiente
-            )
+        principal = principal_por_ambiente.get(
+            ambiente
         )
+
         if principal is None:
             continue
 
-        interruptor = (
-            int_por_ambiente.get(
-                ambiente
-            )
+        interruptores = ints_por_ambiente.get(
+            ambiente,
+            []
         )
 
         circuitos_amb = set(
@@ -1131,31 +1324,37 @@ def _arestas_tugs_internas(
             )
         )
 
-        atual = principal
+        primeira_tug = (
+            tugs[0].get(
+                "ponto_conexao_parede"
+            )
+            or tugs[0].get(
+                "ponto"
+            )
+        )
 
-        if interruptor is not None:
-            arestas.append({
-                "origem_ambiente":
-                    ambiente,
-                "destino_ambiente":
-                    ambiente,
-                "inicio":
-                    atual,
-                "fim":
-                    interruptor,
-                "circuitos":
-                    circuitos_amb,
-                "criterio":
-                    "LUZ_PARA_INTERRUPTOR",
-            })
-            atual = interruptor
+        if interruptores:
+            interruptor_inicio = min(
+                interruptores,
+                key=lambda pt:
+                    _dist(
+                        pt,
+                        primeira_tug
+                    )
+            )
+            atual = interruptor_inicio
+        else:
+            interruptor_inicio = None
+            atual = principal
 
         for indice, tug in enumerate(
             tugs,
             start=1
         ):
             destino = tuple(
-                tug.get("ponto_conexao_parede")
+                tug.get(
+                    "ponto_conexao_parede"
+                )
                 or tug["ponto"]
             )
 
@@ -1174,19 +1373,18 @@ def _arestas_tugs_internas(
                     (
                         "INTERRUPTOR_PARA_TUG1"
                         if indice == 1
-                        and interruptor is not None
-                        else "CADEIA_TUG"
+                        and interruptor_inicio is not None
+                        else (
+                            "LUZ_PARA_TUG1"
+                            if indice == 1
+                            else "CADEIA_TUG"
+                        )
                     ),
                 "tug_destino":
                     tug,
             }
 
-            if (
-                indice > 1
-                and tugs[
-                    indice - 2
-                ]
-            ):
+            if indice > 1:
                 aresta[
                     "tug_origem"
                 ] = tugs[
@@ -1202,13 +1400,104 @@ def _arestas_tugs_internas(
     return arestas
 
 
+def _ambiente_sem_interruptor_proprio_rota(
+    nome
+):
+    n = _normalizar_nome(
+        nome
+    )
+
+    return any(
+        termo in n
+        for termo in [
+            "VARANDA",
+            "TERRACO",
+            "TERRAÇO",
+            "GARAGEM",
+        ]
+    )
+
+
+def _arestas_iluminacao_ambiente_controlado(
+    pontos_eletricos
+):
+    """
+    Fase 11.5 Rev.1.
+
+    Ambientes externos sem interruptor próprio (varanda/terraço/garagem)
+    recebem ligação a partir da luminária mais próxima de outro ambiente,
+    representando o comando feito pelo ambiente interno adjacente.
+
+    A escolha é geométrica e privilegia o ponto de luz vizinho mais próximo.
+    """
+    luminarias = _luminarias_por_ambiente(
+        pontos_eletricos
+    )
+
+    saida = []
+
+    for ambiente, luzes in luminarias.items():
+        if not _ambiente_sem_interruptor_proprio_rota(
+            ambiente
+        ):
+            continue
+
+        candidatos = []
+
+        for outro_ambiente, outras_luzes in luminarias.items():
+            if outro_ambiente == ambiente:
+                continue
+
+            if _ambiente_sem_interruptor_proprio_rota(
+                outro_ambiente
+            ):
+                continue
+
+            for luz_origem in outras_luzes:
+                for luz_destino in luzes:
+                    candidatos.append((
+                        _dist(
+                            luz_origem,
+                            luz_destino
+                        ),
+                        outro_ambiente,
+                        tuple(luz_origem),
+                        tuple(luz_destino),
+                    ))
+
+        if not candidatos:
+            continue
+
+        _, controlador, origem, destino = min(
+            candidatos,
+            key=lambda item:
+                item[0]
+        )
+
+        saida.append({
+            "origem_ambiente":
+                controlador,
+            "destino_ambiente":
+                ambiente,
+            "inicio":
+                origem,
+            "fim":
+                destino,
+            "circuitos":
+                set(),
+            "criterio":
+                "ILUMINACAO_AMBIENTE_CONTROLADO",
+        })
+
+    return saida
+
 
 def _arestas_tues_dedicadas(
     pontos_eletricos,
     circuitos
 ):
     """
-    Fase 11.5 — ramais dedicados das TUEs.
+    Fase 11.5 Rev.1 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -1380,7 +1669,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 11.5
+    Fase 11.5 Rev.1
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -1472,6 +1761,12 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
+    iluminacao_controlada = (
+        _arestas_iluminacao_ambiente_controlado(
+            pontos_eletricos
+        )
+    )
+
     geometria_ambiente = {}
     for item in (ambientes_geom or []):
         chave = _normalizar_nome(
@@ -1494,6 +1789,7 @@ def desenhar_rotas_qdc_iluminacao(
         + secundarias
         + tugs_internas
         + tues_dedicadas
+        + iluminacao_controlada
     )
 
     for indice, trecho in enumerate(
@@ -1641,7 +1937,9 @@ def desenhar_rotas_qdc_iluminacao(
                         if trecho.get("criterio")
                         in {
                             "LUZ_PARA_INTERRUPTOR",
+                            "LUZ_PARA_INTERRUPTOR_PARALELO",
                             "INTERRUPTOR_PARA_TUG1",
+                            "LUZ_PARA_TUG1",
                             "CADEIA_TUG",
                             "REINICIO_TUG_APOS_VAO",
                         }
@@ -1649,7 +1947,12 @@ def desenhar_rotas_qdc_iluminacao(
                             "TUE_DEDICADA"
                             if trecho.get("criterio")
                             == "LUMINARIA_PARA_TUE"
-                            else "TRONCAL_HIBRIDA"
+                            else (
+                                "ILUMINACAO_CONTROLADA"
+                                if trecho.get("criterio")
+                                == "ILUMINACAO_AMBIENTE_CONTROLADO"
+                                else "TRONCAL_HIBRIDA"
+                            )
                         )
                     )
                 ),
