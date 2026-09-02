@@ -461,7 +461,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 10.5:
+                # Fase 10.6:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -511,7 +511,7 @@ def gerar_cad_unifilar(
         
         
         # ====================================================
-        # FASE 10.5 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # FASE 10.6 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
         # ====================================================
         _, circuitos_unifilar = calcular_quantitativo_materiais(
             tabela_editada=dados_editados,

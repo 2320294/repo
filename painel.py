@@ -52,6 +52,8 @@ from exportacoes import (
 )
 
 
+from guia_importacao import renderizar_guia_preparacao_planta
+
 def _chave_projeto(
     sufixo
 ):
@@ -216,6 +218,7 @@ def renderizar_painel_principal():
             "👈 Selecione um projeto na barra lateral "
             "ou cadastre um novo."
         )
+        renderizar_guia_preparacao_planta()
         st.stop()
 
     st.info(
@@ -569,7 +572,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 10.5. O DG depende da validação "
+                "Pré-dimensionamento da Fase 10.6. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 
