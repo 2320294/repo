@@ -1337,7 +1337,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_8_21.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_0.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -1346,7 +1346,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_8_21.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_9_0.pdf",
             mime="application/pdf",
             use_container_width=True
         )

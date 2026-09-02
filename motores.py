@@ -38,12 +38,22 @@ from eletrodutos_cad import (
     desenhar_rede_eletrodutos
 )
 
+from materiais import (
+    calcular_quantitativo_materiais
+)
+
+from unifilar_qdc import (
+    desenhar_unifilar_qdc
+)
+
 
 def gerar_cad_unifilar(
     dxf_bytes,
     dados_editados,
     local_qdc,
-    config_interruptores=None
+    config_interruptores=None,
+    tensao_projeto=220,
+    pe_direito=2.80
 ):
     tmp_in_path = ""
 
@@ -80,6 +90,8 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_ELETRODUTO": 3,
             "PROJ_ELETRICA_ELETRODUTO_TEXTO": 3,
             "PROJ_ELETRICA_COMANDO": 6,
+            "PROJ_ELETRICA_UNIFILAR_QDC": 7,
+            "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO": 7,
             "AE_VERSAO": 8
         }
 
@@ -118,6 +130,8 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_ELETRODUTO",
                     "PROJ_ELETRICA_ELETRODUTO_TEXTO",
                     "PROJ_ELETRICA_COMANDO",
+                    "PROJ_ELETRICA_UNIFILAR_QDC",
+                    "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO",
                     "AE_VERSAO"
                 }:
                     msp.delete_entity(ent)
@@ -427,7 +441,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 8.21:
+                # Fase 9.0:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -476,6 +490,24 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
         
         
+        # ====================================================
+        # FASE 9.0 — DIAGRAMA UNIFILAR PRELIMINAR DO QDC
+        # ====================================================
+        _, circuitos_unifilar = calcular_quantitativo_materiais(
+            tabela_editada=dados_editados,
+            config_interruptores_usuario=(config_interruptores or {}),
+            local_qdc=local_qdc,
+            tensao_projeto=tensao_projeto,
+            pe_direito=pe_direito
+        )
+
+        desenhar_unifilar_qdc(
+            msp=msp,
+            circuitos=circuitos_unifilar,
+            polilinhas_ambientes=polilinhas,
+            tensao_projeto=tensao_projeto
+        )
+
         doc.saveas(
             tmp_in_path
         )
