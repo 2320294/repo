@@ -189,6 +189,148 @@ def procurar_ponto_valido_perimetro(
     return None
 
 
+
+def _selecao_tomada_alta(
+    config_tomadas_altas,
+    ambiente,
+    indice
+):
+    if not isinstance(
+        config_tomadas_altas,
+        dict
+    ):
+        return None
+
+    lista = (
+        config_tomadas_altas.get(
+            ambiente
+        )
+        or []
+    )
+
+    if (
+        not isinstance(
+            lista,
+            list
+        )
+        or indice >= len(
+            lista
+        )
+    ):
+        return None
+
+    item = lista[
+        indice
+    ]
+
+    return (
+        item
+        if isinstance(
+            item,
+            dict
+        )
+        else None
+    )
+
+
+def _parede_e_centro_selecionados(
+    logical_walls,
+    selecao
+):
+    if not selecao:
+        return None
+
+    try:
+        numero = int(
+            selecao.get(
+                "parede_numero"
+            )
+        )
+
+        t0 = float(
+            selecao.get(
+                "t0"
+            )
+        )
+
+        t1 = float(
+            selecao.get(
+                "t1"
+            )
+        )
+    except Exception:
+        return None
+
+    if not (
+        1 <= numero
+        <= len(
+            logical_walls
+        )
+    ):
+        return None
+
+    parede = (
+        logical_walls[
+            numero - 1
+        ]
+    )
+
+    t0 = max(
+        0.0,
+        min(
+            1.0,
+            t0
+        )
+    )
+
+    t1 = max(
+        0.0,
+        min(
+            1.0,
+            t1
+        )
+    )
+
+    if t1 < t0:
+        t0, t1 = (
+            t1,
+            t0
+        )
+
+    tm = (
+        t0 + t1
+    ) / 2.0
+
+    pt1 = parede[
+        "p1"
+    ]
+    pt2 = parede[
+        "p2"
+    ]
+
+    px = (
+        pt1[0]
+        + (
+            pt2[0]
+            - pt1[0]
+        ) * tm
+    )
+
+    py = (
+        pt1[1]
+        + (
+            pt2[1]
+            - pt1[1]
+        ) * tm
+    )
+
+    return (
+        parede,
+        px,
+        py
+    )
+
+
 def desenhar_tomadas(
     msp,
     row_data,
@@ -201,7 +343,8 @@ def desenhar_tomadas(
     portas_raw,
     soleiras_raw,
     centro_x,
-    centro_y
+    centro_y,
+    config_tomadas_altas=None
 ):
     if not row_data:
         return []
@@ -287,7 +430,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 8.4 — classificação por altura preservada da Fase 8.3.
+    # Fase 8.5 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -363,45 +506,85 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            p_alvo = paredes_finais[
-                idx_tue
-                %
-                len(paredes_finais)
-            ]
+            # Fase 8.5:
+            # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
+            selecao_alta = (
+                _selecao_tomada_alta(
+                    config_tomadas_altas,
+                    nome,
+                    idx_tue
+                )
+                if altura_tue
+                == "ALTA"
+                else None
+            )
 
-            pt1 = p_alvo["p1"]
-            pt2 = p_alvo["p2"]
-
-            fator = (
-                0.5
-                if qtd_tue == 1
-                else (
-                    idx_tue + 1
-                ) / (
-                    qtd_tue + 1
+            escolhido = (
+                _parede_e_centro_selecionados(
+                    logical_walls,
+                    selecao_alta
                 )
             )
 
-            px = (
-                pt1[0]
-                +
-                (pt2[0] - pt1[0])
-                * fator
-            )
+            if escolhido is not None:
+                p_alvo, px, py = (
+                    escolhido
+                )
+                posicao_interativa = True
+            else:
+                p_alvo = paredes_finais[
+                    idx_tue
+                    %
+                    len(paredes_finais)
+                ]
 
-            py = (
-                pt1[1]
-                +
-                (pt2[1] - pt1[1])
-                * fator
-            )
+                pt1 = p_alvo["p1"]
+                pt2 = p_alvo["p2"]
 
-            if not ponto_tomada_valido(
+                fator = (
+                    0.5
+                    if qtd_tue == 1
+                    else (
+                        idx_tue + 1
+                    ) / (
+                        qtd_tue + 1
+                    )
+                )
+
+                px = (
+                    pt1[0]
+                    +
+                    (
+                        pt2[0]
+                        - pt1[0]
+                    )
+                    * fator
+                )
+
+                py = (
+                    pt1[1]
+                    +
+                    (
+                        pt2[1]
+                        - pt1[1]
+                    )
+                    * fator
+                )
+
+                posicao_interativa = False
+
+            # Se o usuário escolheu explicitamente um trecho livre,
+            # não deslocamos a tomada para outra parede. O centro do
+            # trecho já foi calculado descontando as portas.
+            if (
+                not posicao_interativa
+                and not ponto_tomada_valido(
                 px,
                 py,
                 polilinha,
                 portas_raw,
-                soleiras_raw
+                    soleiras_raw
+                )
             ):
                 encontrado = None
 
@@ -532,6 +715,11 @@ def desenhar_tomadas(
                 "equipamento": eq_tue_nome,
                 "altura": altura_tue,
                 "grupo_distribuicao": f"TOMADA_{altura_tue}",
+                "posicionamento_interativo": (
+                    bool(
+                        posicao_interativa
+                    )
+                ),
             })
 
     # TUG

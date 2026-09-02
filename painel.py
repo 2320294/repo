@@ -19,6 +19,11 @@ from interruptores import (
     renderizar_interruptores
 )
 
+from tomadas_altas import (
+    renderizar_tomadas_altas,
+    CHAVE_CONFIG as CHAVE_TOMADAS_ALTAS
+)
+
 from materiais import (
     renderizar_materiais
 )
@@ -181,6 +186,20 @@ def renderizar_painel_principal():
             dxf_bytes=dxf_bytes
         )
     )
+
+    # Fase 8.5 — as tomadas altas usam a mesma persistência
+    # do bloco de configuração para evitar alteração de schema no banco.
+    config_tomadas_altas = (
+        renderizar_tomadas_altas(
+            tabela_editada,
+            config_salva,
+            dxf_bytes=dxf_bytes
+        )
+    )
+
+    config_interruptores_usuario[
+        CHAVE_TOMADAS_ALTAS
+    ] = config_tomadas_altas
 
     renderizar_materiais(
         tabela_editada,

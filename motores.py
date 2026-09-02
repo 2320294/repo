@@ -435,7 +435,16 @@ def gerar_cad_unifilar(
                 portas_raw=portas_raw,
                 soleiras_raw=soleiras_raw,
                 centro_x=centro_x,
-                centro_y=centro_y
+                centro_y=centro_y,
+                config_tomadas_altas=(
+                    (
+                        config_interruptores
+                        or {}
+                    ).get(
+                        "__tomadas_altas__",
+                        {}
+                    )
+                )
             )
 
             if pontos_tomadas:
