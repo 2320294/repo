@@ -469,7 +469,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 11.1:
+                # Fase 11.2:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -501,7 +501,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 11.1 — CIRCUITOS CONSOLIDADOS + ROTEAMENTO FÍSICO INICIAL
+        # FASE 11.2 — REDE TRONCAL COMPARTILHADA
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -548,9 +548,10 @@ def gerar_cad_unifilar(
             resumo_drs_unifilar
         )
 
-        # Primeiro caminho físico:
-        # QDC -> ponto de iluminação/distribuição dos ambientes do circuito.
-        # O desenho é feito exclusivamente com entidades ARC de baixa curvatura.
+        # Rede física compartilhada:
+        # QDC -> árvore troncal -> pontos de iluminação/distribuição.
+        # Cada trecho físico é desenhado uma única vez, mesmo quando
+        # transporta vários circuitos. Somente entidades ARC.
         desenhar_rotas_qdc_iluminacao(
             msp=msp,
             qdc_info=qdc_info,
