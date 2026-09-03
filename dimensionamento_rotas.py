@@ -550,7 +550,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 12.1 REV.2 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.2 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -818,7 +818,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 12.1 Rev.2.
+    Fase 12.2.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1023,7 +1023,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 12.1 Rev.2.
+    Validação preliminar da Fase 12.2.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1288,7 +1288,7 @@ def validar_eletrica_rotas(
 
 
 # ============================================================
-# FASE 12.1 REV.2 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# FASE 12.2 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
 # ============================================================
 
 def _prioridade_agrupamento(qtd_circuitos):
@@ -1318,7 +1318,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 12.1 Rev.2.
+    Fase 12.2.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1610,7 +1610,7 @@ def diagnosticar_agrupamento_rotas(
 
 
 # ============================================================
-# FASE 12.1 REV.2 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
+# FASE 12.2 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
 # ============================================================
 
 # Referências internas preliminares para cobre/PVC 70 °C.
@@ -1726,17 +1726,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """
-    Fase 12.1 Rev.2.
-
-    Verifica preliminarmente a capacidade de condução usando:
-    - método B1 ou B2;
-    - cobre/PVC 70 °C;
-    - fator de temperatura;
-    - fator de agrupamento conforme maior concentração física encontrada.
-
-    NÃO altera automaticamente a bitola nesta fase.
-    """
+    """Fase 12.2: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -1744,45 +1734,104 @@ def verificar_capacidade_conducao_preliminar(
     fator_temp, temp_ref = _fator_temperatura_preliminar(
         temperatura_ambiente_c
     )
+    tabela = CAPACIDADE_REFERENCIA_A[metodo]
 
-    diag_por_numero = {
-        int(i.get("numero", 0) or 0): i
-        for i in (
-            (diagnostico_agrupamento or {}).get("circuitos", [])
-            or []
-        )
-        if int(i.get("numero", 0) or 0) > 0
+    circuitos_por_numero = {
+        int(c.get("numero", 0) or 0): c
+        for c in (circuitos or [])
+        if int(c.get("numero", 0) or 0) > 0
     }
+
+    resultados_trechos = []
+    for trecho in ((diagnostico_agrupamento or {}).get("trechos", []) or []):
+        numeros = [
+            int(n)
+            for n in (trecho.get("circuitos", []) or [])
+            if int(n) > 0
+        ]
+        qtd = max(
+            1,
+            int(
+                trecho.get("qtd_circuitos", len(numeros))
+                or len(numeros)
+                or 1
+            )
+        )
+        fator_agr = _fator_agrupamento_preliminar(qtd)
+
+        for numero in numeros:
+            circuito = circuitos_por_numero.get(numero)
+            if not circuito:
+                continue
+
+            corrente = _numero(circuito.get("corrente", 0.0))
+            bitola = _bitola(circuito)
+            iz_base = float(tabela.get(bitola, 0.0) or 0.0)
+            iz_corrigida = iz_base * fator_agr * fator_temp
+
+            if iz_base <= 0:
+                status = "SEM REFERÊNCIA"
+            elif iz_corrigida + 1e-9 >= corrente:
+                status = "OK"
+            else:
+                status = "ATENÇÃO"
+
+            resultados_trechos.append({
+                "trecho_id": trecho.get("trecho_id"),
+                "numero": numero,
+                "tipo": circuito.get("tipo", ""),
+                "ambiente": circuito.get("ambiente", ""),
+                "comprimento_trecho_m": round(
+                    _numero(trecho.get("comprimento_m", 0.0)),
+                    2
+                ),
+                "qtd_circuitos_agrupados": qtd,
+                "fator_agrupamento": round(fator_agr, 3),
+                "fator_temperatura": round(fator_temp, 3),
+                "corrente_a": round(corrente, 2),
+                "bitola_atual_mm2": bitola,
+                "iz_base_a": round(iz_base, 2),
+                "iz_corrigida_a": round(iz_corrigida, 2),
+                "status": status,
+            })
 
     resultados = []
     alertas = 0
 
-    for circuito in (circuitos or []):
-        numero = int(circuito.get("numero", 0) or 0)
-        if numero <= 0:
-            continue
-
-        diag = diag_por_numero.get(numero, {})
-        qtd_agrupada = max(
-            1,
-            int(diag.get("max_circuitos_compartilhados", 1) or 1)
-        )
-
-        fator_agr = _fator_agrupamento_preliminar(qtd_agrupada)
-
+    for numero in sorted(circuitos_por_numero):
+        circuito = circuitos_por_numero[numero]
         corrente = _numero(circuito.get("corrente", 0.0))
-        bitola_atual = _bitola(circuito)
+        bitola = _bitola(circuito)
 
-        tabela = CAPACIDADE_REFERENCIA_A[metodo]
-        iz_base = float(tabela.get(bitola_atual, 0.0) or 0.0)
-        iz_corrigida = iz_base * fator_agr * fator_temp
+        trechos_circuito = [
+            t for t in resultados_trechos
+            if int(t.get("numero", 0) or 0) == numero
+        ]
+
+        if trechos_circuito:
+            trecho_critico = min(
+                trechos_circuito,
+                key=lambda t: float(t.get("iz_corrigida_a", 0.0) or 0.0)
+            )
+            fator_agr = float(trecho_critico.get("fator_agrupamento", 1.0) or 1.0)
+            iz_base = float(trecho_critico.get("iz_base_a", 0.0) or 0.0)
+            iz_corrigida = float(trecho_critico.get("iz_corrigida_a", 0.0) or 0.0)
+        else:
+            fator_agr = 1.0
+            iz_base = float(tabela.get(bitola, 0.0) or 0.0)
+            iz_corrigida = iz_base * fator_temp
+            trecho_critico = {
+                "trecho_id": None,
+                "comprimento_trecho_m": 0.0,
+                "qtd_circuitos_agrupados": 1,
+            }
 
         secao_rec, iz_rec = _secao_recomendada_capacidade(
             corrente_a=corrente,
             metodo_instalacao=metodo,
             fator_agrupamento=fator_agr,
             fator_temperatura=fator_temp,
-            secao_minima=bitola_atual,
+            secao_minima=bitola,
         )
 
         if iz_base <= 0:
@@ -1798,10 +1847,18 @@ def verificar_capacidade_conducao_preliminar(
             "tipo": circuito.get("tipo", ""),
             "ambiente": circuito.get("ambiente", ""),
             "corrente_a": round(corrente, 2),
-            "bitola_atual_mm2": bitola_atual,
+            "bitola_atual_mm2": bitola,
             "metodo_instalacao": metodo,
             "temperatura_ref_c": temp_ref,
-            "qtd_circuitos_agrupados": qtd_agrupada,
+            "trecho_critico_id": trecho_critico.get("trecho_id"),
+            "comprimento_trecho_critico_m": round(
+                _numero(trecho_critico.get("comprimento_trecho_m", 0.0)),
+                2
+            ),
+            "qtd_circuitos_agrupados": max(
+                1,
+                int(trecho_critico.get("qtd_circuitos_agrupados", 1) or 1)
+            ),
             "fator_agrupamento": round(fator_agr, 3),
             "fator_temperatura": round(fator_temp, 3),
             "iz_base_a": round(iz_base, 2),
@@ -1819,8 +1876,13 @@ def verificar_capacidade_conducao_preliminar(
         "fator_temperatura": round(fator_temp, 3),
         "qtd_alertas": alertas,
         "circuitos": resultados,
+        "trechos": resultados_trechos,
+        "criterio_governante": (
+            "Menor Iz corrigida entre os trechos físicos em que "
+            "cada circuito realmente passa."
+        ),
         "observacao": (
-            "Verificação preliminar de capacidade de condução para cobre/PVC "
-            "70 °C. A bitola não é alterada automaticamente nesta fase."
+            "Verificação preliminar trecho a trecho para cobre/PVC 70 °C. "
+            "A bitola não é alterada automaticamente nesta fase."
         ),
     }

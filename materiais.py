@@ -891,17 +891,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.1 REV.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.1 Rev.2/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.2/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.1 Rev.2 — se o CAD desta versão já calculou correções por
+    # Fase 12.2 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1258,7 +1258,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.1 REV.2 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.2 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1450,7 +1450,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.1 Rev.2: dados estruturais usados pelo roteamento continuam
+        # Fase 12.2: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1459,7 +1459,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
     return materiais_df, circuitos_df
 
 
-def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None):
+def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None, trechos_capacidade_df=None):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         materiais_df.to_excel(writer, sheet_name="Materiais", index=False)
@@ -1531,6 +1531,22 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=No
                 (
                     "Capacidade_Conducao",
                     capacidade_df
+                )
+            )
+
+        if (
+            trechos_capacidade_df is not None
+            and not trechos_capacidade_df.empty
+        ):
+            trechos_capacidade_df.to_excel(
+                writer,
+                sheet_name="Capacidade_Trechos",
+                index=False
+            )
+            abas.append(
+                (
+                    "Capacidade_Trechos",
+                    trechos_capacidade_df
                 )
             )
 
@@ -1620,7 +1636,7 @@ def _tabela_resumo_pdf(linhas, largura_total=26.5*cm):
 def _gerar_pdf_materiais_circuitos(
     nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito,
     resumo_balanceamento=None, resumo_protecao=None, resumo_drs=None,
-    resultado_demanda=None, parametros_rede=None, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None
+    resultado_demanda=None, parametros_rede=None, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None, trechos_capacidade_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -2042,6 +2058,67 @@ def _gerar_pdf_materiais_circuitos(
             )
         )
 
+    if (
+        trechos_capacidade_df is not None
+        and not trechos_capacidade_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "10. CAPACIDADE DE CONDUÇÃO POR TRECHO FÍSICO",
+                secao
+            )
+        ]
+
+        cols_trechos_pdf = [
+            c
+            for c in [
+                "Trecho",
+                "Nº",
+                "Circuito",
+                "Ambiente",
+                "Comprimento (m)",
+                "Circuitos no trecho",
+                "Fator agrup.",
+                "Ib (A)",
+                "Bitola (mm²)",
+                "Iz corrigida (A)",
+                "Status",
+            ]
+            if c in trechos_capacidade_df.columns
+        ]
+
+        larguras_trechos = {
+            "Trecho": 1.0*cm,
+            "Nº": 0.7*cm,
+            "Circuito": 1.4*cm,
+            "Ambiente": 3.0*cm,
+            "Comprimento (m)": 1.6*cm,
+            "Circuitos no trecho": 1.8*cm,
+            "Fator agrup.": 1.4*cm,
+            "Ib (A)": 1.1*cm,
+            "Bitola (mm²)": 1.4*cm,
+            "Iz corrigida (A)": 1.7*cm,
+            "Status": 1.3*cm,
+        }
+
+        story.append(
+            _pdf_tabela(
+                trechos_capacidade_df[cols_trechos_pdf],
+                [larguras_trechos.get(c, 1.5*cm) for c in cols_trechos_pdf],
+                fonte=5.5
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "O agrupamento é calculado somente nos trechos em que os "
+                "circuitos realmente compartilham o mesmo caminho. O trecho "
+                "governante é aquele que apresenta a menor Iz corrigida.",
+                texto
+            )
+        )
+
     story += [
         Spacer(1,8),
         Paragraph(
@@ -2108,7 +2185,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.1 Rev.2:
+    # Fase 12.2:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2235,7 +2312,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.1 Rev.2: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.2: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2579,7 +2656,7 @@ def renderizar_materiais(
         )
 
         st.caption(
-            "Fase 12.1 Rev.2: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.2: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -2687,6 +2764,8 @@ definir explicitamente outro método de instalação.
                     "bitola_atual_mm2": "Bitola atual (mm²)",
                     "metodo_instalacao": "Método",
                     "temperatura_ref_c": "Temp. ref. (°C)",
+                    "trecho_critico_id": "Trecho crítico",
+                    "comprimento_trecho_critico_m": "Comp. trecho crítico (m)",
                     "qtd_circuitos_agrupados": "Circuitos agrupados",
                     "fator_agrupamento": "Fator agrup.",
                     "fator_temperatura": "Fator temp.",
@@ -2706,6 +2785,8 @@ definir explicitamente outro método de instalação.
                     "Ib (A)",
                     "Bitola atual (mm²)",
                     "Método",
+                    "Trecho crítico",
+                    "Comp. trecho crítico (m)",
                     "Circuitos agrupados",
                     "Fator agrup.",
                     "Fator temp.",
@@ -2724,6 +2805,75 @@ definir explicitamente outro método de instalação.
                 use_container_width=True,
                 hide_index=True
             )
+
+        dados_trechos_capacidade = (
+            capacidade_preliminar.get(
+                "trechos",
+                []
+            )
+            or []
+        )
+
+        if dados_trechos_capacidade:
+            with st.expander(
+                "🔎 Ver análise trecho a trecho",
+                expanded=False
+            ):
+                st.caption(
+                    "O agrupamento abaixo é calculado somente nos trechos "
+                    "físicos em que os circuitos realmente coexistem. "
+                    "O trecho crítico é aquele que produz a menor Iz corrigida."
+                )
+
+                df_trechos_capacidade = pd.DataFrame(
+                    dados_trechos_capacidade
+                ).rename(
+                    columns={
+                        "trecho_id": "Trecho",
+                        "numero": "Nº",
+                        "tipo": "Circuito",
+                        "ambiente": "Ambiente",
+                        "comprimento_trecho_m": "Comprimento (m)",
+                        "qtd_circuitos_agrupados": "Circuitos no trecho",
+                        "fator_agrupamento": "Fator agrup.",
+                        "fator_temperatura": "Fator temp.",
+                        "corrente_a": "Ib (A)",
+                        "bitola_atual_mm2": "Bitola (mm²)",
+                        "iz_base_a": "Iz base (A)",
+                        "iz_corrigida_a": "Iz corrigida (A)",
+                        "status": "Status",
+                    }
+                )
+
+                cols_trechos = [
+                    c
+                    for c in [
+                        "Trecho",
+                        "Nº",
+                        "Circuito",
+                        "Ambiente",
+                        "Comprimento (m)",
+                        "Circuitos no trecho",
+                        "Fator agrup.",
+                        "Ib (A)",
+                        "Bitola (mm²)",
+                        "Iz corrigida (A)",
+                        "Status",
+                    ]
+                    if c in df_trechos_capacidade.columns
+                ]
+
+                st.dataframe(
+                    df_trechos_capacidade[cols_trechos],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        st.info(
+            "Fase 12.2: um trecho com 7 circuitos não faz o sistema assumir "
+            "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
+            "separadamente e o circuito informa qual trecho é o governante."
+        )
 
         qtd_alertas_capacidade = int(
             capacidade_preliminar.get(
@@ -2757,7 +2907,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.1 Rev.2: os circuitos abaixo já são consolidados. "
+        "Fase 12.2: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -2779,6 +2929,7 @@ definir explicitamente outro método de instalação.
     correcoes_export_df = None
     agrupamento_export_df = None
     capacidade_export_df = None
+    trechos_capacidade_export_df = None
 
     if resumo_rotas:
         dados_validacao_export = (
@@ -2910,6 +3061,8 @@ definir explicitamente outro método de instalação.
                     "bitola_atual_mm2": "Bitola atual (mm²)",
                     "metodo_instalacao": "Método",
                     "temperatura_ref_c": "Temp. ref. (°C)",
+                    "trecho_critico_id": "Trecho crítico",
+                    "comprimento_trecho_critico_m": "Comp. trecho crítico (m)",
                     "qtd_circuitos_agrupados": "Circuitos agrupados",
                     "fator_agrupamento": "Fator agrup.",
                     "fator_temperatura": "Fator temp.",
@@ -2920,6 +3073,42 @@ definir explicitamente outro método de instalação.
                     "status": "Status",
                 }
             )
+
+        dados_trechos_capacidade_export = (
+            (
+                resumo_rotas.get(
+                    "capacidade_conducao_preliminar",
+                    {}
+                )
+                or {}
+            ).get(
+                "trechos",
+                []
+            )
+            or []
+        )
+
+        if dados_trechos_capacidade_export:
+            trechos_capacidade_export_df = pd.DataFrame(
+                dados_trechos_capacidade_export
+            ).rename(
+                columns={
+                    "trecho_id": "Trecho",
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "comprimento_trecho_m": "Comprimento (m)",
+                    "qtd_circuitos_agrupados": "Circuitos no trecho",
+                    "fator_agrupamento": "Fator agrup.",
+                    "fator_temperatura": "Fator temp.",
+                    "corrente_a": "Ib (A)",
+                    "bitola_atual_mm2": "Bitola (mm²)",
+                    "iz_base_a": "Iz base (A)",
+                    "iz_corrigida_a": "Iz corrigida (A)",
+                    "status": "Status",
+                }
+            )
+
 
     nome_projeto = str(
         st.session_state.get(
@@ -2935,7 +3124,8 @@ definir explicitamente outro método de instalação.
         validacao_df=validacao_export_df,
         correcoes_df=correcoes_export_df,
         agrupamento_df=agrupamento_export_df,
-        capacidade_df=capacidade_export_df
+        capacidade_df=capacidade_export_df,
+        trechos_capacidade_df=trechos_capacidade_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -2951,7 +3141,8 @@ definir explicitamente outro método de instalação.
         validacao_df=validacao_export_df,
         correcoes_df=correcoes_export_df,
         agrupamento_df=agrupamento_export_df,
-        capacidade_df=capacidade_export_df
+        capacidade_df=capacidade_export_df,
+        trechos_capacidade_df=trechos_capacidade_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -2960,7 +3151,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_2.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_2.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -2969,7 +3160,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_2.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_2.pdf",
             mime="application/pdf",
             use_container_width=True
         )

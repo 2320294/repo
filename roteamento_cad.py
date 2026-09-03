@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 12.1 Rev.2 — rede híbrida com múltiplas saídas do QDC.
+    Fase 12.2 — rede híbrida com múltiplas saídas do QDC.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -1153,7 +1153,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 12.1 Rev.2:
+    Fase 12.2:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1182,7 +1182,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 12.1 Rev.2
+    Fase 12.2
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -1795,7 +1795,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 12.1 Rev.2.
+    Fase 12.2.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -1963,7 +1963,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 12.1 Rev.2 — ramais dedicados das TUEs.
+    Fase 12.2 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2135,7 +2135,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 12.1 Rev.2
+    Fase 12.2
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
