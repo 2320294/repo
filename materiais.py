@@ -891,17 +891,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.1 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.1 Rev.1/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.1 — se o CAD desta versão já calculou correções por
+    # Fase 12.1 Rev.1 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1258,7 +1258,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.1 REV.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1450,7 +1450,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.1: dados estruturais usados pelo roteamento continuam
+        # Fase 12.1 Rev.1: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2108,7 +2108,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.1:
+    # Fase 12.1 Rev.1:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2235,7 +2235,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.1 Rev.1: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2579,7 +2579,7 @@ def renderizar_materiais(
         )
 
         st.caption(
-            "Fase 12.1: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.1 Rev.1: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -2588,19 +2588,25 @@ def renderizar_materiais(
         col_metodo, col_temp = st.columns(2)
 
         with col_metodo:
-            metodo_capacidade = st.selectbox(
-                "Método de instalação de referência:",
-                [
-                    "B1",
-                    "B2",
-                ],
+            opcoes_metodo = {
+                "B1 — Condutores isolados em eletroduto embutido na parede": "B1",
+                "B2 — Cabo multipolar em eletroduto embutido na parede": "B2",
+            }
+
+            rotulo_metodo = st.selectbox(
+                "Método de instalação:",
+                list(opcoes_metodo.keys()),
                 index=0,
-                key="fase12_1_metodo_instalacao",
+                key="fase12_1_metodo_instalacao_rotulo",
                 help=(
-                    "B1/B2 são usados como referências preliminares nesta fase. "
-                    "A escolha executiva deve ser confirmada pelo responsável técnico."
+                    "O método de instalação interfere diretamente na capacidade "
+                    "de condução de corrente dos cabos."
                 )
             )
+
+            metodo_capacidade = opcoes_metodo[
+                rotulo_metodo
+            ]
 
         with col_temp:
             temperatura_capacidade = st.selectbox(
@@ -2618,6 +2624,31 @@ def renderizar_materiais(
                 index=1,
                 format_func=lambda x: f"{x} °C",
                 key="fase12_1_temperatura_ambiente"
+            )
+
+        with st.expander(
+            "ℹ️ Como escolher entre B1 e B2?",
+            expanded=True
+        ):
+            st.markdown(
+                """
+**B1 — Condutores isolados em eletroduto embutido na parede**
+
+Use quando fase, neutro e terra são **fios/cabos individuais**
+passando dentro do eletroduto.  
+É o cenário mais próximo do padrão atualmente modelado pelo
+**AutoElétrica** para instalações residenciais embutidas.
+
+**B2 — Cabo multipolar em eletroduto embutido na parede**
+
+Use quando o circuito é executado com **um cabo multipolar**
+contendo seus condutores dentro do mesmo invólucro, instalado no
+eletroduto.
+
+**Recomendação do sistema:** para o padrão residencial atual do
+AutoElétrica, mantenha **B1**, salvo quando o responsável técnico
+definir explicitamente outro método de instalação.
+                """
             )
 
         capacidade_preliminar = (
@@ -2726,7 +2757,7 @@ def renderizar_materiais(
     )
 
     st.caption(
-        "Fase 12.1: os circuitos abaixo já são consolidados. "
+        "Fase 12.1 Rev.1: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -2929,7 +2960,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -2938,7 +2969,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )

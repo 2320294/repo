@@ -550,7 +550,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 12.1 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.1 REV.1 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -818,7 +818,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 12.1.
+    Fase 12.1 Rev.1.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1023,7 +1023,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 12.1.
+    Validação preliminar da Fase 12.1 Rev.1.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1288,7 +1288,7 @@ def validar_eletrica_rotas(
 
 
 # ============================================================
-# FASE 12.1 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# FASE 12.1 REV.1 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
 # ============================================================
 
 def _prioridade_agrupamento(qtd_circuitos):
@@ -1318,7 +1318,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 12.1.
+    Fase 12.1 Rev.1.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1610,7 +1610,7 @@ def diagnosticar_agrupamento_rotas(
 
 
 # ============================================================
-# FASE 12.1 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
+# FASE 12.1 REV.1 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
 # ============================================================
 
 # Referências internas preliminares para cobre/PVC 70 °C.
@@ -1727,7 +1727,7 @@ def verificar_capacidade_conducao_preliminar(
     temperatura_ambiente_c=30
 ):
     """
-    Fase 12.1.
+    Fase 12.1 Rev.1.
 
     Verifica preliminarmente a capacidade de condução usando:
     - método B1 ou B2;
