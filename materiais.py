@@ -891,17 +891,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.1 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.1 REV.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.1 Rev.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.1 Rev.2/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.1 Rev.1 — se o CAD desta versão já calculou correções por
+    # Fase 12.1 Rev.2 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1258,7 +1258,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.1 REV.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.1 REV.2 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1450,7 +1450,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.1 Rev.1: dados estruturais usados pelo roteamento continuam
+        # Fase 12.1 Rev.2: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1547,7 +1547,7 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=No
             for col, coluna in enumerate(df.columns):
                 ws.write(0, col, coluna, cabecalho)
                 valores = df[coluna].astype(str).tolist() if not df.empty else []
-                largura = max([len(str(coluna))] + [len(v) for v in valores[:200]])
+                largura = max([len(str(coluna))] + [len(str(v)) for v in valores[:200]])
                 ws.set_column(col, col, min(max(largura + 2, 12), 42))
             if not df.empty:
                 ws.conditional_format(
@@ -2108,7 +2108,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.1 Rev.1:
+    # Fase 12.1 Rev.2:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2235,7 +2235,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.1 Rev.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.1 Rev.2: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2579,7 +2579,7 @@ def renderizar_materiais(
         )
 
         st.caption(
-            "Fase 12.1 Rev.1: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.1 Rev.2: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -2757,7 +2757,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.1 Rev.1: os circuitos abaixo já são consolidados. "
+        "Fase 12.1 Rev.2: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -2960,7 +2960,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_2.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -2969,7 +2969,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1_Rev_2.pdf",
             mime="application/pdf",
             use_container_width=True
         )
