@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 12.4 — rede distribuída por caixas octogonais.
+    Fase 12.5 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -518,7 +518,7 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
-    # Fase 12.4:
+    # Fase 12.5:
     # circuitos terminais devem preferencialmente ser distribuídos em
     # troncos menores, evitando concentrar todos em um único eletroduto.
     # Como referência de topologia, procura limitar a aproximadamente
@@ -794,6 +794,647 @@ def _acumular_circuitos_ate_qdc(
             atual = parent.get(
                 atual
             )
+
+    return arestas
+
+
+
+# ============================================================
+# FASE 12.5 — REDISTRIBUIÇÃO FÍSICA AUTOMÁTICA
+# ============================================================
+
+DIAMETRO_CONDUTOR_REROTA_MM = {
+    1.5: 3.0,
+    2.5: 3.6,
+    4.0: 4.2,
+    6.0: 4.8,
+    10.0: 6.1,
+    16.0: 7.2,
+    25.0: 9.0,
+    35.0: 10.2,
+    50.0: 12.0,
+    70.0: 14.0,
+}
+
+DIAMETRO_INTERNO_ELETRODUTO_25_MM = 20.5
+OCUPACAO_MAX_TERMINAL = 0.40
+MAX_ENTRADAS_CAIXA_OCTOGONAL = 8
+
+
+def _bitola_rota_circuito(circuito):
+    try:
+        valor = float(circuito.get("bitola", 0.0) or 0.0)
+    except Exception:
+        valor = 0.0
+
+    if valor > 0:
+        return valor
+
+    tipo = str(circuito.get("tipo", "") or "").upper()
+    return 1.5 if "ILUM" in tipo else 2.5
+
+
+def _area_condutor_rota(bitola_mm2):
+    bitola = float(bitola_mm2 or 0.0)
+    d = DIAMETRO_CONDUTOR_REROTA_MM.get(bitola)
+
+    if d is None:
+        d = max(
+            3.0,
+            math.sqrt(max(bitola, 0.1)) * 1.8
+        )
+
+    return math.pi * d * d / 4.0
+
+
+def _area_circuito_rota(circuito):
+    """
+    Nesta arquitetura cada circuito terminal é representado por
+    três condutores no eletroduto: ativos + PE.
+    """
+    return 3.0 * _area_condutor_rota(
+        _bitola_rota_circuito(circuito)
+    )
+
+
+def _area_maxima_eletroduto_25():
+    area_interna = (
+        math.pi
+        * DIAMETRO_INTERNO_ELETRODUTO_25_MM
+        * DIAMETRO_INTERNO_ELETRODUTO_25_MM
+        / 4.0
+    )
+    return area_interna * OCUPACAO_MAX_TERMINAL
+
+
+def _ocupacao_circuitos_rota(circuitos_nums, circuitos_por_numero):
+    area = 0.0
+
+    for numero in set(circuitos_nums or []):
+        circuito = circuitos_por_numero.get(int(numero))
+        if not circuito:
+            continue
+        area += _area_circuito_rota(circuito)
+
+    area_interna = (
+        math.pi
+        * DIAMETRO_INTERNO_ELETRODUTO_25_MM
+        * DIAMETRO_INTERNO_ELETRODUTO_25_MM
+        / 4.0
+    )
+
+    return (
+        area / area_interna
+        if area_interna > 0
+        else 1.0
+    )
+
+
+def _graus_tronco(arestas):
+    graus = {}
+
+    for a in arestas:
+        origem = a.get("origem_id")
+        destino = a.get("destino_id")
+
+        if origem and origem != "QDC":
+            graus[origem] = graus.get(origem, 0) + 1
+
+        if destino and destino != "QDC":
+            graus[destino] = graus.get(destino, 0) + 1
+
+    return graus
+
+
+def _estrutura_arvore_tronco(arestas):
+    por_destino = {
+        a.get("destino_id"): a
+        for a in arestas
+        if a.get("destino_id")
+    }
+
+    filhos = {}
+
+    for a in arestas:
+        origem = a.get("origem_id")
+        destino = a.get("destino_id")
+
+        if (
+            origem
+            and destino
+            and origem != "QDC"
+        ):
+            filhos.setdefault(
+                origem,
+                []
+            ).append(
+                destino
+            )
+        elif origem == "QDC" and destino:
+            filhos.setdefault(
+                "QDC",
+                []
+            ).append(
+                destino
+            )
+
+    return por_destino, filhos
+
+
+def _subarvore_ids(raiz, filhos):
+    vistos = set()
+    pilha = [raiz]
+
+    while pilha:
+        atual = pilha.pop()
+
+        if atual in vistos:
+            continue
+
+        vistos.add(atual)
+
+        for filho in filhos.get(atual, []):
+            if filho not in vistos:
+                pilha.append(filho)
+
+    return vistos
+
+
+def _caminho_ate_qdc(no_id, por_destino):
+    caminho = []
+    atual = no_id
+    seguranca = 0
+
+    while atual and atual != "QDC" and seguranca < 200:
+        aresta = por_destino.get(atual)
+
+        if aresta is None:
+            break
+
+        caminho.append(aresta)
+        atual = aresta.get("origem_id")
+        seguranca += 1
+
+    return caminho
+
+
+def _selecionar_circuitos_para_desvio(
+    aresta,
+    subarvore,
+    demandas_por_circuito,
+    circuitos_por_numero
+):
+    """
+    Só move um circuito se TODOS os nós de demanda desse circuito
+    estiverem dentro da subárvore que nasce no trecho crítico.
+    Assim não desconectamos cargas que ainda dependam do caminho antigo.
+    """
+    atuais = set(
+        int(n)
+        for n in (
+            aresta.get("circuitos", set())
+            or set()
+        )
+        if int(n) > 0
+    )
+
+    area_max = _area_maxima_eletroduto_25()
+
+    area_atual = sum(
+        _area_circuito_rota(
+            circuitos_por_numero[n]
+        )
+        for n in atuais
+        if n in circuitos_por_numero
+    )
+
+    excesso = max(
+        0.0,
+        area_atual - area_max
+    )
+
+    moveis = []
+
+    for numero in atuais:
+        demandas = demandas_por_circuito.get(
+            numero,
+            set()
+        )
+
+        if (
+            demandas
+            and demandas.issubset(
+                subarvore
+            )
+            and numero in circuitos_por_numero
+        ):
+            moveis.append(
+                (
+                    numero,
+                    _area_circuito_rota(
+                        circuitos_por_numero[numero]
+                    )
+                )
+            )
+
+    moveis.sort(
+        key=lambda item:
+            item[1],
+        reverse=True
+    )
+
+    escolhidos = []
+    removida = 0.0
+
+    for numero, area in moveis:
+        escolhidos.append(numero)
+        removida += area
+
+        if removida + 1e-9 >= excesso:
+            break
+
+    if removida + 1e-9 < excesso:
+        return []
+
+    return escolhidos
+
+
+def _redistribuir_tronco_caixas_octogonais(
+    qdc,
+    nos,
+    arestas,
+    circuitos,
+    max_iteracoes=12
+):
+    """
+    Fecha o ciclo da Fase 12.5:
+
+    1. calcula a ocupação projetada em Ø25 de cada trecho troncal;
+    2. se ultrapassar 40%, procura outra caixa octogonal disponível;
+    3. move um conjunto completo de circuitos da subárvore crítica;
+    4. cria um caminho físico alternativo via outra caixa;
+    5. recalcula e repete.
+
+    A caixa alternativa precisa ter entrada disponível (máx. 8 conexões).
+    A rota alternativa também precisa caber em Ø25 nos trechos já existentes.
+
+    Se nenhuma caixa puder receber o desvio, cria uma nova saída direta
+    do QDC como fallback técnico, mantendo Ø25 nos circuitos terminais.
+    """
+    if not arestas:
+        return arestas
+
+    circuitos_por_numero = {
+        int(c.get("numero", 0) or 0): c
+        for c in (circuitos or [])
+        if int(c.get("numero", 0) or 0) > 0
+    }
+
+    nos_por_id = {
+        n.get("id"): n
+        for n in (nos or [])
+        if n.get("id")
+    }
+
+    demandas_por_circuito = {}
+
+    for no in (nos or []):
+        no_id = no.get("id")
+
+        for numero in (
+            no.get("circuitos", set())
+            or set()
+        ):
+            numero = int(numero)
+
+            if numero <= 0:
+                continue
+
+            demandas_por_circuito.setdefault(
+                numero,
+                set()
+            ).add(
+                no_id
+            )
+
+    # Guardamos a árvore original. As novas ligações são bypasses e não
+    # substituem o parent estrutural dos nós.
+    por_destino, filhos = _estrutura_arvore_tronco(
+        arestas
+    )
+
+    for _ in range(max_iteracoes):
+        criticas = []
+
+        for a in arestas:
+            if a.get("criterio") == "REDISTRIBUICAO_CAIXA_OCTOGONAL":
+                continue
+
+            ocup = _ocupacao_circuitos_rota(
+                a.get("circuitos", set()),
+                circuitos_por_numero
+            )
+
+            if ocup > OCUPACAO_MAX_TERMINAL + 1e-9:
+                criticas.append(
+                    (
+                        ocup,
+                        a
+                    )
+                )
+
+        if not criticas:
+            break
+
+        # Ataca primeiro o trecho mais carregado.
+        criticas.sort(
+            key=lambda item:
+                item[0],
+            reverse=True
+        )
+
+        alterou = False
+
+        for _, aresta_critica in criticas:
+            destino_id = aresta_critica.get(
+                "destino_id"
+            )
+
+            if not destino_id:
+                continue
+
+            subarvore = _subarvore_ids(
+                destino_id,
+                filhos
+            )
+
+            escolhidos = _selecionar_circuitos_para_desvio(
+                aresta_critica,
+                subarvore,
+                demandas_por_circuito,
+                circuitos_por_numero
+            )
+
+            if not escolhidos:
+                continue
+
+            graus = _graus_tronco(
+                arestas
+            )
+
+            destino_no = nos_por_id.get(
+                destino_id
+            )
+
+            if not destino_no:
+                continue
+
+            destino_pt = tuple(
+                destino_no.get(
+                    "ponto"
+                )
+            )
+
+            if graus.get(destino_id, 0) >= MAX_ENTRADAS_CAIXA_OCTOGONAL:
+                continue
+
+            candidatos = []
+
+            for no in (nos or []):
+                cand_id = no.get("id")
+
+                if (
+                    not cand_id
+                    or cand_id == destino_id
+                    or cand_id in subarvore
+                ):
+                    continue
+
+                if graus.get(cand_id, 0) >= MAX_ENTRADAS_CAIXA_OCTOGONAL:
+                    continue
+
+                caminho_cand = _caminho_ate_qdc(
+                    cand_id,
+                    por_destino
+                )
+
+                cabe = True
+
+                for a_path in caminho_cand:
+                    projetados = set(
+                        a_path.get(
+                            "circuitos",
+                            set()
+                        )
+                        or set()
+                    )
+                    projetados.update(
+                        escolhidos
+                    )
+
+                    if (
+                        _ocupacao_circuitos_rota(
+                            projetados,
+                            circuitos_por_numero
+                        )
+                        > OCUPACAO_MAX_TERMINAL
+                        + 1e-9
+                    ):
+                        cabe = False
+                        break
+
+                if not cabe:
+                    continue
+
+                ocup_bypass = _ocupacao_circuitos_rota(
+                    escolhidos,
+                    circuitos_por_numero
+                )
+
+                if ocup_bypass > OCUPACAO_MAX_TERMINAL + 1e-9:
+                    continue
+
+                ponto_cand = tuple(
+                    no.get("ponto")
+                )
+
+                dist_raiz = 0.0
+
+                if caminho_cand:
+                    # A aresta que chega ao candidato contém a distância
+                    # acumulada desde o QDC.
+                    dist_raiz = float(
+                        caminho_cand[0].get(
+                            "dist_raiz",
+                            0.0
+                        )
+                        or 0.0
+                    )
+                else:
+                    dist_raiz = _dist(
+                        qdc,
+                        ponto_cand
+                    )
+
+                custo = (
+                    dist_raiz
+                    + _dist(
+                        ponto_cand,
+                        destino_pt
+                    )
+                )
+
+                candidatos.append(
+                    (
+                        custo,
+                        no,
+                        caminho_cand
+                    )
+                )
+
+            # Remove os circuitos escolhidos do caminho antigo até o QDC.
+            caminho_antigo = _caminho_ate_qdc(
+                destino_id,
+                por_destino
+            )
+
+            if candidatos:
+                candidatos.sort(
+                    key=lambda item:
+                        item[0]
+                )
+
+                _, caixa_alt, caminho_alt = candidatos[0]
+
+                for a_old in caminho_antigo:
+                    for numero in escolhidos:
+                        a_old.setdefault(
+                            "circuitos",
+                            set()
+                        ).discard(
+                            numero
+                        )
+
+                for a_alt in caminho_alt:
+                    a_alt.setdefault(
+                        "circuitos",
+                        set()
+                    ).update(
+                        escolhidos
+                    )
+
+                ponto_alt = tuple(
+                    caixa_alt.get(
+                        "ponto"
+                    )
+                )
+
+                arestas.append({
+                    "origem_id":
+                        caixa_alt.get(
+                            "id"
+                        ),
+                    "destino_id":
+                        destino_id,
+                    "origem_ambiente":
+                        caixa_alt.get(
+                            "ambiente",
+                            ""
+                        ),
+                    "destino_ambiente":
+                        destino_no.get(
+                            "ambiente",
+                            ""
+                        ),
+                    "inicio":
+                        ponto_alt,
+                    "fim":
+                        destino_pt,
+                    "circuitos":
+                        set(
+                            escolhidos
+                        ),
+                    "criterio":
+                        "REDISTRIBUICAO_CAIXA_OCTOGONAL",
+                    "limite_entradas_caixa":
+                        MAX_ENTRADAS_CAIXA_OCTOGONAL,
+                    "dist_raiz":
+                        _dist(
+                            qdc,
+                            ponto_alt
+                        )
+                        + _dist(
+                            ponto_alt,
+                            destino_pt
+                        ),
+                    "dist_direta":
+                        _dist(
+                            qdc,
+                            destino_pt
+                        ),
+                })
+
+                alterou = True
+                break
+
+            # Fallback: nova saída física do QDC para a caixa crítica.
+            # Só é usado quando nenhuma caixa alternativa comporta o desvio.
+            ocup_bypass = _ocupacao_circuitos_rota(
+                escolhidos,
+                circuitos_por_numero
+            )
+
+            if ocup_bypass <= OCUPACAO_MAX_TERMINAL + 1e-9:
+                for a_old in caminho_antigo:
+                    for numero in escolhidos:
+                        a_old.setdefault(
+                            "circuitos",
+                            set()
+                        ).discard(
+                            numero
+                        )
+
+                arestas.append({
+                    "origem_id":
+                        "QDC",
+                    "destino_id":
+                        destino_id,
+                    "origem_ambiente":
+                        "QDC",
+                    "destino_ambiente":
+                        destino_no.get(
+                            "ambiente",
+                            ""
+                        ),
+                    "inicio":
+                        tuple(qdc),
+                    "fim":
+                        destino_pt,
+                    "circuitos":
+                        set(
+                            escolhidos
+                        ),
+                    "criterio":
+                        "REDISTRIBUICAO_NOVA_SAIDA_QDC",
+                    "limite_entradas_caixa":
+                        MAX_ENTRADAS_CAIXA_OCTOGONAL,
+                    "dist_raiz":
+                        _dist(
+                            qdc,
+                            destino_pt
+                        ),
+                    "dist_direta":
+                        _dist(
+                            qdc,
+                            destino_pt
+                        ),
+                })
+
+                alterou = True
+                break
+
+        if not alterou:
+            break
 
     return arestas
 
@@ -1215,7 +1856,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 12.4:
+    Fase 12.5:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1244,7 +1885,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 12.4
+    Fase 12.5
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -1857,7 +2498,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 12.4.
+    Fase 12.5.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -2025,7 +2666,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 12.4 — ramais dedicados das TUEs.
+    Fase 12.5 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2197,7 +2838,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 12.4
+    Fase 12.5
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -2263,6 +2904,15 @@ def desenhar_rotas_qdc_iluminacao(
     tronco = (
         _acumular_circuitos_ate_qdc(
             tronco
+        )
+    )
+
+    tronco = (
+        _redistribuir_tronco_caixas_octogonais(
+            qdc,
+            nos,
+            tronco,
+            circuitos
         )
     )
 

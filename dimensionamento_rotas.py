@@ -580,7 +580,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 12.4 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.5 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -848,7 +848,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 12.4.
+    Fase 12.5.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1053,7 +1053,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 12.4.
+    Validação preliminar da Fase 12.5.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1318,7 +1318,7 @@ def validar_eletrica_rotas(
 
 
 # ============================================================
-# FASE 12.4 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# FASE 12.5 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
 # ============================================================
 
 def _prioridade_agrupamento(qtd_circuitos):
@@ -1348,7 +1348,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 12.4.
+    Fase 12.5.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1640,7 +1640,7 @@ def diagnosticar_agrupamento_rotas(
 
 
 # ============================================================
-# FASE 12.4 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
+# FASE 12.5 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
 # ============================================================
 
 # Referências internas preliminares para cobre/PVC 70 °C.
@@ -1756,7 +1756,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """Fase 12.4: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
+    """Fase 12.5: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -1919,7 +1919,7 @@ def verificar_capacidade_conducao_preliminar(
 
 
 # ============================================================
-# FASE 12.4 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
+# FASE 12.5 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
 # ============================================================
 
 def _dados_eletroduto_nominal(nominal):
@@ -2010,7 +2010,7 @@ def otimizar_eletrodutos_preliminar(
     limite_circuitos_preferencial=3
 ):
     """
-    Fase 12.4.
+    Fase 12.5.
 
     Para cada trecho físico compara três estratégias:
     1) MANTER o eletroduto atual;
@@ -2101,15 +2101,7 @@ def otimizar_eletrodutos_preliminar(
         # 1) Se ocupação já ultrapassa o limite, primeiro verifica aumento simples.
         # 2) Se há concentração alta de circuitos, prioriza dividir,
         #    pois aumentar somente o diâmetro não reduz a quantidade agrupada.
-        if qtd_circ > int(limite_circuitos_preferencial or 3):
-            recomendacao = "NOVO CAMINHO VIA CAIXA"
-            justificativa = (
-                f"{qtd_circ} circuitos compartilham o trecho. Aumentar apenas "
-                "o diâmetro melhora a ocupação física, mas mantém a concentração "
-                "de circuitos. A divisão reduz ocupação e agrupamento."
-            )
-            qtd_dividir += 1
-        elif ocup_atual > float(limite_ocupacao_pct or 40.0):
+        if ocup_atual > float(limite_ocupacao_pct or 40.0):
             if proximo and ocup_proximo is not None and ocup_proximo <= limite_ocupacao_pct:
                 recomendacao = "AUMENTAR ELETRODUTO"
                 justificativa = (
@@ -2158,14 +2150,14 @@ def otimizar_eletrodutos_preliminar(
     return {
         "status": "simulacao",
         "limite_ocupacao_pct": float(limite_ocupacao_pct),
-        "limite_circuitos_preferencial": int(limite_circuitos_preferencial),
+        "limite_circuitos_preferencial": None,
         "qtd_manter": qtd_manter,
         "qtd_aumentar": qtd_aumentar,
         "qtd_dividir": qtd_dividir,
         "trechos": resultados,
         "observacao": (
             "Simulação de infraestrutura. 'NOVO CAMINHO VIA CAIXA' indica "
-            "redistribuição por outra caixa octogonal; a Fase 12.4 também passa "
+            "redistribuição por outra caixa octogonal; a Fase 12.5 também passa "
             "a reduzir a concentração já na formação da rede troncal."
         ),
     }
