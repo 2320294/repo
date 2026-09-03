@@ -1,5 +1,7 @@
 import streamlit as st
 
+from versao import VERSAO_SISTEMA
+
 from database import (
     buscar_projeto,
     salvar_dados_projeto,
@@ -43,7 +45,8 @@ from demanda_qdc import (
 
 from upload_cad import (
     renderizar_upload_dxf,
-    renderizar_salvar_e_gerar_cad
+    renderizar_salvar_e_gerar_cad,
+    calcular_rotas_antes_do_dxf
 )
 
 
@@ -572,7 +575,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 11.8 Rev.1. O DG depende da validação "
+                "Pré-dimensionamento da Fase 11.9. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 
@@ -655,6 +658,33 @@ def renderizar_painel_principal():
         st.subheader(
             "📦 Circuitos e Quantitativo de Materiais"
         )
+
+        # Fase 11.9 — o dimensionamento físico acontece aqui,
+        # antes da etapa de geração/exportação do CAD.
+        if dxf_bytes and local_qdc:
+            try:
+                with st.spinner(
+                    "Calculando roteamento físico, queda de tensão e materiais..."
+                ):
+                    resumo_previo = calcular_rotas_antes_do_dxf(
+                        dxf_bytes=dxf_bytes,
+                        tabela_editada=tabela_editada,
+                        local_qdc=local_qdc,
+                        config_interruptores_usuario=config_atual,
+                        tensao_projeto=parametros_projeto["tensao_projeto"],
+                        pe_direito=parametros_projeto["pe_direito"],
+                    )
+                if isinstance(resumo_previo, dict):
+                    st.session_state["dimensionamento_rotas"] = resumo_previo
+                    st.session_state["dimensionamento_rotas_projeto"] = (
+                        st.session_state.get("projeto_ativo")
+                    )
+                    st.session_state["dimensionamento_rotas_versao"] = VERSAO_SISTEMA
+            except Exception as exc:
+                st.warning(
+                    "Não foi possível concluir o roteamento prévio: "
+                    f"{exc}"
+                )
 
         renderizar_materiais(
             tabela_editada,

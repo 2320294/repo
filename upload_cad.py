@@ -16,6 +16,28 @@ from exportacoes import (
 )
 
 
+def calcular_rotas_antes_do_dxf(
+    dxf_bytes, tabela_editada, local_qdc,
+    config_interruptores_usuario, tensao_projeto=220, pe_direito=2.80
+):
+    """Fase 11.9: calcula o resumo físico antes da exportação do DXF."""
+    if not dxf_bytes or not local_qdc:
+        return None
+    resultado = motores.gerar_cad_unifilar(
+        dxf_bytes=dxf_bytes,
+        dados_editados=tabela_editada,
+        local_qdc=local_qdc,
+        config_interruptores=config_interruptores_usuario,
+        tensao_projeto=tensao_projeto,
+        pe_direito=pe_direito,
+        retornar_resumo_rotas=True,
+    )
+    if isinstance(resultado, tuple) and len(resultado) == 2:
+        if isinstance(resultado[1], dict):
+            return resultado[1]
+    return None
+
+
 def renderizar_upload_dxf(
     dxf_bytes,
     dados_ambientes,
@@ -24,7 +46,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 11.8 Rev.1:
+    Fase 11.9:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -463,7 +485,7 @@ def renderizar_salvar_e_gerar_cad(
             mime="application/octet-stream",
             use_container_width=True,
             key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
-            # Fase 11.8 Rev.1:
+            # Fase 11.9:
             # impede o rerun do Streamlit no clique do download.
             # O rerun podia reconstruir a página antes de o navegador
             # iniciar a transferência do DXF.

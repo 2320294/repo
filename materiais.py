@@ -890,17 +890,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 11.8 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 11.9 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 11.8 Rev.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 11.9/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 11.8 Rev.1 — se o CAD desta versão já calculou correções por
+    # Fase 11.9 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1257,7 +1257,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 11.8 REV.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 11.9 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1449,7 +1449,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 11.8 Rev.1: dados estruturais usados pelo roteamento continuam
+        # Fase 11.9: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1950,7 +1950,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 11.8 Rev.1 Rev.1:
+    # Fase 11.9:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -1991,7 +1991,7 @@ def renderizar_materiais(
     if resumo_rotas:
         st.success(
             "📐 Comprimentos de cabos e eletrodutos atualizados pelo "
-            "roteamento físico do último CAD gerado nesta versão."
+            "roteamento físico calculado automaticamente antes da geração do DXF."
         )
         st.caption(
             "O diâmetro dos eletrodutos é um pré-dimensionamento por ocupação. "
@@ -2003,9 +2003,8 @@ def renderizar_materiais(
         st.caption(
             f"Parâmetros usados: tensão derivada do perfil de fornecimento | "
             f"pé-direito {float(pe_direito):.2f} m. "
-            "Os comprimentos ainda usam estimativa geométrica. Gere o CAD "
-            "na etapa 7 para registrar o roteamento físico e depois retorne "
-            "a Materiais para atualizar os comprimentos reais do traçado."
+            "O roteamento físico ainda não pôde ser calculado. Confira se o DXF "
+            "do projeto e o posicionamento do QDC estão válidos."
         )
 
     materiais_df, df_circuitos = _dataframes_materiais_circuitos(
@@ -2078,7 +2077,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 11.8 Rev.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 11.9: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2302,7 +2301,7 @@ def renderizar_materiais(
     )
 
     st.caption(
-        "Fase 11.8 Rev.1: os circuitos abaixo já são consolidados. "
+        "Fase 11.9: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -2423,7 +2422,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_8_Rev_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_9.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -2432,7 +2431,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_8_Rev_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_11_9.pdf",
             mime="application/pdf",
             use_container_width=True
         )
