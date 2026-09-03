@@ -13,6 +13,7 @@ from tensoes_circuitos import tensao_circuito, tensao_base_fornecimento
 from formacao_circuitos import formar_circuitos_definitivos
 from versao import VERSAO_SISTEMA
 from dimensionamento_rotas import verificar_capacidade_conducao_preliminar
+from dimensionamento_rotas import otimizar_eletrodutos_preliminar
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -891,17 +892,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.3 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.2/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.3/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.2 — se o CAD desta versão já calculou correções por
+    # Fase 12.3 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1258,7 +1259,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.2 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.3 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1450,7 +1451,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.2: dados estruturais usados pelo roteamento continuam
+        # Fase 12.3: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2185,7 +2186,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.2:
+    # Fase 12.3:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2312,7 +2313,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.2: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.3: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2651,12 +2652,95 @@ def renderizar_materiais(
                 )
 
     if resumo_rotas:
+        otimizacao_eletrodutos = otimizar_eletrodutos_preliminar(
+            resumo_rotas,
+            limite_ocupacao_pct=40.0,
+            limite_circuitos_preferencial=3,
+        )
+        resumo_rotas[
+            "otimizacao_eletrodutos"
+        ] = otimizacao_eletrodutos
+
+        st.markdown(
+            "#### 🛠️ Otimização preliminar dos eletrodutos"
+        )
+
+        st.caption(
+            "O sistema compara três alternativas por trecho: manter o eletroduto, "
+            "aumentar o diâmetro ou dividir os circuitos em dois eletrodutos. "
+            "Nesta fase a divisão é apenas simulada e não redesenha o CAD."
+        )
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Manter", int(otimizacao_eletrodutos.get("qtd_manter", 0) or 0))
+        c2.metric("Aumentar eletroduto", int(otimizacao_eletrodutos.get("qtd_aumentar", 0) or 0))
+        c3.metric("Dividir rota", int(otimizacao_eletrodutos.get("qtd_dividir", 0) or 0))
+
+        dados_otimizacao = otimizacao_eletrodutos.get("trechos", []) or []
+        if dados_otimizacao:
+            linhas_otimizacao = []
+            for item in dados_otimizacao:
+                grupos = item.get("divisao_grupos", []) or []
+                divisao_txt = " | ".join(
+                    f"G{g.get('grupo')}: C{','.join(str(x) for x in g.get('circuitos', []))} "
+                    f"→ Ø{g.get('eletroduto_mm')} ({g.get('ocupacao_pct')}%)"
+                    for g in grupos
+                )
+                linhas_otimizacao.append({
+                    "Trecho": item.get("trecho_id"),
+                    "Comprimento (m)": item.get("comprimento_m"),
+                    "Circuitos": item.get("qtd_circuitos"),
+                    "Condutores": item.get("qtd_condutores"),
+                    "Eletroduto atual": (
+                        f"Ø{item.get('eletroduto_atual_mm')}"
+                        if item.get("eletroduto_atual_mm")
+                        else ""
+                    ),
+                    "Ocupação atual (%)": item.get("ocupacao_atual_pct"),
+                    "Próximo eletroduto": (
+                        f"Ø{item.get('proximo_eletroduto_mm')}"
+                        if item.get("proximo_eletroduto_mm")
+                        else ""
+                    ),
+                    "Ocup. próximo (%)": item.get("ocupacao_proximo_pct"),
+                    "Simulação dividida": divisao_txt,
+                    "Recomendação": item.get("recomendacao"),
+                })
+
+            df_otimizacao = pd.DataFrame(linhas_otimizacao)
+            st.dataframe(
+                df_otimizacao,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            with st.expander(
+                "ℹ️ Como interpretar as recomendações?",
+                expanded=True
+            ):
+                st.markdown(
+                    """
+**MANTER** — o trecho está adequado no diagnóstico preliminar.
+
+**AUMENTAR ELETRODUTO** — o problema principal é a ocupação física; o próximo
+diâmetro reduz a taxa de ocupação.
+
+**DIVIDIR ROTA** — há muitos circuitos compartilhando o mesmo trecho. Um
+eletroduto maior cria mais espaço, mas não reduz o número de circuitos agrupados.
+A simulação separa os circuitos em dois grupos para comparar uma solução com
+dois eletrodutos.
+
+A Fase 12.3 ainda **não desenha automaticamente o segundo eletroduto**.
+Primeiro vamos validar as recomendações nas plantas reais.
+                    """
+                )
+
         st.markdown(
             "#### 🌡️ Capacidade de condução — verificação preliminar"
         )
 
         st.caption(
-            "Fase 12.2: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.3: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -2870,7 +2954,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.2: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 12.3: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -2907,7 +2991,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.2: os circuitos abaixo já são consolidados. "
+        "Fase 12.3: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -3151,7 +3235,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_2.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_3.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3160,7 +3244,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_2.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_3.pdf",
             mime="application/pdf",
             use_container_width=True
         )

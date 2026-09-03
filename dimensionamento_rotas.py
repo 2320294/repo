@@ -550,7 +550,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 12.2 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.3 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -818,7 +818,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 12.2.
+    Fase 12.3.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1023,7 +1023,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 12.2.
+    Validação preliminar da Fase 12.3.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1288,7 +1288,7 @@ def validar_eletrica_rotas(
 
 
 # ============================================================
-# FASE 12.2 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# FASE 12.3 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
 # ============================================================
 
 def _prioridade_agrupamento(qtd_circuitos):
@@ -1318,7 +1318,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 12.2.
+    Fase 12.3.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1610,7 +1610,7 @@ def diagnosticar_agrupamento_rotas(
 
 
 # ============================================================
-# FASE 12.2 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
+# FASE 12.3 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
 # ============================================================
 
 # Referências internas preliminares para cobre/PVC 70 °C.
@@ -1726,7 +1726,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """Fase 12.2: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
+    """Fase 12.3: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -1884,5 +1884,243 @@ def verificar_capacidade_conducao_preliminar(
         "observacao": (
             "Verificação preliminar trecho a trecho para cobre/PVC 70 °C. "
             "A bitola não é alterada automaticamente nesta fase."
+        ),
+    }
+
+
+# ============================================================
+# FASE 12.3 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
+# ============================================================
+
+def _dados_eletroduto_nominal(nominal):
+    for nom, interno in ELETRODUTOS_MM:
+        if int(nom) == int(nominal or 0):
+            return int(nom), float(interno)
+    return None, None
+
+
+def _ocupacao_para_condutores(condutores, nominal):
+    nom, interno = _dados_eletroduto_nominal(nominal)
+    if not nom or not interno:
+        return None
+
+    area_cond = sum(
+        _area_ocupada_condutor(
+            c.get("bitola_mm2", 0)
+        )
+        for c in (condutores or [])
+    )
+    area_int = math.pi * interno * interno / 4.0
+    if area_int <= 0:
+        return None
+    return 100.0 * area_cond / area_int
+
+
+def _proximo_eletroduto_nominal(atual):
+    atuais = [int(n) for n, _ in ELETRODUTOS_MM]
+    try:
+        i = atuais.index(int(atual))
+    except Exception:
+        return atuais[0] if atuais else None
+    return atuais[i + 1] if i + 1 < len(atuais) else None
+
+
+def _condutores_por_circuito_trecho(rota):
+    por = {}
+    for c in (rota.get("condutores", []) or []):
+        num = int(c.get("circuito", 0) or 0)
+        if num <= 0:
+            continue
+        por.setdefault(num, []).append(dict(c))
+    return por
+
+
+def _dividir_circuitos_balanceado(rota):
+    """
+    Divide os circuitos do trecho em dois grupos tentando equilibrar
+    a área externa total dos condutores. É uma simulação de infraestrutura,
+    não um novo traçado CAD nesta fase.
+    """
+    por = _condutores_por_circuito_trecho(rota)
+
+    itens = []
+    for numero, conds in por.items():
+        area = sum(
+            _area_ocupada_condutor(c.get("bitola_mm2", 0))
+            for c in conds
+        )
+        itens.append((numero, area, conds))
+
+    itens.sort(key=lambda x: x[1], reverse=True)
+
+    grupos = [
+        {"circuitos": [], "condutores": [], "area": 0.0},
+        {"circuitos": [], "condutores": [], "area": 0.0},
+    ]
+
+    for numero, area, conds in itens:
+        alvo = 0 if grupos[0]["area"] <= grupos[1]["area"] else 1
+        grupos[alvo]["circuitos"].append(numero)
+        grupos[alvo]["condutores"].extend(conds)
+        grupos[alvo]["area"] += area
+
+    return grupos
+
+
+def otimizar_eletrodutos_preliminar(
+    resumo_rotas,
+    limite_ocupacao_pct=40.0,
+    limite_circuitos_preferencial=3
+):
+    """
+    Fase 12.3.
+
+    Para cada trecho físico compara três estratégias:
+    1) MANTER o eletroduto atual;
+    2) AUMENTAR para o próximo diâmetro nominal;
+    3) DIVIDIR os circuitos em dois eletrodutos paralelos simulados.
+
+    A escolha recomendada prioriza:
+    - respeitar a ocupação geométrica;
+    - reduzir agrupamento quando houver concentração elevada;
+    - evitar aumento desnecessário de bitola dos condutores.
+
+    IMPORTANTE:
+    a opção DIVIDIR é somente uma recomendação/simulação nesta fase.
+    O sistema ainda não redesenha automaticamente uma segunda rota no CAD.
+    """
+    rotas = (
+        resumo_rotas.get("rotas", [])
+        if isinstance(resumo_rotas, dict)
+        else []
+    ) or []
+
+    resultados = []
+    qtd_dividir = 0
+    qtd_aumentar = 0
+    qtd_manter = 0
+
+    for rota in rotas:
+        condutores = list(rota.get("condutores", []) or [])
+        circuitos = sorted(set(
+            int(n)
+            for n in (rota.get("circuitos", []) or [])
+            if int(n) > 0
+        ))
+
+        atual = rota.get("diametro_eletroduto_mm")
+        ocup_atual = float(rota.get("ocupacao_pct", 0.0) or 0.0)
+        qtd_circ = len(circuitos)
+
+        if not condutores or not atual:
+            resultados.append({
+                "trecho_id": rota.get("trecho_id"),
+                "comprimento_m": round(_numero(rota.get("comprimento_m", 0.0)), 2),
+                "circuitos": circuitos,
+                "qtd_circuitos": qtd_circ,
+                "eletroduto_atual_mm": atual,
+                "ocupacao_atual_pct": round(ocup_atual, 1),
+                "recomendacao": "SEM DADOS",
+                "justificativa": "Trecho sem dados suficientes de condutores/eletroduto.",
+            })
+            continue
+
+        proximo = _proximo_eletroduto_nominal(atual)
+        ocup_proximo = (
+            _ocupacao_para_condutores(condutores, proximo)
+            if proximo
+            else None
+        )
+
+        grupos = _dividir_circuitos_balanceado(rota)
+        simulacao_grupos = []
+
+        for idx, grupo in enumerate(grupos, start=1):
+            if not grupo["condutores"]:
+                continue
+            dim = _eletroduto_por_ocupacao(grupo["condutores"])
+            simulacao_grupos.append({
+                "grupo": idx,
+                "circuitos": sorted(grupo["circuitos"]),
+                "qtd_circuitos": len(grupo["circuitos"]),
+                "eletroduto_mm": dim.get("diametro_nominal_mm"),
+                "ocupacao_pct": round(float(dim.get("ocupacao_pct", 0.0) or 0.0), 1),
+            })
+
+        max_circ_div = max(
+            [g["qtd_circuitos"] for g in simulacao_grupos] or [0]
+        )
+        max_ocup_div = max(
+            [g["ocupacao_pct"] for g in simulacao_grupos] or [0.0]
+        )
+
+        # Decisão preliminar de projeto.
+        # 1) Se ocupação já ultrapassa o limite, primeiro verifica aumento simples.
+        # 2) Se há concentração alta de circuitos, prioriza dividir,
+        #    pois aumentar somente o diâmetro não reduz a quantidade agrupada.
+        if qtd_circ > int(limite_circuitos_preferencial or 3):
+            recomendacao = "DIVIDIR ROTA"
+            justificativa = (
+                f"{qtd_circ} circuitos compartilham o trecho. Aumentar apenas "
+                "o diâmetro melhora a ocupação física, mas mantém a concentração "
+                "de circuitos. A divisão reduz ocupação e agrupamento."
+            )
+            qtd_dividir += 1
+        elif ocup_atual > float(limite_ocupacao_pct or 40.0):
+            if proximo and ocup_proximo is not None and ocup_proximo <= limite_ocupacao_pct:
+                recomendacao = "AUMENTAR ELETRODUTO"
+                justificativa = (
+                    f"Ocupação atual de {ocup_atual:.1f}% excede o limite "
+                    f"preliminar de {limite_ocupacao_pct:.0f}%. O próximo "
+                    f"diâmetro reduz para aproximadamente {ocup_proximo:.1f}%."
+                )
+                qtd_aumentar += 1
+            else:
+                recomendacao = "DIVIDIR ROTA"
+                justificativa = (
+                    "A ocupação permanece crítica ou não há próximo diâmetro "
+                    "na tabela preliminar; dividir o trecho é a alternativa indicada."
+                )
+                qtd_dividir += 1
+        else:
+            recomendacao = "MANTER"
+            justificativa = (
+                f"Ocupação de {ocup_atual:.1f}% e {qtd_circ} circuito(s) "
+                "não acionam a otimização preliminar deste trecho."
+            )
+            qtd_manter += 1
+
+        resultados.append({
+            "trecho_id": rota.get("trecho_id"),
+            "comprimento_m": round(_numero(rota.get("comprimento_m", 0.0)), 2),
+            "circuitos": circuitos,
+            "qtd_circuitos": qtd_circ,
+            "qtd_condutores": int(rota.get("qtd_condutores", 0) or 0),
+            "eletroduto_atual_mm": int(atual) if atual else None,
+            "ocupacao_atual_pct": round(ocup_atual, 1),
+            "proximo_eletroduto_mm": proximo,
+            "ocupacao_proximo_pct": (
+                round(float(ocup_proximo), 1)
+                if ocup_proximo is not None
+                else None
+            ),
+            "divisao_grupos": simulacao_grupos,
+            "max_circuitos_apos_divisao": max_circ_div,
+            "max_ocupacao_apos_divisao_pct": round(max_ocup_div, 1),
+            "recomendacao": recomendacao,
+            "justificativa": justificativa,
+        })
+
+    return {
+        "status": "simulacao",
+        "limite_ocupacao_pct": float(limite_ocupacao_pct),
+        "limite_circuitos_preferencial": int(limite_circuitos_preferencial),
+        "qtd_manter": qtd_manter,
+        "qtd_aumentar": qtd_aumentar,
+        "qtd_dividir": qtd_dividir,
+        "trechos": resultados,
+        "observacao": (
+            "Simulação de infraestrutura. 'DIVIDIR ROTA' ainda não cria "
+            "automaticamente o segundo eletroduto no desenho."
         ),
     }
