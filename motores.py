@@ -46,7 +46,8 @@ from dimensionamento_rotas import (
     dimensionar_rotas,
     desenhar_dimensionamento_rotas,
     validar_eletrica_rotas,
-    corrigir_bitolas_por_queda
+    corrigir_bitolas_por_queda,
+    diagnosticar_agrupamento_rotas
 )
 
 from materiais import (
@@ -315,7 +316,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 11.9 — a geometria do ambiente só pode ser
+            # Fase 12.0 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -493,7 +494,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 11.9:
+                # Fase 12.0:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -528,7 +529,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 11.9 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 12.0 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -614,6 +615,13 @@ def gerar_cad_unifilar(
         resumo_rotas[
             "validacao_eletrica"
         ] = validar_eletrica_rotas(
+            resumo_rotas,
+            circuitos_corrigidos_queda
+        )
+
+        resumo_rotas[
+            "diagnostico_agrupamento"
+        ] = diagnosticar_agrupamento_rotas(
             resumo_rotas,
             circuitos_corrigidos_queda
         )

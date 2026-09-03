@@ -550,7 +550,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 11.9 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.0 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -818,7 +818,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 11.9.
+    Fase 12.0.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1023,7 +1023,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 11.9.
+    Validação preliminar da Fase 12.0.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1283,5 +1283,327 @@ def validar_eletrica_rotas(
                 "A capacidade de condução de corrente ainda não é validada "
                 "porque depende do método de instalação, temperatura, "
                 "agrupamento real e dados do fabricante."
+            ),
+    }
+
+
+# ============================================================
+# FASE 12.0 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# ============================================================
+
+def _prioridade_agrupamento(qtd_circuitos):
+    """
+    Classificação de prioridade para revisão.
+
+    IMPORTANTE:
+    estes limites NÃO são fatores normativos de correção.
+    Servem apenas para ordenar os trechos que merecem análise primeiro.
+    """
+    qtd = int(qtd_circuitos or 0)
+
+    if qtd <= 0:
+        return "SEM CIRCUITO"
+
+    if qtd == 1:
+        return "BAIXA"
+
+    if qtd <= 3:
+        return "MÉDIA"
+
+    return "ALTA"
+
+
+def diagnosticar_agrupamento_rotas(
+    resumo_rotas,
+    circuitos
+):
+    """
+    Fase 12.0.
+
+    Analisa a concentração física já conhecida no roteamento, sem aplicar
+    automaticamente fatores de capacidade de condução.
+
+    Por trecho:
+    - circuitos compartilhados;
+    - quantidade de condutores;
+    - ocupação geométrica;
+    - eletroduto preliminar;
+    - prioridade de revisão.
+
+    Por circuito:
+    - maior quantidade de circuitos simultâneos em seu caminho;
+    - maior quantidade de condutores no mesmo trecho;
+    - maior ocupação geométrica encontrada;
+    - trechos compartilhados.
+
+    A capacidade de condução permanece PENDENTE DE PARÂMETROS enquanto
+    não houver método de instalação, temperatura, características reais
+    dos cabos/eletrodutos e critério de agrupamento aplicável.
+    """
+    rotas = (
+        resumo_rotas.get(
+            "rotas",
+            []
+        )
+        if isinstance(
+            resumo_rotas,
+            dict
+        )
+        else []
+    )
+
+    por_numero = {
+        int(c.get("numero", 0) or 0): dict(c)
+        for c in (circuitos or [])
+        if int(c.get("numero", 0) or 0) > 0
+    }
+
+    trechos = []
+    resumo_circuitos = {
+        numero: {
+            "numero": numero,
+            "tipo": circuito.get("tipo", ""),
+            "ambiente": circuito.get("ambiente", ""),
+            "corrente_a": round(
+                _numero(
+                    circuito.get(
+                        "corrente",
+                        0.0
+                    )
+                ),
+                2
+            ),
+            "bitola_mm2": _bitola(
+                circuito
+            ),
+            "max_circuitos_compartilhados": 0,
+            "max_condutores_trecho": 0,
+            "max_ocupacao_pct": 0.0,
+            "trechos_compartilhados": [],
+        }
+        for numero, circuito in por_numero.items()
+    }
+
+    for rota in rotas:
+        numeros = sorted(
+            set(
+                int(n)
+                for n in (
+                    rota.get(
+                        "circuitos",
+                        []
+                    )
+                    or []
+                )
+                if int(n) > 0
+            )
+        )
+
+        qtd_circuitos = len(
+            numeros
+        )
+
+        qtd_condutores = int(
+            rota.get(
+                "qtd_condutores",
+                0
+            )
+            or 0
+        )
+
+        ocupacao = _numero(
+            rota.get(
+                "ocupacao_pct",
+                0.0
+            )
+        )
+
+        trecho_id = rota.get(
+            "trecho_id"
+        )
+
+        prioridade = _prioridade_agrupamento(
+            qtd_circuitos
+        )
+
+        trechos.append({
+            "trecho_id":
+                trecho_id,
+            "tipo_rede":
+                rota.get(
+                    "tipo_rede",
+                    ""
+                ),
+            "criterio":
+                rota.get(
+                    "criterio",
+                    ""
+                ),
+            "circuitos":
+                numeros,
+            "qtd_circuitos":
+                qtd_circuitos,
+            "qtd_condutores":
+                qtd_condutores,
+            "diametro_eletroduto_mm":
+                rota.get(
+                    "diametro_eletroduto_mm"
+                ),
+            "ocupacao_pct":
+                round(
+                    ocupacao,
+                    1
+                ),
+            "comprimento_m":
+                round(
+                    _numero(
+                        rota.get(
+                            "comprimento_m",
+                            0.0
+                        )
+                    ),
+                    2
+                ),
+            "prioridade_revisao":
+                prioridade,
+            "avaliacao_capacidade":
+                (
+                    "PENDENTE DE PARÂMETROS"
+                    if qtd_circuitos > 0
+                    else "SEM CIRCUITO"
+                ),
+        })
+
+        for numero in numeros:
+            resumo = resumo_circuitos.get(
+                numero
+            )
+
+            if resumo is None:
+                continue
+
+            resumo[
+                "max_circuitos_compartilhados"
+            ] = max(
+                resumo[
+                    "max_circuitos_compartilhados"
+                ],
+                qtd_circuitos
+            )
+
+            resumo[
+                "max_condutores_trecho"
+            ] = max(
+                resumo[
+                    "max_condutores_trecho"
+                ],
+                qtd_condutores
+            )
+
+            resumo[
+                "max_ocupacao_pct"
+            ] = max(
+                resumo[
+                    "max_ocupacao_pct"
+                ],
+                ocupacao
+            )
+
+            if qtd_circuitos > 1:
+                resumo[
+                    "trechos_compartilhados"
+                ].append(
+                    trecho_id
+                )
+
+    circuitos_diag = []
+
+    for numero in sorted(
+        resumo_circuitos
+    ):
+        item = resumo_circuitos[
+            numero
+        ]
+
+        item[
+            "max_ocupacao_pct"
+        ] = round(
+            item[
+                "max_ocupacao_pct"
+            ],
+            1
+        )
+
+        item[
+            "qtd_trechos_compartilhados"
+        ] = len(
+            [
+                t
+                for t in item[
+                    "trechos_compartilhados"
+                ]
+                if t is not None
+            ]
+        )
+
+        item[
+            "prioridade_revisao"
+        ] = _prioridade_agrupamento(
+            item[
+                "max_circuitos_compartilhados"
+            ]
+        )
+
+        item[
+            "avaliacao_capacidade"
+        ] = (
+            "PENDENTE DE PARÂMETROS"
+        )
+
+        circuitos_diag.append(
+            item
+        )
+
+    trechos_alta = [
+        t
+        for t in trechos
+        if t.get(
+            "prioridade_revisao"
+        )
+        == "ALTA"
+    ]
+
+    return {
+        "status":
+            "diagnostico",
+        "criterio":
+            (
+                "Diagnóstico físico de concentração. Não aplica fator "
+                "normativo de agrupamento nem altera bitolas."
+            ),
+        "trechos":
+            trechos,
+        "circuitos":
+            circuitos_diag,
+        "qtd_trechos_alta_prioridade":
+            len(
+                trechos_alta
+            ),
+        "max_circuitos_mesmo_trecho":
+            max(
+                [
+                    t.get(
+                        "qtd_circuitos",
+                        0
+                    )
+                    for t in trechos
+                ]
+                or [0]
+            ),
+        "observacao":
+            (
+                "Para validar capacidade de condução é necessário informar "
+                "método de instalação, temperatura ambiente, características "
+                "reais dos cabos/eletrodutos e critério de agrupamento aplicável."
             ),
     }
