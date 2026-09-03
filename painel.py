@@ -575,7 +575,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 12.0. O DG depende da validação "
+                "Pré-dimensionamento da Fase 12.1. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 
@@ -659,7 +659,7 @@ def renderizar_painel_principal():
             "📦 Circuitos e Quantitativo de Materiais"
         )
 
-        # Fase 12.0 — o dimensionamento físico acontece aqui,
+        # Fase 12.1 — o dimensionamento físico acontece aqui,
         # antes da etapa de geração/exportação do CAD.
         if dxf_bytes and local_qdc:
             try:

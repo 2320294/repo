@@ -12,6 +12,7 @@ from protecao_alimentador import avaliar_protecoes_alimentador
 from tensoes_circuitos import tensao_circuito, tensao_base_fornecimento
 from formacao_circuitos import formar_circuitos_definitivos
 from versao import VERSAO_SISTEMA
+from dimensionamento_rotas import verificar_capacidade_conducao_preliminar
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -890,17 +891,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.0 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.0/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.1/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.0 — se o CAD desta versão já calculou correções por
+    # Fase 12.1 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1257,7 +1258,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.0 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1449,7 +1450,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.0: dados estruturais usados pelo roteamento continuam
+        # Fase 12.1: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1458,7 +1459,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
     return materiais_df, circuitos_df
 
 
-def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None, correcoes_df=None, agrupamento_df=None):
+def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         materiais_df.to_excel(writer, sheet_name="Materiais", index=False)
@@ -1514,6 +1515,22 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=No
                 (
                     "Agrupamento_Rotas",
                     agrupamento_df
+                )
+            )
+
+        if (
+            capacidade_df is not None
+            and not capacidade_df.empty
+        ):
+            capacidade_df.to_excel(
+                writer,
+                sheet_name="Capacidade_Conducao",
+                index=False
+            )
+            abas.append(
+                (
+                    "Capacidade_Conducao",
+                    capacidade_df
                 )
             )
 
@@ -1603,7 +1620,7 @@ def _tabela_resumo_pdf(linhas, largura_total=26.5*cm):
 def _gerar_pdf_materiais_circuitos(
     nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito,
     resumo_balanceamento=None, resumo_protecao=None, resumo_drs=None,
-    resultado_demanda=None, parametros_rede=None, validacao_df=None, correcoes_df=None, agrupamento_df=None
+    resultado_demanda=None, parametros_rede=None, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -1958,6 +1975,73 @@ def _gerar_pdf_materiais_circuitos(
             )
         )
 
+    if (
+        capacidade_df is not None
+        and not capacidade_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "9. CAPACIDADE DE CONDUÇÃO — VERIFICAÇÃO PRELIMINAR",
+                secao
+            )
+        ]
+
+        cols_cap_pdf = [
+            c
+            for c in [
+                "Nº",
+                "Circuito",
+                "Ambiente",
+                "Ib (A)",
+                "Bitola atual (mm²)",
+                "Método",
+                "Circuitos agrupados",
+                "Fator agrup.",
+                "Fator temp.",
+                "Iz corrigida (A)",
+                "Bitola recomendada (mm²)",
+                "Status",
+            ]
+            if c in capacidade_df.columns
+        ]
+
+        larguras_cap = {
+            "Nº": 0.8*cm,
+            "Circuito": 1.5*cm,
+            "Ambiente": 3.0*cm,
+            "Ib (A)": 1.2*cm,
+            "Bitola atual (mm²)": 1.6*cm,
+            "Método": 1.1*cm,
+            "Circuitos agrupados": 1.8*cm,
+            "Fator agrup.": 1.4*cm,
+            "Fator temp.": 1.4*cm,
+            "Iz corrigida (A)": 1.7*cm,
+            "Bitola recomendada (mm²)": 2.1*cm,
+            "Status": 1.4*cm,
+        }
+
+        story.append(
+            _pdf_tabela(
+                capacidade_df[cols_cap_pdf],
+                [
+                    larguras_cap.get(c, 1.5*cm)
+                    for c in cols_cap_pdf
+                ],
+                fonte=5.6
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "Verificação preliminar para cobre/PVC 70 °C. Nesta fase a "
+                "bitola recomendada não é aplicada automaticamente. O projeto "
+                "executivo deve confirmar método de instalação, condutores "
+                "carregados, temperatura real, agrupamento e dados de fabricante.",
+                texto
+            )
+        )
+
     story += [
         Spacer(1,8),
         Paragraph(
@@ -2024,7 +2108,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.0:
+    # Fase 12.1:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2151,7 +2235,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.0: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.1: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2489,12 +2573,160 @@ def renderizar_materiais(
                     "agrupamento pelo diagnóstico preliminar."
                 )
 
+    if resumo_rotas:
+        st.markdown(
+            "#### 🌡️ Capacidade de condução — verificação preliminar"
+        )
+
+        st.caption(
+            "Fase 12.1: a verificação abaixo usa uma referência preliminar "
+            "para condutores de cobre com isolação PVC 70 °C. "
+            "Nesta fase o sistema apenas verifica e recomenda; não altera "
+            "automaticamente a bitola por capacidade de condução."
+        )
+
+        col_metodo, col_temp = st.columns(2)
+
+        with col_metodo:
+            metodo_capacidade = st.selectbox(
+                "Método de instalação de referência:",
+                [
+                    "B1",
+                    "B2",
+                ],
+                index=0,
+                key="fase12_1_metodo_instalacao",
+                help=(
+                    "B1/B2 são usados como referências preliminares nesta fase. "
+                    "A escolha executiva deve ser confirmada pelo responsável técnico."
+                )
+            )
+
+        with col_temp:
+            temperatura_capacidade = st.selectbox(
+                "Temperatura ambiente de referência:",
+                [
+                    25,
+                    30,
+                    35,
+                    40,
+                    45,
+                    50,
+                    55,
+                    60,
+                ],
+                index=1,
+                format_func=lambda x: f"{x} °C",
+                key="fase12_1_temperatura_ambiente"
+            )
+
+        capacidade_preliminar = (
+            verificar_capacidade_conducao_preliminar(
+                resumo_rotas.get(
+                    "diagnostico_agrupamento",
+                    {}
+                ),
+                circuitos,
+                metodo_instalacao=metodo_capacidade,
+                temperatura_ambiente_c=temperatura_capacidade,
+            )
+        )
+
+        resumo_rotas[
+            "capacidade_conducao_preliminar"
+        ] = capacidade_preliminar
+
+        dados_capacidade = (
+            capacidade_preliminar.get(
+                "circuitos",
+                []
+            )
+            or []
+        )
+
+        if dados_capacidade:
+            df_capacidade = pd.DataFrame(
+                dados_capacidade
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "corrente_a": "Ib (A)",
+                    "bitola_atual_mm2": "Bitola atual (mm²)",
+                    "metodo_instalacao": "Método",
+                    "temperatura_ref_c": "Temp. ref. (°C)",
+                    "qtd_circuitos_agrupados": "Circuitos agrupados",
+                    "fator_agrupamento": "Fator agrup.",
+                    "fator_temperatura": "Fator temp.",
+                    "iz_base_a": "Iz base (A)",
+                    "iz_corrigida_a": "Iz corrigida (A)",
+                    "bitola_recomendada_mm2": "Bitola recomendada (mm²)",
+                    "status": "Status",
+                }
+            )
+
+            cols_capacidade = [
+                c
+                for c in [
+                    "Nº",
+                    "Circuito",
+                    "Ambiente",
+                    "Ib (A)",
+                    "Bitola atual (mm²)",
+                    "Método",
+                    "Circuitos agrupados",
+                    "Fator agrup.",
+                    "Fator temp.",
+                    "Iz base (A)",
+                    "Iz corrigida (A)",
+                    "Bitola recomendada (mm²)",
+                    "Status",
+                ]
+                if c in df_capacidade.columns
+            ]
+
+            st.dataframe(
+                df_capacidade[
+                    cols_capacidade
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
+
+        qtd_alertas_capacidade = int(
+            capacidade_preliminar.get(
+                "qtd_alertas",
+                0
+            )
+            or 0
+        )
+
+        if qtd_alertas_capacidade:
+            st.warning(
+                f"{qtd_alertas_capacidade} circuito(s) ficaram com capacidade "
+                "de condução preliminar inferior à corrente de projeto após "
+                "os fatores considerados. A bitola recomendada é mostrada "
+                "na tabela, mas ainda não é aplicada automaticamente."
+            )
+        else:
+            st.success(
+                "Todos os circuitos passaram nesta verificação preliminar "
+                "de capacidade de condução para os parâmetros selecionados."
+            )
+
+        st.caption(
+            "A validação executiva deve confirmar método de instalação, "
+            "número de condutores carregados, temperatura real, tipo de isolação, "
+            "forma de agrupamento e dados do fabricante."
+        )
+
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
     )
 
     st.caption(
-        "Fase 12.0: os circuitos abaixo já são consolidados. "
+        "Fase 12.1: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -2515,6 +2747,7 @@ def renderizar_materiais(
     validacao_export_df = None
     correcoes_export_df = None
     agrupamento_export_df = None
+    capacidade_export_df = None
 
     if resumo_rotas:
         dados_validacao_export = (
@@ -2620,6 +2853,43 @@ def renderizar_materiais(
                 }
             )
 
+        dados_capacidade_export = (
+            (
+                resumo_rotas.get(
+                    "capacidade_conducao_preliminar",
+                    {}
+                )
+                or {}
+            ).get(
+                "circuitos",
+                []
+            )
+            or []
+        )
+
+        if dados_capacidade_export:
+            capacidade_export_df = pd.DataFrame(
+                dados_capacidade_export
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "corrente_a": "Ib (A)",
+                    "bitola_atual_mm2": "Bitola atual (mm²)",
+                    "metodo_instalacao": "Método",
+                    "temperatura_ref_c": "Temp. ref. (°C)",
+                    "qtd_circuitos_agrupados": "Circuitos agrupados",
+                    "fator_agrupamento": "Fator agrup.",
+                    "fator_temperatura": "Fator temp.",
+                    "iz_base_a": "Iz base (A)",
+                    "iz_corrigida_a": "Iz corrigida (A)",
+                    "bitola_recomendada_mm2": "Bitola recomendada (mm²)",
+                    "iz_recomendada_a": "Iz recomendada (A)",
+                    "status": "Status",
+                }
+            )
+
     nome_projeto = str(
         st.session_state.get(
             "projeto_ativo",
@@ -2633,7 +2903,8 @@ def renderizar_materiais(
         df_circuitos,
         validacao_df=validacao_export_df,
         correcoes_df=correcoes_export_df,
-        agrupamento_df=agrupamento_export_df
+        agrupamento_df=agrupamento_export_df,
+        capacidade_df=capacidade_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -2648,7 +2919,8 @@ def renderizar_materiais(
         parametros_rede=parametros_rede,
         validacao_df=validacao_export_df,
         correcoes_df=correcoes_export_df,
-        agrupamento_df=agrupamento_export_df
+        agrupamento_df=agrupamento_export_df,
+        capacidade_df=capacidade_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -2657,7 +2929,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_0.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -2666,7 +2938,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_0.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )
