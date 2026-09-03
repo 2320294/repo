@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 12.3 — rede híbrida com múltiplas saídas do QDC.
+    Fase 12.4 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -499,6 +499,12 @@ def _construir_rede_hibrida(
 
     arestas = []
 
+    # Cada ponto de iluminação é tratado como caixa octogonal 4x4
+    # com até 8 entradas/saídas de eletroduto. O QDC não usa esse limite.
+    grau_caixa = {
+        "QDC": 0
+    }
+
     circuitos_unicos = set()
     for no in nos:
         circuitos_unicos.update(
@@ -512,17 +518,25 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
+    # Fase 12.4:
+    # circuitos terminais devem preferencialmente ser distribuídos em
+    # troncos menores, evitando concentrar todos em um único eletroduto.
+    # Como referência de topologia, procura limitar a aproximadamente
+    # 3 circuitos por saída principal do QDC.
     if len(nos) <= 1:
         qtd_troncos_min = 1
-    elif qtd_circuitos > 8:
-        qtd_troncos_min = min(
-            3,
-            len(nos)
-        )
     else:
         qtd_troncos_min = min(
-            2,
-            len(nos)
+            len(nos),
+            max(
+                2,
+                int(
+                    math.ceil(
+                        qtd_circuitos
+                        / 3.0
+                    )
+                )
+            )
         )
 
     # Escolhe âncoras distribuídas angularmente em torno do QDC.
@@ -589,6 +603,17 @@ def _construir_rede_hibrida(
 
         for candidato in conectados:
             if candidato["id"] == "QDC":
+                continue
+
+            # Uma conexão já é consumida pelo trecho de entrada da caixa.
+            # Não cria novo ramo se as 8 entradas/saídas já estiverem ocupadas.
+            if int(
+                grau_caixa.get(
+                    candidato["id"],
+                    1
+                )
+                or 0
+            ) >= 8:
                 continue
 
             trecho = _dist(
@@ -658,16 +683,53 @@ def _construir_rede_hibrida(
                 ),
             "criterio":
                 criterio,
+            "limite_entradas_caixa":
+                8,
             "dist_raiz":
                 dist_raiz,
             "dist_direta":
                 direto,
         })
 
+        if origem["id"] != "QDC":
+            grau_caixa[
+                origem["id"]
+            ] = (
+                int(
+                    grau_caixa.get(
+                        origem["id"],
+                        1
+                    )
+                    or 0
+                )
+                + 1
+            )
+
+        # A caixa de destino passa a ter uma entrada ocupada pelo
+        # eletroduto que acabou de chegar.
+        grau_caixa[
+            no["id"]
+        ] = max(
+            1,
+            int(
+                grau_caixa.get(
+                    no["id"],
+                    0
+                )
+                or 0
+            )
+            + 1
+        )
+
         conectado = dict(no)
         conectado[
             "dist_raiz"
         ] = dist_raiz
+        conectado[
+            "entradas_ocupadas_tronco"
+        ] = grau_caixa[
+            no["id"]
+        ]
 
         conectados.append(
             conectado
@@ -1153,7 +1215,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 12.3:
+    Fase 12.4:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1182,7 +1244,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 12.3
+    Fase 12.4
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -1795,7 +1857,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 12.3.
+    Fase 12.4.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -1963,7 +2025,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 12.3 — ramais dedicados das TUEs.
+    Fase 12.4 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2135,7 +2197,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 12.3
+    Fase 12.4
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente

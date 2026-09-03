@@ -316,7 +316,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 12.3 — a geometria do ambiente só pode ser
+            # Fase 12.4 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -494,7 +494,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 12.3:
+                # Fase 12.4:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -529,7 +529,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 12.3 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 12.4 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.

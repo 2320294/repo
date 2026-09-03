@@ -156,7 +156,10 @@ def _area_ocupada_condutor(bitola_mm2):
     return math.pi * d * d / 4.0
 
 
-def _eletroduto_por_ocupacao(condutores):
+def _eletroduto_por_ocupacao(
+    condutores,
+    max_nominal_mm=None
+):
     area_ocupada = sum(
         _area_ocupada_condutor(
             c["bitola_mm2"]
@@ -164,7 +167,19 @@ def _eletroduto_por_ocupacao(condutores):
         for c in condutores
     )
 
-    for nominal, diametro_interno in ELETRODUTOS_MM:
+    tabela = [
+        (nominal, diametro_interno)
+        for nominal, diametro_interno in ELETRODUTOS_MM
+        if (
+            max_nominal_mm is None
+            or nominal <= int(max_nominal_mm)
+        )
+    ]
+
+    if not tabela:
+        tabela = list(ELETRODUTOS_MM)
+
+    for nominal, diametro_interno in tabela:
         area_interna = (
             math.pi
             * diametro_interno
@@ -187,7 +202,7 @@ def _eletroduto_por_ocupacao(condutores):
                 "area_condutores_mm2": area_ocupada,
             }
 
-    nominal, diametro_interno = ELETRODUTOS_MM[-1]
+    nominal, diametro_interno = tabela[-1]
 
     area_interna = (
         math.pi
@@ -206,6 +221,11 @@ def _eletroduto_por_ocupacao(condutores):
         ),
         "area_condutores_mm2": area_ocupada,
         "excedeu_tabela": True,
+        "limite_nominal_mm": (
+            int(max_nominal_mm)
+            if max_nominal_mm is not None
+            else nominal
+        ),
     }
 
 
@@ -305,7 +325,8 @@ def dimensionar_rotas(
         # circuitos registrados pelas fases antigas. Não inventa cabo:
         # deixa o trecho identificado para auditoria.
         dimens = _eletroduto_por_ocupacao(
-            condutores
+            condutores,
+            max_nominal_mm=25
         ) if condutores else {
             "diametro_nominal_mm": None,
             "diametro_interno_aprox_mm": None,
@@ -339,6 +360,15 @@ def dimensionar_rotas(
                         0.0
                     ),
                     1
+                ),
+            "limite_eletroduto_terminal_mm":
+                25,
+            "excede_limite_eletroduto_terminal":
+                bool(
+                    dimens.get(
+                        "excedeu_tabela",
+                        False
+                    )
                 ),
         })
 
@@ -550,7 +580,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 12.3 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.4 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -818,7 +848,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 12.3.
+    Fase 12.4.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1023,7 +1053,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 12.3.
+    Validação preliminar da Fase 12.4.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1288,7 +1318,7 @@ def validar_eletrica_rotas(
 
 
 # ============================================================
-# FASE 12.3 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# FASE 12.4 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
 # ============================================================
 
 def _prioridade_agrupamento(qtd_circuitos):
@@ -1318,7 +1348,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 12.3.
+    Fase 12.4.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1610,7 +1640,7 @@ def diagnosticar_agrupamento_rotas(
 
 
 # ============================================================
-# FASE 12.3 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
+# FASE 12.4 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
 # ============================================================
 
 # Referências internas preliminares para cobre/PVC 70 °C.
@@ -1726,7 +1756,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """Fase 12.3: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
+    """Fase 12.4: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -1889,7 +1919,7 @@ def verificar_capacidade_conducao_preliminar(
 
 
 # ============================================================
-# FASE 12.3 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
+# FASE 12.4 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
 # ============================================================
 
 def _dados_eletroduto_nominal(nominal):
@@ -1916,8 +1946,15 @@ def _ocupacao_para_condutores(condutores, nominal):
     return 100.0 * area_cond / area_int
 
 
-def _proximo_eletroduto_nominal(atual):
-    atuais = [int(n) for n, _ in ELETRODUTOS_MM]
+def _proximo_eletroduto_nominal(
+    atual,
+    max_nominal_mm=25
+):
+    atuais = [
+        int(n)
+        for n, _ in ELETRODUTOS_MM
+        if int(n) <= int(max_nominal_mm)
+    ]
     try:
         i = atuais.index(int(atual))
     except Exception:
@@ -1973,7 +2010,7 @@ def otimizar_eletrodutos_preliminar(
     limite_circuitos_preferencial=3
 ):
     """
-    Fase 12.3.
+    Fase 12.4.
 
     Para cada trecho físico compara três estratégias:
     1) MANTER o eletroduto atual;
@@ -2025,7 +2062,10 @@ def otimizar_eletrodutos_preliminar(
             })
             continue
 
-        proximo = _proximo_eletroduto_nominal(atual)
+        proximo = _proximo_eletroduto_nominal(
+            atual,
+            max_nominal_mm=25
+        )
         ocup_proximo = (
             _ocupacao_para_condutores(condutores, proximo)
             if proximo
@@ -2038,7 +2078,10 @@ def otimizar_eletrodutos_preliminar(
         for idx, grupo in enumerate(grupos, start=1):
             if not grupo["condutores"]:
                 continue
-            dim = _eletroduto_por_ocupacao(grupo["condutores"])
+            dim = _eletroduto_por_ocupacao(
+                grupo["condutores"],
+                max_nominal_mm=25
+            )
             simulacao_grupos.append({
                 "grupo": idx,
                 "circuitos": sorted(grupo["circuitos"]),
@@ -2059,7 +2102,7 @@ def otimizar_eletrodutos_preliminar(
         # 2) Se há concentração alta de circuitos, prioriza dividir,
         #    pois aumentar somente o diâmetro não reduz a quantidade agrupada.
         if qtd_circ > int(limite_circuitos_preferencial or 3):
-            recomendacao = "DIVIDIR ROTA"
+            recomendacao = "NOVO CAMINHO VIA CAIXA"
             justificativa = (
                 f"{qtd_circ} circuitos compartilham o trecho. Aumentar apenas "
                 "o diâmetro melhora a ocupação física, mas mantém a concentração "
@@ -2076,10 +2119,11 @@ def otimizar_eletrodutos_preliminar(
                 )
                 qtd_aumentar += 1
             else:
-                recomendacao = "DIVIDIR ROTA"
+                recomendacao = "NOVO CAMINHO VIA CAIXA"
                 justificativa = (
-                    "A ocupação permanece crítica ou não há próximo diâmetro "
-                    "na tabela preliminar; dividir o trecho é a alternativa indicada."
+                    "O eletroduto terminal atingiu o limite de Ø25 mm ou a ocupação "
+                    "permanece crítica. O sistema deve procurar outra caixa octogonal "
+                    "de iluminação com entrada disponível para criar um caminho alternativo."
                 )
                 qtd_dividir += 1
         else:
@@ -2120,7 +2164,8 @@ def otimizar_eletrodutos_preliminar(
         "qtd_dividir": qtd_dividir,
         "trechos": resultados,
         "observacao": (
-            "Simulação de infraestrutura. 'DIVIDIR ROTA' ainda não cria "
-            "automaticamente o segundo eletroduto no desenho."
+            "Simulação de infraestrutura. 'NOVO CAMINHO VIA CAIXA' indica "
+            "redistribuição por outra caixa octogonal; a Fase 12.4 também passa "
+            "a reduzir a concentração já na formação da rede troncal."
         ),
     }

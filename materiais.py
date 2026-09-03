@@ -892,17 +892,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.3 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.4 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.3/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.4/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.3 — se o CAD desta versão já calculou correções por
+    # Fase 12.4 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1259,7 +1259,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.3 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.4 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1451,7 +1451,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.3: dados estruturais usados pelo roteamento continuam
+        # Fase 12.4: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2186,7 +2186,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.3:
+    # Fase 12.4:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2313,7 +2313,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.3: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.4: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2674,7 +2674,7 @@ def renderizar_materiais(
         c1, c2, c3 = st.columns(3)
         c1.metric("Manter", int(otimizacao_eletrodutos.get("qtd_manter", 0) or 0))
         c2.metric("Aumentar eletroduto", int(otimizacao_eletrodutos.get("qtd_aumentar", 0) or 0))
-        c3.metric("Dividir rota", int(otimizacao_eletrodutos.get("qtd_dividir", 0) or 0))
+        c3.metric("Novo caminho via caixa", int(otimizacao_eletrodutos.get("qtd_dividir", 0) or 0))
 
         dados_otimizacao = otimizacao_eletrodutos.get("trechos", []) or []
         if dados_otimizacao:
@@ -2703,7 +2703,7 @@ def renderizar_materiais(
                         else ""
                     ),
                     "Ocup. próximo (%)": item.get("ocupacao_proximo_pct"),
-                    "Simulação dividida": divisao_txt,
+                    "Simulação por caixas": divisao_txt,
                     "Recomendação": item.get("recomendacao"),
                 })
 
@@ -2723,15 +2723,15 @@ def renderizar_materiais(
 **MANTER** — o trecho está adequado no diagnóstico preliminar.
 
 **AUMENTAR ELETRODUTO** — o problema principal é a ocupação física; o próximo
-diâmetro reduz a taxa de ocupação.
+diâmetro reduz a taxa de ocupação, limitado a **Ø25 mm** nos circuitos terminais.
 
-**DIVIDIR ROTA** — há muitos circuitos compartilhando o mesmo trecho. Um
-eletroduto maior cria mais espaço, mas não reduz o número de circuitos agrupados.
-A simulação separa os circuitos em dois grupos para comparar uma solução com
-dois eletrodutos.
+**NOVO CAMINHO VIA CAIXA** — quando Ø25 mm não é suficiente ou há concentração
+elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogonal
+de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
-A Fase 12.3 ainda **não desenha automaticamente o segundo eletroduto**.
-Primeiro vamos validar as recomendações nas plantas reais.
+Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
+A Fase 12.4 passa a usar mais saídas do QDC e mais caixas de distribuição para
+reduzir a concentração antes do dimensionamento.
                     """
                 )
 
@@ -2740,7 +2740,7 @@ Primeiro vamos validar as recomendações nas plantas reais.
         )
 
         st.caption(
-            "Fase 12.3: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.4: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -2954,7 +2954,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.3: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 12.4: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -2991,7 +2991,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.3: os circuitos abaixo já são consolidados. "
+        "Fase 12.4: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -3235,7 +3235,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_3.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_4.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3244,7 +3244,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_3.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_4.pdf",
             mime="application/pdf",
             use_container_width=True
         )
