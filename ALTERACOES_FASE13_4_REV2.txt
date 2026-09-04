@@ -1,0 +1,40 @@
+FASE 13.4 REV.2 — ALIMENTAÇÃO DOS CIRCUITOS E LEGENDA DO QDC
+
+CORREÇÕES
+
+1. CIRCUITO SEM DR
+- Circuitos do grupo SEM DR não ficam mais sem alimentação.
+- O segmento do barramento pente SEM DR recebe alimentação direta da saída do DG.
+- Grupos protegidos continuam recebendo alimentação da saída do respectivo IDR.
+
+2. SAÍDA DOS DISJUNTORES
+- Somente a fase sai fisicamente do disjuntor.
+- Neutro e PE não são mais desenhados como se saíssem do disjuntor.
+- N vem diretamente do barramento de neutro.
+- PE vem diretamente do barramento de proteção.
+- N e PE seguem por corredores inferiores e descem junto à saída do circuito.
+- Na saída permanece somente o código C01, C02, C03...
+
+3. LEGENDA
+- A legenda não mostra mais A/B/C fixos.
+- Exibe apenas as fases que realmente existem no alimentador calculado:
+  F, 2F ou 3F.
+- N e PE só aparecem quando fazem parte da composição real do alimentador.
+
+4. LISTA DE CIRCUITOS
+- A antiga lista textual foi substituída por uma tabela.
+- Colunas:
+  Circuito | Fase | Disjuntor | Nome do circuito.
+- O nome é derivado do ambiente/uso e tipo do circuito.
+
+MANTIDO
+- Quantidade real de condutores de entrada.
+- Trilho DIN sem atravessar os aparelhos.
+- Ligação IDR -> pente por grupo.
+- Interface e demais cálculos sem alteração.
+
+VERSÃO
+- Sistema: Fase 13.4 Rev.2
+- Build: 13.4-REV2
+- Arquivo: Fase_13_4_Rev_2
+- Nenhum DXF incluído.

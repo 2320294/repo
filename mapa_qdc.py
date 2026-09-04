@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.1:
+    Fase 13.4 Rev.2:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -817,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.1 — QDC executivo no CAD.
+    Fase 13.4 Rev.2 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -893,7 +893,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.1",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.2",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1250,39 +1250,9 @@ def desenhar_mapa_fisico_qdc(
                 LT
             )
 
-            # Circuito/ambiente abaixo.
-            _texto_central(
-                msp,
-                str(d.get("identificador", "")),
-                geom["x1"],
-                geom["x2"],
-                geom["y1"] - 0.25,
-                0.10,
-                LT
-            )
 
-
-            # Na saída do disjuntor aparece somente o código do circuito.
-            # A fase segue para baixo; N e PE são roteados fora do corpo dos
-            # disjuntores, em corredores inferiores.
-            layer_fase = _layer_fase(
-                fase
-            )
-
-            saida_y = (
-                geom["y1"]
-                - 0.72
-            )
-
-            _line(
-                msp,
-                (geom["cx"], geom["y1"]),
-                (geom["cx"], saida_y),
-                layer_fase
-            )
-
-            # Guarda pontos de conexão para roteamento externo de N e PE.
-            geom["saida_y"] = saida_y
+            # Guarda somente a informação elétrica necessária para
+            # montar a saída do circuito fora do corpo do disjuntor.
             geom["tem_neutro"] = (
                 mod == 1
             )
@@ -1310,16 +1280,23 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Corredores N/PE ficam abaixo da fileira, sem atravessar aparelhos.
+        # Neutro e PE não saem dos disjuntores.
+        # Eles vêm diretamente dos respectivos barramentos laterais e seguem
+        # em corredores inferiores até a saída física de cada circuito.
         if desta_fileira_geom:
             y_corredor_pe = (
                 y_rail
-                - 1.78
+                - 1.74
             )
 
             y_corredor_n = (
                 y_rail
-                - 1.98
+                - 1.92
+            )
+
+            y_saida_circuito = (
+                y_rail
+                - 2.28
             )
 
             x_esq_corredor = (
@@ -1338,6 +1315,7 @@ def desenhar_mapa_fisico_qdc(
                 + 0.12
             )
 
+            # PE nasce no barramento PE.
             _line(
                 msp,
                 (pe["x"], y_corredor_pe),
@@ -1345,6 +1323,7 @@ def desenhar_mapa_fisico_qdc(
                 LPE
             )
 
+            # N nasce no barramento N.
             _line(
                 msp,
                 (x_esq_corredor, y_corredor_n),
@@ -1359,40 +1338,87 @@ def desenhar_mapa_fisico_qdc(
                 ) >= 0.05:
                     continue
 
-                # PE sai do circuito e desce diretamente ao corredor inferior.
-                _polyline(
+                fase = str(
+                    d.get(
+                        "fase",
+                        ""
+                    )
+                    or ""
+                ).strip() or "A"
+
+                # Fase é o único condutor que sai do disjuntor.
+                _line(
                     msp,
-                    [
-                        (
-                            g["cx"] - 0.10,
-                            g["y1"]
-                        ),
-                        (
-                            g["cx"] - 0.10,
-                            y_corredor_pe
-                        ),
-                    ],
+                    (
+                        g["cx"],
+                        g["y1"]
+                    ),
+                    (
+                        g["cx"],
+                        y_saida_circuito
+                    ),
+                    _layer_fase(
+                        fase
+                    )
+                )
+
+                # PE desce do barramento lateral/corredor para o circuito,
+                # sem tocar no corpo do disjuntor.
+                x_pe_saida = (
+                    g["cx"]
+                    - 0.10
+                )
+
+                _line(
+                    msp,
+                    (
+                        x_pe_saida,
+                        y_corredor_pe
+                    ),
+                    (
+                        x_pe_saida,
+                        y_saida_circuito
+                    ),
                     LPE
                 )
 
-                # Neutro somente nos circuitos que realmente o utilizam.
+                # Neutro somente quando o circuito realmente o utiliza.
                 if g.get(
                     "tem_neutro"
                 ):
-                    _polyline(
+                    x_n_saida = (
+                        g["cx"]
+                        + 0.10
+                    )
+
+                    _line(
                         msp,
-                        [
-                            (
-                                g["cx"] + 0.10,
-                                g["y1"]
-                            ),
-                            (
-                                g["cx"] + 0.10,
-                                y_corredor_n
-                            ),
-                        ],
+                        (
+                            x_n_saida,
+                            y_corredor_n
+                        ),
+                        (
+                            x_n_saida,
+                            y_saida_circuito
+                        ),
                         LN
                     )
+
+                # Código do circuito na saída; nenhum ambiente/descrição aqui.
+                _texto_central(
+                    msp,
+                    str(
+                        d.get(
+                            "identificador",
+                            ""
+                        )
+                    ),
+                    g["x1"],
+                    g["x2"],
+                    y_saida_circuito - 0.22,
+                    0.085,
+                    LT
+                )
 
         # Barramento dos circuitos segmentado por grupo de proteção.
         if circuitos_geom:
@@ -1495,38 +1521,48 @@ def desenhar_mapa_fisico_qdc(
                             )
                         )
 
-                    # Saída do respectivo IDR até o barramento daquele grupo.
-                    dr_g = dr_geom_por_grupo.get(
+                    # Alimentação do segmento:
+                    # - grupo protegido: saída do respectivo IDR;
+                    # - SEM DR: saída direta do DG.
+                    fonte_g = dr_geom_por_grupo.get(
                         grupo
                     )
 
-                    if dr_g:
+                    if (
+                        fonte_g is None
+                        and str(
+                            grupo
+                        ).upper()
+                        == "SEM DR"
+                        and dg_geoms
+                    ):
+                        fonte_g = dg_geoms[0][1]
+
+                    if fonte_g:
                         x_dest = (
                             x1p
                             + x2p
                         ) / 2.0
 
-                        y_saida_dr = (
-                            dr_g["y1"]
+                        y_saida_fonte = (
+                            fonte_g["y1"]
                             - 0.20
                         )
 
-                        # Desce lateralmente ao IDR, segue em corredor livre
-                        # e entra no centro do pente do grupo.
                         _polyline(
                             msp,
                             [
                                 (
-                                    dr_g["cx"],
-                                    dr_g["y1"]
+                                    fonte_g["cx"],
+                                    fonte_g["y1"]
                                 ),
                                 (
-                                    dr_g["cx"],
-                                    y_saida_dr
+                                    fonte_g["cx"],
+                                    y_saida_fonte
                                 ),
                                 (
                                     x_dest,
-                                    y_saida_dr
+                                    y_saida_fonte
                                 ),
                                 (
                                     x_dest,
@@ -1563,33 +1599,240 @@ def desenhar_mapa_fisico_qdc(
         LT
     )
 
-    yy = py_top - 0.75
-    for d in circuitos:
-        if yy < ybase + 4.20:
-            break
-        ident = str(d.get("identificador", "") or "")
-        ambiente = str(d.get("ambiente", "") or "")
-        tipo_c = str(d.get("tipo_circuito", "") or "")
-        fase_c = str(d.get("fase", "") or "").strip()
-        dj_c = int(d.get("corrente_a", 0) or 0)
-        texto = f"{ident} | {fase_c or '-'} | {dj_c}A | {ambiente}"
-        if tipo_c:
-            texto += f" | {tipo_c}"
+    # Tabela executiva: Circuito | Fase | Disjuntor | Nome do circuito.
+    tabela_x1 = px1 + 0.22
+    tabela_x2 = px2 - 0.22
+    tabela_y_top = py_top - 0.62
 
-        for li, linha in enumerate(_quebrar_texto(texto, 42)):
-            _text(
-                msp,
-                linha,
-                px1 + 0.25,
-                yy,
-                0.085,
-                LT
+    col_circuito = 0.92
+    col_fase = 0.72
+    col_dj = 1.05
+
+    x_c1 = tabela_x1
+    x_c2 = x_c1 + col_circuito
+    x_c3 = x_c2 + col_fase
+    x_c4 = x_c3 + col_dj
+    x_c5 = tabela_x2
+
+    altura_cab = 0.34
+    altura_linha = 0.34
+
+    tabela_y_bottom = (
+        tabela_y_top
+        - altura_cab
+        - len(
+            circuitos
+        )
+        * altura_linha
+    )
+
+    _rect(
+        msp,
+        tabela_x1,
+        tabela_y_bottom,
+        tabela_x2,
+        tabela_y_top,
+        L
+    )
+
+    for xx in (
+        x_c2,
+        x_c3,
+        x_c4
+    ):
+        _line(
+            msp,
+            (
+                xx,
+                tabela_y_bottom
+            ),
+            (
+                xx,
+                tabela_y_top
+            ),
+            L
+        )
+
+    y_cab = (
+        tabela_y_top
+        - altura_cab
+    )
+
+    _line(
+        msp,
+        (
+            tabela_x1,
+            y_cab
+        ),
+        (
+            tabela_x2,
+            y_cab
+        ),
+        L
+    )
+
+    _text(
+        msp,
+        "Circuito",
+        x_c1 + 0.08,
+        tabela_y_top - 0.23,
+        0.075,
+        LT
+    )
+
+    _text(
+        msp,
+        "Fase",
+        x_c2 + 0.08,
+        tabela_y_top - 0.23,
+        0.075,
+        LT
+    )
+
+    _text(
+        msp,
+        "Disj.",
+        x_c3 + 0.08,
+        tabela_y_top - 0.23,
+        0.075,
+        LT
+    )
+
+    _text(
+        msp,
+        "Nome do circuito",
+        x_c4 + 0.08,
+        tabela_y_top - 0.23,
+        0.075,
+        LT
+    )
+
+    yy = y_cab
+
+    for d in circuitos:
+        yy_next = (
+            yy
+            - altura_linha
+        )
+
+        _line(
+            msp,
+            (
+                tabela_x1,
+                yy_next
+            ),
+            (
+                tabela_x2,
+                yy_next
+            ),
+            L
+        )
+
+        ident = str(
+            d.get(
+                "identificador",
+                ""
             )
-            yy -= 0.17
-        yy -= 0.06
+            or ""
+        )
+
+        fase_c = str(
+            d.get(
+                "fase",
+                ""
+            )
+            or ""
+        ).strip()
+
+        dj_c = int(
+            d.get(
+                "corrente_a",
+                0
+            )
+            or 0
+        )
+
+        ambiente = str(
+            d.get(
+                "ambiente",
+                ""
+            )
+            or ""
+        ).strip()
+
+        tipo_c = str(
+            d.get(
+                "tipo_circuito",
+                ""
+            )
+            or ""
+        ).strip()
+
+        nome_circuito = ambiente
+
+        if tipo_c:
+            nome_circuito = (
+                nome_circuito
+                + (
+                    " - "
+                    if nome_circuito
+                    else ""
+                )
+                + tipo_c
+            )
+
+        _text(
+            msp,
+            ident,
+            x_c1 + 0.08,
+            yy - 0.23,
+            0.072,
+            LT
+        )
+
+        _text(
+            msp,
+            fase_c or "-",
+            x_c2 + 0.08,
+            yy - 0.23,
+            0.072,
+            LT
+        )
+
+        _text(
+            msp,
+            f"{dj_c} A",
+            x_c3 + 0.08,
+            yy - 0.23,
+            0.072,
+            LT
+        )
+
+        linhas_nome = _quebrar_texto(
+            nome_circuito,
+            30
+        )
+
+        _text(
+            msp,
+            (
+                linhas_nome[0]
+                if linhas_nome
+                else "-"
+            ),
+            x_c4 + 0.08,
+            yy - 0.23,
+            0.066,
+            LT
+        )
+
+        yy = yy_next
 
     # Legenda.
-    leg_y = max(ybase + 2.30, yy - 0.15)
+    leg_y = max(
+        ybase + 2.30,
+        tabela_y_bottom - 0.38
+    )
     _text(
         msp,
         "LEGENDA",
@@ -1599,14 +1842,62 @@ def desenhar_mapa_fisico_qdc(
         LT
     )
 
-    legendas = [
-        ("Fase A / L1", LA),
-        ("Fase B / L2", LB),
-        ("Fase C / L3", LC),
-        ("Neutro (N)", LN),
-        ("Protecao / Terra (PE)", LPE),
-        ("Barramento pente", LP),
-    ]
+    legendas = []
+
+    fases_reais = _fases_alimentador(
+        mapa
+    )
+
+    if "A" in fases_reais:
+        legendas.append(
+            (
+                "Fase A / L1",
+                LA
+            )
+        )
+
+    if "B" in fases_reais:
+        legendas.append(
+            (
+                "Fase B / L2",
+                LB
+            )
+        )
+
+    if "C" in fases_reais:
+        legendas.append(
+            (
+                "Fase C / L3",
+                LC
+            )
+        )
+
+    if _tem_neutro_alimentador(
+        mapa
+    ):
+        legendas.append(
+            (
+                "Neutro (N)",
+                LN
+            )
+        )
+
+    if _tem_pe_alimentador(
+        mapa
+    ):
+        legendas.append(
+            (
+                "Protecao / Terra (PE)",
+                LPE
+            )
+        )
+
+    legendas.append(
+        (
+            "Barramento pente",
+            LP
+        )
+    )
 
     yleg = leg_y - 0.35
     for texto, layer in legendas:
