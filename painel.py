@@ -575,7 +575,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 12.6 Rev.1. O DG depende da validação "
+                "Pré-dimensionamento da Fase 12.7. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 
@@ -659,13 +659,33 @@ def renderizar_painel_principal():
             "📦 Circuitos e Quantitativo de Materiais"
         )
 
-        # Fase 12.6 Rev.1 — o dimensionamento físico acontece aqui,
+        # Fase 12.7 — o dimensionamento físico acontece aqui,
         # antes da etapa de geração/exportação do CAD.
         if dxf_bytes and local_qdc:
             try:
                 with st.spinner(
                     "Calculando roteamento físico, queda de tensão e materiais..."
                 ):
+                    rotulo_metodo_capacidade = str(
+                        st.session_state.get(
+                            "fase12_1_metodo_instalacao_rotulo",
+                            "B1"
+                        )
+                        or "B1"
+                    )
+                    metodo_capacidade = (
+                        "B2"
+                        if rotulo_metodo_capacidade.upper().startswith("B2")
+                        else "B1"
+                    )
+                    temperatura_capacidade = int(
+                        st.session_state.get(
+                            "fase12_1_temperatura_ambiente",
+                            30
+                        )
+                        or 30
+                    )
+
                     resumo_previo = calcular_rotas_antes_do_dxf(
                         dxf_bytes=dxf_bytes,
                         tabela_editada=tabela_editada,
@@ -673,6 +693,8 @@ def renderizar_painel_principal():
                         config_interruptores_usuario=config_atual,
                         tensao_projeto=parametros_projeto["tensao_projeto"],
                         pe_direito=parametros_projeto["pe_direito"],
+                        metodo_instalacao=metodo_capacidade,
+                        temperatura_ambiente_c=temperatura_capacidade,
                     )
                 if isinstance(resumo_previo, dict):
                     st.session_state["dimensionamento_rotas"] = resumo_previo

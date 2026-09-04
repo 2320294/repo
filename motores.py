@@ -47,7 +47,10 @@ from dimensionamento_rotas import (
     desenhar_dimensionamento_rotas,
     validar_eletrica_rotas,
     corrigir_bitolas_por_queda,
-    diagnosticar_agrupamento_rotas
+    diagnosticar_agrupamento_rotas,
+    verificar_capacidade_conducao_preliminar,
+    corrigir_bitolas_por_capacidade,
+    validar_relacao_ib_in_iz
 )
 
 from materiais import (
@@ -86,7 +89,9 @@ def gerar_cad_unifilar(
     config_interruptores=None,
     tensao_projeto=220,
     pe_direito=2.80,
-    retornar_resumo_rotas=False
+    retornar_resumo_rotas=False,
+    metodo_instalacao="B1",
+    temperatura_ambiente_c=30
 ):
     tmp_in_path = ""
 
@@ -316,7 +321,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 12.6 Rev.1 — a geometria do ambiente só pode ser
+            # Fase 12.7 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -494,7 +499,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 12.6 Rev.1:
+                # Fase 12.7:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -529,7 +534,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 12.6 REV.1 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 12.7 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -576,54 +581,363 @@ def gerar_cad_unifilar(
             resumo_drs_unifilar
         )
 
-        # Rede física híbrida:
-        # compara caminho acumulado pela rede com ligação direta ao QDC.
-        # Abre novo tronco quando a rede existente provocar desvio excessivo.
-        # Todas as luminárias do ambiente são conectadas. Somente ARC.
-        rotas_fisicas = desenhar_rotas_qdc_iluminacao(
-            msp=msp,
-            qdc_info=qdc_info,
-            pontos_eletricos=pontos_eletricos,
-            circuitos=circuitos_unifilar,
-            pontos_interruptores=pontos_interruptores,
-            ambientes_geom=ambientes_geom,
-            portas_raw=portas_raw,
-            soleiras_raw=soleiras_raw,
-        )
+        # ====================================================
+        # FASE 12.7 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
+        # ====================================================
+        # O ciclo fecha quatro critérios:
+        #   rota física -> queda -> capacidade -> ocupação/rerota.
+        # Se a seção mudar, o roteamento é recalculado com a nova bitola.
+        # O ciclo termina quando nenhuma seção muda ou ao atingir o limite
+        # de segurança de iterações.
+        circuitos_dimensionados = [
+            dict(c)
+            for c in circuitos_unifilar
+        ]
 
-        (
-            circuitos_corrigidos_queda,
-            correcoes_bitola
-        ) = corrigir_bitolas_por_queda(
-            rotas_fisicas,
-            circuitos_unifilar
-        )
+        historico_iteracoes = []
+        relatorio_queda_final = []
+        relatorio_capacidade_final = []
+        correcoes_queda_acumuladas = {}
+        correcoes_capacidade_acumuladas = {}
+        resumo_rotas = None
+        rotas_fisicas = []
+        convergiu = False
 
-        resumo_rotas = dimensionar_rotas(
-            rotas_fisicas,
-            circuitos_corrigidos_queda
-        )
+        MAX_ITERACOES_DIMENSIONAMENTO = 6
+
+        for iteracao in range(
+            1,
+            MAX_ITERACOES_DIMENSIONAMENTO + 1
+        ):
+            # Remove apenas o traçado da iteração anterior.
+            for entidade in list(msp):
+                if str(
+                    entidade.dxf.layer
+                ).upper().strip() in {
+                    "PROJ_ELETRICA_ROTEAMENTO",
+                    "PROJ_ELETRICA_ROTEAMENTO_TEXTO",
+                    "PROJ_ELETRICA_DIMENSIONAMENTO",
+                }:
+                    msp.delete_entity(
+                        entidade
+                    )
+
+            bitolas_antes = {
+                int(c.get("numero", 0) or 0):
+                    float(c.get("bitola", 0.0) or 0.0)
+                for c in circuitos_dimensionados
+                if int(c.get("numero", 0) or 0) > 0
+            }
+
+            rotas_fisicas = desenhar_rotas_qdc_iluminacao(
+                msp=msp,
+                qdc_info=qdc_info,
+                pontos_eletricos=pontos_eletricos,
+                circuitos=circuitos_dimensionados,
+                pontos_interruptores=pontos_interruptores,
+                ambientes_geom=ambientes_geom,
+                portas_raw=portas_raw,
+                soleiras_raw=soleiras_raw,
+            )
+
+            (
+                circuitos_pos_queda,
+                relatorio_queda
+            ) = corrigir_bitolas_por_queda(
+                rotas_fisicas,
+                circuitos_dimensionados
+            )
+
+            resumo_intermediario = dimensionar_rotas(
+                rotas_fisicas,
+                circuitos_pos_queda
+            )
+
+            diagnostico_intermediario = (
+                diagnosticar_agrupamento_rotas(
+                    resumo_intermediario,
+                    circuitos_pos_queda
+                )
+            )
+
+            (
+                circuitos_pos_capacidade,
+                relatorio_capacidade
+            ) = corrigir_bitolas_por_capacidade(
+                diagnostico_intermediario,
+                circuitos_pos_queda,
+                metodo_instalacao=metodo_instalacao,
+                temperatura_ambiente_c=temperatura_ambiente_c
+            )
+
+            for item in relatorio_queda:
+                numero_corr = int(
+                    item.get(
+                        "numero",
+                        0
+                    )
+                    or 0
+                )
+
+                if (
+                    numero_corr > 0
+                    and item.get(
+                        "status"
+                    )
+                    == "CORRIGIDA"
+                ):
+                    anterior = correcoes_queda_acumuladas.get(
+                        numero_corr
+                    )
+
+                    if anterior is None:
+                        correcoes_queda_acumuladas[
+                            numero_corr
+                        ] = dict(
+                            item
+                        )
+                    else:
+                        anterior[
+                            "bitola_final_mm2"
+                        ] = item.get(
+                            "bitola_final_mm2"
+                        )
+                        anterior[
+                            "queda_depois_pct"
+                        ] = item.get(
+                            "queda_depois_pct"
+                        )
+
+            for item in relatorio_capacidade:
+                numero_corr = int(
+                    item.get(
+                        "numero",
+                        0
+                    )
+                    or 0
+                )
+
+                if (
+                    numero_corr > 0
+                    and item.get(
+                        "status"
+                    )
+                    == "CORRIGIDA"
+                ):
+                    anterior = correcoes_capacidade_acumuladas.get(
+                        numero_corr
+                    )
+
+                    if anterior is None:
+                        correcoes_capacidade_acumuladas[
+                            numero_corr
+                        ] = dict(
+                            item
+                        )
+                    else:
+                        anterior[
+                            "bitola_final_mm2"
+                        ] = item.get(
+                            "bitola_final_mm2"
+                        )
+                        anterior[
+                            "iz_recomendada_a"
+                        ] = item.get(
+                            "iz_recomendada_a"
+                        )
+
+            bitolas_depois = {
+                int(c.get("numero", 0) or 0):
+                    float(c.get("bitola", 0.0) or 0.0)
+                for c in circuitos_pos_capacidade
+                if int(c.get("numero", 0) or 0) > 0
+            }
+
+            alteracoes = []
+
+            for numero, depois in bitolas_depois.items():
+                antes = bitolas_antes.get(
+                    numero,
+                    depois
+                )
+
+                if depois > antes + 1e-9:
+                    alteracoes.append({
+                        "numero":
+                            numero,
+                        "bitola_antes_mm2":
+                            antes,
+                        "bitola_depois_mm2":
+                            depois,
+                    })
+
+            historico_iteracoes.append({
+                "iteracao":
+                    iteracao,
+                "qtd_alteracoes_bitola":
+                    len(
+                        alteracoes
+                    ),
+                "alteracoes":
+                    alteracoes,
+                "qtd_trechos":
+                    len(
+                        rotas_fisicas
+                    ),
+            })
+
+            circuitos_dimensionados = [
+                dict(c)
+                for c in circuitos_pos_capacidade
+            ]
+
+            relatorio_queda_final = relatorio_queda
+            relatorio_capacidade_final = relatorio_capacidade
+
+            if not alteracoes:
+                convergiu = True
+
+                # A rota desenhada nesta iteração já usa as bitolas finais.
+                resumo_rotas = dimensionar_rotas(
+                    rotas_fisicas,
+                    circuitos_dimensionados
+                )
+
+                diagnostico_final = (
+                    diagnosticar_agrupamento_rotas(
+                        resumo_rotas,
+                        circuitos_dimensionados
+                    )
+                )
+
+                capacidade_final = (
+                    verificar_capacidade_conducao_preliminar(
+                        diagnostico_final,
+                        circuitos_dimensionados,
+                        metodo_instalacao=metodo_instalacao,
+                        temperatura_ambiente_c=temperatura_ambiente_c
+                    )
+                )
+
+                resumo_rotas[
+                    "diagnostico_agrupamento"
+                ] = diagnostico_final
+
+                resumo_rotas[
+                    "capacidade_conducao_preliminar"
+                ] = capacidade_final
+
+                break
+
+        if resumo_rotas is None:
+            # Limite de iterações atingido: redesenha uma última vez com
+            # as seções finais conhecidas para manter CAD e resumo coerentes.
+            for entidade in list(msp):
+                if str(
+                    entidade.dxf.layer
+                ).upper().strip() in {
+                    "PROJ_ELETRICA_ROTEAMENTO",
+                    "PROJ_ELETRICA_ROTEAMENTO_TEXTO",
+                    "PROJ_ELETRICA_DIMENSIONAMENTO",
+                }:
+                    msp.delete_entity(
+                        entidade
+                    )
+
+            rotas_fisicas = desenhar_rotas_qdc_iluminacao(
+                msp=msp,
+                qdc_info=qdc_info,
+                pontos_eletricos=pontos_eletricos,
+                circuitos=circuitos_dimensionados,
+                pontos_interruptores=pontos_interruptores,
+                ambientes_geom=ambientes_geom,
+                portas_raw=portas_raw,
+                soleiras_raw=soleiras_raw,
+            )
+
+            resumo_rotas = dimensionar_rotas(
+                rotas_fisicas,
+                circuitos_dimensionados
+            )
+
+            diagnostico_final = diagnosticar_agrupamento_rotas(
+                resumo_rotas,
+                circuitos_dimensionados
+            )
+
+            capacidade_final = (
+                verificar_capacidade_conducao_preliminar(
+                    diagnostico_final,
+                    circuitos_dimensionados,
+                    metodo_instalacao=metodo_instalacao,
+                    temperatura_ambiente_c=temperatura_ambiente_c
+                )
+            )
+
+            resumo_rotas[
+                "diagnostico_agrupamento"
+            ] = diagnostico_final
+
+            resumo_rotas[
+                "capacidade_conducao_preliminar"
+            ] = capacidade_final
 
         resumo_rotas[
             "correcoes_bitola"
-        ] = correcoes_bitola
+        ] = list(
+            correcoes_queda_acumuladas.values()
+        )
+
+        resumo_rotas[
+            "correcoes_capacidade"
+        ] = list(
+            correcoes_capacidade_acumuladas.values()
+        )
 
         resumo_rotas[
             "circuitos_corrigidos"
-        ] = circuitos_corrigidos_queda
+        ] = circuitos_dimensionados
+
+        resumo_rotas[
+            "circuitos_dimensionados_finais"
+        ] = circuitos_dimensionados
+
+        resumo_rotas[
+            "dimensionamento_iterativo"
+        ] = {
+            "status":
+                (
+                    "CONVERGIU"
+                    if convergiu
+                    else "LIMITE_DE_ITERACOES"
+                ),
+            "iteracoes":
+                len(
+                    historico_iteracoes
+                ),
+            "metodo_instalacao":
+                metodo_instalacao,
+            "temperatura_ambiente_c":
+                temperatura_ambiente_c,
+            "historico":
+                historico_iteracoes,
+        }
 
         resumo_rotas[
             "validacao_eletrica"
         ] = validar_eletrica_rotas(
             resumo_rotas,
-            circuitos_corrigidos_queda
+            circuitos_dimensionados
         )
 
         resumo_rotas[
-            "diagnostico_agrupamento"
-        ] = diagnosticar_agrupamento_rotas(
-            resumo_rotas,
-            circuitos_corrigidos_queda
+            "validacao_ib_in_iz"
+        ] = validar_relacao_ib_in_iz(
+            resumo_rotas.get(
+                "capacidade_conducao_preliminar",
+                {}
+            ),
+            circuitos_dimensionados
         )
 
         # Etiquetas de auditoria: Ø do eletroduto e circuitos por trecho.
@@ -656,7 +970,7 @@ def gerar_cad_unifilar(
 
         desenhar_unifilar_qdc(
             msp=msp,
-            circuitos=circuitos_unifilar,
+            circuitos=circuitos_dimensionados,
             polilinhas_ambientes=polilinhas,
             tensao_projeto=tensao_projeto,
             parametros_rede=parametros_rede_unifilar,

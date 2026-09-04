@@ -18,9 +18,10 @@ from exportacoes import (
 
 def calcular_rotas_antes_do_dxf(
     dxf_bytes, tabela_editada, local_qdc,
-    config_interruptores_usuario, tensao_projeto=220, pe_direito=2.80
+    config_interruptores_usuario, tensao_projeto=220, pe_direito=2.80,
+    metodo_instalacao="B1", temperatura_ambiente_c=30
 ):
-    """Fase 12.6 Rev.1: calcula o resumo físico antes da exportação do DXF."""
+    """Fase 12.7: calcula o resumo físico antes da exportação do DXF."""
     if not dxf_bytes or not local_qdc:
         return None
     resultado = motores.gerar_cad_unifilar(
@@ -31,6 +32,8 @@ def calcular_rotas_antes_do_dxf(
         tensao_projeto=tensao_projeto,
         pe_direito=pe_direito,
         retornar_resumo_rotas=True,
+        metodo_instalacao=metodo_instalacao,
+        temperatura_ambiente_c=temperatura_ambiente_c,
     )
     if isinstance(resultado, tuple) and len(resultado) == 2:
         if isinstance(resultado[1], dict):
@@ -46,7 +49,7 @@ def renderizar_upload_dxf(
     """
     Upload inicial / substituição do DXF.
 
-    Fase 12.6 Rev.1:
+    Fase 12.7:
     - o file_uploader recebe uma chave com nonce;
     - após salvar com sucesso, o nonce é incrementado;
     - no rerun seguinte, nasce um uploader novo e vazio;
@@ -361,6 +364,26 @@ def renderizar_salvar_e_gerar_cad(
                         pe_direito=pe_direito,
                     )
 
+                    rotulo_metodo_capacidade = str(
+                        st.session_state.get(
+                            "fase12_1_metodo_instalacao_rotulo",
+                            "B1"
+                        )
+                        or "B1"
+                    )
+                    metodo_capacidade = (
+                        "B2"
+                        if rotulo_metodo_capacidade.upper().startswith("B2")
+                        else "B1"
+                    )
+                    temperatura_capacidade = int(
+                        st.session_state.get(
+                            "fase12_1_temperatura_ambiente",
+                            30
+                        )
+                        or 30
+                    )
+
                     resultado_cad = motores.gerar_cad_unifilar(
                         dxf_bytes=dxf_bytes,
                         dados_editados=tabela_editada,
@@ -371,6 +394,8 @@ def renderizar_salvar_e_gerar_cad(
                         tensao_projeto=tensao_projeto,
                         pe_direito=pe_direito,
                         retornar_resumo_rotas=True,
+                        metodo_instalacao=metodo_capacidade,
+                        temperatura_ambiente_c=temperatura_capacidade,
                     )
 
                     if (
@@ -485,7 +510,7 @@ def renderizar_salvar_e_gerar_cad(
             mime="application/octet-stream",
             use_container_width=True,
             key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
-            # Fase 12.6 Rev.1:
+            # Fase 12.7:
             # impede o rerun do Streamlit no clique do download.
             # O rerun podia reconstruir a página antes de o navegador
             # iniciar a transferência do DXF.

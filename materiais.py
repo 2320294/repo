@@ -892,17 +892,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.6 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.7 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.6 Rev.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.7/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.6 Rev.1 — se o CAD desta versão já calculou correções por
+    # Fase 12.7 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1259,7 +1259,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.6 REV.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.7 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1440,7 +1440,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
             "potencia": "Potência (W)",
             "tensao": "Tensão (V)",
             "corrente": "Corrente estimada (A)",
-            "bitola": "Bitola preliminar (mm²)",
+            "bitola": "Bitola final (mm²)",
             "disjuntor": "Disjuntor preliminar (A)"
         })
         circuitos_df["Corrente estimada (A)"] = (
@@ -1451,7 +1451,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.6 Rev.1: dados estruturais usados pelo roteamento continuam
+        # Fase 12.7: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1460,7 +1460,17 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
     return materiais_df, circuitos_df
 
 
-def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None, trechos_capacidade_df=None):
+def _gerar_excel_materiais_circuitos(
+    materiais_df,
+    circuitos_df,
+    validacao_df=None,
+    correcoes_df=None,
+    agrupamento_df=None,
+    capacidade_df=None,
+    trechos_capacidade_df=None,
+    correcoes_capacidade_df=None,
+    iteracoes_df=None
+):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         materiais_df.to_excel(writer, sheet_name="Materiais", index=False)
@@ -1551,6 +1561,38 @@ def _gerar_excel_materiais_circuitos(materiais_df, circuitos_df, validacao_df=No
                 )
             )
 
+        if (
+            correcoes_capacidade_df is not None
+            and not correcoes_capacidade_df.empty
+        ):
+            correcoes_capacidade_df.to_excel(
+                writer,
+                sheet_name="Correcoes_Capacidade",
+                index=False
+            )
+            abas.append(
+                (
+                    "Correcoes_Capacidade",
+                    correcoes_capacidade_df
+                )
+            )
+
+        if (
+            iteracoes_df is not None
+            and not iteracoes_df.empty
+        ):
+            iteracoes_df.to_excel(
+                writer,
+                sheet_name="Iteracoes_Dimensionamento",
+                index=False
+            )
+            abas.append(
+                (
+                    "Iteracoes_Dimensionamento",
+                    iteracoes_df
+                )
+            )
+
         workbook = writer.book
         cabecalho = workbook.add_format({
             "bold": True, "bg_color": "#EAF2FF", "border": 1,
@@ -1637,7 +1679,15 @@ def _tabela_resumo_pdf(linhas, largura_total=26.5*cm):
 def _gerar_pdf_materiais_circuitos(
     nome_projeto, materiais_df, circuitos_df, tensao_projeto, pe_direito,
     resumo_balanceamento=None, resumo_protecao=None, resumo_drs=None,
-    resultado_demanda=None, parametros_rede=None, validacao_df=None, correcoes_df=None, agrupamento_df=None, capacidade_df=None, trechos_capacidade_df=None
+    resultado_demanda=None,
+    parametros_rede=None,
+    validacao_df=None,
+    correcoes_df=None,
+    agrupamento_df=None,
+    capacidade_df=None,
+    trechos_capacidade_df=None,
+    correcoes_capacidade_df=None,
+    iteracoes_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -1698,7 +1748,7 @@ def _gerar_pdf_materiais_circuitos(
             "Potência (W)": "Potência<br/>(W)",
             "Tensão (V)": "Tensão<br/>(V)",
             "Corrente estimada (A)": "Corrente<br/>estimada (A)",
-            "Bitola preliminar (mm²)": "Bitola<br/>prelim. (mm²)",
+            "Bitola final (mm²)": "Bitola<br/>final (mm²)",
             "Disjuntor preliminar (A)": "Disjuntor<br/>prelim. (A)",
             "Nº": "Nº",
             "Fase(s)": "Fase(s)",
@@ -1711,7 +1761,7 @@ def _gerar_pdf_materiais_circuitos(
             "Potência (W)": 1.75*cm,
             "Tensão (V)": 1.45*cm,
             "Corrente estimada (A)": 1.85*cm,
-            "Bitola preliminar (mm²)": 1.85*cm,
+            "Bitola final (mm²)": 1.85*cm,
             "Disjuntor preliminar (A)": 2.05*cm,
             "Nº": 1.25*cm,
             "Fase(s)": 1.45*cm,
@@ -2120,6 +2170,116 @@ def _gerar_pdf_materiais_circuitos(
             )
         )
 
+    if (
+        correcoes_capacidade_df is not None
+        and not correcoes_capacidade_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "11. CORREÇÕES AUTOMÁTICAS POR CAPACIDADE DE CONDUÇÃO",
+                secao
+            )
+        ]
+
+        cols_corr_cap_pdf = [
+            c
+            for c in [
+                "Nº",
+                "Circuito",
+                "Ambiente",
+                "Ib (A)",
+                "Bitola antes (mm²)",
+                "Bitola final (mm²)",
+                "Trecho crítico",
+                "Circuitos no trecho",
+                "Fator agrup.",
+                "Iz antes (A)",
+                "Iz final (A)",
+                "Status",
+            ]
+            if c in correcoes_capacidade_df.columns
+        ]
+
+        larguras_corr_cap = {
+            "Nº": 0.8*cm,
+            "Circuito": 1.4*cm,
+            "Ambiente": 2.8*cm,
+            "Ib (A)": 1.1*cm,
+            "Bitola antes (mm²)": 1.7*cm,
+            "Bitola final (mm²)": 1.7*cm,
+            "Trecho crítico": 1.4*cm,
+            "Circuitos no trecho": 1.8*cm,
+            "Fator agrup.": 1.4*cm,
+            "Iz antes (A)": 1.5*cm,
+            "Iz final (A)": 1.5*cm,
+            "Status": 1.3*cm,
+        }
+
+        story.append(
+            _pdf_tabela(
+                correcoes_capacidade_df[
+                    cols_corr_cap_pdf
+                ],
+                [
+                    larguras_corr_cap.get(
+                        c,
+                        1.5*cm
+                    )
+                    for c in cols_corr_cap_pdf
+                ],
+                fonte=5.5
+            )
+        )
+
+        story.append(
+            Paragraph(
+                "As seções acima foram elevadas automaticamente quando a "
+                "capacidade corrigida do trecho governante ficou abaixo da "
+                "corrente de projeto. Após cada alteração, o roteamento e a "
+                "ocupação dos eletrodutos foram recalculados.",
+                texto
+            )
+        )
+
+    if (
+        iteracoes_df is not None
+        and not iteracoes_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "12. HISTÓRICO DO DIMENSIONAMENTO ITERATIVO",
+                secao
+            )
+        ]
+
+        cols_iter_pdf = [
+            c
+            for c in [
+                "Iteração",
+                "Trechos",
+                "Bitolas alteradas",
+                "Alterações",
+            ]
+            if c in iteracoes_df.columns
+        ]
+
+        story.append(
+            _pdf_tabela(
+                iteracoes_df[
+                    cols_iter_pdf
+                ],
+                [
+                    1.4*cm,
+                    1.6*cm,
+                    2.2*cm,
+                    20.0*cm,
+                ][:len(cols_iter_pdf)],
+                fonte=6.0
+            )
+        )
+
     story += [
         Spacer(1,8),
         Paragraph(
@@ -2186,7 +2346,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.6 Rev.1:
+    # Fase 12.7:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2209,6 +2369,63 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
+    # Fase 12.7:
+    # reaplica a seção FINAL calculada pelo ciclo iterativo
+    # (queda de tensão + capacidade de condução + reroteamento).
+    if isinstance(resumo_rotas, dict):
+        finais_por_numero = {
+            int(item.get("numero", 0) or 0): item
+            for item in (
+                resumo_rotas.get(
+                    "circuitos_dimensionados_finais",
+                    []
+                )
+                or []
+            )
+            if int(item.get("numero", 0) or 0) > 0
+        }
+
+        for circuito in circuitos:
+            numero = int(
+                circuito.get(
+                    "numero",
+                    0
+                )
+                or 0
+            )
+
+            final = finais_por_numero.get(
+                numero
+            )
+
+            if not final:
+                continue
+
+            bitola_final = float(
+                final.get(
+                    "bitola",
+                    circuito.get(
+                        "bitola",
+                        0.0
+                    )
+                )
+                or 0.0
+            )
+
+            if bitola_final > 0:
+                circuito[
+                    "bitola"
+                ] = bitola_final
+
+            criterio_final = final.get(
+                "criterio_bitola"
+            )
+
+            if criterio_final:
+                circuito[
+                    "criterio_bitola"
+                ] = criterio_final
+
     resultado_demanda_materiais = calcular_demanda_qdc(
         tabela_editada,
         parametros_rede
@@ -2247,6 +2464,148 @@ def renderizar_materiais(
         materiais,
         circuitos
     )
+
+    if isinstance(resumo_rotas, dict):
+        iterativo = (
+            resumo_rotas.get(
+                "dimensionamento_iterativo",
+                {}
+            )
+            or {}
+        )
+
+        if iterativo:
+            st.markdown(
+                "#### 🔁 Dimensionamento iterativo automático"
+            )
+
+            status_iter = str(
+                iterativo.get(
+                    "status",
+                    ""
+                )
+                or ""
+            )
+
+            qtd_iter = int(
+                iterativo.get(
+                    "iteracoes",
+                    0
+                )
+                or 0
+            )
+
+            metodo_iter = iterativo.get(
+                "metodo_instalacao",
+                "B1"
+            )
+
+            temp_iter = iterativo.get(
+                "temperatura_ambiente_c",
+                30
+            )
+
+            c_it1, c_it2, c_it3 = st.columns(3)
+            c_it1.metric(
+                "Status",
+                status_iter
+            )
+            c_it2.metric(
+                "Iterações",
+                qtd_iter
+            )
+            c_it3.metric(
+                "Parâmetros",
+                f"{metodo_iter} / {temp_iter} °C"
+            )
+
+            historico_iter = (
+                iterativo.get(
+                    "historico",
+                    []
+                )
+                or []
+            )
+
+            if historico_iter:
+                linhas_iter = []
+
+                for item in historico_iter:
+                    alteracoes = (
+                        item.get(
+                            "alteracoes",
+                            []
+                        )
+                        or []
+                    )
+
+                    alteracoes_txt = ", ".join(
+                        (
+                            f"C{int(a.get('numero', 0))}: "
+                            f"{a.get('bitola_antes_mm2')}→"
+                            f"{a.get('bitola_depois_mm2')} mm²"
+                        )
+                        for a in alteracoes
+                    ) or "Sem alteração"
+
+                    linhas_iter.append({
+                        "Iteração":
+                            item.get(
+                                "iteracao"
+                            ),
+                        "Trechos":
+                            item.get(
+                                "qtd_trechos"
+                            ),
+                        "Bitolas alteradas":
+                            item.get(
+                                "qtd_alteracoes_bitola"
+                            ),
+                        "Alterações":
+                            alteracoes_txt,
+                    })
+
+                with st.expander(
+                    "🔎 Ver histórico de convergência",
+                    expanded=False
+                ):
+                    st.dataframe(
+                        pd.DataFrame(
+                            linhas_iter
+                        ),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+            validacao_ib_in_iz = (
+                resumo_rotas.get(
+                    "validacao_ib_in_iz",
+                    {}
+                )
+                or {}
+            )
+
+            alertas_ibin = int(
+                validacao_ib_in_iz.get(
+                    "qtd_alertas",
+                    0
+                )
+                or 0
+            )
+
+            if (
+                status_iter == "CONVERGIU"
+                and alertas_ibin == 0
+            ):
+                st.success(
+                    "O ciclo convergiu e a relação preliminar "
+                    "Ib ≤ In ≤ Iz está atendida nos circuitos avaliados."
+                )
+            elif alertas_ibin:
+                st.warning(
+                    f"{alertas_ibin} circuito(s) ainda exigem revisão da relação "
+                    "Ib ≤ In ≤ Iz. O sistema não aumenta automaticamente o disjuntor."
+                )
 
     if not materiais_df.empty:
         st.dataframe(
@@ -2313,7 +2672,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.6 Rev.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.7: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2858,7 +3217,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 12.6 Rev.1 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 12.7 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -2868,7 +3227,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 12.6 Rev.1: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.7: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -3082,7 +3441,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.6 Rev.1: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 12.7: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -3114,12 +3473,86 @@ definir explicitamente outro método de instalação.
             "forma de agrupamento e dados do fabricante."
         )
 
+    if isinstance(resumo_rotas, dict):
+        correcoes_capacidade_ui = [
+            item
+            for item in (
+                resumo_rotas.get(
+                    "correcoes_capacidade",
+                    []
+                )
+                or []
+            )
+            if item.get(
+                "status"
+            )
+            == "CORRIGIDA"
+        ]
+
+        if correcoes_capacidade_ui:
+            st.markdown(
+                "#### 🌡️ Correções automáticas por capacidade de condução"
+            )
+
+            df_corr_cap = pd.DataFrame(
+                correcoes_capacidade_ui
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "corrente_a": "Ib (A)",
+                    "bitola_original_mm2": "Bitola antes (mm²)",
+                    "bitola_final_mm2": "Bitola final (mm²)",
+                    "trecho_critico_id": "Trecho crítico",
+                    "comprimento_trecho_critico_m": "Comp. crítico (m)",
+                    "qtd_circuitos_agrupados": "Circuitos no trecho",
+                    "fator_agrupamento": "Fator agrup.",
+                    "iz_antes_a": "Iz antes (A)",
+                    "iz_recomendada_a": "Iz final (A)",
+                    "status": "Status",
+                }
+            )
+
+            cols_corr_cap = [
+                c
+                for c in [
+                    "Nº",
+                    "Circuito",
+                    "Ambiente",
+                    "Ib (A)",
+                    "Bitola antes (mm²)",
+                    "Bitola final (mm²)",
+                    "Trecho crítico",
+                    "Circuitos no trecho",
+                    "Fator agrup.",
+                    "Iz antes (A)",
+                    "Iz final (A)",
+                    "Status",
+                ]
+                if c in df_corr_cap.columns
+            ]
+
+            st.dataframe(
+                df_corr_cap[
+                    cols_corr_cap
+                ],
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.caption(
+                "Depois de cada correção de seção, a Fase 12.7 recalcula "
+                "ocupação, redistribuição dos eletrodutos, queda de tensão "
+                "e capacidade de condução até estabilizar."
+            )
+
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
     )
 
     st.caption(
-        "Fase 12.6 Rev.1: os circuitos abaixo já são consolidados. "
+        "Fase 12.7: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -3142,6 +3575,8 @@ definir explicitamente outro método de instalação.
     agrupamento_export_df = None
     capacidade_export_df = None
     trechos_capacidade_export_df = None
+    correcoes_capacidade_export_df = None
+    iteracoes_export_df = None
 
     if resumo_rotas:
         dados_validacao_export = (
@@ -3322,6 +3757,101 @@ definir explicitamente outro método de instalação.
             )
 
 
+    if isinstance(resumo_rotas, dict):
+        dados_corr_cap_export = [
+            item
+            for item in (
+                resumo_rotas.get(
+                    "correcoes_capacidade",
+                    []
+                )
+                or []
+            )
+            if item.get(
+                "status"
+            )
+            == "CORRIGIDA"
+        ]
+
+        if dados_corr_cap_export:
+            correcoes_capacidade_export_df = pd.DataFrame(
+                dados_corr_cap_export
+            ).rename(
+                columns={
+                    "numero": "Nº",
+                    "tipo": "Circuito",
+                    "ambiente": "Ambiente",
+                    "corrente_a": "Ib (A)",
+                    "bitola_original_mm2": "Bitola antes (mm²)",
+                    "bitola_final_mm2": "Bitola final (mm²)",
+                    "trecho_critico_id": "Trecho crítico",
+                    "comprimento_trecho_critico_m": "Comp. crítico (m)",
+                    "qtd_circuitos_agrupados": "Circuitos no trecho",
+                    "fator_agrupamento": "Fator agrup.",
+                    "fator_temperatura": "Fator temp.",
+                    "iz_antes_a": "Iz antes (A)",
+                    "iz_recomendada_a": "Iz final (A)",
+                    "metodo_instalacao": "Método",
+                    "temperatura_ref_c": "Temp. (°C)",
+                    "status": "Status",
+                }
+            )
+
+        historico_export = (
+            (
+                resumo_rotas.get(
+                    "dimensionamento_iterativo",
+                    {}
+                )
+                or {}
+            ).get(
+                "historico",
+                []
+            )
+            or []
+        )
+
+        if historico_export:
+            linhas_hist_export = []
+
+            for item in historico_export:
+                alteracoes = (
+                    item.get(
+                        "alteracoes",
+                        []
+                    )
+                    or []
+                )
+
+                linhas_hist_export.append({
+                    "Iteração":
+                        item.get(
+                            "iteracao"
+                        ),
+                    "Trechos":
+                        item.get(
+                            "qtd_trechos"
+                        ),
+                    "Bitolas alteradas":
+                        item.get(
+                            "qtd_alteracoes_bitola"
+                        ),
+                    "Alterações":
+                        ", ".join(
+                            (
+                                f"C{int(a.get('numero', 0))}: "
+                                f"{a.get('bitola_antes_mm2')}→"
+                                f"{a.get('bitola_depois_mm2')} mm²"
+                            )
+                            for a in alteracoes
+                        )
+                        or "Sem alteração",
+                })
+
+            iteracoes_export_df = pd.DataFrame(
+                linhas_hist_export
+            )
+
     nome_projeto = str(
         st.session_state.get(
             "projeto_ativo",
@@ -3337,7 +3867,9 @@ definir explicitamente outro método de instalação.
         correcoes_df=correcoes_export_df,
         agrupamento_df=agrupamento_export_df,
         capacidade_df=capacidade_export_df,
-        trechos_capacidade_df=trechos_capacidade_export_df
+        trechos_capacidade_df=trechos_capacidade_export_df,
+        correcoes_capacidade_df=correcoes_capacidade_export_df,
+        iteracoes_df=iteracoes_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -3354,7 +3886,9 @@ definir explicitamente outro método de instalação.
         correcoes_df=correcoes_export_df,
         agrupamento_df=agrupamento_export_df,
         capacidade_df=capacidade_export_df,
-        trechos_capacidade_df=trechos_capacidade_export_df
+        trechos_capacidade_df=trechos_capacidade_export_df,
+        correcoes_capacidade_df=correcoes_capacidade_export_df,
+        iteracoes_df=iteracoes_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -3363,7 +3897,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_6_Rev_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_7.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3372,7 +3906,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_6_Rev_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_7.pdf",
             mime="application/pdf",
             use_container_width=True
         )

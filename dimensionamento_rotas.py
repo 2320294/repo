@@ -580,7 +580,7 @@ def desenhar_dimensionamento_rotas(
 
 
 # ============================================================
-# FASE 12.6 REV.1 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
+# FASE 12.7 — VALIDAÇÃO ELÉTRICA PRELIMINAR DAS ROTAS
 # ============================================================
 
 RHO_COBRE_OPERACAO = 0.0225  # ohm.mm²/m — valor preliminar conservador
@@ -848,7 +848,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 12.6 Rev.1.
+    Fase 12.7.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1053,7 +1053,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 12.6 Rev.1.
+    Validação preliminar da Fase 12.7.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1318,7 +1318,7 @@ def validar_eletrica_rotas(
 
 
 # ============================================================
-# FASE 12.6 REV.1 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
+# FASE 12.7 — DIAGNÓSTICO DE AGRUPAMENTO NOS ELETRODUTOS
 # ============================================================
 
 def _prioridade_agrupamento(qtd_circuitos):
@@ -1348,7 +1348,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 12.6 Rev.1.
+    Fase 12.7.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1640,7 +1640,7 @@ def diagnosticar_agrupamento_rotas(
 
 
 # ============================================================
-# FASE 12.6 REV.1 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
+# FASE 12.7 — CAPACIDADE DE CONDUÇÃO PRELIMINAR
 # ============================================================
 
 # Referências internas preliminares para cobre/PVC 70 °C.
@@ -1756,7 +1756,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """Fase 12.6 Rev.1: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
+    """Fase 12.7: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -1919,7 +1919,7 @@ def verificar_capacidade_conducao_preliminar(
 
 
 # ============================================================
-# FASE 12.6 REV.1 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
+# FASE 12.7 — OTIMIZAÇÃO PRELIMINAR DE ELETRODUTOS
 # ============================================================
 
 def _dados_eletroduto_nominal(nominal):
@@ -2010,7 +2010,7 @@ def otimizar_eletrodutos_preliminar(
     limite_circuitos_preferencial=3
 ):
     """
-    Fase 12.6 Rev.1.
+    Fase 12.7.
 
     Para cada trecho físico compara três estratégias:
     1) MANTER o eletroduto atual;
@@ -2157,7 +2157,386 @@ def otimizar_eletrodutos_preliminar(
         "trechos": resultados,
         "observacao": (
             "Simulação de infraestrutura. 'NOVO CAMINHO VIA CAIXA' indica "
-            "redistribuição por outra caixa octogonal; a Fase 12.6 Rev.1 também passa "
+            "redistribuição por outra caixa octogonal; a Fase 12.7 também passa "
             "a reduzir a concentração já na formação da rede troncal."
         ),
+    }
+
+
+# ============================================================
+# FASE 12.7 — CORREÇÃO AUTOMÁTICA POR CAPACIDADE DE CONDUÇÃO
+# ============================================================
+
+def corrigir_bitolas_por_capacidade(
+    diagnostico_agrupamento,
+    circuitos,
+    metodo_instalacao="B1",
+    temperatura_ambiente_c=30
+):
+    """
+    Eleva automaticamente a seção quando a capacidade de condução
+    corrigida fica abaixo da corrente de projeto.
+
+    Usa o trecho físico governante de cada circuito, já considerando
+    agrupamento real da rota e temperatura selecionada.
+
+    Não reduz seção existente.
+    Não altera o disjuntor.
+    """
+    corrigidos = [
+        dict(c)
+        for c in (
+            circuitos
+            or []
+        )
+    ]
+
+    verificacao = (
+        verificar_capacidade_conducao_preliminar(
+            diagnostico_agrupamento,
+            corrigidos,
+            metodo_instalacao=metodo_instalacao,
+            temperatura_ambiente_c=temperatura_ambiente_c,
+        )
+    )
+
+    por_numero = {
+        int(item.get("numero", 0) or 0): item
+        for item in (
+            verificacao.get(
+                "circuitos",
+                []
+            )
+            or []
+        )
+        if int(item.get("numero", 0) or 0) > 0
+    }
+
+    relatorio = []
+
+    for circuito in corrigidos:
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        if numero <= 0:
+            continue
+
+        item = por_numero.get(
+            numero,
+            {}
+        )
+
+        original = _bitola(
+            circuito
+        )
+
+        ib = _numero(
+            item.get(
+                "corrente_a",
+                circuito.get(
+                    "corrente",
+                    0.0
+                )
+            )
+        )
+
+        in_a = _numero(
+            circuito.get(
+                "disjuntor",
+                0.0
+            )
+        )
+
+        corrente_dimensionamento = max(
+            ib,
+            in_a
+        )
+
+        fator_agr = _numero(
+            item.get(
+                "fator_agrupamento",
+                1.0
+            ),
+            1.0
+        )
+
+        fator_temp = _numero(
+            item.get(
+                "fator_temperatura",
+                1.0
+            ),
+            1.0
+        )
+
+        recomendada, iz_recomendada = (
+            _secao_recomendada_capacidade(
+                corrente_a=corrente_dimensionamento,
+                metodo_instalacao=str(
+                    item.get(
+                        "metodo_instalacao",
+                        metodo_instalacao
+                    )
+                    or metodo_instalacao
+                ),
+                fator_agrupamento=fator_agr,
+                fator_temperatura=fator_temp,
+                secao_minima=original,
+            )
+        )
+
+        final = max(
+            original,
+            recomendada
+        )
+
+        status_original = str(
+            item.get(
+                "status",
+                "SEM REFERÊNCIA"
+            )
+            or "SEM REFERÊNCIA"
+        )
+
+        status = (
+            "CORRIGIDA"
+            if final > original + 1e-9
+            else (
+                "MANTIDA"
+                if status_original == "OK"
+                else status_original
+            )
+        )
+
+        if final > original + 1e-9:
+            circuito[
+                "bitola"
+            ] = final
+
+            circuito[
+                "bitola_antes_capacidade"
+            ] = original
+
+            circuito[
+                "criterio_bitola"
+            ] = (
+                "Seção elevada automaticamente por capacidade de condução"
+            )
+
+        relatorio.append({
+            "numero":
+                numero,
+            "tipo":
+                circuito.get(
+                    "tipo",
+                    ""
+                ),
+            "ambiente":
+                circuito.get(
+                    "ambiente",
+                    ""
+                ),
+            "corrente_a":
+                round(
+                    ib,
+                    2
+                ),
+            "disjuntor_a":
+                round(
+                    in_a,
+                    2
+                ),
+            "corrente_dimensionamento_a":
+                round(
+                    corrente_dimensionamento,
+                    2
+                ),
+            "bitola_original_mm2":
+                original,
+            "bitola_final_mm2":
+                final,
+            "trecho_critico_id":
+                item.get(
+                    "trecho_critico_id"
+                ),
+            "comprimento_trecho_critico_m":
+                item.get(
+                    "comprimento_trecho_critico_m"
+                ),
+            "qtd_circuitos_agrupados":
+                item.get(
+                    "qtd_circuitos_agrupados"
+                ),
+            "fator_agrupamento":
+                item.get(
+                    "fator_agrupamento"
+                ),
+            "fator_temperatura":
+                item.get(
+                    "fator_temperatura"
+                ),
+            "iz_antes_a":
+                item.get(
+                    "iz_corrigida_a"
+                ),
+            "iz_recomendada_a":
+                round(
+                    iz_recomendada,
+                    2
+                ),
+            "metodo_instalacao":
+                item.get(
+                    "metodo_instalacao",
+                    metodo_instalacao
+                ),
+            "temperatura_ref_c":
+                item.get(
+                    "temperatura_ref_c",
+                    temperatura_ambiente_c
+                ),
+            "status":
+                status,
+        })
+
+    return (
+        corrigidos,
+        relatorio
+    )
+
+
+def validar_relacao_ib_in_iz(
+    capacidade,
+    circuitos
+):
+    """
+    Valida a relação preliminar:
+        Ib <= In <= Iz
+
+    Ib = corrente de projeto
+    In = disjuntor nominal
+    Iz = capacidade corrigida do condutor no trecho governante
+    """
+    capacidade_por_numero = {
+        int(item.get("numero", 0) or 0): item
+        for item in (
+            (capacidade or {}).get(
+                "circuitos",
+                []
+            )
+            or []
+        )
+        if int(item.get("numero", 0) or 0) > 0
+    }
+
+    resultados = []
+    alertas = 0
+
+    for circuito in (
+        circuitos
+        or []
+    ):
+        numero = int(
+            circuito.get(
+                "numero",
+                0
+            )
+            or 0
+        )
+
+        if numero <= 0:
+            continue
+
+        cap = capacidade_por_numero.get(
+            numero,
+            {}
+        )
+
+        ib = _numero(
+            circuito.get(
+                "corrente",
+                cap.get(
+                    "corrente_a",
+                    0.0
+                )
+            )
+        )
+
+        in_a = _numero(
+            circuito.get(
+                "disjuntor",
+                0.0
+            )
+        )
+
+        iz = _numero(
+            cap.get(
+                "iz_corrigida_a",
+                0.0
+            )
+        )
+
+        if iz <= 0 or in_a <= 0:
+            status = "PENDENTE"
+        elif (
+            ib <= in_a + 1e-9
+            and in_a <= iz + 1e-9
+        ):
+            status = "OK"
+        else:
+            status = "ATENÇÃO"
+            alertas += 1
+
+        resultados.append({
+            "numero":
+                numero,
+            "tipo":
+                circuito.get(
+                    "tipo",
+                    ""
+                ),
+            "ambiente":
+                circuito.get(
+                    "ambiente",
+                    ""
+                ),
+            "ib_a":
+                round(
+                    ib,
+                    2
+                ),
+            "in_a":
+                round(
+                    in_a,
+                    2
+                ),
+            "iz_a":
+                round(
+                    iz,
+                    2
+                ),
+            "bitola_mm2":
+                _bitola(
+                    circuito
+                ),
+            "status":
+                status,
+        })
+
+    return {
+        "status":
+            (
+                "alerta"
+                if alertas
+                else "ok"
+            ),
+        "qtd_alertas":
+            alertas,
+        "circuitos":
+            resultados,
+        "criterio":
+            "Ib <= In <= Iz",
     }
