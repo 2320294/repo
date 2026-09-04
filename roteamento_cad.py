@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 12.5 — rede distribuída por caixas octogonais.
+    Fase 12.6 Rev.1 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -518,7 +518,7 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
-    # Fase 12.5:
+    # Fase 12.6 Rev.1:
     # circuitos terminais devem preferencialmente ser distribuídos em
     # troncos menores, evitando concentrar todos em um único eletroduto.
     # Como referência de topologia, procura limitar a aproximadamente
@@ -800,7 +800,7 @@ def _acumular_circuitos_ate_qdc(
 
 
 # ============================================================
-# FASE 12.5 — REDISTRIBUIÇÃO FÍSICA AUTOMÁTICA
+# FASE 12.6 REV.1 — REDISTRIBUIÇÃO FÍSICA AUTOMÁTICA
 # ============================================================
 
 DIAMETRO_CONDUTOR_REROTA_MM = {
@@ -1059,6 +1059,109 @@ def _selecionar_circuitos_para_desvio(
     return escolhidos
 
 
+
+def _alinhamento_direcional(qdc, candidato, destino):
+    """
+    Retorna o cosseno entre QDC->candidato e QDC->destino.
+    +1 = mesma direção; 0 = perpendicular; -1 = direção oposta.
+    """
+    ax = float(candidato[0]) - float(qdc[0])
+    ay = float(candidato[1]) - float(qdc[1])
+    bx = float(destino[0]) - float(qdc[0])
+    by = float(destino[1]) - float(qdc[1])
+
+    na = math.hypot(ax, ay)
+    nb = math.hypot(bx, by)
+
+    if na < 1e-9 or nb < 1e-9:
+        return 1.0
+
+    return (
+        ax * bx + ay * by
+    ) / (na * nb)
+
+
+def _avaliar_caminho_alternativo(
+    qdc,
+    candidato,
+    destino,
+    distancia_raiz_candidato
+):
+    """
+    Fase 12.6 Rev.1.
+
+    Compara o percurso total desde o QDC até o destino, e não apenas
+    a ligação local candidato->destino.
+
+    Caminhos que saem para o hemisfério oposto ao destino recebem
+    uma penalização de custo, evitando situações como QDC -> VARANDA
+    -> WC quando existe uma alternativa mais curta na direção do WC.
+    """
+    direto = _dist(
+        qdc,
+        destino
+    )
+
+    total = (
+        float(
+            distancia_raiz_candidato
+            or 0.0
+        )
+        + _dist(
+            candidato,
+            destino
+        )
+    )
+
+    alinhamento = _alinhamento_direcional(
+        qdc,
+        candidato,
+        destino
+    )
+
+    # Não proíbe desvios geométricos: apenas os torna menos atraentes.
+    # Quanto mais o candidato estiver "atrás" do QDC em relação ao destino,
+    # maior a penalização.
+    penalidade_direcao = (
+        1.0
+        if alinhamento >= 0.0
+        else (
+            1.0
+            + min(
+                0.75,
+                abs(alinhamento) * 0.75
+            )
+        )
+    )
+
+    custo = total * penalidade_direcao
+
+    desvio_pct = (
+        (
+            total / direto
+            - 1.0
+        )
+        * 100.0
+        if direto > 1e-9
+        else 0.0
+    )
+
+    return {
+        "percurso_total_m":
+            float(total),
+        "percurso_direto_m":
+            float(direto),
+        "desvio_vs_direto_pct":
+            float(desvio_pct),
+        "alinhamento_direcional":
+            float(alinhamento),
+        "penalidade_direcao":
+            float(penalidade_direcao),
+        "custo_selecao":
+            float(custo),
+    }
+
+
 def _redistribuir_tronco_caixas_octogonais(
     qdc,
     nos,
@@ -1067,7 +1170,7 @@ def _redistribuir_tronco_caixas_octogonais(
     max_iteracoes=12
 ):
     """
-    Fecha o ciclo da Fase 12.5:
+    Fecha o ciclo da Fase 12.6 Rev.1:
 
     1. calcula a ocupação projetada em Ø25 de cada trecho troncal;
     2. se ultrapassar 40%, procura outra caixa octogonal disponível;
@@ -1276,19 +1379,21 @@ def _redistribuir_tronco_caixas_octogonais(
                         ponto_cand
                     )
 
-                custo = (
+                avaliacao = _avaliar_caminho_alternativo(
+                    qdc,
+                    ponto_cand,
+                    destino_pt,
                     dist_raiz
-                    + _dist(
-                        ponto_cand,
-                        destino_pt
-                    )
                 )
 
                 candidatos.append(
                     (
-                        custo,
+                        avaliacao[
+                            "custo_selecao"
+                        ],
                         no,
-                        caminho_cand
+                        caminho_cand,
+                        avaliacao
                     )
                 )
 
@@ -1298,13 +1403,47 @@ def _redistribuir_tronco_caixas_octogonais(
                 por_destino
             )
 
+            # A saída direta do QDC participa da comparação SEMPRE.
+            # Assim uma caixa alternativa só é usada se o percurso total
+            # realmente for melhor que QDC -> destino.
+            direto_m = _dist(
+                qdc,
+                destino_pt
+            )
+
+            melhor_caixa = None
+
             if candidatos:
                 candidatos.sort(
                     key=lambda item:
                         item[0]
                 )
+                melhor_caixa = candidatos[0]
 
-                _, caixa_alt, caminho_alt = candidatos[0]
+            # Reusar uma caixa pode economizar infraestrutura, então aceitamos
+            # um pequeno desvio de percurso. Porém o caminho alternativo não pode
+            # ficar muito maior que uma nova saída direta do QDC.
+            FATOR_MAX_DESVIO_REROTA = 1.20
+
+            usar_caixa = (
+                melhor_caixa is not None
+                and float(
+                    melhor_caixa[3].get(
+                        "custo_selecao",
+                        1e99
+                    )
+                )
+                <= direto_m
+                * FATOR_MAX_DESVIO_REROTA
+            )
+
+            if usar_caixa:
+                (
+                    _,
+                    caixa_alt,
+                    caminho_alt,
+                    avaliacao_alt
+                ) = melhor_caixa
 
                 for a_old in caminho_antigo:
                     for numero in escolhidos:
@@ -1359,26 +1498,35 @@ def _redistribuir_tronco_caixas_octogonais(
                     "limite_entradas_caixa":
                         MAX_ENTRADAS_CAIXA_OCTOGONAL,
                     "dist_raiz":
-                        _dist(
-                            qdc,
-                            ponto_alt
-                        )
-                        + _dist(
-                            ponto_alt,
-                            destino_pt
-                        ),
+                        avaliacao_alt[
+                            "percurso_total_m"
+                        ],
                     "dist_direta":
-                        _dist(
-                            qdc,
-                            destino_pt
+                        avaliacao_alt[
+                            "percurso_direto_m"
+                        ],
+                    "desvio_vs_direto_pct":
+                        round(
+                            avaliacao_alt[
+                                "desvio_vs_direto_pct"
+                            ],
+                            1
                         ),
+                    "alinhamento_direcional":
+                        round(
+                            avaliacao_alt[
+                                "alinhamento_direcional"
+                            ],
+                            3
+                        ),
+                    "criterio_selecao_rerota":
+                        "MENOR_CUSTO_TOTAL_DESDE_QDC",
                 })
 
                 alterou = True
                 break
 
-            # Fallback: nova saída física do QDC para a caixa crítica.
-            # Só é usado quando nenhuma caixa alternativa comporta o desvio.
+            # Se nenhuma caixa é melhor que a saída direta, usa o QDC.
             ocup_bypass = _ocupacao_circuitos_rota(
                 escolhidos,
                 circuitos_por_numero
@@ -1428,6 +1576,12 @@ def _redistribuir_tronco_caixas_octogonais(
                             qdc,
                             destino_pt
                         ),
+                    "desvio_vs_direto_pct":
+                        0.0,
+                    "alinhamento_direcional":
+                        1.0,
+                    "criterio_selecao_rerota":
+                        "MENOR_CUSTO_TOTAL_DESDE_QDC",
                 })
 
                 alterou = True
@@ -1856,7 +2010,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 12.5:
+    Fase 12.6 Rev.1:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -1885,7 +2039,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 12.5
+    Fase 12.6 Rev.1
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -2498,7 +2652,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 12.5.
+    Fase 12.6 Rev.1.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -2666,7 +2820,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 12.5 — ramais dedicados das TUEs.
+    Fase 12.6 Rev.1 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2838,7 +2992,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 12.5
+    Fase 12.6 Rev.1
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente

@@ -892,17 +892,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.5 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.6 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.5/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.6 Rev.1/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.5 — se o CAD desta versão já calculou correções por
+    # Fase 12.6 Rev.1 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1259,7 +1259,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.5 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.6 REV.1 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1451,7 +1451,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.5: dados estruturais usados pelo roteamento continuam
+        # Fase 12.6 Rev.1: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2186,7 +2186,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.5:
+    # Fase 12.6 Rev.1:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2313,7 +2313,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.5: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.6 Rev.1: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -2704,15 +2704,40 @@ def renderizar_materiais(
                             "destino_ambiente",
                             ""
                         ),
-                    "Circuitos":
+                    "Circuitos transportados":
                         ", ".join(
-                            str(n)
+                            f"C{n}"
                             for n in (
                                 rota.get(
                                     "circuitos",
                                     []
                                 )
                                 or []
+                            )
+                        ),
+                    "Qtd. circuitos":
+                        len(
+                            rota.get(
+                                "circuitos",
+                                []
+                            )
+                            or []
+                        ),
+                    "Condutores":
+                        int(
+                            rota.get(
+                                "qtd_condutores",
+                                0
+                            )
+                            or sum(
+                                1
+                                for _ in (
+                                    rota.get(
+                                        "condutores",
+                                        []
+                                    )
+                                    or []
+                                )
                             )
                         ),
                     "Comprimento (m)":
@@ -2732,6 +2757,11 @@ def renderizar_materiais(
                             if criterio
                             == "REDISTRIBUICAO_CAIXA_OCTOGONAL"
                             else "Nova saída do QDC"
+                        ),
+                    "Desvio vs. direto (%)":
+                        rota.get(
+                            "desvio_vs_direto_pct",
+                            0.0
                         ),
                 })
 
@@ -2762,7 +2792,8 @@ def renderizar_materiais(
         )
 
         st.caption(
-            "Depois da redistribuição física, o sistema reavalia cada trecho. "
+            "Depois da redistribuição física, o sistema reavalia cada trecho e escolhe "
+            "o caminho considerando o percurso total desde o QDC. "
             "Nos circuitos terminais o limite permanece Ø25 mm; se a ocupação "
             "passar de 40%, o roteamento procura outra caixa octogonal ou "
             "uma nova saída do QDC."
@@ -2827,7 +2858,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 12.5 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 12.6 Rev.1 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -2837,7 +2868,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 12.5: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.6 Rev.1: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -3051,7 +3082,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.5: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 12.6 Rev.1: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -3088,7 +3119,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.5: os circuitos abaixo já são consolidados. "
+        "Fase 12.6 Rev.1: os circuitos abaixo já são consolidados. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -3332,7 +3363,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_5.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_6_Rev_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3341,7 +3372,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_5.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_6_Rev_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )
