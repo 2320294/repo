@@ -76,21 +76,94 @@ def _qtd_dps(resumo_protecao, dg_polos):
     return max(0, int(dg_polos or 0))
 
 
-def _polos_dr(dr, circuitos_por_numero):
+def _condutores_dr(dr, circuitos_por_numero):
+    """
+    Retorna os condutores que realmente atravessam o IDR com base na
+    coluna `fase` dos circuitos já balanceados.
+
+    Exemplos:
+      circuitos só em A (127 V)        -> A + N
+      circuitos A-B apenas (220 V)     -> A + B
+      circuitos em A e B com 127 V     -> A + B + N
+      grupo usando A/B/C e 127 V       -> A + B + C + N
+    """
     numeros = [
         int(n or 0)
         for n in (dr.get("circuitos", []) or [])
         if int(n or 0) > 0
     ]
-    maior = max(
-        (
-            _polos_circuito(circuitos_por_numero[n])
-            for n in numeros
-            if n in circuitos_por_numero
-        ),
-        default=1
+
+    fases = []
+    precisa_neutro = False
+
+    for numero in numeros:
+        circuito = circuitos_por_numero.get(
+            numero
+        )
+
+        if not circuito:
+            continue
+
+        for token in _fases_do_texto(
+            circuito.get(
+                "fase",
+                ""
+            )
+        ):
+            if (
+                token in ("A", "B", "C")
+                and token not in fases
+            ):
+                fases.append(
+                    token
+                )
+
+        # Circuito monopolar utiliza fase + neutro.
+        if _polos_circuito(
+            circuito
+        ) == 1:
+            precisa_neutro = True
+
+    fases = [
+        token
+        for token in ("A", "B", "C")
+        if token in fases
+    ]
+
+    condutores = list(
+        fases
     )
-    return 2 if maior <= 2 else maior
+
+    if precisa_neutro:
+        condutores.append(
+            "N"
+        )
+
+    return condutores
+
+
+def _polos_dr(dr, circuitos_por_numero):
+    """
+    Dimensiona fisicamente o IDR pelos condutores reais do grupo.
+
+    Em padrão DIN residencial:
+      - 2 condutores -> IDR 2P;
+      - 3 ou 4 condutores -> IDR 4P.
+    """
+    condutores = _condutores_dr(
+        dr,
+        circuitos_por_numero
+    )
+
+    qtd = len(
+        condutores
+    )
+
+    if qtd <= 2:
+        return 2
+
+    return 4
+
 
 
 def _dispositivos_base(
@@ -100,7 +173,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.12:
+    Fase 13.4 Rev.13:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -189,12 +262,16 @@ def _dispositivos_base(
         if sens:
             descr += f" {int(sens)} mA"
 
-        fases_grupo = []
-        for item in itens:
-            fase_item = str(item.get("fase", "") or "").upper().strip()
-            for token in ("A", "B", "C"):
-                if token in fase_item and token not in fases_grupo:
-                    fases_grupo.append(token)
+        condutores_grupo = _condutores_dr(
+            dr,
+            por_numero
+        )
+
+        fases_grupo = [
+            token
+            for token in condutores_grupo
+            if token in ("A", "B", "C")
+        ]
 
         protecoes_gerais.append({
             "tipo": "IDR",
@@ -203,6 +280,7 @@ def _dispositivos_base(
             "modulos": polos_dr,
             "grupo": gid,
             "fase": "/".join(fases_grupo),
+            "condutores": condutores_grupo,
             "circuitos": ",".join(f"C{n:02d}" for n in numeros),
             "ambiente": str(dr.get("descricao", "") or ""),
             "corrente_a": int(nominal) if nominal else None,
@@ -728,7 +806,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.4 Rev.12:
+    # Fase 13.4 Rev.13:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -793,7 +871,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.4 Rev.12:
+        # Fase 13.4 Rev.13:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -897,62 +975,112 @@ def _indice_fase(token):
     )
 
 
-def _polo_para_fase(disp, geom, token):
+def _mapa_condutores_polos(disp, geom):
     """
-    Retorna o centro do polo físico destinado à fase indicada.
-
-    Para aparelhos multipolares, a ordem dos polos acompanha a ordem
-    elétrica das fases presentes no dispositivo.
+    Mapeia cada condutor elétrico a um polo físico único.
+    Nunca permite duas fases no mesmo polo.
     """
-    fases = _fases_do_texto(
-        disp.get(
-            "fase",
-            ""
-        )
+    centros = _centros_polos(
+        geom
     )
 
-    if disp.get(
-        "tipo"
-    ) == "DG":
-        fases = [
+    tipo = str(
+        disp.get(
+            "tipo",
+            ""
+        )
+        or ""
+    ).upper()
+
+    if tipo == "DG":
+        ordem = [
             "A",
             "B",
             "C",
         ][:len(
-            _centros_polos(
-                geom
-            )
+            centros
         )]
+
+    elif tipo == "IDR":
+        condutores = [
+            str(c).upper()
+            for c in (
+                disp.get(
+                    "condutores",
+                    []
+                )
+                or []
+            )
+        ]
+
+        if len(centros) >= 4:
+            # Ordem física convencional e estável.
+            ordem = [
+                "A",
+                "B",
+                "C",
+                "N",
+            ]
+        else:
+            ordem = list(
+                condutores
+            )[:len(
+                centros
+            )]
+
+    else:
+        ordem = _fases_do_texto(
+            disp.get(
+                "fase",
+                ""
+            )
+        )[:len(
+            centros
+        )]
+
+    mapa = {}
+
+    for idx, condutor in enumerate(
+        ordem
+    ):
+        if idx >= len(
+            centros
+        ):
+            break
+
+        mapa[
+            condutor
+        ] = centros[
+            idx
+        ]
+
+    return mapa
+
+
+def _polo_para_fase(disp, geom, token):
+    token = str(
+        token
+        or ""
+    ).upper()
+
+    mapa = _mapa_condutores_polos(
+        disp,
+        geom
+    )
+
+    if token in mapa:
+        return mapa[
+            token
+        ]
 
     centros = _centros_polos(
         geom
     )
 
-    if token in fases:
-        idx = fases.index(
-            token
-        )
-        if idx < len(
-            centros
-        ):
-            return centros[
-                idx
-            ]
-
-    idx_global = _indice_fase(
-        token
-    )
-
-    if idx_global < len(
-        centros
-    ):
-        return centros[
-            idx_global
-        ]
-
     return centros[
         0
     ]
+
 
 
 def _mapa_fases_polos(disp, geom):
@@ -1003,7 +1131,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.12 — QDC executivo no CAD.
+    Fase 13.4 Rev.13 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1085,7 +1213,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.12",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.13",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1145,7 +1273,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.4 Rev.12:
+    # Fase 13.4 Rev.13:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1484,38 +1612,42 @@ def desenhar_mapa_fisico_qdc(
                 LPE
             )
 
-        # IDRs: cada fase entra em seu polo físico correspondente.
+        # IDRs: derivação baseada diretamente nas fases dos circuitos
+        # pertencentes ao grupo. Cada condutor possui um polo exclusivo.
         for d, g in geral_geom:
             if d.get("tipo") != "IDR":
                 continue
 
-            fases_idr = _fases_do_texto(
-                d.get(
-                    "fase",
-                    ""
-                )
+            mapa_polos = _mapa_condutores_polos(
+                d,
+                g
             )
 
-            fases_polos = []
+            fases_idr = [
+                token
+                for token in ("A", "B", "C")
+                if token in (
+                    d.get(
+                        "condutores",
+                        []
+                    )
+                    or []
+                )
+            ]
 
             for token in fases_idr:
                 if token not in barramentos_y:
                     continue
 
-                xx = _polo_para_fase(
-                    d,
-                    g,
+                xx = mapa_polos.get(
                     token
                 )
 
-                fases_polos.append(
-                    (
-                        token,
-                        xx
-                    )
-                )
+                if xx is None:
+                    continue
 
-                # A ligação termina exatamente na barra da fase escolhida.
+                # A ligação nasce no borne do polo e termina na barra
+                # específica daquela fase.
                 _line(
                     msp,
                     (
@@ -1530,6 +1662,7 @@ def desenhar_mapa_fisico_qdc(
                         token
                     )
                 )
+
                 _no_fase_preenchido(
                     msp,
                     xx,
@@ -1537,26 +1670,32 @@ def desenhar_mapa_fisico_qdc(
                     token
                 )
 
-            # Quando sobra polo em IDR de circuito fase-neutro,
-            # o último polo é reservado visualmente ao neutro.
-            polos_idr = _centros_polos(
-                g
-            )
+            # Neutro entra somente no polo N.
             if (
-                _tem_neutro_alimentador(mapa)
-                and len(polos_idr) > len(fases_polos)
+                "N"
+                in (
+                    d.get(
+                        "condutores",
+                        []
+                    )
+                    or []
+                )
+                and "N" in mapa_polos
             ):
-                x_n_idr = polos_idr[-1]
+                x_n_idr = mapa_polos[
+                    "N"
+                ]
+
                 _polyline(
                     msp,
                     [
                         (
                             neutro["x"],
-                            g["y2"] + 0.16
+                            g["y2"] + 0.14
                         ),
                         (
                             x_n_idr,
-                            g["y2"] + 0.16
+                            g["y2"] + 0.14
                         ),
                         (
                             x_n_idr,
@@ -1565,16 +1704,6 @@ def desenhar_mapa_fisico_qdc(
                     ],
                     LN
                 )
-
-            _polyline(
-                msp,
-                [
-                    (g["x2"] - 0.12, g["y1"]),
-                    (g["x2"] - 0.12, g["y1"] - 0.24),
-                    (neutro["x"], g["y1"] - 0.24),
-                ],
-                LN
-            )
 
     # -------------------------
     # Fileiras inferiores: circuitos
@@ -2004,12 +2133,25 @@ def desenhar_mapa_fisico_qdc(
                             fonte_geom
                         )
 
-                        fases_fonte = _fases_do_texto(
-                            fonte_disp.get(
-                                "fase",
-                                ""
+                        if fonte_disp.get("tipo") == "IDR":
+                            fases_fonte = [
+                                token
+                                for token in ("A", "B", "C")
+                                if token in (
+                                    fonte_disp.get(
+                                        "condutores",
+                                        []
+                                    )
+                                    or []
+                                )
+                            ]
+                        else:
+                            fases_fonte = _fases_do_texto(
+                                fonte_disp.get(
+                                    "fase",
+                                    ""
+                                )
                             )
-                        )
 
                         if fonte_disp.get("tipo") == "DG":
                             fases_fonte = _fases_alimentador(
@@ -2028,9 +2170,11 @@ def desenhar_mapa_fisico_qdc(
                             ):
                                 continue
 
-                            x_origem = polos_fonte[
-                                idx_fase
-                            ]
+                            x_origem = _polo_para_fase(
+                                fonte_disp,
+                                fonte_geom,
+                                fase_item
+                            )
                             yy_destino = y_fase_grupo[
                                 fase_item
                             ]
@@ -2142,7 +2286,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.4 Rev.12:
+    # Fase 13.4 Rev.13:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
@@ -2186,6 +2330,7 @@ def desenhar_mapa_fisico_qdc(
             or ""
         )
 
+        # Fonte de verdade das fases: resultado de balancear_circuitos().
         fase_c = str(
             d.get(
                 "fase",
