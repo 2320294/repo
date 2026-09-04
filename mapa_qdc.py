@@ -173,7 +173,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.13:
+    Fase 13.5:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -533,6 +533,44 @@ def _polyline(msp, pontos, layer):
 
 
 
+
+def _eh_ultimo_ponto_da_fase(x, pontos_fase, tolerancia=1e-6):
+    """
+    Convenção gráfica da vista frontal:
+    o último ponto de uma pista de fase é somente uma mudança de direção.
+    Portanto, não recebe círculo preenchido.
+    """
+    pontos = [
+        float(v)
+        for v in (pontos_fase or [])
+    ]
+
+    if not pontos:
+        return False
+
+    return abs(
+        float(x)
+        - max(pontos)
+    ) <= tolerancia
+
+
+def _desenhar_no_se_derivacao(msp, x, y, token, pontos_fase):
+    """
+    Desenha nó somente quando a conexão é uma derivação.
+    No último ponto da pista a linha apenas vira/desce.
+    """
+    if not _eh_ultimo_ponto_da_fase(
+        x,
+        pontos_fase
+    ):
+        _no_fase_preenchido(
+            msp,
+            x,
+            y,
+            token
+        )
+
+
 def _no_fase_preenchido(msp, x, y, token, raio=0.045):
     """
     Nó elétrico de derivação:
@@ -806,7 +844,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -871,7 +909,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.4 Rev.13:
+        # Fase 13.5:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1131,7 +1169,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.13 — QDC executivo no CAD.
+    Fase 13.5 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1213,7 +1251,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.13",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.5",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1273,7 +1311,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1514,23 +1552,110 @@ def desenhar_mapa_fisico_qdc(
         )
 
     if geral_geom:
-        x_bus_ini = dg_geoms[0][1]["cx"] if dg_geoms else geral_geom[0][1]["cx"]
-        x_bus_fim = geral_geom[-1][1]["cx"]
-
         fases_disponiveis = _fases_alimentador(
             mapa
         )
 
+        # ----------------------------------------------------
+        # FASE 13.5 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # ----------------------------------------------------
+        # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
+        # Assim o barramento termina exatamente na última ligação:
+        # nesse último ponto a linha apenas vira/desce e NÃO recebe bolinha.
+        pontos_superiores_por_fase = {
+            token: []
+            for token in fases_disponiveis
+        }
+
+        if dg_geoms:
+            dg_disp, dg_geom = dg_geoms[0]
+            for token in fases_disponiveis:
+                pontos_superiores_por_fase[token].append(
+                    _polo_para_fase(
+                        dg_disp,
+                        dg_geom,
+                        token
+                    )
+                )
+
+        for d, g in geral_geom:
+            tipo_d = str(
+                d.get(
+                    "tipo",
+                    ""
+                )
+                or ""
+            ).upper()
+
+            if tipo_d == "DPS":
+                token = _fases_do_texto(
+                    d.get(
+                        "fase"
+                    )
+                )[0]
+
+                if token in pontos_superiores_por_fase:
+                    pontos_superiores_por_fase[token].append(
+                        _centros_polos(
+                            g
+                        )[0]
+                    )
+
+            elif tipo_d == "IDR":
+                mapa_polos = _mapa_condutores_polos(
+                    d,
+                    g
+                )
+
+                for token in ("A", "B", "C"):
+                    if (
+                        token in pontos_superiores_por_fase
+                        and token in (
+                            d.get(
+                                "condutores",
+                                []
+                            )
+                            or []
+                        )
+                        and token in mapa_polos
+                    ):
+                        pontos_superiores_por_fase[token].append(
+                            mapa_polos[
+                                token
+                            ]
+                        )
+
+        # Cada pista de fase termina no último consumidor daquela fase.
+        # Não há prolongamento "morto" após a última derivação.
         for token in fases_disponiveis:
-            _line(
-                msp,
-                (x_bus_ini, barramentos_y[token]),
-                (x_bus_fim, barramentos_y[token]),
-                _layer_por_token(token)
+            pontos_token = pontos_superiores_por_fase.get(
+                token,
+                []
             )
 
-        # DG -> barramentos: uma derivação por fase, terminando exatamente
-        # na respectiva barra.
+            if len(
+                pontos_token
+            ) >= 2:
+                _line(
+                    msp,
+                    (
+                        min(
+                            pontos_token
+                        ),
+                        barramentos_y[token]
+                    ),
+                    (
+                        max(
+                            pontos_token
+                        ),
+                        barramentos_y[token]
+                    ),
+                    _layer_por_token(
+                        token
+                    )
+                )
+
+        # DG -> barramentos.
         if dg_geoms:
             dg_disp, dg_geom = dg_geoms[0]
 
@@ -1555,24 +1680,34 @@ def desenhar_mapa_fisico_qdc(
                         token
                     )
                 )
-                _no_fase_preenchido(
+
+                _desenhar_no_se_derivacao(
                     msp,
                     x_polo_dg,
                     barramentos_y[token],
-                    token
+                    token,
+                    pontos_superiores_por_fase.get(
+                        token,
+                        []
+                    )
                 )
 
         # DPS: fase -> polo físico do DPS -> PE.
         for d, g in geral_geom:
             if d.get("tipo") != "DPS":
                 continue
-            token = _fases_do_texto(d.get("fase"))[0]
+
+            token = _fases_do_texto(
+                d.get(
+                    "fase"
+                )
+            )[0]
+
             polos_dps = _centros_polos(
                 g
             )
             x_polo = polos_dps[0]
-            # A derivação do DPS começa na própria barra da fase e termina
-            # no borne superior do aparelho.
+
             _line(
                 msp,
                 (
@@ -1587,12 +1722,18 @@ def desenhar_mapa_fisico_qdc(
                     token
                 )
             )
-            _no_fase_preenchido(
+
+            _desenhar_no_se_derivacao(
                 msp,
                 x_polo,
                 barramentos_y[token],
-                token
+                token,
+                pontos_superiores_por_fase.get(
+                    token,
+                    []
+                )
             )
+
             _texto_central(
                 msp,
                 f"L{('A','B','C').index(token)+1}",
@@ -1602,18 +1743,27 @@ def desenhar_mapa_fisico_qdc(
                 0.065,
                 LT
             )
+
             _polyline(
                 msp,
                 [
-                    (g["cx"], g["y1"]),
-                    (g["cx"], g["y1"] - 0.28),
-                    (pe["x"], g["y1"] - 0.28),
+                    (
+                        g["cx"],
+                        g["y1"]
+                    ),
+                    (
+                        g["cx"],
+                        g["y1"] - 0.28
+                    ),
+                    (
+                        pe["x"],
+                        g["y1"] - 0.28
+                    ),
                 ],
                 LPE
             )
 
-        # IDRs: derivação baseada diretamente nas fases dos circuitos
-        # pertencentes ao grupo. Cada condutor possui um polo exclusivo.
+        # IDRs: cada fase entra em seu polo físico correspondente.
         for d, g in geral_geom:
             if d.get("tipo") != "IDR":
                 continue
@@ -1646,8 +1796,6 @@ def desenhar_mapa_fisico_qdc(
                 if xx is None:
                     continue
 
-                # A ligação nasce no borne do polo e termina na barra
-                # específica daquela fase.
                 _line(
                     msp,
                     (
@@ -1663,14 +1811,18 @@ def desenhar_mapa_fisico_qdc(
                     )
                 )
 
-                _no_fase_preenchido(
+                _desenhar_no_se_derivacao(
                     msp,
                     xx,
                     barramentos_y[token],
-                    token
+                    token,
+                    pontos_superiores_por_fase.get(
+                        token,
+                        []
+                    )
                 )
 
-            # Neutro entra somente no polo N.
+            # Neutro entra exclusivamente no polo N.
             if (
                 "N"
                 in (
@@ -1823,17 +1975,10 @@ def desenhar_mapa_fisico_qdc(
                 LPE
             )
 
-            # N: barramento vertical -> corredor inferior.
-            _polyline(
-                msp,
-                [
-                    (neutro["x"], neutro["y_bottom"]),
-                    (neutro["x"], y_corredor_n),
-                    (x_esq_corredor, y_corredor_n),
-                ],
-                LN
-            )
-
+            # O neutro não é mais distribuído por um corredor comum.
+            # Circuitos protegidos por IDR recebem N somente pela saída
+            # do respectivo IDR. Circuitos SEM DR recebem N diretamente
+            # do barramento principal.
             for d, g in circuitos_geom:
                 if abs(
                     g["y1"]
@@ -1885,27 +2030,9 @@ def desenhar_mapa_fisico_qdc(
                     LPE
                 )
 
-                # Neutro somente quando o circuito realmente o utiliza.
-                if g.get(
-                    "tem_neutro"
-                ):
-                    x_n_saida = (
-                        g["cx"]
-                        + 0.10
-                    )
-
-                    _line(
-                        msp,
-                        (
-                            x_n_saida,
-                            y_corredor_n
-                        ),
-                        (
-                            x_n_saida,
-                            y_saida_circuito
-                        ),
-                        LN
-                    )
+                # O neutro é ligado depois, dentro do grupo elétrico
+                # correspondente, para garantir que passe pelo mesmo IDR
+                # das fases daquele circuito.
 
                 # Código do circuito na saída; nenhum ambiente/descrição aqui.
                 _texto_central(
@@ -1970,7 +2097,7 @@ def desenhar_mapa_fisico_qdc(
                         )
                     )
 
-                dr_geom_por_grupo = {
+                dr_disp_geom_por_grupo = {
                     str(
                         d.get(
                             "grupo",
@@ -1978,7 +2105,10 @@ def desenhar_mapa_fisico_qdc(
                         )
                         or ""
                     ):
-                    g
+                    (
+                        d,
+                        g
+                    )
                     for d, g in geral_geom
                     if d.get(
                         "tipo"
@@ -1986,9 +2116,161 @@ def desenhar_mapa_fisico_qdc(
                     == "IDR"
                 }
 
+                dr_geom_por_grupo = {
+                    grupo_idr: par_idr[1]
+                    for grupo_idr, par_idr
+                    in dr_disp_geom_por_grupo.items()
+                }
+
                 for grupo, itens_grupo in grupos_fileira:
                     x1p = itens_grupo[0][1]["x1"]
                     x2p = itens_grupo[-1][1]["x2"]
+
+                    # --------------------------------------------------
+                    # NEUTRO DO GRUPO
+                    # --------------------------------------------------
+                    # Somente circuitos monopolares utilizam neutro.
+                    # Se houver IDR, o neutro obrigatoriamente entra no
+                    # IDR e SAI do IDR antes de alimentar esses circuitos.
+                    itens_com_neutro = [
+                        (
+                            d_item,
+                            g_item
+                        )
+                        for d_item, g_item
+                        in itens_grupo
+                        if g_item.get(
+                            "tem_neutro"
+                        )
+                    ]
+
+                    if itens_com_neutro:
+                        y_n_grupo = y_corredor_n
+
+                        x_n_primeiro = (
+                            itens_com_neutro[0][1]["cx"]
+                            + 0.10
+                        )
+
+                        x_n_ultimo = (
+                            itens_com_neutro[-1][1]["cx"]
+                            + 0.10
+                        )
+
+                        # Segmento de neutro exclusivo deste grupo.
+                        _line(
+                            msp,
+                            (
+                                min(
+                                    x_n_primeiro,
+                                    x_n_ultimo
+                                ),
+                                y_n_grupo
+                            ),
+                            (
+                                max(
+                                    x_n_primeiro,
+                                    x_n_ultimo
+                                ),
+                                y_n_grupo
+                            ),
+                            LN
+                        )
+
+                        # Derivações N para os circuitos do grupo.
+                        for d_n, g_n in itens_com_neutro:
+                            x_n_saida = (
+                                g_n["cx"]
+                                + 0.10
+                            )
+
+                            _line(
+                                msp,
+                                (
+                                    x_n_saida,
+                                    y_n_grupo
+                                ),
+                                (
+                                    x_n_saida,
+                                    y_saida_circuito
+                                ),
+                                LN
+                            )
+
+                        par_idr = dr_disp_geom_por_grupo.get(
+                            grupo
+                        )
+
+                        if par_idr is not None:
+                            disp_idr, geom_idr = par_idr
+
+                            mapa_polos_idr = _mapa_condutores_polos(
+                                disp_idr,
+                                geom_idr
+                            )
+
+                            x_n_idr = mapa_polos_idr.get(
+                                "N"
+                            )
+
+                            # Se o grupo usa neutro, o IDR precisa possuir
+                            # polo N disponível. O motor da Rev.13 já garante
+                            # IDR 2P/4P conforme os condutores do grupo.
+                            if x_n_idr is not None:
+                                x_descida_n = (
+                                    x1p
+                                    - 0.10
+                                )
+
+                                # Saída do borne inferior N do IDR ->
+                                # corredor do grupo -> cargas.
+                                _polyline(
+                                    msp,
+                                    [
+                                        (
+                                            x_n_idr,
+                                            geom_idr["y1"]
+                                        ),
+                                        (
+                                            x_n_idr,
+                                            geom_idr["y1"] - 0.18
+                                        ),
+                                        (
+                                            x_descida_n,
+                                            geom_idr["y1"] - 0.18
+                                        ),
+                                        (
+                                            x_descida_n,
+                                            y_n_grupo
+                                        ),
+                                        (
+                                            x_n_primeiro,
+                                            y_n_grupo
+                                        ),
+                                    ],
+                                    LN
+                                )
+                        else:
+                            # Grupo SEM DR: neutro vem diretamente do
+                            # barramento principal N.
+                            _polyline(
+                                msp,
+                                [
+                                    (
+                                        neutro["x"],
+                                        neutro["y_bottom"]
+                                    ),
+                                    (
+                                        neutro["x"],
+                                        y_n_grupo
+                                    ),
+                                    (
+                                        x_n_primeiro,
+                                        y_n_grupo
+                                    ),
+                                ],
+                                LN
+                            )
 
                     # Linha mecânica do pente.
                     _line(
@@ -2037,7 +2319,11 @@ def desenhar_mapa_fisico_qdc(
                     ]
 
                     # Cada fase ganha uma pista própria, paralela ao pente.
+                    # A pista termina exatamente no último disjuntor que usa
+                    # aquela fase; o último ponto será apenas uma curva.
                     y_fase_grupo = {}
+                    pontos_pente_por_fase = {}
+
                     for idx_fase, fase_grupo in enumerate(
                         fases_grupo
                     ):
@@ -2050,14 +2336,44 @@ def desenhar_mapa_fisico_qdc(
                             fase_grupo
                         ] = yy_fase
 
-                        _line(
-                            msp,
-                            (x1p, yy_fase),
-                            (x2p, yy_fase),
-                            _layer_por_token(
-                                fase_grupo
+                        pontos_fase = []
+
+                        for d_item, g_item in itens_grupo:
+                            if fase_grupo in _fases_do_texto(
+                                d_item.get(
+                                    "fase",
+                                    ""
+                                )
+                            ):
+                                pontos_fase.append(
+                                    _polo_para_fase(
+                                        d_item,
+                                        g_item,
+                                        fase_grupo
+                                    )
+                                )
+
+                        pontos_pente_por_fase[
+                            fase_grupo
+                        ] = pontos_fase
+
+                        if pontos_fase:
+                            _line(
+                                msp,
+                                (
+                                    x1p,
+                                    yy_fase
+                                ),
+                                (
+                                    max(
+                                        pontos_fase
+                                    ),
+                                    yy_fase
+                                ),
+                                _layer_por_token(
+                                    fase_grupo
+                                )
                             )
-                        )
 
                     # Cada disjuntor recebe cada fase em um polo diferente.
                     for d_item, g_item in itens_grupo:
@@ -2099,11 +2415,15 @@ def desenhar_mapa_fisico_qdc(
                                     fase_item
                                 )
                             )
-                            _no_fase_preenchido(
+                            _desenhar_no_se_derivacao(
                                 msp,
                                 x_polo,
                                 yy_fase,
-                                fase_item
+                                fase_item,
+                                pontos_pente_por_fase.get(
+                                    fase_item,
+                                    []
+                                )
                             )
 
                     # Fonte do grupo.
@@ -2241,11 +2561,22 @@ def desenhar_mapa_fisico_qdc(
                                     fase_item
                                 )
                             )
-                            _no_fase_preenchido(
+                            pontos_derivacao_pente = list(
+                                pontos_pente_por_fase.get(
+                                    fase_item,
+                                    []
+                                )
+                            )
+                            pontos_derivacao_pente.append(
+                                x_destino_fase
+                            )
+
+                            _desenhar_no_se_derivacao(
                                 msp,
                                 x_destino_fase,
                                 yy_destino,
-                                fase_item
+                                fase_item,
+                                pontos_derivacao_pente
                             )
 
         y_rail -= 3.15
@@ -2286,7 +2617,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35

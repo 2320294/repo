@@ -15,6 +15,7 @@ from versao import VERSAO_SISTEMA
 from dimensionamento_rotas import verificar_capacidade_conducao_preliminar
 from dimensionamento_rotas import otimizar_eletrodutos_preliminar
 from mapa_qdc import gerar_mapa_fisico_qdc, dataframe_slots
+from qdc_auditoria import auditar_qdc_normativo
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -40,7 +41,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 13.4 Rev.13:
+# Fase 13.5:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -313,7 +314,7 @@ def _adicionar_material(
 
 
 # ============================================================
-# FASE 13.4 REV.13 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# FASE 13.5 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
 # ============================================================
 
 MODULO_DIN_MM = 17.5
@@ -348,11 +349,25 @@ def _polos_circuito_real(circuito):
 
 
 def _polos_dr_por_circuitos(circuitos_grupo):
-    maior = max(
-        (_polos_circuito_real(c) for c in circuitos_grupo),
-        default=1
-    )
-    return 2 if maior <= 2 else maior
+    """
+    Fase 13.5:
+    o IDR é dimensionado pelos condutores reais do grupo.
+    """
+    fases = []
+    precisa_neutro = False
+
+    for c in circuitos_grupo or []:
+        fase_txt = str(c.get("fase", "") or "").upper()
+
+        for token in ("A", "B", "C"):
+            if token in fase_txt and token not in fases:
+                fases.append(token)
+
+        if _polos_circuito_real(c) == 1:
+            precisa_neutro = True
+
+    qtd_condutores = len(fases) + (1 if precisa_neutro else 0)
+    return 2 if qtd_condutores <= 2 else 4
 
 
 def _proximo_qdc_padrao(modulos_necessarios):
@@ -373,7 +388,7 @@ def _adicionar_componentes_qdc_executivo(
     local_qdc
 ):
     """
-    Fase 13.4 Rev.13.
+    Fase 13.5.
 
     Transforma a estrutura já conhecida do unifilar em componentes físicos
     do QDC. Não inclui conectores genéricos: ainda não existe informação
@@ -668,7 +683,7 @@ def _auditar_consistencia_qdc(
     resumo_qdc
 ):
     """
-    Fase 13.4 Rev.13 — auditoria cruzada do QDC.
+    Fase 13.5 — auditoria cruzada do QDC.
 
     A mesma estrutura elétrica usada no quantitativo/unifilar é verificada
     quanto a módulos DIN, polos, DR, barramentos, pente e sequência funcional.
@@ -712,7 +727,7 @@ def _auditar_consistencia_qdc(
     )
 
     # 3. Cobertura DR e exclusividade de grupo.
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # somente circuitos que a própria lógica do projeto classificou para DR
     # são obrigados a aparecer em um grupo IDR. Iluminação comum sem DR não
     # gera alerta apenas por estar fora dos grupos.
@@ -1008,7 +1023,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -1420,17 +1435,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 13.4 REV.13 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.5 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 13.4 Rev.13/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.5/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 13.4 Rev.13 — se o CAD desta versão já calculou correções por
+    # Fase 13.5 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1566,7 +1581,7 @@ def calcular_quantitativo_materiais(
     # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 13.4 REV.13 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.5 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1722,7 +1737,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 13.4 REV.13 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.5 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1819,7 +1834,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 13.4 Rev.13: dados estruturais usados pelo roteamento continuam
+        # Fase 13.5: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -3017,7 +3032,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -3040,7 +3055,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 13.4 Rev.13:
+    # Fase 13.5:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -3112,7 +3127,7 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    # Fase 13.4 Rev.13 — componentes físicos do QDC derivados do unifilar.
+    # Fase 13.5 — componentes físicos do QDC derivados do unifilar.
     # Conectores genéricos ficam deliberadamente fora desta fase.
     resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
         materiais,
@@ -3141,6 +3156,15 @@ def renderizar_materiais(
         )
     )
 
+    auditoria_normativa_qdc = auditar_qdc_normativo(
+        circuitos,
+        resumo_drs,
+        resumo_protecao,
+        resultado_demanda_materiais,
+        parametros_rede_calculo,
+        mapa_fisico=mapa_fisico_qdc
+    )
+
     if resumo_rotas:
         st.caption(
             "O dimensionamento utiliza o roteamento físico calculado para o projeto. "
@@ -3161,7 +3185,7 @@ def renderizar_materiais(
     )
 
     # ========================================================
-    # FASE 13.4 REV.13 — APRESENTAÇÃO MODULAR
+    # FASE 13.5 — APRESENTAÇÃO MODULAR
     # ========================================================
     # Os cálculos continuam centralizados neste motor. A interface apenas
     # apresenta cada diagnóstico no módulo ao qual ele pertence.
@@ -3253,25 +3277,72 @@ def renderizar_materiais(
         else:
             st.info("Nenhum grupo IDR foi formado.")
 
-        st.markdown("#### 🛡️ Consistência elétrica do QDC")
-        if auditoria_qdc:
+        st.markdown("#### ✅ Auditoria elétrica do QDC")
+
+        if auditoria_normativa_qdc:
             a1, a2, a3 = st.columns(3)
-            a1.metric("Resultado", auditoria_qdc.get("status", "—"))
+            a1.metric(
+                "Status",
+                auditoria_normativa_qdc.get(
+                    "status",
+                    "—"
+                )
+            )
             a2.metric(
-                "Posições livres",
-                auditoria_qdc.get("posicoes_livres", 0)
+                "Bloqueios",
+                int(
+                    auditoria_normativa_qdc.get(
+                        "qtd_bloqueios",
+                        0
+                    )
+                    or 0
+                )
             )
             a3.metric(
-                "Alertas",
-                int(auditoria_qdc.get("qtd_alertas", 0) or 0)
+                "Pendências executivas",
+                int(
+                    auditoria_normativa_qdc.get(
+                        "qtd_pendencias",
+                        0
+                    )
+                    or 0
+                )
             )
-            verificacoes = auditoria_qdc.get("verificacoes", []) or []
-            if verificacoes:
+
+            if auditoria_normativa_qdc.get(
+                "qtd_bloqueios",
+                0
+            ):
+                st.error(
+                    "A vista frontal do QDC fica bloqueada enquanto houver "
+                    "inconsistência elétrica estrutural."
+                )
+            else:
+                st.success(
+                    "Topologia elétrica estrutural aprovada para geração do DXF."
+                )
+
+            with st.expander(
+                "🔎 Ver verificações da auditoria",
+                expanded=False
+            ):
                 st.dataframe(
-                    pd.DataFrame(verificacoes),
+                    pd.DataFrame(
+                        auditoria_normativa_qdc.get(
+                            "verificacoes",
+                            []
+                        )
+                        or []
+                    ),
                     use_container_width=True,
                     hide_index=True
                 )
+
+            st.caption(
+                "Dados dependentes de Icc, fabricante, DPS, esquema de "
+                "aterramento ou exigência específica da concessionária "
+                "permanecem como pendentes; o sistema não inventa valores."
+            )
         return
 
     if pagina == "eletrodutos":
@@ -3966,7 +4037,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_4_Rev_13.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_5.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3975,7 +4046,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_4_Rev_13.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_5.pdf",
             mime="application/pdf",
             use_container_width=True
         )

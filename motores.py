@@ -65,6 +65,10 @@ from mapa_qdc import (
     desenhar_mapa_fisico_qdc
 )
 
+from qdc_auditoria import (
+    auditar_qdc_normativo
+)
+
 from concessionarias import (
     CHAVE_PARAMETROS_REDE
 )
@@ -341,7 +345,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.4 Rev.13 — a geometria do ambiente só pode ser
+            # Fase 13.5 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -519,7 +523,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.4 Rev.13:
+                # Fase 13.5:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -554,7 +558,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 13.4 REV.13 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 13.5 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -602,7 +606,7 @@ def gerar_cad_unifilar(
         )
 
         # ====================================================
-        # FASE 13.4 REV.13 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
+        # FASE 13.5 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
         # ====================================================
         # O ciclo fecha quatro critérios:
         #   rota física -> queda -> capacidade -> ocupação/rerota.
@@ -1006,6 +1010,47 @@ def gerar_cad_unifilar(
             resumo_protecao_unifilar,
             resultado_demanda_unifilar
         )
+
+        # ====================================================
+        # FASE 13.5 — AUDITORIA ELÉTRICA OBRIGATÓRIA DO QDC
+        # ====================================================
+        auditoria_normativa_qdc = auditar_qdc_normativo(
+            circuitos_dimensionados,
+            resumo_drs_unifilar,
+            resumo_protecao_unifilar,
+            resultado_demanda_unifilar,
+            parametros_rede_unifilar,
+            mapa_fisico=mapa_fisico_qdc
+        )
+
+        if auditoria_normativa_qdc.get(
+            "qtd_bloqueios",
+            0
+        ):
+            detalhes_bloqueio = "; ".join(
+                (
+                    item.get("Código", "")
+                    + " — "
+                    + item.get("Detalhe", "")
+                )
+                for item in auditoria_normativa_qdc.get(
+                    "bloqueios",
+                    []
+                )
+            )
+
+            raise ValueError(
+                "QDC bloqueado pela auditoria elétrica da Fase 13.5: "
+                + detalhes_bloqueio
+            )
+
+        if isinstance(
+            resumo_rotas,
+            dict
+        ):
+            resumo_rotas[
+                "auditoria_normativa_qdc"
+            ] = auditoria_normativa_qdc
 
         desenhar_mapa_fisico_qdc(
             msp,
