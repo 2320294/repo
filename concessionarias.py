@@ -7,7 +7,7 @@ UFS = [
     "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
 ]
 
-# Cadastro inicial para a arquitetura da Fase 13.2 Rev.1.
+# Cadastro inicial para a arquitetura da Fase 13.2 Rev.2.
 # A cobertura municipal e os critérios de demanda serão ampliados
 # gradualmente, sem espalhar regras pelo restante do sistema.
 CONCESSIONARIAS_POR_UF = {
@@ -141,7 +141,7 @@ def descricao_localidade(parametros):
 
 def perfil_normativo_disponivel(parametros):
     """
-    Na Fase 13.2 Rev.1 a estrutura de perfis está pronta, mas os métodos
+    Na Fase 13.2 Rev.2 a estrutura de perfis está pronta, mas os métodos
     de demanda ainda não são executados. Retorna False para impedir
     que o sistema trate um critério não implementado como definitivo.
     """
