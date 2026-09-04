@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.3 Rev.3:
+    Fase 13.4:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -142,14 +142,16 @@ def _dispositivos_base(
         resumo_protecao,
         dg_polos if dg_a else 0
     )
+    fases_dps = ["A", "B", "C"][:qtd_dps]
     for i in range(1, qtd_dps + 1):
+        fase_dps = fases_dps[i - 1] if i - 1 < len(fases_dps) else "A"
         protecoes_gerais.append({
             "tipo": "DPS",
             "identificador": f"DPS{i}",
-            "descricao": "DPS 1P",
+            "descricao": f"DPS 1P - Fase {fase_dps}",
             "modulos": 1,
             "grupo": "GERAL",
-            "fase": "",
+            "fase": fase_dps,
             "circuitos": "",
             "ambiente": "",
             "corrente_a": None,
@@ -187,13 +189,20 @@ def _dispositivos_base(
         if sens:
             descr += f" {int(sens)} mA"
 
+        fases_grupo = []
+        for item in itens:
+            fase_item = str(item.get("fase", "") or "").upper().strip()
+            for token in ("A", "B", "C"):
+                if token in fase_item and token not in fases_grupo:
+                    fases_grupo.append(token)
+
         protecoes_gerais.append({
             "tipo": "IDR",
             "identificador": gid,
             "descricao": descr,
             "modulos": polos_dr,
             "grupo": gid,
-            "fase": "",
+            "fase": "/".join(fases_grupo),
             "circuitos": ",".join(f"C{n:02d}" for n in numeros),
             "ambiente": str(dr.get("descricao", "") or ""),
             "corrente_a": int(nominal) if nominal else None,
@@ -457,6 +466,24 @@ def _texto_central(msp, texto, x1, x2, y, altura, layer):
     return _text(msp, texto, x, y, altura, layer)
 
 
+def _fases_do_texto(fase):
+    texto = str(fase or "").upper()
+    fases = []
+    for token in ("A", "B", "C"):
+        if token in texto:
+            fases.append(token)
+    return fases or ["A"]
+
+
+def _layer_por_token(token):
+    token = str(token or "A").upper()
+    if token == "C":
+        return "PROJ_ELETRICA_QDC_FASE_C"
+    if token == "B":
+        return "PROJ_ELETRICA_QDC_FASE_B"
+    return "PROJ_ELETRICA_QDC_FASE_A"
+
+
 def _layer_fase(fase):
     fase = str(fase or "").upper()
     if "C" in fase:
@@ -686,7 +713,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.3 Rev.3 — Vista frontal executiva do QDC.
+    Fase 13.4 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -762,7 +789,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.3 REV.3",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -849,47 +876,126 @@ def desenhar_mapa_fisico_qdc(
         geral_geom.append((d, geom))
         x = geom["x2"] + 0.12
 
-    # Entrada elétrica estilizada até DG.
+    # Entrada elétrica e distribuição superior por fase.
     dg_geoms = [
-        (d,g)
-        for d,g in geral_geom
+        (d, g)
+        for d, g in geral_geom
         if d.get("tipo") == "DG"
     ]
-    if dg_geoms:
-        dg = dg_geoms[0][1]
-        entrada_y = qy_top - 0.48
-        entrada_x = dg["cx"]
-        _line(
-            msp,
-            (entrada_x, qy_top - 0.10),
-            (entrada_x, dg["y2"]),
-            LA
-        )
-        _text(
-            msp,
-            "ENTRADA",
-            entrada_x - 0.27,
-            qy_top - 0.32,
-            0.09,
-            LT
-        )
 
-    # Barramento superior que alimenta proteções.
-    if geral_geom:
-        xs = [g["cx"] for _,g in geral_geom]
-        bus_y = top_rail_y + 1.05
-        _line(
-            msp,
-            (min(xs), bus_y),
-            (max(xs), bus_y),
-            LA
-        )
-        for d,g in geral_geom:
+    barramentos_y = {
+        "A": top_rail_y + 1.22,
+        "B": top_rail_y + 1.08,
+        "C": top_rail_y + 0.94,
+    }
+
+    if dg_geoms:
+        dg_disp, dg = dg_geoms[0]
+        entrada_x = dg["cx"]
+        offsets = {"A": -0.16, "B": 0.0, "C": 0.16}
+
+        for token in ("A", "B", "C"):
+            xx = entrada_x + offsets[token]
             _line(
                 msp,
-                (g["cx"], bus_y),
+                (xx, qy_top - 0.10),
+                (xx, dg["y2"]),
+                _layer_por_token(token)
+            )
+            _text(
+                msp,
+                f"L{('A','B','C').index(token)+1}",
+                xx - 0.045,
+                qy_top - 0.30,
+                0.075,
+                LT
+            )
+
+        _polyline(
+            msp,
+            [
+                (entrada_x + 0.34, qy_top - 0.10),
+                (entrada_x + 0.34, qy_top - 0.42),
+                (neutro["x"], qy_top - 0.42),
+                (neutro["x"], neutro["y_top"]),
+            ],
+            LN
+        )
+        _text(msp, "N", entrada_x + 0.30, qy_top - 0.30, 0.075, LT)
+        _text(msp, "ENTRADA DA REDE", din_x1, qy_top - 0.18, 0.085, LT)
+
+    if geral_geom:
+        x_bus_ini = dg_geoms[0][1]["cx"] if dg_geoms else geral_geom[0][1]["cx"]
+        x_bus_fim = geral_geom[-1][1]["cx"]
+
+        for token in ("A", "B", "C"):
+            _line(
+                msp,
+                (x_bus_ini, barramentos_y[token]),
+                (x_bus_fim, barramentos_y[token]),
+                _layer_por_token(token)
+            )
+
+        # DPS: fase -> DPS -> PE.
+        for d, g in geral_geom:
+            if d.get("tipo") != "DPS":
+                continue
+            token = _fases_do_texto(d.get("fase"))[0]
+            _line(
+                msp,
+                (g["cx"], barramentos_y[token]),
                 (g["cx"], g["y2"]),
-                LA if d.get("tipo") != "DPS" else LC
+                _layer_por_token(token)
+            )
+            _texto_central(
+                msp,
+                f"L{('A','B','C').index(token)+1}",
+                g["x1"],
+                g["x2"],
+                g["y1"] - 0.13,
+                0.065,
+                LT
+            )
+            _polyline(
+                msp,
+                [
+                    (g["cx"], g["y1"]),
+                    (g["cx"], g["y1"] - 0.28),
+                    (pe["x"], g["y1"] - 0.28),
+                ],
+                LPE
+            )
+
+        # IDRs: recebem as fases presentes no grupo e retorno ao neutro.
+        for d, g in geral_geom:
+            if d.get("tipo") != "IDR":
+                continue
+
+            fases = _fases_do_texto(d.get("fase"))
+            largura = max(1, len(fases))
+
+            for idx, token in enumerate(fases):
+                xx = (
+                    g["x1"]
+                    + (idx + 0.5)
+                    * (g["x2"] - g["x1"])
+                    / largura
+                )
+                _line(
+                    msp,
+                    (xx, barramentos_y[token]),
+                    (xx, g["y2"]),
+                    _layer_por_token(token)
+                )
+
+            _polyline(
+                msp,
+                [
+                    (g["x2"] - 0.12, g["y1"]),
+                    (g["x2"] - 0.12, g["y1"] - 0.24),
+                    (neutro["x"], g["y1"] - 0.24),
+                ],
+                LN
             )
 
     # -------------------------
@@ -1085,11 +1191,13 @@ def desenhar_mapa_fisico_qdc(
         ident = str(d.get("identificador", "") or "")
         ambiente = str(d.get("ambiente", "") or "")
         tipo_c = str(d.get("tipo_circuito", "") or "")
-        texto = f"{ident} - {ambiente}"
+        fase_c = str(d.get("fase", "") or "").strip()
+        dj_c = int(d.get("corrente_a", 0) or 0)
+        texto = f"{ident} | {fase_c or '-'} | {dj_c}A | {ambiente}"
         if tipo_c:
-            texto += f" ({tipo_c})"
+            texto += f" | {tipo_c}"
 
-        for li, linha in enumerate(_quebrar_texto(texto, 38)):
+        for li, linha in enumerate(_quebrar_texto(texto, 42)):
             _text(
                 msp,
                 linha,
@@ -1149,11 +1257,16 @@ def desenhar_mapa_fisico_qdc(
         0.15,
         LT
     )
+    qtd_idr = sum(1 for d in gerais if d.get("tipo") == "IDR")
+    qtd_dps_desenho = sum(1 for d in gerais if d.get("tipo") == "DPS")
+
     dados = [
         f"Posicoes: {int(mapa.get('qdc_posicoes', 0) or 0)}",
-        f"Modulos de dispositivos: {int(mapa.get('modulos_dispositivos', 0) or 0)}",
+        f"Modulos ocupados: {int(mapa.get('modulos_dispositivos', 0) or 0)}",
         f"Posicoes livres: {int(mapa.get('posicoes_livres', 0) or 0)}",
         f"Fileiras DIN: {int(mapa.get('linhas', 0) or 0)}",
+        f"IDRs: {qtd_idr}",
+        f"DPS: {qtd_dps_desenho}",
     ]
     yy_d = dados_y + 0.50
     for linha in dados:
