@@ -31,7 +31,7 @@ def _polos_dg(tipo):
 
 def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos, resumo_drs):
     """
-    Fase 12.7: consolidação preliminar das proteções e alimentador.
+    Fase 12.8: consolidação preliminar das proteções e alimentador.
     A bitola usa uma ampacidade de referência conservadora interna apenas para
     pré-dimensionamento. O resultado fica explicitamente condicionado à forma
     de instalação, temperatura, agrupamento, queda de tensão e perfil normativo.

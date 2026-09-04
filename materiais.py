@@ -892,17 +892,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.7 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.8 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.7/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.8/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.7 — se o CAD desta versão já calculou correções por
+    # Fase 12.8 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1259,7 +1259,7 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # FASE 12.7 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
+    # FASE 12.8 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
     # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
     # ========================================================
     if (
@@ -1451,7 +1451,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.7: dados estruturais usados pelo roteamento continuam
+        # Fase 12.8: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1469,7 +1469,9 @@ def _gerar_excel_materiais_circuitos(
     capacidade_df=None,
     trechos_capacidade_df=None,
     correcoes_capacidade_df=None,
-    iteracoes_df=None
+    iteracoes_df=None,
+    auditoria_final_df=None,
+    auditoria_trechos_df=None
 ):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
@@ -1593,6 +1595,38 @@ def _gerar_excel_materiais_circuitos(
                 )
             )
 
+        if (
+            auditoria_final_df is not None
+            and not auditoria_final_df.empty
+        ):
+            auditoria_final_df.to_excel(
+                writer,
+                sheet_name="Auditoria_Final",
+                index=False
+            )
+            abas.append(
+                (
+                    "Auditoria_Final",
+                    auditoria_final_df
+                )
+            )
+
+        if (
+            auditoria_trechos_df is not None
+            and not auditoria_trechos_df.empty
+        ):
+            auditoria_trechos_df.to_excel(
+                writer,
+                sheet_name="Auditoria_Trechos",
+                index=False
+            )
+            abas.append(
+                (
+                    "Auditoria_Trechos",
+                    auditoria_trechos_df
+                )
+            )
+
         workbook = writer.book
         cabecalho = workbook.add_format({
             "bold": True, "bg_color": "#EAF2FF", "border": 1,
@@ -1687,7 +1721,9 @@ def _gerar_pdf_materiais_circuitos(
     capacidade_df=None,
     trechos_capacidade_df=None,
     correcoes_capacidade_df=None,
-    iteracoes_df=None
+    iteracoes_df=None,
+    auditoria_final_df=None,
+    auditoria_trechos_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -2280,6 +2316,122 @@ def _gerar_pdf_materiais_circuitos(
             )
         )
 
+    if (
+        auditoria_final_df is not None
+        and not auditoria_final_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "13. AUDITORIA FINAL DO DIMENSIONAMENTO",
+                secao
+            )
+        ]
+
+        cols_af = [
+            c
+            for c in [
+                "Circuito",
+                "Tipo",
+                "Ambiente",
+                "Ib (A)",
+                "Disjuntor In (A)",
+                "Bitola final (mm²)",
+                "Percurso máx. (m)",
+                "Queda (%)",
+                "Agrupamento",
+                "Iz corrigida (A)",
+                "Ib ≤ In ≤ Iz",
+                "Resultado",
+            ]
+            if c in auditoria_final_df.columns
+        ]
+
+        larg_af = {
+            "Circuito": 1.0*cm,
+            "Tipo": 1.4*cm,
+            "Ambiente": 3.1*cm,
+            "Ib (A)": 1.1*cm,
+            "Disjuntor In (A)": 1.6*cm,
+            "Bitola final (mm²)": 1.7*cm,
+            "Percurso máx. (m)": 1.7*cm,
+            "Queda (%)": 1.2*cm,
+            "Agrupamento": 1.4*cm,
+            "Iz corrigida (A)": 1.7*cm,
+            "Ib ≤ In ≤ Iz": 1.5*cm,
+            "Resultado": 1.3*cm,
+        }
+
+        story.append(
+            _pdf_tabela(
+                auditoria_final_df[
+                    cols_af
+                ],
+                [
+                    larg_af.get(
+                        c,
+                        1.5*cm
+                    )
+                    for c in cols_af
+                ],
+                fonte=5.4
+            )
+        )
+
+    if (
+        auditoria_trechos_df is not None
+        and not auditoria_trechos_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "14. AUDITORIA FINAL DOS TRECHOS DE ELETRODUTO",
+                secao
+            )
+        ]
+
+        cols_at = [
+            c
+            for c in [
+                "Trecho",
+                "Circuitos transportados",
+                "Qtd. circuitos",
+                "Condutores",
+                "Eletroduto",
+                "Ocupação (%)",
+                "Comprimento (m)",
+                "Resultado",
+            ]
+            if c in auditoria_trechos_df.columns
+        ]
+
+        larg_at = {
+            "Trecho": 1.0*cm,
+            "Circuitos transportados": 5.0*cm,
+            "Qtd. circuitos": 1.5*cm,
+            "Condutores": 1.4*cm,
+            "Eletroduto": 1.4*cm,
+            "Ocupação (%)": 1.5*cm,
+            "Comprimento (m)": 1.6*cm,
+            "Resultado": 1.3*cm,
+        }
+
+        story.append(
+            _pdf_tabela(
+                auditoria_trechos_df[
+                    cols_at
+                ],
+                [
+                    larg_at.get(
+                        c,
+                        1.5*cm
+                    )
+                    for c in cols_at
+                ],
+                fonte=5.6
+            )
+        )
+
     story += [
         Spacer(1,8),
         Paragraph(
@@ -2346,7 +2498,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.7:
+    # Fase 12.8:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2369,7 +2521,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 12.7:
+    # Fase 12.8:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -2672,7 +2824,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.7: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.8: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -3217,7 +3369,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 12.7 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 12.8 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -3227,7 +3379,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 12.7: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.8: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -3441,7 +3593,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.7: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 12.8: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -3542,17 +3694,429 @@ definir explicitamente outro método de instalação.
             )
 
             st.caption(
-                "Depois de cada correção de seção, a Fase 12.7 recalcula "
+                "Depois de cada correção de seção, a Fase 12.8 recalcula "
                 "ocupação, redistribuição dos eletrodutos, queda de tensão "
                 "e capacidade de condução até estabilizar."
             )
+
+    if isinstance(resumo_rotas, dict):
+        circuitos_finais_auditoria = (
+            resumo_rotas.get(
+                "circuitos_dimensionados_finais",
+                []
+            )
+            or []
+        )
+
+        validacao_ibin = (
+            resumo_rotas.get(
+                "validacao_ib_in_iz",
+                {}
+            )
+            or {}
+        )
+
+        capacidade_final_auditoria = (
+            resumo_rotas.get(
+                "capacidade_conducao_preliminar",
+                {}
+            )
+            or {}
+        )
+
+        validacao_rotas_auditoria = (
+            resumo_rotas.get(
+                "validacao_eletrica",
+                {}
+            )
+            or {}
+        )
+
+        cap_por_numero = {
+            int(item.get("numero", 0) or 0): item
+            for item in (
+                capacidade_final_auditoria.get(
+                    "circuitos",
+                    []
+                )
+                or []
+            )
+            if int(item.get("numero", 0) or 0) > 0
+        }
+
+        valid_por_numero = {
+            int(item.get("numero", 0) or 0): item
+            for item in (
+                validacao_rotas_auditoria.get(
+                    "circuitos",
+                    []
+                )
+                or []
+            )
+            if int(item.get("numero", 0) or 0) > 0
+        }
+
+        ibin_por_numero = {
+            int(item.get("numero", 0) or 0): item
+            for item in (
+                validacao_ibin.get(
+                    "circuitos",
+                    []
+                )
+                or []
+            )
+            if int(item.get("numero", 0) or 0) > 0
+        }
+
+        linhas_auditoria_final = []
+
+        for circuito in circuitos_finais_auditoria:
+            numero = int(
+                circuito.get(
+                    "numero",
+                    0
+                )
+                or 0
+            )
+
+            if numero <= 0:
+                continue
+
+            cap = cap_por_numero.get(
+                numero,
+                {}
+            )
+
+            val = valid_por_numero.get(
+                numero,
+                {}
+            )
+
+            ibin = ibin_por_numero.get(
+                numero,
+                {}
+            )
+
+            status_queda = (
+                "OK"
+                if float(
+                    val.get(
+                        "queda_pct",
+                        0.0
+                    )
+                    or 0.0
+                )
+                <= 4.0
+                else "ATENÇÃO"
+            )
+
+            status_ibin = str(
+                ibin.get(
+                    "status",
+                    "PENDENTE"
+                )
+                or "PENDENTE"
+            )
+
+            status_final = (
+                "OK"
+                if (
+                    status_queda == "OK"
+                    and status_ibin == "OK"
+                )
+                else "ATENÇÃO"
+            )
+
+            linhas_auditoria_final.append({
+                "Circuito":
+                    f"C{numero}",
+                "Tipo":
+                    circuito.get(
+                        "tipo",
+                        ""
+                    ),
+                "Ambiente":
+                    circuito.get(
+                        "ambiente",
+                        ""
+                    ),
+                "Ib (A)":
+                    round(
+                        float(
+                            circuito.get(
+                                "corrente",
+                                0.0
+                            )
+                            or 0.0
+                        ),
+                        2
+                    ),
+                "Disjuntor In (A)":
+                    round(
+                        float(
+                            circuito.get(
+                                "disjuntor",
+                                0.0
+                            )
+                            or 0.0
+                        ),
+                        2
+                    ),
+                "Bitola final (mm²)":
+                    float(
+                        circuito.get(
+                            "bitola",
+                            0.0
+                        )
+                        or 0.0
+                    ),
+                "Percurso máx. (m)":
+                    round(
+                        float(
+                            val.get(
+                                "comprimento_max_m",
+                                0.0
+                            )
+                            or 0.0
+                        ),
+                        2
+                    ),
+                "Queda (%)":
+                    round(
+                        float(
+                            val.get(
+                                "queda_pct",
+                                0.0
+                            )
+                            or 0.0
+                        ),
+                        2
+                    ),
+                "Trecho crítico":
+                    cap.get(
+                        "trecho_critico_id"
+                    ),
+                "Agrupamento":
+                    cap.get(
+                        "qtd_circuitos_agrupados"
+                    ),
+                "Iz corrigida (A)":
+                    round(
+                        float(
+                            cap.get(
+                                "iz_corrigida_a",
+                                0.0
+                            )
+                            or 0.0
+                        ),
+                        2
+                    ),
+                "Ib ≤ In ≤ Iz":
+                    status_ibin,
+                "Resultado":
+                    status_final,
+            })
+
+        if linhas_auditoria_final:
+            st.markdown(
+                "#### ✅ Auditoria final do dimensionamento"
+            )
+
+            st.caption(
+                "Resumo executivo dos circuitos após a convergência do ciclo "
+                "iterativo. A tabela reúne queda de tensão, capacidade de "
+                "condução e relação Ib ≤ In ≤ Iz."
+            )
+
+            df_auditoria_final = pd.DataFrame(
+                linhas_auditoria_final
+            )
+
+            st.dataframe(
+                df_auditoria_final,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            qtd_ok = int(
+                (
+                    df_auditoria_final[
+                        "Resultado"
+                    ]
+                    == "OK"
+                ).sum()
+            )
+
+            qtd_atencao = int(
+                (
+                    df_auditoria_final[
+                        "Resultado"
+                    ]
+                    != "OK"
+                ).sum()
+            )
+
+            c_af1, c_af2, c_af3 = st.columns(3)
+            c_af1.metric(
+                "Circuitos auditados",
+                len(
+                    df_auditoria_final
+                )
+            )
+            c_af2.metric(
+                "OK",
+                qtd_ok
+            )
+            c_af3.metric(
+                "Atenção",
+                qtd_atencao
+            )
+
+            if qtd_atencao == 0:
+                st.success(
+                    "Todos os circuitos passaram pela auditoria final "
+                    "preliminar desta fase."
+                )
+            else:
+                st.warning(
+                    f"{qtd_atencao} circuito(s) ainda apresentam ponto(s) "
+                    "que exigem revisão técnica."
+                )
+
+        # Auditoria por trecho físico
+        rotas_auditoria = (
+            resumo_rotas.get(
+                "rotas",
+                []
+            )
+            or []
+        )
+
+        linhas_trechos_final = []
+
+        for rota in rotas_auditoria:
+            circuitos_rota = sorted(
+                int(n)
+                for n in (
+                    rota.get(
+                        "circuitos",
+                        []
+                    )
+                    or []
+                )
+                if int(n) > 0
+            )
+
+            ocupacao = round(
+                float(
+                    rota.get(
+                        "ocupacao_pct",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                1
+            )
+
+            diametro = rota.get(
+                "diametro_eletroduto_mm"
+            )
+
+            status_trecho = (
+                "OK"
+                if (
+                    ocupacao <= 40.0
+                    and (
+                        diametro is None
+                        or int(
+                            diametro
+                        )
+                        <= 25
+                    )
+                )
+                else "ATENÇÃO"
+            )
+
+            linhas_trechos_final.append({
+                "Trecho":
+                    rota.get(
+                        "trecho_id"
+                    ),
+                "Circuitos transportados":
+                    ", ".join(
+                        f"C{n}"
+                        for n in circuitos_rota
+                    ),
+                "Qtd. circuitos":
+                    len(
+                        circuitos_rota
+                    ),
+                "Condutores":
+                    int(
+                        rota.get(
+                            "qtd_condutores",
+                            0
+                        )
+                        or len(
+                            rota.get(
+                                "condutores",
+                                []
+                            )
+                            or []
+                        )
+                    ),
+                "Eletroduto":
+                    (
+                        f"Ø{diametro}"
+                        if diametro
+                        else ""
+                    ),
+                "Ocupação (%)":
+                    ocupacao,
+                "Comprimento (m)":
+                    round(
+                        float(
+                            rota.get(
+                                "comprimento_m",
+                                0.0
+                            )
+                            or 0.0
+                        ),
+                        2
+                    ),
+                "Critério":
+                    rota.get(
+                        "criterio",
+                        ""
+                    ),
+                "Resultado":
+                    status_trecho,
+            })
+
+        if linhas_trechos_final:
+            with st.expander(
+                "🧵 Auditoria final por trecho de eletroduto",
+                expanded=False
+            ):
+                st.caption(
+                    "Confere circuitos transportados, ocupação física, "
+                    "diâmetro e comprimento de cada trecho."
+                )
+
+                st.dataframe(
+                    pd.DataFrame(
+                        linhas_trechos_final
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
     st.markdown(
         "#### ⚡ Circuitos considerados no quantitativo"
     )
 
     st.caption(
-        "Fase 12.7: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
+        "Fase 12.8: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -3577,6 +4141,8 @@ definir explicitamente outro método de instalação.
     trechos_capacidade_export_df = None
     correcoes_capacidade_export_df = None
     iteracoes_export_df = None
+    auditoria_final_export_df = None
+    auditoria_trechos_export_df = None
 
     if resumo_rotas:
         dados_validacao_export = (
@@ -3852,6 +4418,17 @@ definir explicitamente outro método de instalação.
                 linhas_hist_export
             )
 
+    if isinstance(resumo_rotas, dict):
+        if "linhas_auditoria_final" in locals() and linhas_auditoria_final:
+            auditoria_final_export_df = pd.DataFrame(
+                linhas_auditoria_final
+            )
+
+        if "linhas_trechos_final" in locals() and linhas_trechos_final:
+            auditoria_trechos_export_df = pd.DataFrame(
+                linhas_trechos_final
+            )
+
     nome_projeto = str(
         st.session_state.get(
             "projeto_ativo",
@@ -3869,7 +4446,9 @@ definir explicitamente outro método de instalação.
         capacidade_df=capacidade_export_df,
         trechos_capacidade_df=trechos_capacidade_export_df,
         correcoes_capacidade_df=correcoes_capacidade_export_df,
-        iteracoes_df=iteracoes_export_df
+        iteracoes_df=iteracoes_export_df,
+        auditoria_final_df=auditoria_final_export_df,
+        auditoria_trechos_df=auditoria_trechos_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -3888,7 +4467,9 @@ definir explicitamente outro método de instalação.
         capacidade_df=capacidade_export_df,
         trechos_capacidade_df=trechos_capacidade_export_df,
         correcoes_capacidade_df=correcoes_capacidade_export_df,
-        iteracoes_df=iteracoes_export_df
+        iteracoes_df=iteracoes_export_df,
+        auditoria_final_df=auditoria_final_export_df,
+        auditoria_trechos_df=auditoria_trechos_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -3897,7 +4478,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_7.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_8.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3906,7 +4487,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_7.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_8.pdf",
             mime="application/pdf",
             use_container_width=True
         )
