@@ -40,7 +40,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 13.3:
+# Fase 13.3 Rev.1:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -313,7 +313,7 @@ def _adicionar_material(
 
 
 # ============================================================
-# FASE 13.3 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# FASE 13.3 REV.1 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
 # ============================================================
 
 MODULO_DIN_MM = 17.5
@@ -373,7 +373,7 @@ def _adicionar_componentes_qdc_executivo(
     local_qdc
 ):
     """
-    Fase 13.3.
+    Fase 13.3 Rev.1.
 
     Transforma a estrutura já conhecida do unifilar em componentes físicos
     do QDC. Não inclui conectores genéricos: ainda não existe informação
@@ -668,7 +668,7 @@ def _auditar_consistencia_qdc(
     resumo_qdc
 ):
     """
-    Fase 13.3 — auditoria cruzada do QDC.
+    Fase 13.3 Rev.1 — auditoria cruzada do QDC.
 
     A mesma estrutura elétrica usada no quantitativo/unifilar é verificada
     quanto a módulos DIN, polos, DR, barramentos, pente e sequência funcional.
@@ -712,7 +712,7 @@ def _auditar_consistencia_qdc(
     )
 
     # 3. Cobertura DR e exclusividade de grupo.
-    # Fase 13.3:
+    # Fase 13.3 Rev.1:
     # somente circuitos que a própria lógica do projeto classificou para DR
     # são obrigados a aparecer em um grupo IDR. Iluminação comum sem DR não
     # gera alerta apenas por estar fora dos grupos.
@@ -1008,7 +1008,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 13.3:
+    # Fase 13.3 Rev.1:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -1420,17 +1420,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 13.3 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.3 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 13.3/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.3 Rev.1/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 13.3 — se o CAD desta versão já calculou correções por
+    # Fase 13.3 Rev.1 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1566,7 +1566,7 @@ def calcular_quantitativo_materiais(
     # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 13.3 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.3 REV.1 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1722,7 +1722,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 13.3 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.3 REV.1 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1819,7 +1819,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 13.3: dados estruturais usados pelo roteamento continuam
+        # Fase 13.3 Rev.1: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -3017,7 +3017,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 13.3:
+    # Fase 13.3 Rev.1:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -3040,7 +3040,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 13.3:
+    # Fase 13.3 Rev.1:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -3112,7 +3112,7 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    # Fase 13.3 — componentes físicos do QDC derivados do unifilar.
+    # Fase 13.3 Rev.1 — componentes físicos do QDC derivados do unifilar.
     # Conectores genéricos ficam deliberadamente fora desta fase.
     resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
         materiais,
@@ -3166,7 +3166,7 @@ def renderizar_materiais(
     )
 
     # ========================================================
-    # FASE 13.3 — APRESENTAÇÃO MODULAR
+    # FASE 13.3 REV.1 — APRESENTAÇÃO MODULAR
     # ========================================================
     # Os cálculos continuam centralizados neste motor. A interface apenas
     # apresenta cada diagnóstico no módulo ao qual ele pertence.
@@ -3355,7 +3355,7 @@ def renderizar_materiais(
         return
 
     if pagina == "dimensionamento":
-        st.markdown("#### ⚡ Dimensionamento dos circuitos")
+        st.markdown("#### ⚡ Resultado do dimensionamento")
 
         if not isinstance(resumo_rotas, dict):
             st.info(
@@ -3364,10 +3364,17 @@ def renderizar_materiais(
             return
 
         iterativo = resumo_rotas.get("dimensionamento_iterativo", {}) or {}
+
         if iterativo:
             d1, d2, d3 = st.columns(3)
-            d1.metric("Status", iterativo.get("status", "—"))
-            d2.metric("Iterações", int(iterativo.get("iteracoes", 0) or 0))
+            d1.metric(
+                "Status do cálculo",
+                iterativo.get("status", "—")
+            )
+            d2.metric(
+                "Iterações até convergir",
+                int(iterativo.get("iteracoes", 0) or 0)
+            )
             d3.metric(
                 "Método / temperatura",
                 (
@@ -3378,22 +3385,92 @@ def renderizar_materiais(
 
             historico = iterativo.get("historico", []) or []
             if historico:
-                with st.expander(
-                    "🔁 Histórico de convergência",
-                    expanded=True
-                ):
-                    st.dataframe(
-                        pd.DataFrame(historico),
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                linhas_historico = []
+
+                for item in historico:
+                    alteracoes = item.get("alteracoes", []) or []
+
+                    alteracoes_txt = ", ".join(
+                        (
+                            f"C{int(a.get('numero', 0) or 0)}: "
+                            f"{a.get('bitola_antes_mm2', '—')} → "
+                            f"{a.get('bitola_depois_mm2', '—')} mm²"
+                        )
+                        for a in alteracoes
+                    ) or "Sem alteração de bitola"
+
+                    linhas_historico.append({
+                        "Iteração":
+                            item.get("iteracao"),
+                        "Trechos analisados":
+                            item.get("qtd_trechos"),
+                        "Bitolas alteradas":
+                            item.get("qtd_alteracoes_bitola"),
+                        "Alterações realizadas":
+                            alteracoes_txt,
+                    })
+
+                st.markdown(
+                    "#### 🔁 Histórico de convergência do dimensionamento"
+                )
+
+                st.caption(
+                    "Mostra em cada iteração quais circuitos tiveram a "
+                    "seção dos condutores alterada."
+                )
+
+                st.dataframe(
+                    pd.DataFrame(linhas_historico),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
         validacao = resumo_rotas.get("validacao_eletrica", {}) or {}
         dados_validacao = validacao.get("circuitos", []) or []
+
         if dados_validacao:
-            st.markdown("#### 📉 Queda de tensão")
+            linhas_queda = []
+
+            for item in dados_validacao:
+                linhas_queda.append({
+                    "Circuito":
+                        f"C{int(item.get('numero', 0) or 0):02d}",
+                    "Tipo":
+                        item.get("tipo", ""),
+                    "Ambiente":
+                        item.get("ambiente", ""),
+                    "Potência (W)":
+                        item.get("potencia_w", ""),
+                    "Tensão (V)":
+                        item.get("tensao_v", ""),
+                    "Corrente (A)":
+                        item.get("corrente_a", ""),
+                    "Bitola final (mm²)":
+                        item.get("bitola_mm2", ""),
+                    "Disjuntor (A)":
+                        item.get("disjuntor_a", ""),
+                    "Percurso máximo (m)":
+                        item.get("comprimento_max_m", ""),
+                    "Queda de tensão (%)":
+                        item.get("queda_tensao_pct", ""),
+                    "Resultado":
+                        item.get(
+                            "status",
+                            item.get("status_queda", "")
+                        ),
+                })
+
+            st.markdown(
+                "#### 📉 Verificação da queda de tensão por circuito"
+            )
+
+            st.caption(
+                "Percurso calculado pela rota física desde o QDC. "
+                "A coluna de queda mostra o resultado com a bitola final."
+            )
+
             st.dataframe(
-                pd.DataFrame(dados_validacao),
+                pd.DataFrame(linhas_queda),
                 use_container_width=True,
                 hide_index=True
             )
@@ -3403,29 +3480,87 @@ def renderizar_materiais(
             or {}
         )
         dados_cap = capacidade.get("circuitos", []) or []
+
         if dados_cap:
-            st.markdown("#### 🌡️ Capacidade de condução")
+            linhas_capacidade = []
+
+            for item in dados_cap:
+                linhas_capacidade.append({
+                    "Circuito":
+                        f"C{int(item.get('numero', 0) or 0):02d}",
+                    "Tipo":
+                        item.get("tipo", ""),
+                    "Ambiente":
+                        item.get("ambiente", ""),
+                    "Ib — corrente de projeto (A)":
+                        item.get("corrente_a", ""),
+                    "Bitola final (mm²)":
+                        item.get(
+                            "bitola_atual_mm2",
+                            item.get("bitola_mm2", "")
+                        ),
+                    "Método":
+                        item.get("metodo_instalacao", ""),
+                    "Temperatura (°C)":
+                        item.get(
+                            "temperatura_ref_c",
+                            capacidade.get(
+                                "temperatura_ambiente_c",
+                                ""
+                            )
+                        ),
+                    "Trecho crítico":
+                        item.get("trecho_critico_id", ""),
+                    "Comprimento do trecho crítico (m)":
+                        item.get("comprimento_trecho_critico_m", ""),
+                    "Circuitos agrupados":
+                        item.get("qtd_circuitos_agrupados", ""),
+                    "Fator de agrupamento":
+                        item.get("fator_agrupamento", ""),
+                    "Fator de temperatura":
+                        item.get("fator_temperatura", ""),
+                    "Iz corrigida (A)":
+                        item.get("iz_corrigida_a", ""),
+                    "Bitola recomendada (mm²)":
+                        item.get("bitola_recomendada_mm2", ""),
+                    "Resultado":
+                        item.get("status", ""),
+                })
+
+            st.markdown(
+                "#### 🌡️ Verificação da capacidade de condução"
+            )
+
+            st.caption(
+                "A capacidade é avaliada com o método B1/B2 e a "
+                "temperatura selecionados acima, considerando o trecho "
+                "físico mais crítico de cada circuito."
+            )
+
             st.dataframe(
-                pd.DataFrame(dados_cap),
+                pd.DataFrame(linhas_capacidade),
                 use_container_width=True,
                 hide_index=True
             )
 
         valid_ib = resumo_rotas.get("validacao_ib_in_iz", {}) or {}
         alertas = int(valid_ib.get("qtd_alertas", 0) or 0)
+
+        st.markdown(
+            "#### ✅ Verificação final Ib ≤ In ≤ Iz"
+        )
+
         if alertas == 0:
             st.success(
-                "Relação preliminar Ib ≤ In ≤ Iz atendida nos circuitos avaliados."
+                "Relação preliminar Ib ≤ In ≤ Iz atendida nos "
+                "circuitos avaliados."
             )
         else:
             st.warning(
-                f"{alertas} circuito(s) exigem revisão de Ib ≤ In ≤ Iz."
+                f"{alertas} circuito(s) exigem revisão da relação "
+                "Ib ≤ In ≤ Iz."
             )
 
-        st.caption(
-            "Queda de tensão, capacidade de condução e convergência de bitolas "
-            "ficam concentradas nesta página."
-        )
         return
 
     # --------------------------------------------------------
@@ -3851,7 +3986,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_3.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_3_Rev_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -3860,7 +3995,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_3.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_3_Rev_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )

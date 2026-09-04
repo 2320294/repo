@@ -217,37 +217,27 @@ def _garantir_dimensionamento_fisico(
     parametros_projeto
 ):
     """
-    Fase 13.3:
+    Fase 13.3 Rev.1:
     cálculo compartilhado pelas páginas Dimensionamento, Eletrodutos
-    e Materiais. Mantém uma única fonte de verdade no session_state.
+    e Materiais. O cache também considera método B1/B2 e temperatura.
     """
     if not dxf_bytes or not local_qdc:
         return None
 
-    if (
-        st.session_state.get("dimensionamento_rotas_projeto")
-        == st.session_state.get("projeto_ativo")
-        and st.session_state.get("dimensionamento_rotas_versao")
-        == VERSAO_SISTEMA
-        and isinstance(
-            st.session_state.get("dimensionamento_rotas"),
-            dict
-        )
-    ):
-        return st.session_state.get("dimensionamento_rotas")
-
     rotulo_metodo = str(
         st.session_state.get(
             "fase12_1_metodo_instalacao_rotulo",
-            "B1"
+            "B1 — Condutores isolados em eletroduto embutido na parede"
         )
         or "B1"
     )
+
     metodo = (
         "B2"
         if rotulo_metodo.upper().startswith("B2")
         else "B1"
     )
+
     temperatura = int(
         st.session_state.get(
             "fase12_1_temperatura_ambiente",
@@ -255,6 +245,51 @@ def _garantir_dimensionamento_fisico(
         )
         or 30
     )
+
+    resumo_cache = st.session_state.get(
+        "dimensionamento_rotas"
+    )
+
+    cache_compativel = False
+
+    if (
+        st.session_state.get("dimensionamento_rotas_projeto")
+        == st.session_state.get("projeto_ativo")
+        and st.session_state.get("dimensionamento_rotas_versao")
+        == VERSAO_SISTEMA
+        and isinstance(resumo_cache, dict)
+    ):
+        iterativo_cache = (
+            resumo_cache.get(
+                "dimensionamento_iterativo",
+                {}
+            )
+            or {}
+        )
+
+        metodo_cache = str(
+            iterativo_cache.get(
+                "metodo_instalacao",
+                ""
+            )
+            or ""
+        ).upper()
+
+        temperatura_cache = int(
+            iterativo_cache.get(
+                "temperatura_ambiente_c",
+                0
+            )
+            or 0
+        )
+
+        cache_compativel = (
+            metodo_cache == metodo
+            and temperatura_cache == temperatura
+        )
+
+    if cache_compativel:
+        return resumo_cache
 
     resumo = calcular_rotas_antes_do_dxf(
         dxf_bytes=dxf_bytes,
@@ -277,6 +312,7 @@ def _garantir_dimensionamento_fisico(
         )
 
     return resumo
+
 
 
 def renderizar_painel_principal():
@@ -647,7 +683,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 13.3. O DG depende da validação "
+                "Pré-dimensionamento da Fase 13.3 Rev.1. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 
@@ -740,6 +776,88 @@ def renderizar_painel_principal():
         st.subheader(
             "⚙️ Dimensionamento dos Circuitos"
         )
+
+        st.markdown(
+            "#### 🧱 Método de instalação e temperatura"
+        )
+
+        metodo_opcoes = [
+            "B1 — Condutores isolados em eletroduto embutido na parede",
+            "B2 — Cabo multipolar em eletroduto embutido na parede",
+        ]
+
+        metodo_atual = str(
+            st.session_state.get(
+                "fase12_1_metodo_instalacao_rotulo",
+                metodo_opcoes[0]
+            )
+            or metodo_opcoes[0]
+        )
+
+        if metodo_atual not in metodo_opcoes:
+            metodo_atual = (
+                metodo_opcoes[1]
+                if metodo_atual.upper().startswith("B2")
+                else metodo_opcoes[0]
+            )
+
+        metodo_selecionado = st.selectbox(
+            "Método de instalação",
+            metodo_opcoes,
+            index=metodo_opcoes.index(
+                metodo_atual
+            ),
+            key="fase13_3_metodo_instalacao_ui"
+        )
+
+        temperatura_selecionada = st.selectbox(
+            "Temperatura ambiente de referência",
+            [30, 35, 40, 45, 50, 55, 60],
+            index=(
+                [30, 35, 40, 45, 50, 55, 60].index(
+                    int(
+                        st.session_state.get(
+                            "fase12_1_temperatura_ambiente",
+                            30
+                        )
+                        or 30
+                    )
+                )
+                if int(
+                    st.session_state.get(
+                        "fase12_1_temperatura_ambiente",
+                        30
+                    )
+                    or 30
+                )
+                in [30, 35, 40, 45, 50, 55, 60]
+                else 0
+            ),
+            format_func=lambda valor: f"{valor} °C",
+            key="fase13_3_temperatura_ui"
+        )
+
+        st.session_state[
+            "fase12_1_metodo_instalacao_rotulo"
+        ] = metodo_selecionado
+
+        st.session_state[
+            "fase12_1_temperatura_ambiente"
+        ] = temperatura_selecionada
+
+        with st.expander(
+            "ℹ️ Como escolher entre B1 e B2?",
+            expanded=False
+        ):
+            st.markdown(
+                "**B1:** condutores isolados individualmente dentro de "
+                "eletroduto embutido na parede.\n\n"
+                "**B2:** cabo multipolar dentro de eletroduto embutido "
+                "na parede.\n\n"
+                "A escolha altera a capacidade de condução usada no "
+                "pré-dimensionamento. O sistema não deve assumir B1 "
+                "silenciosamente quando o usuário pode definir o método."
+            )
 
         if not local_qdc:
             st.warning(
