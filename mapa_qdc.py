@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.9:
+    Fase 13.4 Rev.10:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -690,6 +690,19 @@ def _desenhar_dispositivo(
         layer
     )
 
+    # Fase 13.4 Rev.10:
+    # cada módulo/polo fica visualmente separado dentro do aparelho.
+    # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
+    if modulos > 1:
+        for i_sep in range(1, modulos):
+            x_sep = x1 + modulo_w * i_sep
+            _line(
+                msp,
+                (x_sep, y1 + 0.08),
+                (x_sep, y2 - 0.08),
+                layer
+            )
+
     # Bornes superior/inferior por polo/módulo.
     for i in range(modulos):
         cx = x1 + modulo_w * (i + 0.5)
@@ -731,8 +744,18 @@ def _desenhar_dispositivo(
             layer_txt
         )
 
+    _texto_central(
+        msp,
+        f"{modulos}P",
+        x1,
+        x2,
+        y2 - 0.35,
+        0.060,
+        layer_txt
+    )
+
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.4 Rev.9:
+        # Fase 13.4 Rev.10:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -797,6 +820,54 @@ def _desenhar_dispositivo(
     }
 
 
+def _centros_polos(geom):
+    modulos = max(
+        1,
+        int(
+            geom.get(
+                "modulos",
+                1
+            )
+            or 1
+        )
+    )
+    largura = (
+        float(geom["x2"])
+        - float(geom["x1"])
+    )
+    passo = largura / modulos
+    return [
+        float(geom["x1"])
+        + passo * (i + 0.5)
+        for i in range(modulos)
+    ]
+
+
+def _mapa_fases_polos(disp, geom):
+    """Associa as fases elétricas reais aos polos físicos do aparelho."""
+    fases = _fases_do_texto(
+        disp.get(
+            "fase",
+            ""
+        )
+    )
+    centros = _centros_polos(
+        geom
+    )
+
+    resultado = []
+    for idx, fase in enumerate(fases):
+        if idx >= len(centros):
+            break
+        resultado.append(
+            (
+                fase,
+                centros[idx]
+            )
+        )
+    return resultado
+
+
 def _quebrar_texto(texto, max_chars=27):
     palavras = str(texto or "").split()
     linhas = []
@@ -820,7 +891,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.9 — QDC executivo no CAD.
+    Fase 13.4 Rev.10 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -902,7 +973,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.9",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.10",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1011,28 +1082,22 @@ def desenhar_mapa_fisico_qdc(
             mapa
         )
 
-        espacamento_entrada = 0.16
-        largura_fases = (
-            max(
-                0,
-                len(fases_entrada) - 1
-            )
-            * espacamento_entrada
+        polos_dg = _centros_polos(
+            dg
         )
 
-        x_inicio_fases = (
-            entrada_x
-            - largura_fases / 2.0
-        )
-
-        # Somente a quantidade real de fases dimensionada pelo sistema.
+        # Cada fase entra no polo físico correspondente do DG.
         for idx_fase, token in enumerate(
             fases_entrada
         ):
-            xx = (
-                x_inicio_fases
-                + idx_fase * espacamento_entrada
-            )
+            if idx_fase >= len(
+                polos_dg
+            ):
+                break
+
+            xx = polos_dg[
+                idx_fase
+            ]
 
             _line(
                 msp,
@@ -1049,6 +1114,14 @@ def desenhar_mapa_fisico_qdc(
                 0.075,
                 LT
             )
+
+        largura_fases = (
+            max(
+                0,
+                len(fases_entrada) - 1
+            )
+            * 0.16
+        )
 
         x_aux = (
             entrada_x
@@ -1155,15 +1228,47 @@ def desenhar_mapa_fisico_qdc(
                 _layer_por_token(token)
             )
 
-        # DPS: fase -> DPS -> PE.
+        # DG alimenta separadamente cada barramento de fase.
+        if dg_geoms:
+            dg_disp, dg_geom = dg_geoms[0]
+            polos_dg = _centros_polos(
+                dg_geom
+            )
+            for idx_fase, token in enumerate(
+                fases_disponiveis
+            ):
+                if idx_fase >= len(
+                    polos_dg
+                ):
+                    break
+                _line(
+                    msp,
+                    (
+                        polos_dg[idx_fase],
+                        dg_geom["y2"]
+                    ),
+                    (
+                        polos_dg[idx_fase],
+                        barramentos_y[token]
+                    ),
+                    _layer_por_token(
+                        token
+                    )
+                )
+
+        # DPS: fase -> polo físico do DPS -> PE.
         for d, g in geral_geom:
             if d.get("tipo") != "DPS":
                 continue
             token = _fases_do_texto(d.get("fase"))[0]
+            polos_dps = _centros_polos(
+                g
+            )
+            x_polo = polos_dps[0]
             _line(
                 msp,
-                (g["cx"], barramentos_y[token]),
-                (g["cx"], g["y2"]),
+                (x_polo, barramentos_y[token]),
+                (x_polo, g["y2"]),
                 _layer_por_token(token)
             )
             _texto_central(
@@ -1185,26 +1290,53 @@ def desenhar_mapa_fisico_qdc(
                 LPE
             )
 
-        # IDRs: recebem as fases presentes no grupo e retorno ao neutro.
+        # IDRs: cada fase entra em seu polo físico correspondente.
         for d, g in geral_geom:
             if d.get("tipo") != "IDR":
                 continue
 
-            fases = _fases_do_texto(d.get("fase"))
-            largura = max(1, len(fases))
+            fases_polos = _mapa_fases_polos(
+                d,
+                g
+            )
 
-            for idx, token in enumerate(fases):
-                xx = (
-                    g["x1"]
-                    + (idx + 0.5)
-                    * (g["x2"] - g["x1"])
-                    / largura
-                )
+            for token, xx in fases_polos:
+                if token not in barramentos_y:
+                    continue
                 _line(
                     msp,
                     (xx, barramentos_y[token]),
                     (xx, g["y2"]),
                     _layer_por_token(token)
+                )
+
+            # Quando sobra polo em IDR de circuito fase-neutro,
+            # o último polo é reservado visualmente ao neutro.
+            polos_idr = _centros_polos(
+                g
+            )
+            if (
+                _tem_neutro_alimentador(mapa)
+                and len(polos_idr) > len(fases_polos)
+            ):
+                x_n_idr = polos_idr[-1]
+                _polyline(
+                    msp,
+                    [
+                        (
+                            neutro["x"],
+                            g["y2"] + 0.16
+                        ),
+                        (
+                            x_n_idr,
+                            g["y2"] + 0.16
+                        ),
+                        (
+                            x_n_idr,
+                            g["y2"]
+                        ),
+                    ],
+                    LN
                 )
 
             _polyline(
@@ -1502,6 +1634,7 @@ def desenhar_mapa_fisico_qdc(
                     x1p = itens_grupo[0][1]["x1"]
                     x2p = itens_grupo[-1][1]["x2"]
 
+                    # Linha mecânica do pente.
                     _line(
                         msp,
                         (x1p, yp),
@@ -1523,69 +1656,189 @@ def desenhar_mapa_fisico_qdc(
                         LT
                     )
 
-                    # Dentes do pente para os disjuntores daquele grupo.
-                    for d, g in itens_grupo:
+                    # Fases realmente usadas neste grupo.
+                    fases_grupo = []
+                    for d_item, g_item in itens_grupo:
+                        for fase_item in _fases_do_texto(
+                            d_item.get(
+                                "fase",
+                                ""
+                            )
+                        ):
+                            if fase_item not in fases_grupo:
+                                fases_grupo.append(
+                                    fase_item
+                                )
+
+                    fases_grupo = [
+                        fase
+                        for fase in (
+                            "A",
+                            "B",
+                            "C"
+                        )
+                        if fase in fases_grupo
+                    ]
+
+                    # Cada fase ganha uma pista própria, paralela ao pente.
+                    y_fase_grupo = {}
+                    for idx_fase, fase_grupo in enumerate(
+                        fases_grupo
+                    ):
+                        yy_fase = (
+                            yp
+                            + 0.10
+                            + idx_fase * 0.10
+                        )
+                        y_fase_grupo[
+                            fase_grupo
+                        ] = yy_fase
+
                         _line(
                             msp,
-                            (g["cx"], yp),
-                            (g["cx"], g["y2"]),
-                            _layer_fase(
-                                d.get(
-                                    "fase"
-                                )
+                            (x1p, yy_fase),
+                            (x2p, yy_fase),
+                            _layer_por_token(
+                                fase_grupo
                             )
                         )
 
-                    # Alimentação do segmento:
-                    # - grupo protegido: saída do respectivo IDR;
-                    # - SEM DR: saída direta do DG.
-                    fonte_g = dr_geom_por_grupo.get(
+                    # Cada disjuntor recebe cada fase em um polo diferente.
+                    for d_item, g_item in itens_grupo:
+                        polos_circuito = _centros_polos(
+                            g_item
+                        )
+                        fases_circuito = _fases_do_texto(
+                            d_item.get(
+                                "fase",
+                                ""
+                            )
+                        )
+
+                        for idx_fase, fase_item in enumerate(
+                            fases_circuito
+                        ):
+                            if idx_fase >= len(
+                                polos_circuito
+                            ):
+                                break
+
+                            yy_fase = y_fase_grupo.get(
+                                fase_item,
+                                yp + 0.10
+                            )
+
+                            x_polo = polos_circuito[
+                                idx_fase
+                            ]
+
+                            _line(
+                                msp,
+                                (
+                                    x_polo,
+                                    yy_fase
+                                ),
+                                (
+                                    x_polo,
+                                    g_item["y2"]
+                                ),
+                                _layer_por_token(
+                                    fase_item
+                                )
+                            )
+
+                    # Fonte do grupo.
+                    fonte_disp = None
+                    fonte_geom = dr_geom_por_grupo.get(
                         grupo
                     )
 
+                    if fonte_geom is not None:
+                        for d_geral, g_geral in geral_geom:
+                            if g_geral is fonte_geom:
+                                fonte_disp = d_geral
+                                break
+
                     if (
-                        fonte_g is None
+                        fonte_geom is None
                         and str(
                             grupo
                         ).upper()
                         == "SEM DR"
                         and dg_geoms
                     ):
-                        fonte_g = dg_geoms[0][1]
+                        fonte_disp, fonte_geom = dg_geoms[0]
 
-                    if fonte_g:
-                        x_dest = (
-                            x1p
-                            + x2p
-                        ) / 2.0
-
-                        y_saida_fonte = (
-                            fonte_g["y1"]
-                            - 0.20
+                    if fonte_geom and fonte_disp:
+                        polos_fonte = _centros_polos(
+                            fonte_geom
                         )
 
-                        _polyline(
-                            msp,
-                            [
-                                (
-                                    fonte_g["cx"],
-                                    fonte_g["y1"]
-                                ),
-                                (
-                                    fonte_g["cx"],
-                                    y_saida_fonte
-                                ),
-                                (
-                                    x_dest,
-                                    y_saida_fonte
-                                ),
-                                (
-                                    x_dest,
-                                    yp
-                                ),
-                            ],
-                            LP
+                        fases_fonte = _fases_do_texto(
+                            fonte_disp.get(
+                                "fase",
+                                ""
+                            )
                         )
+
+                        if fonte_disp.get("tipo") == "DG":
+                            fases_fonte = _fases_alimentador(
+                                mapa
+                            )
+
+                        # Liga cada fase da fonte à pista correspondente.
+                        for idx_fase, fase_item in enumerate(
+                            fases_fonte
+                        ):
+                            if (
+                                fase_item not in y_fase_grupo
+                                or idx_fase >= len(
+                                    polos_fonte
+                                )
+                            ):
+                                continue
+
+                            x_origem = polos_fonte[
+                                idx_fase
+                            ]
+                            yy_destino = y_fase_grupo[
+                                fase_item
+                            ]
+
+                            # Corredores verticais ligeiramente deslocados
+                            # para que fases distintas não se sobreponham.
+                            x_corredor = (
+                                x_origem
+                                + idx_fase * 0.035
+                            )
+
+                            _polyline(
+                                msp,
+                                [
+                                    (
+                                        x_origem,
+                                        fonte_geom["y1"]
+                                    ),
+                                    (
+                                        x_corredor,
+                                        fonte_geom["y1"] - 0.16
+                                    ),
+                                    (
+                                        x_corredor,
+                                        yy_destino
+                                    ),
+                                    (
+                                        (
+                                            x1p
+                                            + x2p
+                                        ) / 2.0,
+                                        yy_destino
+                                    ),
+                                ],
+                                _layer_por_token(
+                                    fase_item
+                                )
+                            )
 
         y_rail -= 3.15
 
@@ -1625,7 +1878,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.4 Rev.9:
+    # Fase 13.4 Rev.10:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
