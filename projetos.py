@@ -50,6 +50,27 @@ def _ativar_projeto_selecionado():
         )
 
 
+    # Remove widgets legados globais da tela de parâmetros.
+    # A partir desta revisão, novos widgets usam chave por projeto.
+    chaves_widgets_legados = (
+        "param_pe_direito",
+        "param_rede_uf",
+        "param_rede_municipio",
+        "param_rede_concessionaria",
+        "param_rede_concessionaria_manual",
+        "param_rede_tipo_fornecimento",
+        "param_rede_tensao_fornecimento",
+        "param_rede_metodo_demanda",
+        "param_rede_fator_demanda_manual",
+    )
+
+    for chave in chaves_widgets_legados:
+        st.session_state.pop(
+            chave,
+            None
+        )
+
+
 def renderizar_gerenciador_projetos():
     st.markdown("<br>", unsafe_allow_html=True)
 

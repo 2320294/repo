@@ -13,6 +13,32 @@ from concessionarias import (
 )
 
 
+def _widget_key(sufixo):
+    """
+    Chave de widget isolada por projeto.
+
+    Evita que o Streamlit reutilize valores visuais do projeto anterior
+    ao trocar o projeto ativo na barra lateral.
+    """
+    projeto = str(
+        st.session_state.get(
+            "projeto_ativo",
+            "SEM_PROJETO"
+        )
+        or "SEM_PROJETO"
+    )
+
+    seguro = (
+        projeto
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace("\\", "_")
+        .replace(":", "_")
+    )
+
+    return f"parametros_{seguro}_{sufixo}"
+
+
 def renderizar_parametros_projeto(
     tensao_salva=None,
     pe_direito_salvo=None,
@@ -21,7 +47,7 @@ def renderizar_parametros_projeto(
     """
     Parâmetros gerais e perfil de fornecimento do projeto.
 
-    Fase 13.4 Rev.6:
+    Fase 13.4 Rev.7:
     - localização;
     - concessionária;
     - tipo/tensão de fornecimento;
@@ -52,7 +78,7 @@ def renderizar_parametros_projeto(
         value=pe_atual,
         step=0.05,
         format="%.2f",
-        key="param_pe_direito"
+        key=_widget_key("pe_direito")
     )
 
     st.markdown(
@@ -87,7 +113,7 @@ def renderizar_parametros_projeto(
             "Estado (UF):",
             opcoes_uf,
             index=indice_uf,
-            key="param_rede_uf"
+            key=_widget_key("rede_uf")
         )
 
         uf = (
@@ -104,7 +130,7 @@ def renderizar_parametros_projeto(
                 ""
             ),
             placeholder="Ex.: Belo Horizonte",
-            key="param_rede_municipio"
+            key=_widget_key("rede_municipio")
         ).strip()
 
     opcoes_concessionaria = (
@@ -132,7 +158,7 @@ def renderizar_parametros_projeto(
         index=opcoes_concessionaria.index(
             concessionaria_salva
         ),
-        key="param_rede_concessionaria"
+        key=_widget_key("rede_concessionaria")
     )
 
     concessionaria_manual = ""
@@ -151,9 +177,7 @@ def renderizar_parametros_projeto(
                 placeholder=(
                     "Informe a distribuidora local"
                 ),
-                key=(
-                    "param_rede_concessionaria_manual"
-                )
+                key=_widget_key("rede_concessionaria_manual")
             ).strip()
         )
 
@@ -202,9 +226,7 @@ def renderizar_parametros_projeto(
                 index=tipos.index(
                     tipo_salvo
                 ),
-                key=(
-                    "param_rede_tipo_fornecimento"
-                )
+                key=_widget_key("rede_tipo_fornecimento")
             )
         )
 
@@ -229,9 +251,7 @@ def renderizar_parametros_projeto(
                 index=tensoes_rede.index(
                     tensao_rede_salva
                 ),
-                key=(
-                    "param_rede_tensao_fornecimento"
-                )
+                key=_widget_key("rede_tensao_fornecimento")
             )
         )
 
@@ -257,7 +277,7 @@ def renderizar_parametros_projeto(
         index=metodos.index(
             metodo_salvo
         ),
-        key="param_rede_metodo_demanda"
+        key=_widget_key("rede_metodo_demanda")
     )
 
     fator_demanda_manual = float(
@@ -276,7 +296,7 @@ def renderizar_parametros_projeto(
             value=min(100.0, max(0.0, fator_demanda_manual)),
             step=1.0,
             format="%.1f",
-            key="param_rede_fator_demanda_manual"
+            key=_widget_key("rede_fator_demanda_manual")
         )
         st.caption(
             "Entrada técnica explícita. O sistema não trata este valor "
@@ -318,7 +338,7 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto, mas nesta Fase 13.4 Rev.6 o cálculo de demanda "
+            "no projeto, mas nesta Fase 13.4 Rev.7 o cálculo de demanda "
             "ainda não é aplicado automaticamente. "
             "O perfil normativo será ativado somente quando "
             "a regra oficial dessa concessionária estiver "

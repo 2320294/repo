@@ -36,7 +36,7 @@ def _geometria_simbolo_tomada(
     ny
 ):
     """
-    Fase 13.4 Rev.6.
+    Fase 13.4 Rev.7.
 
     px,py continuam sendo o ponto da parede.
 
@@ -336,7 +336,7 @@ def _selecao_tomada_alta(
         or []
     )
 
-    # Fase 13.4 Rev.6:
+    # Fase 13.4 Rev.7:
     # prioridade absoluta para o identificador único (ex.: "WC 2").
     # Compatibilidade somente para projetos antigos que tenham salvo
     # a configuração usando o nome-base.
@@ -763,7 +763,7 @@ def _distancias_tugs_desde_interruptor(
     ponto_interruptor
 ):
     """
-    Fase 13.4 Rev.6
+    Fase 13.4 Rev.7
 
     O sistema testa os DOIS lados do interruptor.
     Escolhe o lado que oferece saída útil pela parede, evitando começar
@@ -1001,7 +1001,7 @@ def desenhar_tomadas(
         ]
     )
 
-    # Fase 13.4 Rev.6 — classificação por altura preservada da Fase 8.3.
+    # Fase 13.4 Rev.7 — classificação por altura preservada da Fase 8.3.
     # ALTA: pontos dedicados de chuveiro e ar-condicionado.
     # MEDIA: demais TUEs (micro-ondas/forno, máquina etc.).
     # As TUGs são classificadas mais abaixo conforme o ambiente.
@@ -1077,7 +1077,7 @@ def desenhar_tomadas(
         for idx_tue in range(
             qtd_tue
         ):
-            # Fase 13.4 Rev.6:
+            # Fase 13.4 Rev.7:
             # TUE ALTA usa exatamente o trecho escolhido pelo usuário.
             selecao_alta = (
                 _selecao_tomada_alta(
@@ -1288,7 +1288,7 @@ def desenhar_tomadas(
                 "ambiente": nome,
                 "tipo": "TUE",
                 "ponto": (px, py),
-                # Fase 13.4 Rev.6: o ramal dedicado chega no extremo do
+                # Fase 13.4 Rev.7: o ramal dedicado chega no extremo do
                 # traço central que fica embutido na parede.
                 "ponto_conexao_parede":
                     ponto_traco_externo,
@@ -1305,7 +1305,7 @@ def desenhar_tomadas(
                 ),
             })
 
-    # TUG — FASE 13.4 REV.6
+    # TUG — FASE 13.4 REV.7
     if qtd_tugs > 0 and comp_total > 0:
         interruptor_ref = (
             _interruptor_referencia_ambiente(

@@ -52,7 +52,7 @@ def formar_circuitos_definitivos(circuitos_elementares, disjuntor_por_corrente):
     """
     Consolida as cargas elementares por ambiente em circuitos físicos.
 
-    Regras da Fase 13.4 Rev.6:
+    Regras da Fase 13.4 Rev.7:
     - TUE permanece dedicada, uma carga por circuito.
     - TUG de cozinha/serviço/lavanderia e análogos permanece exclusiva
       daquele ambiente; não é misturada com TUG de outros ambientes.
