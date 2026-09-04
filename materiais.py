@@ -40,7 +40,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 13.2 Rev.2:
+# Fase 13.3:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -313,7 +313,7 @@ def _adicionar_material(
 
 
 # ============================================================
-# FASE 13.2 REV.2 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# FASE 13.3 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
 # ============================================================
 
 MODULO_DIN_MM = 17.5
@@ -373,7 +373,7 @@ def _adicionar_componentes_qdc_executivo(
     local_qdc
 ):
     """
-    Fase 13.2 Rev.2.
+    Fase 13.3.
 
     Transforma a estrutura já conhecida do unifilar em componentes físicos
     do QDC. Não inclui conectores genéricos: ainda não existe informação
@@ -668,7 +668,7 @@ def _auditar_consistencia_qdc(
     resumo_qdc
 ):
     """
-    Fase 13.2 Rev.2 — auditoria cruzada do QDC.
+    Fase 13.3 — auditoria cruzada do QDC.
 
     A mesma estrutura elétrica usada no quantitativo/unifilar é verificada
     quanto a módulos DIN, polos, DR, barramentos, pente e sequência funcional.
@@ -712,7 +712,7 @@ def _auditar_consistencia_qdc(
     )
 
     # 3. Cobertura DR e exclusividade de grupo.
-    # Fase 13.2 Rev.2:
+    # Fase 13.3:
     # somente circuitos que a própria lógica do projeto classificou para DR
     # são obrigados a aparecer em um grupo IDR. Iluminação comum sem DR não
     # gera alerta apenas por estar fora dos grupos.
@@ -1008,7 +1008,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 13.2 Rev.2:
+    # Fase 13.3:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -1420,17 +1420,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 13.2 REV.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.3 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 13.2 Rev.2/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.3/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 13.2 Rev.2 — se o CAD desta versão já calculou correções por
+    # Fase 13.3 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1566,7 +1566,7 @@ def calcular_quantitativo_materiais(
     # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 13.2 REV.2 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.3 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1722,7 +1722,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 13.2 REV.2 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.3 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1819,7 +1819,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 13.2 Rev.2: dados estruturais usados pelo roteamento continuam
+        # Fase 13.3: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2973,7 +2973,8 @@ def renderizar_materiais(
     config_interruptores_usuario,
     local_qdc=None,
     tensao_projeto=110,
-    pe_direito=2.80
+    pe_direito=2.80,
+    pagina="materiais"
 ):
 
     resumo_rotas = None
@@ -3016,7 +3017,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 13.2 Rev.2:
+    # Fase 13.3:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -3039,7 +3040,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 13.2 Rev.2:
+    # Fase 13.3:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -3111,7 +3112,7 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    # Fase 13.2 Rev.2 — componentes físicos do QDC derivados do unifilar.
+    # Fase 13.3 — componentes físicos do QDC derivados do unifilar.
     # Conectores genéricos ficam deliberadamente fora desta fase.
     resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
         materiais,
@@ -3164,260 +3165,277 @@ def renderizar_materiais(
         circuitos
     )
 
-    if isinstance(resumo_rotas, dict):
-        iterativo = (
-            resumo_rotas.get(
-                "dimensionamento_iterativo",
-                {}
+    # ========================================================
+    # FASE 13.3 — APRESENTAÇÃO MODULAR
+    # ========================================================
+    # Os cálculos continuam centralizados neste motor. A interface apenas
+    # apresenta cada diagnóstico no módulo ao qual ele pertence.
+    pagina = str(pagina or "materiais").strip().lower()
+
+    if pagina == "qdc":
+        st.markdown("#### 🧰 QDC executivo")
+
+        if resumo_qdc_executivo:
+            q1, q2, q3, q4 = st.columns(4)
+            q1.metric(
+                "Posições do QDC",
+                resumo_qdc_executivo.get("qdc_posicoes", 0)
             )
-            or {}
+            q2.metric(
+                "Módulos ocupados",
+                resumo_qdc_executivo.get("modulos_ocupados", 0)
+            )
+            q3.metric(
+                "IDRs",
+                resumo_qdc_executivo.get("quantidade_drs", 0)
+            )
+            q4.metric(
+                "DPS",
+                resumo_qdc_executivo.get("quantidade_dps", 0)
+            )
+
+        st.markdown("#### ⚖️ Balanceamento de fases")
+        if resumo_balanceamento.get("status") == "ok":
+            fases_resumo = resumo_balanceamento.get("fases", {}) or {}
+            cols = st.columns(max(1, len(fases_resumo)))
+            for col, (fase, pot) in zip(cols, fases_resumo.items()):
+                col.metric(
+                    f"Fase {fase}",
+                    f"{float(pot or 0)/1000:.2f} kW"
+                )
+            st.caption(
+                "Desequilíbrio preliminar: "
+                f"{resumo_balanceamento.get('desequilibrio_pct', 0):.1f}%."
+            )
+        else:
+            st.info(
+                "Complete os parâmetros de fornecimento para liberar "
+                "o balanceamento automático."
+            )
+
+        st.markdown("#### 🔧 Proteção geral e alimentador")
+        if resumo_protecao.get("status") == "pre_dimensionado":
+            c1, c2, c3 = st.columns(3)
+            dg = resumo_protecao.get("dg_a")
+            polos = resumo_protecao.get("dg_polos", "")
+            sf = resumo_protecao.get("alimentador_fase_mm2")
+            spe = resumo_protecao.get("alimentador_pe_mm2")
+            c1.metric(
+                "Disjuntor geral",
+                f"{dg} A {polos}".strip() if dg else "—"
+            )
+            c2.metric(
+                "Condutor fase",
+                f"{sf:g} mm²" if sf else "—"
+            )
+            c3.metric(
+                "Condutor PE",
+                f"{spe:g} mm²" if spe else "—"
+            )
+        else:
+            st.info(
+                "A proteção geral aguarda os parâmetros necessários."
+            )
+
+        st.markdown("#### 🛡️ Agrupamento dos IDRs")
+        if resumo_drs:
+            linhas_dr = []
+            for dr in resumo_drs:
+                linhas_dr.append({
+                    "IDR": dr.get("dr", ""),
+                    "Circuitos": ", ".join(
+                        f"C{int(n)}"
+                        for n in (dr.get("circuitos", []) or [])
+                    ),
+                    "Corrente nominal (A)": dr.get("corrente_nominal_a"),
+                    "Sensibilidade (mA)": dr.get("sensibilidade_ma"),
+                })
+            st.dataframe(
+                pd.DataFrame(linhas_dr),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("Nenhum grupo IDR foi formado.")
+
+        st.markdown("#### 🛡️ Consistência elétrica do QDC")
+        if auditoria_qdc:
+            a1, a2, a3 = st.columns(3)
+            a1.metric("Resultado", auditoria_qdc.get("status", "—"))
+            a2.metric(
+                "Posições livres",
+                auditoria_qdc.get("posicoes_livres", 0)
+            )
+            a3.metric(
+                "Alertas",
+                int(auditoria_qdc.get("qtd_alertas", 0) or 0)
+            )
+            verificacoes = auditoria_qdc.get("verificacoes", []) or []
+            if verificacoes:
+                st.dataframe(
+                    pd.DataFrame(verificacoes),
+                    use_container_width=True,
+                    hide_index=True
+                )
+        return
+
+    if pagina == "eletrodutos":
+        st.markdown("#### 🧵 Eletrodutos e rotas físicas")
+
+        if not isinstance(resumo_rotas, dict):
+            st.info(
+                "O roteamento físico ainda não foi calculado para este projeto."
+            )
+            return
+
+        rotas = resumo_rotas.get("rotas", []) or []
+        diag = resumo_rotas.get("diagnostico_agrupamento", {}) or {}
+
+        e1, e2, e3 = st.columns(3)
+        e1.metric("Trechos físicos", len(rotas))
+        e2.metric(
+            "Máx. circuitos no mesmo trecho",
+            int(diag.get("max_circuitos_mesmo_trecho", 0) or 0)
+        )
+        e3.metric(
+            "Trechos de alta prioridade",
+            int(diag.get("qtd_trechos_alta_prioridade", 0) or 0)
         )
 
-        if iterativo:
-            st.markdown(
-                "#### 🔁 Dimensionamento iterativo automático"
-            )
-
-            status_iter = str(
-                iterativo.get(
-                    "status",
-                    ""
+        if rotas:
+            linhas_rotas = []
+            for r in rotas:
+                circuitos_txt = ", ".join(
+                    f"C{int(n)}"
+                    for n in sorted(set(r.get("circuitos", []) or []))
                 )
-                or ""
+                linhas_rotas.append({
+                    "Trecho": r.get("trecho_id", ""),
+                    "Circuitos": circuitos_txt,
+                    "Comprimento (m)": round(float(r.get("comprimento_m", 0) or 0), 2),
+                    "Eletroduto (mm)": r.get("diametro_eletroduto_mm"),
+                    "Ocupação (%)": round(float(r.get("ocupacao_pct", 0) or 0), 1),
+                    "Critério": r.get("criterio", ""),
+                })
+            st.dataframe(
+                pd.DataFrame(linhas_rotas),
+                use_container_width=True,
+                hide_index=True
             )
 
-            qtd_iter = int(
-                iterativo.get(
-                    "iteracoes",
-                    0
-                )
-                or 0
-            )
-
-            metodo_iter = iterativo.get(
-                "metodo_instalacao",
-                "B1"
-            )
-
-            temp_iter = iterativo.get(
-                "temperatura_ambiente_c",
-                30
-            )
-
-            c_it1, c_it2, c_it3 = st.columns(3)
-            c_it1.metric(
-                "Status",
-                status_iter
-            )
-            c_it2.metric(
-                "Iterações",
-                qtd_iter
-            )
-            c_it3.metric(
-                "Parâmetros",
-                f"{metodo_iter} / {temp_iter} °C"
-            )
-
-            historico_iter = (
-                iterativo.get(
-                    "historico",
-                    []
-                )
-                or []
-            )
-
-            if historico_iter:
-                linhas_iter = []
-
-                for item in historico_iter:
-                    alteracoes = (
-                        item.get(
-                            "alteracoes",
-                            []
-                        )
-                        or []
-                    )
-
-                    alteracoes_txt = ", ".join(
-                        (
-                            f"C{int(a.get('numero', 0))}: "
-                            f"{a.get('bitola_antes_mm2')}→"
-                            f"{a.get('bitola_depois_mm2')} mm²"
-                        )
-                        for a in alteracoes
-                    ) or "Sem alteração"
-
-                    linhas_iter.append({
-                        "Iteração":
-                            item.get(
-                                "iteracao"
-                            ),
-                        "Trechos":
-                            item.get(
-                                "qtd_trechos"
-                            ),
-                        "Bitolas alteradas":
-                            item.get(
-                                "qtd_alteracoes_bitola"
-                            ),
-                        "Alterações":
-                            alteracoes_txt,
+        trechos_diag = diag.get("trechos", []) or []
+        if trechos_diag:
+            with st.expander(
+                "🔎 Agrupamento e ocupação trecho a trecho",
+                expanded=True
+            ):
+                linhas = []
+                for t in trechos_diag:
+                    linhas.append({
+                        "Trecho": t.get("trecho_id", ""),
+                        "Circuitos": ", ".join(
+                            f"C{int(n)}"
+                            for n in (t.get("circuitos", []) or [])
+                        ),
+                        "Qtd. circuitos": t.get("qtd_circuitos", 0),
+                        "Condutores": t.get("qtd_condutores", 0),
+                        "Ocupação (%)": t.get("ocupacao_pct", 0),
+                        "Prioridade": t.get("prioridade_revisao", ""),
                     })
+                st.dataframe(
+                    pd.DataFrame(linhas),
+                    use_container_width=True,
+                    hide_index=True
+                )
 
+        st.caption(
+            "Esta página concentra infraestrutura física: rotas, ocupação, "
+            "agrupamento e eletrodutos. O quantitativo final permanece em Materiais."
+        )
+        return
+
+    if pagina == "dimensionamento":
+        st.markdown("#### ⚡ Dimensionamento dos circuitos")
+
+        if not isinstance(resumo_rotas, dict):
+            st.info(
+                "O dimensionamento físico ainda não foi calculado."
+            )
+            return
+
+        iterativo = resumo_rotas.get("dimensionamento_iterativo", {}) or {}
+        if iterativo:
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Status", iterativo.get("status", "—"))
+            d2.metric("Iterações", int(iterativo.get("iteracoes", 0) or 0))
+            d3.metric(
+                "Método / temperatura",
+                (
+                    f"{iterativo.get('metodo_instalacao', 'B1')} / "
+                    f"{iterativo.get('temperatura_ambiente_c', 30)} °C"
+                )
+            )
+
+            historico = iterativo.get("historico", []) or []
+            if historico:
                 with st.expander(
-                    "🔎 Ver histórico de convergência",
-                    expanded=False
+                    "🔁 Histórico de convergência",
+                    expanded=True
                 ):
                     st.dataframe(
-                        pd.DataFrame(
-                            linhas_iter
-                        ),
+                        pd.DataFrame(historico),
                         use_container_width=True,
                         hide_index=True
                     )
 
-            validacao_ib_in_iz = (
-                resumo_rotas.get(
-                    "validacao_ib_in_iz",
-                    {}
-                )
-                or {}
+        validacao = resumo_rotas.get("validacao_eletrica", {}) or {}
+        dados_validacao = validacao.get("circuitos", []) or []
+        if dados_validacao:
+            st.markdown("#### 📉 Queda de tensão")
+            st.dataframe(
+                pd.DataFrame(dados_validacao),
+                use_container_width=True,
+                hide_index=True
             )
 
-            alertas_ibin = int(
-                validacao_ib_in_iz.get(
-                    "qtd_alertas",
-                    0
-                )
-                or 0
+        capacidade = (
+            resumo_rotas.get("capacidade_conducao_preliminar", {})
+            or {}
+        )
+        dados_cap = capacidade.get("circuitos", []) or []
+        if dados_cap:
+            st.markdown("#### 🌡️ Capacidade de condução")
+            st.dataframe(
+                pd.DataFrame(dados_cap),
+                use_container_width=True,
+                hide_index=True
             )
 
-            if (
-                status_iter == "CONVERGIU"
-                and alertas_ibin == 0
-            ):
-                st.success(
-                    "O ciclo convergiu e a relação preliminar "
-                    "Ib ≤ In ≤ Iz está atendida nos circuitos avaliados."
-                )
-            elif alertas_ibin:
-                st.warning(
-                    f"{alertas_ibin} circuito(s) ainda exigem revisão da relação "
-                    "Ib ≤ In ≤ Iz. O sistema não aumenta automaticamente o disjuntor."
-                )
-
-    st.markdown(
-        "#### 📦 Quantitativo físico do projeto"
-    )
-
-    st.success(
-        "A Fase 13.2 Rev.2 mantém o quantitativo físico do projeto e acrescenta "
-        "os componentes do QDC que já podem ser derivados do unifilar."
-    )
-
-    st.caption(
-        "QDC, disjuntores, IDRs, quantidade de DPS, barramentos N/PE, "
-        "barramento pente, trilho DIN e terminais por bitola são calculados "
-        "a partir da estrutura elétrica já definida. Conectores genéricos "
-        "continuam fora do quantitativo. Parâmetros de DPS que dependem de "
-        "rede/Icc permanecem explicitamente 'a definir', sem valores inventados."
-    )
-
-    if resumo_qdc_executivo:
-        st.markdown(
-            "##### 🧰 QDC executivo"
-        )
-        q1, q2, q3, q4 = st.columns(4)
-        q1.metric(
-            "Posições do QDC",
-            resumo_qdc_executivo.get(
-                "qdc_posicoes",
-                0
-            )
-        )
-        q2.metric(
-            "Módulos ocupados",
-            resumo_qdc_executivo.get(
-                "modulos_ocupados",
-                0
-            )
-        )
-        q3.metric(
-            "IDRs",
-            resumo_qdc_executivo.get(
-                "quantidade_drs",
-                0
-            )
-        )
-        q4.metric(
-            "DPS",
-            resumo_qdc_executivo.get(
-                "quantidade_dps",
-                0
-            )
-        )
-
-    if auditoria_qdc:
-        st.markdown(
-            "##### 🛡️ Consistência elétrica do QDC"
-        )
-
-        status_qdc = auditoria_qdc.get(
-            "status",
-            "ATENÇÃO"
-        )
-        alertas_qdc = int(
-            auditoria_qdc.get(
-                "qtd_alertas",
-                0
-            )
-            or 0
-        )
-
-        a1, a2, a3 = st.columns(3)
-        a1.metric(
-            "Resultado",
-            status_qdc
-        )
-        a2.metric(
-            "Posições livres",
-            auditoria_qdc.get(
-                "posicoes_livres",
-                0
-            )
-        )
-        a3.metric(
-            "Alertas",
-            alertas_qdc
-        )
-
-        df_auditoria_qdc = pd.DataFrame(
-            auditoria_qdc.get(
-                "verificacoes",
-                []
-            )
-        )
-
-        st.dataframe(
-            df_auditoria_qdc,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        if alertas_qdc == 0:
+        valid_ib = resumo_rotas.get("validacao_ib_in_iz", {}) or {}
+        alertas = int(valid_ib.get("qtd_alertas", 0) or 0)
+        if alertas == 0:
             st.success(
-                "QDC consistente na auditoria automática desta fase."
+                "Relação preliminar Ib ≤ In ≤ Iz atendida nos circuitos avaliados."
             )
         else:
             st.warning(
-                "O QDC possui ponto(s) que exigem revisão antes da montagem."
+                f"{alertas} circuito(s) exigem revisão de Ib ≤ In ≤ Iz."
             )
 
         st.caption(
-            "A auditoria cruza a mesma estrutura usada no unifilar e no "
-            "quantitativo: módulos DIN, polos, grupos DR, neutro, PE, pente, "
-            "DG, DPS e sequência funcional."
+            "Queda de tensão, capacidade de condução e convergência de bitolas "
+            "ficam concentradas nesta página."
         )
+        return
+
+    # --------------------------------------------------------
+    # MATERIAIS — somente o que pertence ao quantitativo
+    # --------------------------------------------------------
+    st.markdown("#### 📦 Lista de materiais")
+    st.caption(
+        "Quantidades derivadas do projeto. Itens sem quantidade física "
+        "determinada não são incluídos."
+    )
 
     if not materiais_df.empty:
         st.dataframe(
@@ -3425,1361 +3443,13 @@ def renderizar_materiais(
             use_container_width=True,
             hide_index=True
         )
-
-    st.markdown("#### ⚖️ Balanceamento automático de fases")
-
-    if resumo_balanceamento.get("status") == "ok":
-        fases_resumo = resumo_balanceamento.get("fases", {})
-        cols = st.columns(max(1, len(fases_resumo)))
-        for col, (fase, pot) in zip(cols, fases_resumo.items()):
-            col.metric(f"Fase {fase}", f"{pot/1000:.2f} kW")
-        st.caption(
-            "Desequilíbrio preliminar entre fases: "
-            f"{resumo_balanceamento.get('desequilibrio_pct', 0):.1f}% "
-            "com base na potência instalada."
-        )
     else:
-        st.info(
-            "Informe o tipo de fornecimento na etapa Parâmetros "
-            "para liberar o balanceamento automático."
-        )
+        st.info("Nenhum material foi calculado.")
 
-    st.markdown("#### 🔧 Proteção geral e alimentador")
-
-    if resumo_protecao.get("status") == "pre_dimensionado":
-        c1, c2, c3 = st.columns(3)
-        dg = resumo_protecao.get("dg_a")
-        polos = resumo_protecao.get("dg_polos","")
-        sf = resumo_protecao.get("alimentador_fase_mm2")
-        spe = resumo_protecao.get("alimentador_pe_mm2")
-        c1.metric("Disjuntor geral", f"{dg} A {polos}".strip())
-        c2.metric("Condutor fase preliminar", f"{sf:g} mm²")
-        c3.metric("Condutor PE preliminar", f"{spe:g} mm²")
-        st.caption(
-            "Pré-dimensionamento condicionado ao método de instalação, "
-            "temperatura, agrupamento, queda de tensão e curto-circuito."
-        )
-    else:
-        st.info(
-            "Complete os parâmetros de fornecimento/demanda para "
-            "pré-dimensionar o alimentador e o DG."
-        )
-
-    st.markdown("#### 🛡️ Agrupamento dos DRs")
-
-    if resumo_drs:
-        for grupo in resumo_drs:
-            lista = ", ".join(
-                f"C{n:02d}" for n in grupo["circuitos"]
-            )
-            nominal = grupo.get("corrente_nominal_a")
-            sens = grupo.get("sensibilidade_ma")
-            especificacao = (
-                f"{nominal} A / {sens} mA"
-                if nominal is not None
-                else f"{sens} mA"
-            )
-            st.write(
-                f"**{grupo['dr']} — {especificacao}** — "
-                f"{grupo['descricao']} — {lista}"
-            )
-        st.caption(
-            "Fase 13.2 Rev.2: corrente nominal pré-dimensionada pelo maior "
-            "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
-            "de tomadas. A seletividade completa depende das curvas e "
-            "dados do fabricante."
-        )
-    else:
-        st.info("Nenhum circuito de tomada/TUE foi identificado para agrupamento em DR.")
-
-    if resumo_rotas:
-        st.markdown(
-            "#### 📐 Dimensionamento dos trechos roteados"
-        )
-
-        st.write(
-            f"**{int(resumo_rotas.get('total_trechos', 0))} "
-            "trecho(s) físico(s)** analisados."
-        )
-
-        diametros = (
-            resumo_rotas.get(
-                "eletrodutos",
-                []
-            )
-            or []
-        )
-
-        if diametros:
-            df_eletrodutos_rota = pd.DataFrame(
-                diametros
-            ).rename(
-                columns={
-                    "diametro_mm":
-                        "Ø nominal (mm)",
-                    "comprimento_rota_m":
-                        "Traçado (m)",
-                    "comprimento_com_folga_m":
-                        "Com folga (m)",
-                }
-            )
-
-            st.dataframe(
-                df_eletrodutos_rota,
-                use_container_width=True,
-                hide_index=True
-            )
-
-        correcoes_queda = (
-            resumo_rotas.get(
-                "correcoes_bitola",
-                []
-            )
-            or []
-        )
-
-        corrigidas = [
-            item
-            for item in correcoes_queda
-            if item.get(
-                "status"
-            )
-            == "CORRIGIDA"
-        ]
-
-        if corrigidas:
-            st.markdown(
-                "#### 🔧 Correções automáticas por queda de tensão"
-            )
-
-            df_correcoes = pd.DataFrame(
-                corrigidas
-            ).rename(
-                columns={
-                    "numero": "Nº",
-                    "tipo": "Circuito",
-                    "ambiente": "Ambiente",
-                    "comprimento_max_m": "Percurso máx. (m)",
-                    "corrente_a": "Corrente (A)",
-                    "bitola_original_mm2": "Bitola anterior (mm²)",
-                    "bitola_final_mm2": "Bitola corrigida (mm²)",
-                    "queda_antes_pct": "Queda antes (%)",
-                    "queda_depois_pct": "Queda depois (%)",
-                    "status": "Status",
-                }
-            )
-
-            cols_corr = [
-                c
-                for c in [
-                    "Nº",
-                    "Circuito",
-                    "Ambiente",
-                    "Percurso máx. (m)",
-                    "Corrente (A)",
-                    "Bitola anterior (mm²)",
-                    "Bitola corrigida (mm²)",
-                    "Queda antes (%)",
-                    "Queda depois (%)",
-                    "Status",
-                ]
-                if c in df_correcoes.columns
-            ]
-
-            st.dataframe(
-                df_correcoes[
-                    cols_corr
-                ],
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.success(
-                f"{len(corrigidas)} circuito(s) tiveram a seção elevada "
-                "automaticamente para atender ao limite preliminar de "
-                "queda de tensão. Os eletrodutos dos trechos afetados "
-                "foram recalculados com as novas seções."
-            )
-
-        validacao = (
-            resumo_rotas.get(
-                "validacao_eletrica",
-                {}
-            )
-            or {}
-        )
-
-        if validacao:
-            st.markdown(
-                "#### 📉 Queda de tensão e consistência dos circuitos"
-            )
-
-            max_compartilhados = int(
-                validacao.get(
-                    "max_circuitos_mesmo_trecho",
-                    0
-                )
-                or 0
-            )
-
-            st.caption(
-                f"Maior concentração encontrada: "
-                f"{max_compartilhados} circuito(s) no mesmo trecho. "
-                "A correção de capacidade por agrupamento será aplicada "
-                "quando o método de instalação e os dados reais dos cabos "
-                "forem definidos."
-            )
-
-            dados_validacao = (
-                validacao.get(
-                    "circuitos",
-                    []
-                )
-                or []
-            )
-
-            if dados_validacao:
-                df_validacao = pd.DataFrame(
-                    dados_validacao
-                ).rename(
-                    columns={
-                        "numero": "Nº",
-                        "tipo": "Circuito",
-                        "ambiente": "Ambiente",
-                        "corrente_a": "Corrente (A)",
-                        "bitola_mm2": "Bitola (mm²)",
-                        "disjuntor_a": "Disjuntor (A)",
-                        "comprimento_max_m": "Percurso máx. (m)",
-                        "queda_tensao_pct": "Queda (%)",
-                        "status": "Status",
-                    }
-                )
-
-                colunas = [
-                    c
-                    for c in [
-                        "Nº",
-                        "Circuito",
-                        "Ambiente",
-                        "Corrente (A)",
-                        "Bitola (mm²)",
-                        "Disjuntor (A)",
-                        "Percurso máx. (m)",
-                        "Queda (%)",
-                        "Status",
-                    ]
-                    if c in df_validacao.columns
-                ]
-
-                st.dataframe(
-                    df_validacao[
-                        colunas
-                    ],
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                if (
-                    validacao.get(
-                        "status"
-                    )
-                    == "alerta"
-                ):
-                    st.warning(
-                        "Há circuitos com alerta preliminar de queda de "
-                        "tensão, proteção ou seção mínima. Revise a tabela "
-                        "antes do dimensionamento executivo."
-                    )
-                else:
-                    st.success(
-                        "Os circuitos passaram nas verificações preliminares "
-                        "implementadas nesta fase."
-                    )
-
-            st.caption(
-                "A queda de tensão é estimada pelo maior percurso físico "
-                "do circuito. A validação final depende também do método "
-                "de instalação, temperatura, agrupamento, capacidade de "
-                "condução, curto-circuito e dados do fabricante."
-            )
-
-    if resumo_rotas:
-        diagnostico_agrupamento = (
-            resumo_rotas.get(
-                "diagnostico_agrupamento",
-                {}
-            )
-            or {}
-        )
-
-        if diagnostico_agrupamento:
-            st.markdown(
-                "#### 🧵 Diagnóstico de agrupamento nos eletrodutos"
-            )
-
-            st.caption(
-                "Esta fase identifica onde vários circuitos compartilham o "
-                "mesmo trecho físico. A classificação BAIXA / MÉDIA / ALTA "
-                "é uma prioridade de revisão, não um fator normativo de correção."
-            )
-
-            max_comp = int(
-                diagnostico_agrupamento.get(
-                    "max_circuitos_mesmo_trecho",
-                    0
-                )
-                or 0
-            )
-
-            alta = int(
-                diagnostico_agrupamento.get(
-                    "qtd_trechos_alta_prioridade",
-                    0
-                )
-                or 0
-            )
-
-            c1, c2 = st.columns(2)
-            c1.metric(
-                "Máx. circuitos no mesmo trecho",
-                max_comp
-            )
-            c2.metric(
-                "Trechos de alta prioridade",
-                alta
-            )
-
-            dados_diag = (
-                diagnostico_agrupamento.get(
-                    "circuitos",
-                    []
-                )
-                or []
-            )
-
-            if dados_diag:
-                df_diag = pd.DataFrame(
-                    dados_diag
-                ).rename(
-                    columns={
-                        "numero": "Nº",
-                        "tipo": "Circuito",
-                        "ambiente": "Ambiente",
-                        "corrente_a": "Corrente (A)",
-                        "bitola_mm2": "Bitola (mm²)",
-                        "max_circuitos_compartilhados":
-                            "Máx. circuitos no trecho",
-                        "max_condutores_trecho":
-                            "Máx. condutores no trecho",
-                        "max_ocupacao_pct":
-                            "Máx. ocupação (%)",
-                        "qtd_trechos_compartilhados":
-                            "Trechos compartilhados",
-                        "prioridade_revisao":
-                            "Prioridade",
-                        "avaliacao_capacidade":
-                            "Capacidade de condução",
-                    }
-                )
-
-                cols_diag = [
-                    c
-                    for c in [
-                        "Nº",
-                        "Circuito",
-                        "Ambiente",
-                        "Corrente (A)",
-                        "Bitola (mm²)",
-                        "Máx. circuitos no trecho",
-                        "Máx. condutores no trecho",
-                        "Máx. ocupação (%)",
-                        "Trechos compartilhados",
-                        "Prioridade",
-                        "Capacidade de condução",
-                    ]
-                    if c in df_diag.columns
-                ]
-
-                st.dataframe(
-                    df_diag[
-                        cols_diag
-                    ],
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-            if alta > 0:
-                st.warning(
-                    "Há trechos com alta concentração física de circuitos. "
-                    "Nesta fase o sistema não aumenta a bitola por agrupamento: "
-                    "a capacidade de condução permanece pendente até serem "
-                    "definidos método de instalação, temperatura e dados reais "
-                    "dos cabos/eletrodutos."
-                )
-            else:
-                st.info(
-                    "Nenhum trecho foi classificado como alta prioridade de "
-                    "agrupamento pelo diagnóstico preliminar."
-                )
-
-    if resumo_rotas:
-        rotas_redistribuidas = [
-            rota
-            for rota in (
-                resumo_rotas.get(
-                    "rotas",
-                    []
-                )
-                or []
-            )
-            if rota.get(
-                "criterio"
-            )
-            in {
-                "REDISTRIBUICAO_CAIXA_OCTOGONAL",
-                "REDISTRIBUICAO_NOVA_SAIDA_QDC",
-            }
-        ]
-
-        if rotas_redistribuidas:
-            st.markdown(
-                "#### 🔀 Redistribuição física automática aplicada"
-            )
-
-            st.success(
-                f"{len(rotas_redistribuidas)} novo(s) caminho(s) foram criados "
-                "fisicamente para aliviar trechos que ultrapassariam a ocupação "
-                "permitida em Ø25 mm."
-            )
-
-            linhas_rerota = []
-
-            for rota in rotas_redistribuidas:
-                criterio = rota.get(
-                    "criterio",
-                    ""
-                )
-
-                linhas_rerota.append({
-                    "Trecho":
-                        rota.get(
-                            "trecho_id"
-                        ),
-                    "Origem":
-                        rota.get(
-                            "origem_ambiente",
-                            ""
-                        ),
-                    "Destino":
-                        rota.get(
-                            "destino_ambiente",
-                            ""
-                        ),
-                    "Circuitos transportados":
-                        ", ".join(
-                            f"C{n}"
-                            for n in (
-                                rota.get(
-                                    "circuitos",
-                                    []
-                                )
-                                or []
-                            )
-                        ),
-                    "Qtd. circuitos":
-                        len(
-                            rota.get(
-                                "circuitos",
-                                []
-                            )
-                            or []
-                        ),
-                    "Condutores":
-                        int(
-                            rota.get(
-                                "qtd_condutores",
-                                0
-                            )
-                            or sum(
-                                1
-                                for _ in (
-                                    rota.get(
-                                        "condutores",
-                                        []
-                                    )
-                                    or []
-                                )
-                            )
-                        ),
-                    "Comprimento (m)":
-                        round(
-                            float(
-                                rota.get(
-                                    "comprimento_m",
-                                    0.0
-                                )
-                                or 0.0
-                            ),
-                            2
-                        ),
-                    "Estratégia":
-                        (
-                            "Via caixa octogonal"
-                            if criterio
-                            == "REDISTRIBUICAO_CAIXA_OCTOGONAL"
-                            else "Nova saída do QDC"
-                        ),
-                    "Desvio vs. direto (%)":
-                        rota.get(
-                            "desvio_vs_direto_pct",
-                            0.0
-                        ),
-                })
-
-            st.dataframe(
-                pd.DataFrame(
-                    linhas_rerota
-                ),
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info(
-                "A rede atual não precisou criar um caminho físico adicional "
-                "por excesso de ocupação em Ø25 mm."
-            )
-
-        otimizacao_eletrodutos = otimizar_eletrodutos_preliminar(
-            resumo_rotas,
-            limite_ocupacao_pct=40.0,
-            limite_circuitos_preferencial=3,
-        )
-        resumo_rotas[
-            "otimizacao_eletrodutos"
-        ] = otimizacao_eletrodutos
-
-        st.markdown(
-            "#### 🛠️ Otimização preliminar dos eletrodutos"
-        )
-
-        st.caption(
-            "Depois da redistribuição física, o sistema reavalia cada trecho e escolhe "
-            "o caminho considerando o percurso total desde o QDC. "
-            "Nos circuitos terminais o limite permanece Ø25 mm; se a ocupação "
-            "passar de 40%, o roteamento procura outra caixa octogonal ou "
-            "uma nova saída do QDC."
-        )
-
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Manter", int(otimizacao_eletrodutos.get("qtd_manter", 0) or 0))
-        c2.metric("Aumentar eletroduto", int(otimizacao_eletrodutos.get("qtd_aumentar", 0) or 0))
-        c3.metric("Novo caminho via caixa", int(otimizacao_eletrodutos.get("qtd_dividir", 0) or 0))
-
-        dados_otimizacao = otimizacao_eletrodutos.get("trechos", []) or []
-        if dados_otimizacao:
-            linhas_otimizacao = []
-            for item in dados_otimizacao:
-                grupos = item.get("divisao_grupos", []) or []
-                divisao_txt = " | ".join(
-                    f"G{g.get('grupo')}: C{','.join(str(x) for x in g.get('circuitos', []))} "
-                    f"→ Ø{g.get('eletroduto_mm')} ({g.get('ocupacao_pct')}%)"
-                    for g in grupos
-                )
-                linhas_otimizacao.append({
-                    "Trecho": item.get("trecho_id"),
-                    "Comprimento (m)": item.get("comprimento_m"),
-                    "Circuitos": item.get("qtd_circuitos"),
-                    "Condutores": item.get("qtd_condutores"),
-                    "Eletroduto atual": (
-                        f"Ø{item.get('eletroduto_atual_mm')}"
-                        if item.get("eletroduto_atual_mm")
-                        else ""
-                    ),
-                    "Ocupação atual (%)": item.get("ocupacao_atual_pct"),
-                    "Próximo eletroduto": (
-                        f"Ø{item.get('proximo_eletroduto_mm')}"
-                        if item.get("proximo_eletroduto_mm")
-                        else ""
-                    ),
-                    "Ocup. próximo (%)": item.get("ocupacao_proximo_pct"),
-                    "Simulação por caixas": divisao_txt,
-                    "Recomendação": item.get("recomendacao"),
-                })
-
-            df_otimizacao = pd.DataFrame(linhas_otimizacao)
-            st.dataframe(
-                df_otimizacao,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            with st.expander(
-                "ℹ️ Como interpretar as recomendações?",
-                expanded=True
-            ):
-                st.markdown(
-                    """
-**MANTER** — o trecho está adequado no diagnóstico preliminar.
-
-**AUMENTAR ELETRODUTO** — o problema principal é a ocupação física; o próximo
-diâmetro reduz a taxa de ocupação, limitado a **Ø25 mm** nos circuitos terminais.
-
-**NOVO CAMINHO VIA CAIXA** — quando Ø25 mm não é suficiente ou há concentração
-elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogonal
-de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
-
-Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 13.2 Rev.2 a redistribuição deixa de ser somente uma recomendação: o novo
-caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
-                    """
-                )
-
-        st.markdown(
-            "#### 🌡️ Capacidade de condução — verificação preliminar"
-        )
-
-        st.caption(
-            "Fase 13.2 Rev.2: a verificação abaixo usa uma referência preliminar "
-            "para condutores de cobre com isolação PVC 70 °C. "
-            "Nesta fase o sistema apenas verifica e recomenda; não altera "
-            "automaticamente a bitola por capacidade de condução."
-        )
-
-        col_metodo, col_temp = st.columns(2)
-
-        with col_metodo:
-            opcoes_metodo = {
-                "B1 — Condutores isolados em eletroduto embutido na parede": "B1",
-                "B2 — Cabo multipolar em eletroduto embutido na parede": "B2",
-            }
-
-            rotulo_metodo = st.selectbox(
-                "Método de instalação:",
-                list(opcoes_metodo.keys()),
-                index=0,
-                key="fase12_1_metodo_instalacao_rotulo",
-                help=(
-                    "O método de instalação interfere diretamente na capacidade "
-                    "de condução de corrente dos cabos."
-                )
-            )
-
-            metodo_capacidade = opcoes_metodo[
-                rotulo_metodo
-            ]
-
-        with col_temp:
-            temperatura_capacidade = st.selectbox(
-                "Temperatura ambiente de referência:",
-                [
-                    25,
-                    30,
-                    35,
-                    40,
-                    45,
-                    50,
-                    55,
-                    60,
-                ],
-                index=1,
-                format_func=lambda x: f"{x} °C",
-                key="fase12_1_temperatura_ambiente"
-            )
-
-        with st.expander(
-            "ℹ️ Como escolher entre B1 e B2?",
-            expanded=True
-        ):
-            st.markdown(
-                """
-**B1 — Condutores isolados em eletroduto embutido na parede**
-
-Use quando fase, neutro e terra são **fios/cabos individuais**
-passando dentro do eletroduto.  
-É o cenário mais próximo do padrão atualmente modelado pelo
-**AutoElétrica** para instalações residenciais embutidas.
-
-**B2 — Cabo multipolar em eletroduto embutido na parede**
-
-Use quando o circuito é executado com **um cabo multipolar**
-contendo seus condutores dentro do mesmo invólucro, instalado no
-eletroduto.
-
-**Recomendação do sistema:** para o padrão residencial atual do
-AutoElétrica, mantenha **B1**, salvo quando o responsável técnico
-definir explicitamente outro método de instalação.
-                """
-            )
-
-        capacidade_preliminar = (
-            verificar_capacidade_conducao_preliminar(
-                resumo_rotas.get(
-                    "diagnostico_agrupamento",
-                    {}
-                ),
-                circuitos,
-                metodo_instalacao=metodo_capacidade,
-                temperatura_ambiente_c=temperatura_capacidade,
-            )
-        )
-
-        resumo_rotas[
-            "capacidade_conducao_preliminar"
-        ] = capacidade_preliminar
-
-        dados_capacidade = (
-            capacidade_preliminar.get(
-                "circuitos",
-                []
-            )
-            or []
-        )
-
-        if dados_capacidade:
-            df_capacidade = pd.DataFrame(
-                dados_capacidade
-            ).rename(
-                columns={
-                    "numero": "Nº",
-                    "tipo": "Circuito",
-                    "ambiente": "Ambiente",
-                    "corrente_a": "Ib (A)",
-                    "bitola_atual_mm2": "Bitola atual (mm²)",
-                    "metodo_instalacao": "Método",
-                    "temperatura_ref_c": "Temp. ref. (°C)",
-                    "trecho_critico_id": "Trecho crítico",
-                    "comprimento_trecho_critico_m": "Comp. trecho crítico (m)",
-                    "qtd_circuitos_agrupados": "Circuitos agrupados",
-                    "fator_agrupamento": "Fator agrup.",
-                    "fator_temperatura": "Fator temp.",
-                    "iz_base_a": "Iz base (A)",
-                    "iz_corrigida_a": "Iz corrigida (A)",
-                    "bitola_recomendada_mm2": "Bitola recomendada (mm²)",
-                    "status": "Status",
-                }
-            )
-
-            cols_capacidade = [
-                c
-                for c in [
-                    "Nº",
-                    "Circuito",
-                    "Ambiente",
-                    "Ib (A)",
-                    "Bitola atual (mm²)",
-                    "Método",
-                    "Trecho crítico",
-                    "Comp. trecho crítico (m)",
-                    "Circuitos agrupados",
-                    "Fator agrup.",
-                    "Fator temp.",
-                    "Iz base (A)",
-                    "Iz corrigida (A)",
-                    "Bitola recomendada (mm²)",
-                    "Status",
-                ]
-                if c in df_capacidade.columns
-            ]
-
-            st.dataframe(
-                df_capacidade[
-                    cols_capacidade
-                ],
-                use_container_width=True,
-                hide_index=True
-            )
-
-        dados_trechos_capacidade = (
-            capacidade_preliminar.get(
-                "trechos",
-                []
-            )
-            or []
-        )
-
-        if dados_trechos_capacidade:
-            with st.expander(
-                "🔎 Ver análise trecho a trecho",
-                expanded=False
-            ):
-                st.caption(
-                    "O agrupamento abaixo é calculado somente nos trechos "
-                    "físicos em que os circuitos realmente coexistem. "
-                    "O trecho crítico é aquele que produz a menor Iz corrigida."
-                )
-
-                df_trechos_capacidade = pd.DataFrame(
-                    dados_trechos_capacidade
-                ).rename(
-                    columns={
-                        "trecho_id": "Trecho",
-                        "numero": "Nº",
-                        "tipo": "Circuito",
-                        "ambiente": "Ambiente",
-                        "comprimento_trecho_m": "Comprimento (m)",
-                        "qtd_circuitos_agrupados": "Circuitos no trecho",
-                        "fator_agrupamento": "Fator agrup.",
-                        "fator_temperatura": "Fator temp.",
-                        "corrente_a": "Ib (A)",
-                        "bitola_atual_mm2": "Bitola (mm²)",
-                        "iz_base_a": "Iz base (A)",
-                        "iz_corrigida_a": "Iz corrigida (A)",
-                        "status": "Status",
-                    }
-                )
-
-                cols_trechos = [
-                    c
-                    for c in [
-                        "Trecho",
-                        "Nº",
-                        "Circuito",
-                        "Ambiente",
-                        "Comprimento (m)",
-                        "Circuitos no trecho",
-                        "Fator agrup.",
-                        "Ib (A)",
-                        "Bitola (mm²)",
-                        "Iz corrigida (A)",
-                        "Status",
-                    ]
-                    if c in df_trechos_capacidade.columns
-                ]
-
-                st.dataframe(
-                    df_trechos_capacidade[cols_trechos],
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-        st.info(
-            "Fase 13.2 Rev.2: um trecho com 7 circuitos não faz o sistema assumir "
-            "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
-            "separadamente e o circuito informa qual trecho é o governante."
-        )
-
-        qtd_alertas_capacidade = int(
-            capacidade_preliminar.get(
-                "qtd_alertas",
-                0
-            )
-            or 0
-        )
-
-        if qtd_alertas_capacidade:
-            st.warning(
-                f"{qtd_alertas_capacidade} circuito(s) ficaram com capacidade "
-                "de condução preliminar inferior à corrente de projeto após "
-                "os fatores considerados. A bitola recomendada é mostrada "
-                "na tabela, mas ainda não é aplicada automaticamente."
-            )
-        else:
-            st.success(
-                "Todos os circuitos passaram nesta verificação preliminar "
-                "de capacidade de condução para os parâmetros selecionados."
-            )
-
-        st.caption(
-            "A validação executiva deve confirmar método de instalação, "
-            "número de condutores carregados, temperatura real, tipo de isolação, "
-            "forma de agrupamento e dados do fabricante."
-        )
-
-    if isinstance(resumo_rotas, dict):
-        correcoes_capacidade_ui = [
-            item
-            for item in (
-                resumo_rotas.get(
-                    "correcoes_capacidade",
-                    []
-                )
-                or []
-            )
-            if item.get(
-                "status"
-            )
-            == "CORRIGIDA"
-        ]
-
-        if correcoes_capacidade_ui:
-            st.markdown(
-                "#### 🌡️ Correções automáticas por capacidade de condução"
-            )
-
-            df_corr_cap = pd.DataFrame(
-                correcoes_capacidade_ui
-            ).rename(
-                columns={
-                    "numero": "Nº",
-                    "tipo": "Circuito",
-                    "ambiente": "Ambiente",
-                    "corrente_a": "Ib (A)",
-                    "bitola_original_mm2": "Bitola antes (mm²)",
-                    "bitola_final_mm2": "Bitola final (mm²)",
-                    "trecho_critico_id": "Trecho crítico",
-                    "comprimento_trecho_critico_m": "Comp. crítico (m)",
-                    "qtd_circuitos_agrupados": "Circuitos no trecho",
-                    "fator_agrupamento": "Fator agrup.",
-                    "iz_antes_a": "Iz antes (A)",
-                    "iz_recomendada_a": "Iz final (A)",
-                    "status": "Status",
-                }
-            )
-
-            cols_corr_cap = [
-                c
-                for c in [
-                    "Nº",
-                    "Circuito",
-                    "Ambiente",
-                    "Ib (A)",
-                    "Bitola antes (mm²)",
-                    "Bitola final (mm²)",
-                    "Trecho crítico",
-                    "Circuitos no trecho",
-                    "Fator agrup.",
-                    "Iz antes (A)",
-                    "Iz final (A)",
-                    "Status",
-                ]
-                if c in df_corr_cap.columns
-            ]
-
-            st.dataframe(
-                df_corr_cap[
-                    cols_corr_cap
-                ],
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.caption(
-                "Depois de cada correção de seção, a Fase 13.2 Rev.2 recalcula "
-                "ocupação, redistribuição dos eletrodutos, queda de tensão "
-                "e capacidade de condução até estabilizar."
-            )
-
-    if isinstance(resumo_rotas, dict):
-        circuitos_finais_auditoria = (
-            resumo_rotas.get(
-                "circuitos_dimensionados_finais",
-                []
-            )
-            or []
-        )
-
-        validacao_ibin = (
-            resumo_rotas.get(
-                "validacao_ib_in_iz",
-                {}
-            )
-            or {}
-        )
-
-        capacidade_final_auditoria = (
-            resumo_rotas.get(
-                "capacidade_conducao_preliminar",
-                {}
-            )
-            or {}
-        )
-
-        validacao_rotas_auditoria = (
-            resumo_rotas.get(
-                "validacao_eletrica",
-                {}
-            )
-            or {}
-        )
-
-        cap_por_numero = {
-            int(item.get("numero", 0) or 0): item
-            for item in (
-                capacidade_final_auditoria.get(
-                    "circuitos",
-                    []
-                )
-                or []
-            )
-            if int(item.get("numero", 0) or 0) > 0
-        }
-
-        valid_por_numero = {
-            int(item.get("numero", 0) or 0): item
-            for item in (
-                validacao_rotas_auditoria.get(
-                    "circuitos",
-                    []
-                )
-                or []
-            )
-            if int(item.get("numero", 0) or 0) > 0
-        }
-
-        ibin_por_numero = {
-            int(item.get("numero", 0) or 0): item
-            for item in (
-                validacao_ibin.get(
-                    "circuitos",
-                    []
-                )
-                or []
-            )
-            if int(item.get("numero", 0) or 0) > 0
-        }
-
-        linhas_auditoria_final = []
-
-        for circuito in circuitos_finais_auditoria:
-            numero = int(
-                circuito.get(
-                    "numero",
-                    0
-                )
-                or 0
-            )
-
-            if numero <= 0:
-                continue
-
-            cap = cap_por_numero.get(
-                numero,
-                {}
-            )
-
-            val = valid_por_numero.get(
-                numero,
-                {}
-            )
-
-            ibin = ibin_por_numero.get(
-                numero,
-                {}
-            )
-
-            status_queda = (
-                "OK"
-                if float(
-                    val.get(
-                        "queda_pct",
-                        0.0
-                    )
-                    or 0.0
-                )
-                <= 4.0
-                else "ATENÇÃO"
-            )
-
-            status_ibin = str(
-                ibin.get(
-                    "status",
-                    "PENDENTE"
-                )
-                or "PENDENTE"
-            )
-
-            status_final = (
-                "OK"
-                if (
-                    status_queda == "OK"
-                    and status_ibin == "OK"
-                )
-                else "ATENÇÃO"
-            )
-
-            linhas_auditoria_final.append({
-                "Circuito":
-                    f"C{numero}",
-                "Tipo":
-                    circuito.get(
-                        "tipo",
-                        ""
-                    ),
-                "Ambiente":
-                    circuito.get(
-                        "ambiente",
-                        ""
-                    ),
-                "Ib (A)":
-                    round(
-                        float(
-                            circuito.get(
-                                "corrente",
-                                0.0
-                            )
-                            or 0.0
-                        ),
-                        2
-                    ),
-                "Disjuntor In (A)":
-                    round(
-                        float(
-                            circuito.get(
-                                "disjuntor",
-                                0.0
-                            )
-                            or 0.0
-                        ),
-                        2
-                    ),
-                "Bitola final (mm²)":
-                    float(
-                        circuito.get(
-                            "bitola",
-                            0.0
-                        )
-                        or 0.0
-                    ),
-                "Percurso máx. (m)":
-                    round(
-                        float(
-                            val.get(
-                                "comprimento_max_m",
-                                0.0
-                            )
-                            or 0.0
-                        ),
-                        2
-                    ),
-                "Queda (%)":
-                    round(
-                        float(
-                            val.get(
-                                "queda_pct",
-                                0.0
-                            )
-                            or 0.0
-                        ),
-                        2
-                    ),
-                "Trecho crítico":
-                    cap.get(
-                        "trecho_critico_id"
-                    ),
-                "Agrupamento":
-                    cap.get(
-                        "qtd_circuitos_agrupados"
-                    ),
-                "Iz corrigida (A)":
-                    round(
-                        float(
-                            cap.get(
-                                "iz_corrigida_a",
-                                0.0
-                            )
-                            or 0.0
-                        ),
-                        2
-                    ),
-                "Ib ≤ In ≤ Iz":
-                    status_ibin,
-                "Resultado":
-                    status_final,
-            })
-
-        if linhas_auditoria_final:
-            st.markdown(
-                "#### ✅ Auditoria final do dimensionamento"
-            )
-
-            st.caption(
-                "Resumo executivo dos circuitos após a convergência do ciclo "
-                "iterativo. A tabela reúne queda de tensão, capacidade de "
-                "condução e relação Ib ≤ In ≤ Iz."
-            )
-
-            df_auditoria_final = pd.DataFrame(
-                linhas_auditoria_final
-            )
-
-            st.dataframe(
-                df_auditoria_final,
-                use_container_width=True,
-                hide_index=True
-            )
-
-            qtd_ok = int(
-                (
-                    df_auditoria_final[
-                        "Resultado"
-                    ]
-                    == "OK"
-                ).sum()
-            )
-
-            qtd_atencao = int(
-                (
-                    df_auditoria_final[
-                        "Resultado"
-                    ]
-                    != "OK"
-                ).sum()
-            )
-
-            c_af1, c_af2, c_af3 = st.columns(3)
-            c_af1.metric(
-                "Circuitos auditados",
-                len(
-                    df_auditoria_final
-                )
-            )
-            c_af2.metric(
-                "OK",
-                qtd_ok
-            )
-            c_af3.metric(
-                "Atenção",
-                qtd_atencao
-            )
-
-            if qtd_atencao == 0:
-                st.success(
-                    "Todos os circuitos passaram pela auditoria final "
-                    "preliminar desta fase."
-                )
-            else:
-                st.warning(
-                    f"{qtd_atencao} circuito(s) ainda apresentam ponto(s) "
-                    "que exigem revisão técnica."
-                )
-
-        # Auditoria por trecho físico
-        rotas_auditoria = (
-            resumo_rotas.get(
-                "rotas",
-                []
-            )
-            or []
-        )
-
-        linhas_trechos_final = []
-
-        for rota in rotas_auditoria:
-            circuitos_rota = sorted(
-                int(n)
-                for n in (
-                    rota.get(
-                        "circuitos",
-                        []
-                    )
-                    or []
-                )
-                if int(n) > 0
-            )
-
-            ocupacao = round(
-                float(
-                    rota.get(
-                        "ocupacao_pct",
-                        0.0
-                    )
-                    or 0.0
-                ),
-                1
-            )
-
-            diametro = rota.get(
-                "diametro_eletroduto_mm"
-            )
-
-            status_trecho = (
-                "OK"
-                if (
-                    ocupacao <= 40.0
-                    and (
-                        diametro is None
-                        or int(
-                            diametro
-                        )
-                        <= 25
-                    )
-                )
-                else "ATENÇÃO"
-            )
-
-            linhas_trechos_final.append({
-                "Trecho":
-                    rota.get(
-                        "trecho_id"
-                    ),
-                "Circuitos transportados":
-                    ", ".join(
-                        f"C{n}"
-                        for n in circuitos_rota
-                    ),
-                "Qtd. circuitos":
-                    len(
-                        circuitos_rota
-                    ),
-                "Condutores":
-                    int(
-                        rota.get(
-                            "qtd_condutores",
-                            0
-                        )
-                        or len(
-                            rota.get(
-                                "condutores",
-                                []
-                            )
-                            or []
-                        )
-                    ),
-                "Eletroduto":
-                    (
-                        f"Ø{diametro}"
-                        if diametro
-                        else ""
-                    ),
-                "Ocupação (%)":
-                    ocupacao,
-                "Comprimento (m)":
-                    round(
-                        float(
-                            rota.get(
-                                "comprimento_m",
-                                0.0
-                            )
-                            or 0.0
-                        ),
-                        2
-                    ),
-                "Critério":
-                    rota.get(
-                        "criterio",
-                        ""
-                    ),
-                "Resultado":
-                    status_trecho,
-            })
-
-        if linhas_trechos_final:
-            with st.expander(
-                "🧵 Auditoria final por trecho de eletroduto",
-                expanded=False
-            ):
-                st.caption(
-                    "Confere circuitos transportados, ocupação física, "
-                    "diâmetro e comprimento de cada trecho."
-                )
-
-                st.dataframe(
-                    pd.DataFrame(
-                        linhas_trechos_final
-                    ),
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-    st.markdown(
-        "#### ⚡ Circuitos considerados no quantitativo"
-    )
-
+    st.markdown("#### ⚡ Circuitos considerados no quantitativo")
     st.caption(
-        "Fase 13.2 Rev.2: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
-        "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
-        "exclusivas do ambiente; iluminação e demais TUGs podem ser "
-        "agrupadas dentro dos limites preliminares definidos pelo sistema."
+        "Os circuitos abaixo usam as bitolas finais calculadas pelo sistema "
+        "e são a base para o quantitativo de cabos, proteções e infraestrutura."
     )
 
     if circuitos:
@@ -4789,10 +3459,7 @@ definir explicitamente outro método de instalação.
             hide_index=True
         )
     else:
-        st.info(
-            "Nenhum circuito foi identificado."
-        )
-
+        st.info("Nenhum circuito foi identificado.")
 
     validacao_export_df = None
     correcoes_export_df = None
@@ -5184,7 +3851,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_2_Rev_2.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_3.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -5193,7 +3860,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_2_Rev_2.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_3.pdf",
             mime="application/pdf",
             use_container_width=True
         )

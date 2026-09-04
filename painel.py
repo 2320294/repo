@@ -172,6 +172,8 @@ def _navegacao_etapas():
         "⚡ QDC",
         "💡 Interruptores",
         "🔌 Tomadas Altas",
+        "⚙️ Dimensionamento",
+        "🧵 Eletrodutos",
         "📦 Materiais",
         "📐 Gerar Projeto"
     ]
@@ -205,6 +207,76 @@ def _navegacao_etapas():
     )
 
     return etapa
+
+
+def _garantir_dimensionamento_fisico(
+    dxf_bytes,
+    tabela_editada,
+    local_qdc,
+    config_atual,
+    parametros_projeto
+):
+    """
+    Fase 13.3:
+    cálculo compartilhado pelas páginas Dimensionamento, Eletrodutos
+    e Materiais. Mantém uma única fonte de verdade no session_state.
+    """
+    if not dxf_bytes or not local_qdc:
+        return None
+
+    if (
+        st.session_state.get("dimensionamento_rotas_projeto")
+        == st.session_state.get("projeto_ativo")
+        and st.session_state.get("dimensionamento_rotas_versao")
+        == VERSAO_SISTEMA
+        and isinstance(
+            st.session_state.get("dimensionamento_rotas"),
+            dict
+        )
+    ):
+        return st.session_state.get("dimensionamento_rotas")
+
+    rotulo_metodo = str(
+        st.session_state.get(
+            "fase12_1_metodo_instalacao_rotulo",
+            "B1"
+        )
+        or "B1"
+    )
+    metodo = (
+        "B2"
+        if rotulo_metodo.upper().startswith("B2")
+        else "B1"
+    )
+    temperatura = int(
+        st.session_state.get(
+            "fase12_1_temperatura_ambiente",
+            30
+        )
+        or 30
+    )
+
+    resumo = calcular_rotas_antes_do_dxf(
+        dxf_bytes=dxf_bytes,
+        tabela_editada=tabela_editada,
+        local_qdc=local_qdc,
+        config_interruptores_usuario=config_atual,
+        tensao_projeto=parametros_projeto["tensao_projeto"],
+        pe_direito=parametros_projeto["pe_direito"],
+        metodo_instalacao=metodo,
+        temperatura_ambiente_c=temperatura,
+    )
+
+    if isinstance(resumo, dict):
+        st.session_state["dimensionamento_rotas"] = resumo
+        st.session_state["dimensionamento_rotas_projeto"] = (
+            st.session_state.get("projeto_ativo")
+        )
+        st.session_state["dimensionamento_rotas_versao"] = (
+            VERSAO_SISTEMA
+        )
+
+    return resumo
 
 
 def renderizar_painel_principal():
@@ -575,9 +647,19 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 13.2 Rev.2. O DG depende da validação "
+                "Pré-dimensionamento da Fase 13.3. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
+
+        st.divider()
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="qdc"
+        )
 
         return
 
@@ -652,82 +734,125 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 6 — MATERIAIS
+    # ETAPA 6 — DIMENSIONAMENTO DOS CIRCUITOS
+    # --------------------------------------------------------
+    if etapa == "⚙️ Dimensionamento":
+        st.subheader(
+            "⚙️ Dimensionamento dos Circuitos"
+        )
+
+        if not local_qdc:
+            st.warning(
+                "Defina primeiro a posição do QDC."
+            )
+            return
+
+        try:
+            with st.spinner(
+                "Calculando roteamento e dimensionamento elétrico..."
+            ):
+                _garantir_dimensionamento_fisico(
+                    dxf_bytes,
+                    tabela_editada,
+                    local_qdc,
+                    config_atual,
+                    parametros_projeto
+                )
+        except Exception as exc:
+            st.warning(
+                "Não foi possível concluir o dimensionamento: "
+                f"{exc}"
+            )
+
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="dimensionamento"
+        )
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 7 — ELETRODUTOS
+    # --------------------------------------------------------
+    if etapa == "🧵 Eletrodutos":
+        st.subheader(
+            "🧵 Eletrodutos e Rotas Físicas"
+        )
+
+        if not local_qdc:
+            st.warning(
+                "Defina primeiro a posição do QDC."
+            )
+            return
+
+        try:
+            with st.spinner(
+                "Conferindo rotas, ocupação e agrupamento..."
+            ):
+                _garantir_dimensionamento_fisico(
+                    dxf_bytes,
+                    tabela_editada,
+                    local_qdc,
+                    config_atual,
+                    parametros_projeto
+                )
+        except Exception as exc:
+            st.warning(
+                "Não foi possível concluir a análise dos eletrodutos: "
+                f"{exc}"
+            )
+
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="eletrodutos"
+        )
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 8 — MATERIAIS
     # --------------------------------------------------------
     if etapa == "📦 Materiais":
         st.subheader(
-            "📦 Circuitos e Quantitativo de Materiais"
+            "📦 Quantitativo de Materiais"
         )
 
-        # Fase 13.2 Rev.2 — o dimensionamento físico acontece aqui,
-        # antes da etapa de geração/exportação do CAD.
         if dxf_bytes and local_qdc:
             try:
                 with st.spinner(
-                    "Calculando roteamento físico, queda de tensão e materiais..."
+                    "Atualizando quantitativo com as rotas físicas..."
                 ):
-                    rotulo_metodo_capacidade = str(
-                        st.session_state.get(
-                            "fase12_1_metodo_instalacao_rotulo",
-                            "B1"
-                        )
-                        or "B1"
+                    _garantir_dimensionamento_fisico(
+                        dxf_bytes,
+                        tabela_editada,
+                        local_qdc,
+                        config_atual,
+                        parametros_projeto
                     )
-                    metodo_capacidade = (
-                        "B2"
-                        if rotulo_metodo_capacidade.upper().startswith("B2")
-                        else "B1"
-                    )
-                    temperatura_capacidade = int(
-                        st.session_state.get(
-                            "fase12_1_temperatura_ambiente",
-                            30
-                        )
-                        or 30
-                    )
-
-                    resumo_previo = calcular_rotas_antes_do_dxf(
-                        dxf_bytes=dxf_bytes,
-                        tabela_editada=tabela_editada,
-                        local_qdc=local_qdc,
-                        config_interruptores_usuario=config_atual,
-                        tensao_projeto=parametros_projeto["tensao_projeto"],
-                        pe_direito=parametros_projeto["pe_direito"],
-                        metodo_instalacao=metodo_capacidade,
-                        temperatura_ambiente_c=temperatura_capacidade,
-                    )
-                if isinstance(resumo_previo, dict):
-                    st.session_state["dimensionamento_rotas"] = resumo_previo
-                    st.session_state["dimensionamento_rotas_projeto"] = (
-                        st.session_state.get("projeto_ativo")
-                    )
-                    st.session_state["dimensionamento_rotas_versao"] = VERSAO_SISTEMA
             except Exception as exc:
                 st.warning(
-                    "Não foi possível concluir o roteamento prévio: "
-                    f"{exc}"
+                    "O quantitativo será exibido com os dados disponíveis. "
+                    f"Detalhe: {exc}"
                 )
 
         renderizar_materiais(
             tabela_editada,
             config_atual,
             local_qdc,
-            tensao_projeto=(
-                parametros_projeto[
-                    "tensao_projeto"
-                ]
-            ),
-            pe_direito=(
-                parametros_projeto[
-                    "pe_direito"
-                ]
-            )
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="materiais"
         )
-
         return
 
     # --------------------------------------------------------
-    # ETAPA 7 — SALVAR / EXPORTAR / GERAR CAD
+    # ETAPA 9 — SALVAR / EXPORTAR / GERAR CAD
     # --------------------------------------------------------
     if etapa == "📐 Gerar Projeto":
         st.subheader(
