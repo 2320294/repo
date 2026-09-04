@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.7:
+    Fase 13.6 Rev.8:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -845,7 +845,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.7:
+    # Fase 13.6 Rev.8:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -910,7 +910,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.7:
+        # Fase 13.6 Rev.8:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1170,7 +1170,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.7 — QDC executivo no CAD.
+    Fase 13.6 Rev.8 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1204,7 +1204,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.7:
+    # Fase 13.6 Rev.8:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1237,7 +1237,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.7:
+    # Fase 13.6 Rev.8:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1275,7 +1275,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.7",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.8",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1335,7 +1335,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.7:
+    # Fase 13.6 Rev.8:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1431,7 +1431,7 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.7:
+    # Fase 13.6 Rev.8:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
@@ -1458,201 +1458,86 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.7 — ENTRADA DA REDE
+        # FASE 13.6 REV.8 — ENTRADA DA REDE
         # ====================================================
-        # Convenção visual única:
-        # A | B | C | N | PE
+        # Convenção visual definida pelo usuário:
+        # A | B | C | PE | N
         #
-        # Somente os condutores realmente existentes no fornecimento
-        # são mostrados. Todos usam exatamente o mesmo espaçamento
-        # horizontal, evitando sobreposição de rótulos e linhas.
-        condutores_entrada = list(
-            fases_entrada
+        # A/B/C nascem EXATAMENTE alinhadas aos bornes do DG.
+        # PE e N continuam à direita, usando o mesmo passo horizontal
+        # dos bornes do DG. Isso elimina cruzamentos/desvios desnecessários
+        # logo na entrada do diagrama.
+        polos_dg = _centros_polos(dg)
+
+        # Passo real entre polos do DG; fallback apenas para geometria atípica.
+        if len(polos_dg) >= 2:
+            ESPACAMENTO_ENTRADA = abs(polos_dg[1] - polos_dg[0])
+        else:
+            ESPACAMENTO_ENTRADA = 0.42
+
+        x_por_condutor = {}
+        for idx_fase, token in enumerate(fases_entrada):
+            if idx_fase < len(polos_dg):
+                x_por_condutor[token] = polos_dg[idx_fase]
+
+        # Após a última fase: primeiro PE e depois N.
+        x_ultima_fase = (
+            polos_dg[min(len(fases_entrada), len(polos_dg)) - 1]
+            if polos_dg and fases_entrada
+            else dg["cx"]
         )
-
-        if tem_neutro:
-            condutores_entrada.append(
-                "N"
-            )
-
+        proximo_x = x_ultima_fase + ESPACAMENTO_ENTRADA
         if tem_pe:
-            condutores_entrada.append(
-                "PE"
-            )
-
-        ESPACAMENTO_ENTRADA = 0.42
-
-        largura_entrada = (
-            max(
-                0,
-                len(
-                    condutores_entrada
-                )
-                - 1
-            )
-            * ESPACAMENTO_ENTRADA
-        )
-
-        # Centraliza o conjunto de condutores aproximadamente sobre o DG.
-        centro_entrada = dg["cx"]
-
-        x_inicial_entrada = (
-            centro_entrada
-            - largura_entrada / 2.0
-        )
-
-        x_por_condutor = {
-            token: (
-                x_inicial_entrada
-                + idx * ESPACAMENTO_ENTRADA
-            )
-            for idx, token in enumerate(
-                condutores_entrada
-            )
-        }
+            x_por_condutor["PE"] = proximo_x
+            proximo_x += ESPACAMENTO_ENTRADA
+        if tem_neutro:
+            x_por_condutor["N"] = proximo_x
 
         y_inicio_entrada = qy_top - 0.15
         y_rotulos_entrada = qy_top - 0.38
 
-        polos_dg = _centros_polos(
-            dg
-        )
-
-        # Fases A/B/C:
-        # o trecho superior é equidistante; depois cada fase segue
-        # separadamente até seu polo físico correspondente do DG.
-        for idx_fase, token in enumerate(
-            fases_entrada
-        ):
-            if idx_fase >= len(
-                polos_dg
-            ):
+        # Fases: ligação vertical direta, sem degrau horizontal.
+        for idx_fase, token in enumerate(fases_entrada):
+            if idx_fase >= len(polos_dg) or token not in x_por_condutor:
                 break
-
-            x_topo = x_por_condutor[
-                token
-            ]
-
-            x_polo = polos_dg[
-                idx_fase
-            ]
-
-            # Corredor vertical exclusivo da entrada. O deslocamento
-            # horizontal até o polo do DG acontece SOMENTE abaixo da
-            # pista C; portanto não existe coincidência de A/B/C.
-            y_transferencia_dg = top_rail_y + 0.72
-
-            _polyline(
+            x_fase = x_por_condutor[token]
+            _line(
                 msp,
-                [
-                    (
-                        x_topo,
-                        y_inicio_entrada
-                    ),
-                    (
-                        x_topo,
-                        y_transferencia_dg
-                    ),
-                    (
-                        x_polo,
-                        y_transferencia_dg
-                    ),
-                    (
-                        x_polo,
-                        dg["y2"]
-                    ),
-                ],
-                _layer_por_token(
-                    token
-                )
+                (x_fase, y_inicio_entrada),
+                (x_fase, dg["y2"]),
+                _layer_por_token(token)
             )
+            _text(msp, token, x_fase - 0.03, y_rotulos_entrada, 0.080, LT)
 
-            _text(
-                msp,
-                token,
-                x_topo - 0.03,
-                y_rotulos_entrada,
-                0.080,
-                LT
-            )
-
-        # Neutro:
-        # mantém o mesmo espaçamento da entrada e segue ao barramento N.
-        if tem_neutro:
-            x_n = x_por_condutor[
-                "N"
-            ]
-
-            _polyline(
-                msp,
-                [
-                    (
-                        x_n,
-                        y_inicio_entrada
-                    ),
-                    (
-                        x_n,
-                        qy_top - 0.62
-                    ),
-                    (
-                        neutro["x"],
-                        qy_top - 0.62
-                    ),
-                    (
-                        neutro["x"],
-                        neutro["y_top"]
-                    ),
-                ],
-                LN
-            )
-
-            _text(
-                msp,
-                "N",
-                x_n - 0.03,
-                y_rotulos_entrada,
-                0.080,
-                LT
-            )
-
-        # Proteção / terra:
-        # mesma malha de espaçamento e ligação independente ao PE.
+        # PE vem antes do N e segue diretamente ao barramento de proteção.
         if tem_pe:
-            x_pe = x_por_condutor[
-                "PE"
-            ]
-
+            x_pe = x_por_condutor["PE"]
             _polyline(
                 msp,
                 [
-                    (
-                        x_pe,
-                        y_inicio_entrada
-                    ),
-                    (
-                        x_pe,
-                        qy_top - 0.82
-                    ),
-                    (
-                        pe["x"],
-                        qy_top - 0.82
-                    ),
-                    (
-                        pe["x"],
-                        pe["y_top"]
-                    ),
+                    (x_pe, y_inicio_entrada),
+                    (x_pe, qy_top - 0.62),
+                    (pe["x"], qy_top - 0.62),
+                    (pe["x"], pe["y_top"]),
                 ],
                 LPE
             )
+            _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-            _text(
+        # N é o último condutor da sequência e segue ao barramento de neutro.
+        if tem_neutro:
+            x_n = x_por_condutor["N"]
+            _polyline(
                 msp,
-                "PE",
-                x_pe - 0.05,
-                y_rotulos_entrada,
-                0.080,
-                LT
+                [
+                    (x_n, y_inicio_entrada),
+                    (x_n, qy_top - 0.82),
+                    (neutro["x"], qy_top - 0.82),
+                    (neutro["x"], neutro["y_top"]),
+                ],
+                LN
             )
+            _text(msp, "N", x_n - 0.03, y_rotulos_entrada, 0.080, LT)
 
         bitola_fase = mapa.get(
             "alimentador_fase_mm2"
@@ -1696,7 +1581,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.7 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.8 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2426,7 +2311,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.7:
+                    # Fase 13.6 Rev.8:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -2856,7 +2741,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.7:
+    # Fase 13.6 Rev.8:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35

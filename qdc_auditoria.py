@@ -1,5 +1,5 @@
 """
-Fase 13.6 Rev.7 — Auditoria elétrica estrutural do QDC.
+Fase 13.6 Rev.8 — Auditoria elétrica estrutural do QDC.
 
 Valida somente aquilo que o sistema consegue comprovar com os dados do
 projeto. Dados dependentes de Icc, fabricante, esquema de aterramento
