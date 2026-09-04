@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4:
+    Fase 13.4 Rev.1:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -363,6 +363,8 @@ def gerar_mapa_fisico_qdc(
         if s["tipo"] == "RESERVA"
     )
 
+    resumo_protecao = dict(resumo_protecao or {})
+
     return {
         "status": "ok",
         "qdc_posicoes": posicoes,
@@ -372,6 +374,23 @@ def gerar_mapa_fisico_qdc(
         "posicoes_livres": livres,
         "dispositivos": layout["dispositivos"],
         "slots": slots,
+        "alimentador_composicao": resumo_protecao.get(
+            "alimentador_composicao",
+            ""
+        ),
+        "alimentador_fase_mm2": resumo_protecao.get(
+            "alimentador_fase_mm2"
+        ),
+        "alimentador_neutro_mm2": resumo_protecao.get(
+            "alimentador_neutro_mm2"
+        ),
+        "alimentador_pe_mm2": resumo_protecao.get(
+            "alimentador_pe_mm2"
+        ),
+        "dg_polos": resumo_protecao.get(
+            "dg_polos",
+            ""
+        ),
     }
 
 
@@ -493,19 +512,104 @@ def _layer_fase(fase):
     return "PROJ_ELETRICA_QDC_FASE_A"
 
 
-def _desenhar_trilho(msp, x1, x2, y, layer):
+def _fases_alimentador(mapa):
+    composicao = str(
+        (mapa or {}).get(
+            "alimentador_composicao",
+            ""
+        )
+        or ""
+    ).upper()
+
+    if "3F" in composicao:
+        return ["A", "B", "C"]
+    if "2F" in composicao:
+        return ["A", "B"]
+    if "F" in composicao:
+        return ["A"]
+    return []
+
+
+def _tem_neutro_alimentador(mapa):
+    return "N" in str(
+        (mapa or {}).get(
+            "alimentador_composicao",
+            ""
+        )
+        or ""
+    ).upper()
+
+
+def _tem_pe_alimentador(mapa):
+    return "PE" in str(
+        (mapa or {}).get(
+            "alimentador_composicao",
+            ""
+        )
+        or ""
+    ).upper()
+
+
+def _desenhar_trilho_segmento(msp, x1, x2, y, layer):
+    if x2 <= x1:
+        return
     _line(msp, (x1, y), (x2, y), layer)
     _line(msp, (x1, y - 0.08), (x2, y - 0.08), layer)
+
     passo = 0.34
     x = x1 + 0.18
     while x < x2 - 0.18:
         _line(
             msp,
             (x, y - 0.10),
-            (x + 0.12, y + 0.02),
+            (min(x + 0.12, x2), y + 0.02),
             layer
         )
         x += passo
+
+
+def _desenhar_trilho_com_vazios(
+    msp,
+    x1,
+    x2,
+    y,
+    layer,
+    geometrias
+):
+    """Desenha o trilho somente nas áreas externas aos aparelhos."""
+    intervalos = sorted(
+        [
+            (
+                float(g.get("x1", 0)) - 0.04,
+                float(g.get("x2", 0)) + 0.04,
+            )
+            for g in (geometrias or [])
+        ]
+    )
+
+    cursor = x1
+    for a, b in intervalos:
+        a = max(x1, a)
+        b = min(x2, b)
+        if a > cursor:
+            _desenhar_trilho_segmento(
+                msp,
+                cursor,
+                a,
+                y,
+                layer
+            )
+        cursor = max(cursor, b)
+
+    if cursor < x2:
+        _desenhar_trilho_segmento(
+            msp,
+            cursor,
+            x2,
+            y,
+            layer
+        )
+
 
 
 def _desenhar_borne(msp, x, y, layer):
@@ -713,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 — QDC executivo no CAD.
+    Fase 13.4 Rev.1 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -789,7 +893,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.1",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -848,14 +952,6 @@ def desenhar_mapa_fisico_qdc(
     # Fileira superior: DG/DPS/IDR
     # -------------------------
     top_rail_y = qy_top - 2.25
-    _desenhar_trilho(
-        msp,
-        din_x1,
-        din_x2,
-        top_rail_y - 0.05,
-        L
-    )
-
     x = din_x1 + 0.20
     geral_geom = []
     for d in gerais:
@@ -876,6 +972,15 @@ def desenhar_mapa_fisico_qdc(
         geral_geom.append((d, geom))
         x = geom["x2"] + 0.12
 
+    _desenhar_trilho_com_vazios(
+        msp,
+        din_x1,
+        din_x2,
+        top_rail_y - 0.05,
+        L,
+        [g for _, g in geral_geom]
+    )
+
     # Entrada elétrica e distribuição superior por fase.
     dg_geoms = [
         (d, g)
@@ -892,43 +997,148 @@ def desenhar_mapa_fisico_qdc(
     if dg_geoms:
         dg_disp, dg = dg_geoms[0]
         entrada_x = dg["cx"]
-        offsets = {"A": -0.16, "B": 0.0, "C": 0.16}
 
-        for token in ("A", "B", "C"):
-            xx = entrada_x + offsets[token]
+        fases_entrada = _fases_alimentador(
+            mapa
+        )
+
+        espacamento_entrada = 0.16
+        largura_fases = (
+            max(
+                0,
+                len(fases_entrada) - 1
+            )
+            * espacamento_entrada
+        )
+
+        x_inicio_fases = (
+            entrada_x
+            - largura_fases / 2.0
+        )
+
+        # Somente a quantidade real de fases dimensionada pelo sistema.
+        for idx_fase, token in enumerate(
+            fases_entrada
+        ):
+            xx = (
+                x_inicio_fases
+                + idx_fase * espacamento_entrada
+            )
+
             _line(
                 msp,
                 (xx, qy_top - 0.10),
                 (xx, dg["y2"]),
                 _layer_por_token(token)
             )
+
             _text(
                 msp,
-                f"L{('A','B','C').index(token)+1}",
+                f"L{idx_fase + 1}",
                 xx - 0.045,
                 qy_top - 0.30,
                 0.075,
                 LT
             )
 
-        _polyline(
-            msp,
-            [
-                (entrada_x + 0.34, qy_top - 0.10),
-                (entrada_x + 0.34, qy_top - 0.42),
-                (neutro["x"], qy_top - 0.42),
-                (neutro["x"], neutro["y_top"]),
-            ],
-            LN
+        x_aux = (
+            entrada_x
+            + largura_fases / 2.0
+            + 0.24
         )
-        _text(msp, "N", entrada_x + 0.30, qy_top - 0.30, 0.075, LT)
-        _text(msp, "ENTRADA DA REDE", din_x1, qy_top - 0.18, 0.085, LT)
+
+        if _tem_neutro_alimentador(
+            mapa
+        ):
+            _polyline(
+                msp,
+                [
+                    (x_aux, qy_top - 0.10),
+                    (x_aux, qy_top - 0.42),
+                    (neutro["x"], qy_top - 0.42),
+                    (neutro["x"], neutro["y_top"]),
+                ],
+                LN
+            )
+
+            _text(
+                msp,
+                "N",
+                x_aux - 0.02,
+                qy_top - 0.30,
+                0.075,
+                LT
+            )
+
+            x_aux += 0.20
+
+        if _tem_pe_alimentador(
+            mapa
+        ):
+            _polyline(
+                msp,
+                [
+                    (x_aux, qy_top - 0.10),
+                    (x_aux, qy_top - 0.58),
+                    (pe["x"], qy_top - 0.58),
+                    (pe["x"], pe["y_top"]),
+                ],
+                LPE
+            )
+
+            _text(
+                msp,
+                "PE",
+                x_aux - 0.05,
+                qy_top - 0.30,
+                0.075,
+                LT
+            )
+
+        bitola_fase = mapa.get(
+            "alimentador_fase_mm2"
+        )
+
+        composicao_txt = str(
+            mapa.get(
+                "alimentador_composicao",
+                ""
+            )
+            or ""
+        )
+
+        rotulo_entrada = (
+            "ENTRADA DA REDE"
+            + (
+                f" | {composicao_txt}"
+                if composicao_txt
+                else ""
+            )
+            + (
+                f" | FASE {float(bitola_fase):g} mm2"
+                if bitola_fase
+                else ""
+            )
+        )
+
+        _text(
+            msp,
+            rotulo_entrada,
+            din_x1,
+            qy_top - 0.18,
+            0.080,
+            LT
+        )
 
     if geral_geom:
         x_bus_ini = dg_geoms[0][1]["cx"] if dg_geoms else geral_geom[0][1]["cx"]
         x_bus_fim = geral_geom[-1][1]["cx"]
 
-        for token in ("A", "B", "C"):
+        fases_disponiveis = _fases_alimentador(
+            mapa
+        )
+
+        for token in fases_disponiveis:
             _line(
                 msp,
                 (x_bus_ini, barramentos_y[token]),
@@ -1006,14 +1216,6 @@ def desenhar_mapa_fisico_qdc(
     circuitos_geom = []
 
     for trilho in range(trilhos_circuitos):
-        _desenhar_trilho(
-            msp,
-            din_x1,
-            din_x2,
-            y_rail - 0.05,
-            L
-        )
-
         x = din_x1 + 0.20
         usados = 0
 
@@ -1059,103 +1261,280 @@ def desenhar_mapa_fisico_qdc(
                 LT
             )
 
-            ambiente = str(d.get("ambiente", "") or "")
-            if ambiente:
-                linhas_amb = _quebrar_texto(
-                    ambiente,
-                    15
-                )
-                yy = geom["y1"] - 0.48
-                for linha in linhas_amb[:2]:
-                    _texto_central(
-                        msp,
-                        linha,
-                        geom["x1"] - 0.18,
-                        geom["x2"] + 0.18,
-                        yy,
-                        0.065,
-                        LT
-                    )
-                    yy -= 0.15
 
-            # Saída de fase.
+            # Na saída do disjuntor aparece somente o código do circuito.
+            # A fase segue para baixo; N e PE são roteados fora do corpo dos
+            # disjuntores, em corredores inferiores.
             layer_fase = _layer_fase(
                 fase
             )
+
+            saida_y = (
+                geom["y1"]
+                - 0.72
+            )
+
             _line(
                 msp,
                 (geom["cx"], geom["y1"]),
-                (geom["cx"], geom["y1"] - 0.85),
+                (geom["cx"], saida_y),
                 layer_fase
             )
 
-            # PE até barramento esquerdo.
-            y_pe = max(
-                pe["y_bottom"] + 0.16,
-                geom["y1"] - 0.68
+            # Guarda pontos de conexão para roteamento externo de N e PE.
+            geom["saida_y"] = saida_y
+            geom["tem_neutro"] = (
+                mod == 1
             )
-            _polyline(
-                msp,
-                [
-                    (geom["cx"] - 0.12, geom["y1"] - 0.03),
-                    (geom["cx"] - 0.12, y_pe),
-                    (pe["x"], y_pe),
-                ],
-                LPE
-            )
-
-            # N em circuitos 1P.
-            if mod == 1:
-                y_n = max(
-                    neutro["y_bottom"] + 0.16,
-                    geom["y1"] - 0.52
-                )
-                _polyline(
-                    msp,
-                    [
-                        (geom["cx"] + 0.12, geom["y1"] - 0.03),
-                        (geom["cx"] + 0.12, y_n),
-                        (neutro["x"], y_n),
-                    ],
-                    LN
-                )
 
             x = geom["x2"] + 0.10
             usados += mod
             idx_circ += 1
 
-        # Barramento pente acima desta fileira.
+        desta_fileira_geom = [
+            g
+            for d, g in circuitos_geom
+            if abs(
+                g["y1"]
+                - (y_rail - 0.85)
+            )
+            < 0.05
+        ]
+
+        _desenhar_trilho_com_vazios(
+            msp,
+            din_x1,
+            din_x2,
+            y_rail - 0.05,
+            L,
+            desta_fileira_geom
+        )
+
+        # Corredores N/PE ficam abaixo da fileira, sem atravessar aparelhos.
+        if desta_fileira_geom:
+            y_corredor_pe = (
+                y_rail
+                - 1.78
+            )
+
+            y_corredor_n = (
+                y_rail
+                - 1.98
+            )
+
+            x_esq_corredor = (
+                min(
+                    g["x1"]
+                    for g in desta_fileira_geom
+                )
+                - 0.12
+            )
+
+            x_dir_corredor = (
+                max(
+                    g["x2"]
+                    for g in desta_fileira_geom
+                )
+                + 0.12
+            )
+
+            _line(
+                msp,
+                (pe["x"], y_corredor_pe),
+                (x_dir_corredor, y_corredor_pe),
+                LPE
+            )
+
+            _line(
+                msp,
+                (x_esq_corredor, y_corredor_n),
+                (neutro["x"], y_corredor_n),
+                LN
+            )
+
+            for d, g in circuitos_geom:
+                if abs(
+                    g["y1"]
+                    - (y_rail - 0.85)
+                ) >= 0.05:
+                    continue
+
+                # PE sai do circuito e desce diretamente ao corredor inferior.
+                _polyline(
+                    msp,
+                    [
+                        (
+                            g["cx"] - 0.10,
+                            g["y1"]
+                        ),
+                        (
+                            g["cx"] - 0.10,
+                            y_corredor_pe
+                        ),
+                    ],
+                    LPE
+                )
+
+                # Neutro somente nos circuitos que realmente o utilizam.
+                if g.get(
+                    "tem_neutro"
+                ):
+                    _polyline(
+                        msp,
+                        [
+                            (
+                                g["cx"] + 0.10,
+                                g["y1"]
+                            ),
+                            (
+                                g["cx"] + 0.10,
+                                y_corredor_n
+                            ),
+                        ],
+                        LN
+                    )
+
+        # Barramento dos circuitos segmentado por grupo de proteção.
         if circuitos_geom:
             desta_fileira = [
-                (d,g)
-                for d,g in circuitos_geom
-                if abs(g["y1"] - (y_rail - 0.85)) < 0.05
+                (d, g)
+                for d, g in circuitos_geom
+                if abs(
+                    g["y1"]
+                    - (y_rail - 0.85)
+                )
+                < 0.05
             ]
+
             if desta_fileira:
-                x1p = desta_fileira[0][1]["x1"]
-                x2p = desta_fileira[-1][1]["x2"]
-                yp = y_rail + 0.90
-                _line(
-                    msp,
-                    (x1p, yp),
-                    (x2p, yp),
-                    LP
+                yp = (
+                    y_rail
+                    + 0.90
                 )
-                _text(
-                    msp,
-                    "BARRAMENTO PENTE",
-                    x1p,
-                    yp + 0.15,
-                    0.075,
-                    LT
-                )
-                for d,g in desta_fileira:
+
+                grupos_fileira = []
+                for d, g in desta_fileira:
+                    grupo = str(
+                        d.get(
+                            "grupo",
+                            "SEM DR"
+                        )
+                        or "SEM DR"
+                    )
+
+                    if (
+                        not grupos_fileira
+                        or grupos_fileira[-1][0]
+                        != grupo
+                    ):
+                        grupos_fileira.append(
+                            [
+                                grupo,
+                                []
+                            ]
+                        )
+
+                    grupos_fileira[-1][1].append(
+                        (
+                            d,
+                            g
+                        )
+                    )
+
+                dr_geom_por_grupo = {
+                    str(
+                        d.get(
+                            "grupo",
+                            ""
+                        )
+                        or ""
+                    ):
+                    g
+                    for d, g in geral_geom
+                    if d.get(
+                        "tipo"
+                    )
+                    == "IDR"
+                }
+
+                for grupo, itens_grupo in grupos_fileira:
+                    x1p = itens_grupo[0][1]["x1"]
+                    x2p = itens_grupo[-1][1]["x2"]
+
                     _line(
                         msp,
-                        (g["cx"], yp),
-                        (g["cx"], g["y2"]),
-                        _layer_fase(d.get("fase"))
+                        (x1p, yp),
+                        (x2p, yp),
+                        LP
                     )
+
+                    _text(
+                        msp,
+                        (
+                            "PENTE "
+                            + str(
+                                grupo
+                            )
+                        ),
+                        x1p,
+                        yp + 0.15,
+                        0.070,
+                        LT
+                    )
+
+                    # Dentes do pente para os disjuntores daquele grupo.
+                    for d, g in itens_grupo:
+                        _line(
+                            msp,
+                            (g["cx"], yp),
+                            (g["cx"], g["y2"]),
+                            _layer_fase(
+                                d.get(
+                                    "fase"
+                                )
+                            )
+                        )
+
+                    # Saída do respectivo IDR até o barramento daquele grupo.
+                    dr_g = dr_geom_por_grupo.get(
+                        grupo
+                    )
+
+                    if dr_g:
+                        x_dest = (
+                            x1p
+                            + x2p
+                        ) / 2.0
+
+                        y_saida_dr = (
+                            dr_g["y1"]
+                            - 0.20
+                        )
+
+                        # Desce lateralmente ao IDR, segue em corredor livre
+                        # e entra no centro do pente do grupo.
+                        _polyline(
+                            msp,
+                            [
+                                (
+                                    dr_g["cx"],
+                                    dr_g["y1"]
+                                ),
+                                (
+                                    dr_g["cx"],
+                                    y_saida_dr
+                                ),
+                                (
+                                    x_dest,
+                                    y_saida_dr
+                                ),
+                                (
+                                    x_dest,
+                                    yp
+                                ),
+                            ],
+                            LP
+                        )
 
         y_rail -= 3.15
 
