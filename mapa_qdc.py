@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.9:
+    Fase 13.6 Rev.10:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -651,6 +651,10 @@ def _fases_do_texto(fase):
 
 def _layer_por_token(token):
     token = str(token or "A").upper()
+    if token == "N":
+        return "PROJ_ELETRICA_QDC_NEUTRO"
+    if token == "PE":
+        return "PROJ_ELETRICA_QDC_PE"
     if token == "C":
         return "PROJ_ELETRICA_QDC_FASE_C"
     if token == "B":
@@ -845,7 +849,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.9:
+    # Fase 13.6 Rev.10:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -910,7 +914,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.9:
+        # Fase 13.6 Rev.10:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1170,7 +1174,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.9 — QDC executivo no CAD.
+    Fase 13.6 Rev.10 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1204,7 +1208,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.9:
+    # Fase 13.6 Rev.10:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1237,7 +1241,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.9:
+    # Fase 13.6 Rev.10:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1275,7 +1279,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.9",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.10",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1335,7 +1339,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.9:
+    # Fase 13.6 Rev.10:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1431,31 +1435,67 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.9:
+    # Fase 13.6 Rev.10:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.9 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.10 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    ESPACAMENTO_VERTICAL_CABOS = 0.30
-    _y_linha_superior = top_rail_y + 1.50
+    # Fase 13.6 Rev.10:
+    # O espaçamento vertical é calculado conforme a quantidade REAL
+    # de cabos presentes na entrada. Assim monofásico, bifásico e
+    # trifásico mantêm a mesma proporção visual.
+    #
+    # Fórmula:
+    # espaçamento = distância disponível / quantidade de cabos
+    #
+    # A referência superior é o PE e a inferior é o topo do DG.
+    dg_ref_geom = dg_geoms[0][1] if dg_geoms else None
+    y_topo_dg = (
+        dg_ref_geom["y2"]
+        if dg_ref_geom is not None
+        else top_rail_y + 0.75
+    )
+
+    fases_presentes = _fases_alimentador(mapa)
+    tem_neutro_grade = _tem_neutro_alimentador(mapa)
+    tem_pe_grade = _tem_pe_alimentador(mapa)
+
+    cabos_grade = []
+    if tem_pe_grade:
+        cabos_grade.append("PE")
+    cabos_grade.extend(fases_presentes)
+    if tem_neutro_grade:
+        cabos_grade.append("N")
+
+    qtd_cabos_grade = max(1, len(cabos_grade))
+
+    y_pe_superior = qy_top - 0.62
+    distancia_disponivel = max(
+        0.60,
+        y_pe_superior - y_topo_dg
+    )
+
+    ESPACAMENTO_VERTICAL_CABOS = (
+        distancia_disponivel
+        / qtd_cabos_grade
+    )
 
     niveis_cabos_qdc = {
-        "LINHA_1": _y_linha_superior,
-        "LINHA_2": _y_linha_superior - 1 * ESPACAMENTO_VERTICAL_CABOS,
-        "LINHA_3": _y_linha_superior - 2 * ESPACAMENTO_VERTICAL_CABOS,
-        "LINHA_4": _y_linha_superior - 3 * ESPACAMENTO_VERTICAL_CABOS,
-        "LINHA_5": _y_linha_superior - 4 * ESPACAMENTO_VERTICAL_CABOS,
-        "LINHA_6": _y_linha_superior - 5 * ESPACAMENTO_VERTICAL_CABOS,
+        token: (
+            y_pe_superior
+            - idx * ESPACAMENTO_VERTICAL_CABOS
+        )
+        for idx, token in enumerate(cabos_grade)
     }
 
     barramentos_y = {
-        "A": niveis_cabos_qdc["LINHA_1"],
-        "B": niveis_cabos_qdc["LINHA_2"],
-        "C": niveis_cabos_qdc["LINHA_3"],
+        token: niveis_cabos_qdc[token]
+        for token in fases_presentes
+        if token in niveis_cabos_qdc
     }
 
     if dg_geoms:
@@ -1474,7 +1514,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.9 — ENTRADA DA REDE
+        # FASE 13.6 REV.10 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -1532,8 +1572,8 @@ def desenhar_mapa_fisico_qdc(
                 msp,
                 [
                     (x_pe, y_inicio_entrada),
-                    (x_pe, qy_top - 0.62),
-                    (pe["x"], qy_top - 0.62),
+                    (x_pe, niveis_cabos_qdc.get("PE", qy_top - 0.62)),
+                    (pe["x"], niveis_cabos_qdc.get("PE", qy_top - 0.62)),
                     (pe["x"], pe["y_top"]),
                 ],
                 LPE
@@ -1547,8 +1587,8 @@ def desenhar_mapa_fisico_qdc(
                 msp,
                 [
                     (x_n, y_inicio_entrada),
-                    (x_n, qy_top - 0.82),
-                    (neutro["x"], qy_top - 0.82),
+                    (x_n, niveis_cabos_qdc.get("N", qy_top - 0.82)),
+                    (neutro["x"], niveis_cabos_qdc.get("N", qy_top - 0.82)),
                     (neutro["x"], neutro["y_top"]),
                 ],
                 LN
@@ -1597,7 +1637,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.9 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.10 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -1877,17 +1917,18 @@ def desenhar_mapa_fisico_qdc(
                 x_n_idr = mapa_polos[
                     "N"
                 ]
+                y_deriv_n = g["y2"] + 0.14
 
                 _polyline(
                     msp,
                     [
                         (
                             neutro["x"],
-                            g["y2"] + 0.14
+                            y_deriv_n
                         ),
                         (
                             x_n_idr,
-                            g["y2"] + 0.14
+                            y_deriv_n
                         ),
                         (
                             x_n_idr,
@@ -1896,6 +1937,18 @@ def desenhar_mapa_fisico_qdc(
                     ],
                     LN
                 )
+
+                # Toda derivação real deve ser identificada com nó preenchido
+                # na cor do condutor. Para N, o nó é azul.
+                try:
+                    _no_fase_preenchido(
+                        msp,
+                        x_n_idr,
+                        y_deriv_n,
+                        "N"
+                    )
+                except Exception:
+                    pass
 
     # -------------------------
     # Fileiras inferiores: circuitos
@@ -2327,7 +2380,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.9:
+                    # Fase 13.6 Rev.10:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -2757,7 +2810,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.9:
+    # Fase 13.6 Rev.10:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
