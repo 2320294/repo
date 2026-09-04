@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.12:
+    Fase 13.6 Rev.13:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -863,7 +863,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -928,7 +928,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.12:
+        # Fase 13.6 Rev.13:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1188,7 +1188,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.12 — QDC executivo no CAD.
+    Fase 13.6 Rev.13 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1222,7 +1222,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1255,7 +1255,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1293,7 +1293,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.12",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.13",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1353,7 +1353,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1449,16 +1449,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.12 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.13 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -1512,11 +1512,11 @@ def desenhar_mapa_fisico_qdc(
         if token in niveis_cabos_qdc
     }
 
-    # REV.12 — regra dos barramentos laterais:
+    # REV.13 — regra dos barramentos laterais:
     # - entrada PE -> 1º borne do barramento PE;
-    # - entrada N  -> 1º borne do barramento N;
+    # - entrada N  -> 1º borne do barramento N, pelo topo do diagrama;
     # - alimentação N dos IDRs -> 2º borne do barramento N;
-    # - o N dos IDRs sobe e passa por cima de todo o conjunto;
+    # - N de entrada e N dos IDRs são rotas visualmente independentes;
     # - nó azul apenas nos pontos reais de derivação.
 
     if dg_geoms:
@@ -1535,7 +1535,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.12 — ENTRADA DA REDE
+        # FASE 13.6 REV.13 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -1601,15 +1601,30 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # N é o último condutor da sequência e segue ao barramento de neutro.
+        # Fase 13.6 Rev.13:
+        # O N de ENTRADA segue a mesma lógica visual do PE:
+        # vem da entrada, desce até um corredor superior e segue para a direita
+        # por cima dos demais condutores/dispositivos até o 1º borne do
+        # barramento de neutro.
         if tem_neutro:
             x_n = x_por_condutor["N"]
+
+            y_n_entrada_superior = (
+                max(
+                    niveis_cabos_qdc.values()
+                )
+                + max(
+                    0.22,
+                    ESPACAMENTO_VERTICAL_CABOS
+                )
+            )
+
             _polyline(
                 msp,
                 [
                     (x_n, y_inicio_entrada),
-                    (x_n, niveis_cabos_qdc.get("N", qy_top - 0.82)),
-                    (neutro["x"], niveis_cabos_qdc.get("N", qy_top - 0.82)),
+                    (x_n, y_n_entrada_superior),
+                    (neutro["x"], y_n_entrada_superior),
                     (neutro["x"], _y_borne_barramento(neutro, 0)),
                 ],
                 LN
@@ -1658,7 +1673,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.12 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.13 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -1927,12 +1942,12 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.12 — NEUTRO DOS IDRs POR CIMA DO CONJUNTO
+    # FASE 13.6 REV.13 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
-    # Entrada N -> 1º borne do barramento N.
-    # Alimentação N dos IDRs -> 2º borne do barramento N.
-    # Do 2º borne, o cabo sobe, passa por cima de todos os dispositivos
-    # e só então desce para o borne N superior de cada IDR.
+    # O cabo superior azul é exclusivamente o N de entrada.
+    # A alimentação dos IDRs permanece independente:
+    # nasce no 2º borne do barramento N e segue em um corredor próprio
+    # imediatamente acima dos bornes superiores dos IDRs.
     idrs_com_neutro = []
 
     for d_idr, g_idr in geral_geom:
@@ -1952,49 +1967,51 @@ def desenhar_mapa_fisico_qdc(
         )
 
     if idrs_com_neutro:
-        y_borne_n_2 = _y_borne_barramento(neutro, 1)
-
-        # Corredor exclusivo do neutro dos IDRs, acima do conjunto.
-        y_n_idr_superior = (
-            max(niveis_cabos_qdc.values())
-            + max(0.22, ESPACAMENTO_VERTICAL_CABOS)
+        y_borne_n_2 = _y_borne_barramento(
+            neutro,
+            1
         )
 
-        xs_n_idr = sorted(x for _, _, x in idrs_com_neutro)
+        # Corredor do neutro dos IDRs:
+        # fica acima dos bornes superiores dos IDRs, porém abaixo da
+        # entrada N principal que percorre o topo do diagrama.
+        y_n_idr = max(
+            g_idr["y2"]
+            for _, g_idr, _ in idrs_com_neutro
+        ) + 0.14
+
+        xs_n_idr = sorted(
+            x_n_idr
+            for _, _, x_n_idr in idrs_com_neutro
+        )
         x_idr_mais_esquerda = min(xs_n_idr)
 
-        # Sobe primeiro pelo barramento lateral N.
-        _line(
+        # Sai exatamente do 2º borne do barramento N.
+        _polyline(
             msp,
-            (neutro["x"], y_borne_n_2),
-            (neutro["x"], y_n_idr_superior),
+            [
+                (neutro["x"], y_borne_n_2),
+                (neutro["x"], y_n_idr),
+                (x_idr_mais_esquerda, y_n_idr),
+            ],
             LN
         )
 
-        # Depois percorre por cima de DG/DPS/IDRs.
-        _line(
-            msp,
-            (neutro["x"], y_n_idr_superior),
-            (x_idr_mais_esquerda, y_n_idr_superior),
-            LN
-        )
-
-        # Derivações para cada borne N superior.
+        # Derivações para os bornes N superiores dos IDRs.
+        # Bolinha azul somente onde existe derivação real.
         for d_idr, g_idr, x_n_idr in idrs_com_neutro:
             _line(
                 msp,
-                (x_n_idr, y_n_idr_superior),
+                (x_n_idr, y_n_idr),
                 (x_n_idr, g_idr["y2"]),
                 LN
             )
 
-            # Bolinha azul apenas em derivação real.
-            # O último ponto à esquerda é término, sem bolinha.
             if x_n_idr > x_idr_mais_esquerda + 1e-9:
                 _no_fase_preenchido(
                     msp,
                     x_n_idr,
-                    y_n_idr_superior,
+                    y_n_idr,
                     "N"
                 )
 
@@ -2428,7 +2445,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.12:
+                    # Fase 13.6 Rev.13:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -2858,7 +2875,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.12:
+    # Fase 13.6 Rev.13:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
