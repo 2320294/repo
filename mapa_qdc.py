@@ -173,7 +173,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.2:
+    Fase 13.6 Rev.3:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -844,7 +844,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.2:
+    # Fase 13.6 Rev.3:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -909,7 +909,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.2:
+        # Fase 13.6 Rev.3:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1169,7 +1169,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.2 — QDC executivo no CAD.
+    Fase 13.6 Rev.3 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1311,7 +1311,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.2:
+    # Fase 13.6 Rev.3:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2272,27 +2272,39 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Linha mecânica do pente.
-                    _line(
-                        msp,
-                        (x1p, yp),
-                        (x2p, yp),
-                        LP
+                    # Fase 13.6 Rev.3:
+                    # barramento pente somente faz sentido quando alimenta
+                    # dois ou mais disjuntores do mesmo grupo.
+                    usar_pente = (
+                        len(
+                            itens_grupo
+                        )
+                        >= 2
                     )
 
-                    _text(
-                        msp,
-                        (
-                            "PENTE "
-                            + str(
-                                grupo
-                            )
-                        ),
-                        x1p,
-                        yp + 0.15,
-                        0.070,
-                        LT
-                    )
+                    if usar_pente:
+                        _line(
+                            msp,
+                            (x1p, yp),
+                            (x2p, yp),
+                            LP
+                        )
+
+                        # O texto fica abaixo da primeira pista de fase,
+                        # afastado das ligações elétricas.
+                        _text(
+                            msp,
+                            (
+                                "PENTE "
+                                + str(
+                                    grupo
+                                )
+                            ),
+                            x1p,
+                            yp + 0.08,
+                            0.060,
+                            LT
+                        )
 
                     # Fases realmente usadas neste grupo.
                     fases_grupo = []
@@ -2324,8 +2336,11 @@ def desenhar_mapa_fisico_qdc(
                     # gráfica entre PENTE, fases e textos dos circuitos.
                     # A pista termina exatamente no último disjuntor que usa
                     # aquela fase; o último ponto será apenas uma curva.
-                    AFASTAMENTO_PENTE_FASE = 0.18
-                    AFASTAMENTO_ENTRE_FASES = 0.16
+                    # Separação gráfica mínima entre todos os elementos:
+                    # PENTE -> A -> B -> C.
+                    # Evita coincidência de linha, texto e nós de derivação.
+                    AFASTAMENTO_PENTE_FASE = 0.30
+                    AFASTAMENTO_ENTRE_FASES = 0.22
                     y_fase_grupo = {}
                     pontos_pente_por_fase = {}
 
@@ -2362,7 +2377,10 @@ def desenhar_mapa_fisico_qdc(
                             fase_grupo
                         ] = pontos_fase
 
-                        if pontos_fase:
+                        if (
+                            pontos_fase
+                            and usar_pente
+                        ):
                             _line(
                                 msp,
                                 (
@@ -2381,56 +2399,60 @@ def desenhar_mapa_fisico_qdc(
                             )
 
                     # Cada disjuntor recebe cada fase em um polo diferente.
-                    for d_item, g_item in itens_grupo:
-                        polos_circuito = _centros_polos(
-                            g_item
-                        )
-                        fases_circuito = _fases_do_texto(
-                            d_item.get(
-                                "fase",
-                                ""
+                    # Em grupo unitário, a conexão será feita diretamente
+                    # da fonte ao polo; portanto não criamos descida a partir
+                    # de uma pista horizontal inexistente.
+                    if usar_pente:
+                        for d_item, g_item in itens_grupo:
+                            polos_circuito = _centros_polos(
+                                g_item
                             )
-                        )
-
-                        for fase_item in fases_circuito:
-                            yy_fase = y_fase_grupo.get(
-                                fase_item,
-                                yp + AFASTAMENTO_PENTE_FASE
+                            fases_circuito = _fases_do_texto(
+                                d_item.get(
+                                    "fase",
+                                    ""
+                                )
                             )
 
-                            x_polo = _polo_para_fase(
-                                d_item,
-                                g_item,
-                                fase_item
-                            )
+                            for fase_item in fases_circuito:
+                                yy_fase = y_fase_grupo.get(
+                                    fase_item,
+                                    yp + AFASTAMENTO_PENTE_FASE
+                                )
 
-                            # A derivação vertical começa na pista da fase e
-                            # termina no borne do polo correspondente.
-                            _line(
-                                msp,
-                                (
-                                    x_polo,
-                                    yy_fase
-                                ),
-                                (
-                                    x_polo,
-                                    g_item["y2"]
-                                ),
-                                _layer_por_token(
+                                x_polo = _polo_para_fase(
+                                    d_item,
+                                    g_item,
                                     fase_item
                                 )
-                            )
-                            _desenhar_no_se_derivacao(
-                                msp,
-                                x_polo,
-                                yy_fase,
-                                fase_item,
-                                pontos_pente_por_fase.get(
-                                    fase_item,
-                                    []
-                                )
-                            )
 
+                                _line(
+                                    msp,
+                                    (
+                                        x_polo,
+                                        yy_fase
+                                    ),
+                                    (
+                                        x_polo,
+                                        g_item["y2"]
+                                    ),
+                                    _layer_por_token(
+                                        fase_item
+                                    )
+                                )
+                                _desenhar_no_se_derivacao(
+                                    msp,
+                                    x_polo,
+                                    yy_fase,
+                                    fase_item,
+                                    pontos_pente_por_fase.get(
+                                        fase_item,
+                                        []
+                                    )
+                                )
+
+                    # Fonte do grupo.
+                    fonte_disp = None
                     # Fonte do grupo.
                     fonte_disp = None
                     fonte_geom = dr_geom_por_grupo.get(
@@ -2483,106 +2505,164 @@ def desenhar_mapa_fisico_qdc(
                                 mapa
                             )
 
-                        # Liga cada fase da fonte à pista correspondente.
-                        for idx_fase, fase_item in enumerate(
-                            fases_fonte
-                        ):
-                            if (
-                                fase_item not in y_fase_grupo
-                                or idx_fase >= len(
-                                    polos_fonte
-                                )
+                        if usar_pente:
+                            # Dois ou mais disjuntores:
+                            # fonte -> pista específica A/B/C -> derivações.
+                            for idx_fase, fase_item in enumerate(
+                                fases_fonte
                             ):
-                                continue
+                                if fase_item not in y_fase_grupo:
+                                    continue
 
-                            x_origem = _polo_para_fase(
-                                fonte_disp,
-                                fonte_geom,
-                                fase_item
-                            )
-                            yy_destino = y_fase_grupo[
-                                fase_item
-                            ]
-
-                            # Corredores verticais ligeiramente deslocados
-                            # para que fases distintas não se sobreponham.
-                            # Corredor individual por fase. O trecho horizontal
-                            # final pertence somente à pista da própria fase.
-                            x_destino_fase = (
-                                (
-                                    x1p
-                                    + x2p
-                                )
-                                / 2.0
-                                + (
-                                    idx_fase
-                                    - (
-                                        len(
-                                            fases_fonte
-                                        )
-                                        - 1
-                                    )
-                                    / 2.0
-                                )
-                                * 0.08
-                            )
-
-                            x_corredor = (
-                                x_origem
-                                + (
-                                    idx_fase
-                                    - (
-                                        len(
-                                            fases_fonte
-                                        )
-                                        - 1
-                                    )
-                                    / 2.0
-                                )
-                                * 0.06
-                            )
-
-                            _polyline(
-                                msp,
-                                [
-                                    (
-                                        x_origem,
-                                        fonte_geom["y1"]
-                                    ),
-                                    (
-                                        x_corredor,
-                                        fonte_geom["y1"] - 0.18
-                                    ),
-                                    (
-                                        x_corredor,
-                                        yy_destino
-                                    ),
-                                    (
-                                        x_destino_fase,
-                                        yy_destino
-                                    ),
-                                ],
-                                _layer_por_token(
+                                x_origem = _polo_para_fase(
+                                    fonte_disp,
+                                    fonte_geom,
                                     fase_item
                                 )
-                            )
-                            pontos_derivacao_pente = list(
-                                pontos_pente_por_fase.get(
+                                yy_destino = y_fase_grupo[
+                                    fase_item
+                                ]
+
+                                x_destino_fase = (
+                                    (
+                                        x1p
+                                        + x2p
+                                    )
+                                    / 2.0
+                                    + (
+                                        idx_fase
+                                        - (
+                                            len(
+                                                fases_fonte
+                                            )
+                                            - 1
+                                        )
+                                        / 2.0
+                                    )
+                                    * 0.12
+                                )
+
+                                x_corredor = (
+                                    x_origem
+                                    + (
+                                        idx_fase
+                                        - (
+                                            len(
+                                                fases_fonte
+                                            )
+                                            - 1
+                                        )
+                                        / 2.0
+                                    )
+                                    * 0.10
+                                )
+
+                                _polyline(
+                                    msp,
+                                    [
+                                        (
+                                            x_origem,
+                                            fonte_geom["y1"]
+                                        ),
+                                        (
+                                            x_corredor,
+                                            fonte_geom["y1"] - 0.18
+                                        ),
+                                        (
+                                            x_corredor,
+                                            yy_destino
+                                        ),
+                                        (
+                                            x_destino_fase,
+                                            yy_destino
+                                        ),
+                                    ],
+                                    _layer_por_token(
+                                        fase_item
+                                    )
+                                )
+
+                                pontos_derivacao_pente = list(
+                                    pontos_pente_por_fase.get(
+                                        fase_item,
+                                        []
+                                    )
+                                )
+                                pontos_derivacao_pente.append(
+                                    x_destino_fase
+                                )
+
+                                _desenhar_no_se_derivacao(
+                                    msp,
+                                    x_destino_fase,
+                                    yy_destino,
                                     fase_item,
-                                    []
+                                    pontos_derivacao_pente
+                                )
+
+                        else:
+                            # Um único disjuntor:
+                            # SEM PENTE e SEM pista horizontal.
+                            # Cada fase sai do polo correspondente da fonte e
+                            # chega diretamente ao polo correspondente do DJ.
+                            d_unico, g_unico = itens_grupo[0]
+                            fases_destino = _fases_do_texto(
+                                d_unico.get(
+                                    "fase",
+                                    ""
                                 )
                             )
-                            pontos_derivacao_pente.append(
-                                x_destino_fase
-                            )
 
-                            _desenhar_no_se_derivacao(
-                                msp,
-                                x_destino_fase,
-                                yy_destino,
-                                fase_item,
-                                pontos_derivacao_pente
-                            )
+                            for idx_fase, fase_item in enumerate(
+                                fases_destino
+                            ):
+                                if fase_item not in fases_fonte:
+                                    continue
+
+                                x_origem = _polo_para_fase(
+                                    fonte_disp,
+                                    fonte_geom,
+                                    fase_item
+                                )
+                                x_destino = _polo_para_fase(
+                                    d_unico,
+                                    g_unico,
+                                    fase_item
+                                )
+
+                                # Corredores de fase independentes, espaçados
+                                # inclusive em circuitos 2P/3P.
+                                y_corredor_direto = (
+                                    yp
+                                    + AFASTAMENTO_PENTE_FASE
+                                    + idx_fase
+                                    * AFASTAMENTO_ENTRE_FASES
+                                )
+
+                                _polyline(
+                                    msp,
+                                    [
+                                        (
+                                            x_origem,
+                                            fonte_geom["y1"]
+                                        ),
+                                        (
+                                            x_origem,
+                                            y_corredor_direto
+                                        ),
+                                        (
+                                            x_destino,
+                                            y_corredor_direto
+                                        ),
+                                        (
+                                            x_destino,
+                                            g_unico["y2"]
+                                        ),
+                                    ],
+                                    _layer_por_token(
+                                        fase_item
+                                    )
+                                )
 
         y_rail -= 3.15
 
@@ -2622,7 +2702,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.2:
+    # Fase 13.6 Rev.3:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
