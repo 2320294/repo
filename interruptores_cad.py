@@ -603,7 +603,7 @@ def desenhar_interruptores(
     ):
         nome = ambiente["nome"]
 
-        # Fase 12.9: varanda, terraço e garagem têm comando de iluminação
+        # Fase 13.0: varanda, terraço e garagem têm comando de iluminação
         # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
         # mesmo que exista configuração antiga salva no projeto.
         if _ambiente_sem_interruptor_proprio(nome):

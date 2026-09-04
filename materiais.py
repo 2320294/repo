@@ -39,7 +39,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 12.9:
+# Fase 13.0:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -310,6 +310,354 @@ def _adicionar_material(
     })
 
 
+
+# ============================================================
+# FASE 13.0 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# ============================================================
+
+MODULO_DIN_MM = 17.5
+RESERVA_MINIMA_MODULOS_QDC = 4
+RESERVA_QDC_FRACAO = 0.20
+TAMANHOS_PADRAO_QDC = (8, 12, 16, 18, 24, 36, 48, 54, 72)
+
+
+def _polos_numero(valor, padrao=1):
+    texto = str(valor or "").upper().strip()
+    numeros = "".join(ch for ch in texto if ch.isdigit())
+    try:
+        n = int(numeros)
+        return max(1, n)
+    except Exception:
+        return max(1, int(padrao))
+
+
+def _polos_circuito_real(circuito):
+    polos = circuito.get("polos")
+    if polos:
+        return _polos_numero(polos, 1)
+
+    tensao = float(circuito.get("tensao", 0) or 0)
+    tipo = str(circuito.get("tipo", "") or "").upper()
+
+    # Compatível com a arquitetura atual: circuitos 220 V/TUE usam 2P;
+    # circuitos fase-neutro usam 1P.
+    if tipo == "TUE" or tensao > 127.5:
+        return 2
+    return 1
+
+
+def _polos_dr_por_circuitos(circuitos_grupo):
+    maior = max(
+        (_polos_circuito_real(c) for c in circuitos_grupo),
+        default=1
+    )
+    return 2 if maior <= 2 else maior
+
+
+def _proximo_qdc_padrao(modulos_necessarios):
+    necessidade = max(1, int(modulos_necessarios))
+    for tamanho in TAMANHOS_PADRAO_QDC:
+        if tamanho >= necessidade:
+            return tamanho
+    # Acima dos tamanhos usuais internos, mantém múltiplo de 12
+    return int(math.ceil(necessidade / 12.0) * 12)
+
+
+def _adicionar_componentes_qdc_executivo(
+    materiais,
+    circuitos,
+    resumo_drs,
+    resumo_protecao,
+    resultado_demanda,
+    local_qdc
+):
+    """
+    Fase 13.0.
+
+    Transforma a estrutura já conhecida do unifilar em componentes físicos
+    do QDC. Não inclui conectores genéricos: ainda não existe informação
+    suficientemente determinística para contá-los sem estimativa.
+    """
+    if not local_qdc:
+        return {}
+
+    circuitos = list(circuitos or [])
+    resumo_drs = list(resumo_drs or [])
+    resumo_protecao = dict(resumo_protecao or {})
+    resultado_demanda = dict(resultado_demanda or {})
+
+    por_numero = {
+        int(c.get("numero", 0) or 0): c
+        for c in circuitos
+        if int(c.get("numero", 0) or 0) > 0
+    }
+
+    # ------------------------
+    # Disjuntores terminais
+    # ------------------------
+    contagem_dj = {}
+    modulos_dj_terminais = 0
+    for c in circuitos:
+        corrente = int(c.get("disjuntor", 0) or 0)
+        polos = _polos_circuito_real(c)
+        if corrente <= 0:
+            continue
+        chave = (polos, corrente)
+        contagem_dj[chave] = contagem_dj.get(chave, 0) + 1
+        modulos_dj_terminais += polos
+
+    for (polos, corrente), qtd in sorted(contagem_dj.items()):
+        _adicionar_material(
+            materiais,
+            "QDC — Proteção",
+            "Disjuntor termomagnético terminal",
+            f"{polos}P {corrente} A",
+            "pç",
+            qtd,
+            "Quantidade, polos e corrente derivados dos circuitos finais"
+        )
+
+    # ------------------------
+    # Disjuntor geral
+    # ------------------------
+    dg_a = resultado_demanda.get("disjuntor_geral_a")
+    dg_polos_txt = resumo_protecao.get("dg_polos", "")
+    dg_polos = _polos_numero(dg_polos_txt, 2)
+    modulos_dg = 0
+
+    if dg_a is not None:
+        modulos_dg = dg_polos
+        _adicionar_material(
+            materiais,
+            "QDC — Proteção",
+            "Disjuntor geral",
+            f"{dg_polos}P {int(dg_a)} A",
+            "pç",
+            1,
+            "Proteção geral derivada da demanda e do tipo de fornecimento"
+        )
+
+    # ------------------------
+    # IDRs / DRs
+    # ------------------------
+    modulos_drs = 0
+    drs_validos = []
+    for dr in resumo_drs:
+        nominal = dr.get("corrente_nominal_a")
+        sens = dr.get("sensibilidade_ma")
+        numeros = [
+            int(n)
+            for n in (dr.get("circuitos", []) or [])
+            if int(n or 0) > 0
+        ]
+        grupo = [por_numero[n] for n in numeros if n in por_numero]
+        polos = _polos_dr_por_circuitos(grupo)
+
+        if nominal is None or sens is None:
+            continue
+
+        modulos_drs += polos
+        drs_validos.append((dr, polos))
+
+        _adicionar_material(
+            materiais,
+            "QDC — Proteção",
+            "IDR / DR",
+            (
+                f"{polos}P {int(nominal)} A — "
+                f"{int(sens)} mA — {dr.get('dr', '')}"
+            ),
+            "pç",
+            1,
+            (
+                "Grupo "
+                + ",".join(f"C{n}" for n in numeros)
+                + "; corrente nominal e sensibilidade vindas do agrupamento DR"
+            )
+        )
+
+    # ------------------------
+    # DPS
+    # ------------------------
+    # O unifilar atual possui DPS após o DG. A quantidade física é derivada
+    # dos condutores ativos protegidos pelo arranjo atual.
+    tipo_fornecimento = str(
+        resumo_protecao.get("alimentador_composicao", "") or ""
+    )
+    if "3F" in tipo_fornecimento:
+        qtd_dps = 3
+    elif "2F" in tipo_fornecimento:
+        qtd_dps = 2
+    elif "F +" in tipo_fornecimento or tipo_fornecimento.startswith("F"):
+        qtd_dps = 1
+    else:
+        qtd_dps = dg_polos if dg_a is not None else 0
+
+    modulos_dps = qtd_dps
+
+    if qtd_dps > 0:
+        _adicionar_material(
+            materiais,
+            "QDC — Proteção",
+            "DPS",
+            "1P — valor nominal a definir pelo perfil da rede/Icc",
+            "pç",
+            qtd_dps,
+            (
+                "Quantidade derivada dos condutores ativos do fornecimento; "
+                "Uc/Up/In/Imax permanecem sem valor enquanto os parâmetros "
+                "necessários não estiverem definidos"
+            )
+        )
+
+    # ------------------------
+    # Barramentos N e PE
+    # ------------------------
+    circuitos_com_neutro = sum(
+        1
+        for c in circuitos
+        if _polos_circuito_real(c) == 1
+    )
+    bornes_n = circuitos_com_neutro + 1  # entrada/alimentação + circuitos
+    bornes_pe = len(circuitos) + 1
+
+    _adicionar_material(
+        materiais,
+        "QDC — Barramentos",
+        "Barramento de neutro",
+        f"mín. {bornes_n} bornes",
+        "pç",
+        1,
+        "1 borne por circuito com neutro + 1 borne de entrada"
+    )
+    _adicionar_material(
+        materiais,
+        "QDC — Barramentos",
+        "Barramento de proteção PE",
+        f"mín. {bornes_pe} bornes",
+        "pç",
+        1,
+        "1 borne PE por circuito + 1 borne de entrada"
+    )
+
+    # ------------------------
+    # Barramento pente
+    # ------------------------
+    # Conta polos/módulos efetivamente alimentados no quadro.
+    polos_pente = modulos_dj_terminais
+    if polos_pente > 0:
+        _adicionar_material(
+            materiais,
+            "QDC — Distribuição",
+            "Barramento pente",
+            f"capacidade mínima {polos_pente} polos/módulos",
+            "pç",
+            1,
+            (
+                "Comprimento útil derivado dos polos dos disjuntores terminais; "
+                "configuração final 1P/2P/fases conforme montagem do unifilar"
+            )
+        )
+
+    # ------------------------
+    # Terminais tubulares por bitola
+    # ------------------------
+    # Duas terminações por condutor do circuito no interior do QDC:
+    # dispositivo de proteção/distribuição e borne/barramento correspondente.
+    terminais = {}
+    for c in circuitos:
+        bitola = float(c.get("bitola", 0) or 0)
+        if bitola <= 0:
+            continue
+        polos = _polos_circuito_real(c)
+        condutores_no_qdc = 3 if polos <= 2 else polos + 1
+        terminais[bitola] = (
+            terminais.get(bitola, 0)
+            + 2 * condutores_no_qdc
+        )
+
+    # Alimentador: inclui terminais somente quando a seção já foi definida.
+    sf = resumo_protecao.get("alimentador_fase_mm2")
+    sn = resumo_protecao.get("alimentador_neutro_mm2")
+    spe = resumo_protecao.get("alimentador_pe_mm2")
+    comp = str(resumo_protecao.get("alimentador_composicao", "") or "")
+    fases_alim = 3 if "3F" in comp else 2 if "2F" in comp else 1 if "F" in comp else 0
+
+    if sf:
+        terminais[float(sf)] = terminais.get(float(sf), 0) + 2 * fases_alim
+    if sn:
+        terminais[float(sn)] = terminais.get(float(sn), 0) + 2
+    if spe:
+        terminais[float(spe)] = terminais.get(float(spe), 0) + 2
+
+    for bitola, qtd in sorted(terminais.items()):
+        _adicionar_material(
+            materiais,
+            "QDC — Terminações",
+            "Terminal tubular / ilhós",
+            f"{bitola:g} mm²",
+            "pç",
+            int(qtd),
+            "Contagem por seção a partir das terminações elétricas do QDC/unifilar"
+        )
+
+    # ------------------------
+    # Módulos, quadro e trilho DIN
+    # ------------------------
+    modulos_ocupados = (
+        modulos_dg
+        + modulos_dps
+        + modulos_drs
+        + modulos_dj_terminais
+    )
+    reserva_modulos = max(
+        RESERVA_MINIMA_MODULOS_QDC,
+        int(math.ceil(modulos_ocupados * RESERVA_QDC_FRACAO))
+    )
+    modulos_requeridos = modulos_ocupados + reserva_modulos
+    qdc_posicoes = _proximo_qdc_padrao(modulos_requeridos)
+
+    _adicionar_material(
+        materiais,
+        "QDC",
+        "Quadro de distribuição (QDC)",
+        (
+            f"{qdc_posicoes} posições DIN — "
+            f"{modulos_ocupados} ocupadas + "
+            f"{qdc_posicoes - modulos_ocupados} livres"
+        ),
+        "pç",
+        1,
+        (
+            "Tamanho escolhido pela ocupação real dos dispositivos do unifilar "
+            f"+ reserva mínima de {reserva_modulos} módulos"
+        )
+    )
+
+    trilho_mm = qdc_posicoes * MODULO_DIN_MM
+    _adicionar_material(
+        materiais,
+        "QDC — Montagem",
+        "Trilho DIN 35 mm",
+        f"comprimento útil mínimo {trilho_mm:.0f} mm",
+        "m",
+        round(trilho_mm / 1000.0, 2),
+        "Comprimento derivado das posições DIN do quadro selecionado"
+    )
+
+    return {
+        "modulos_ocupados": modulos_ocupados,
+        "reserva_modulos": reserva_modulos,
+        "qdc_posicoes": qdc_posicoes,
+        "trilho_din_mm": trilho_mm,
+        "quantidade_drs": len(drs_validos),
+        "quantidade_dps": qtd_dps,
+        "bornes_neutro": bornes_n,
+        "bornes_pe": bornes_pe,
+        "terminais_por_bitola": terminais,
+    }
+
+
 def calcular_quantitativo_materiais(
     tabela_editada,
     config_interruptores_usuario,
@@ -474,7 +822,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 12.9:
+    # Fase 13.0:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -886,17 +1234,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.9 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.0 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.9/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.0/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.9 — se o CAD desta versão já calculou correções por
+    # Fase 13.0 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1028,77 +1376,11 @@ def calcular_quantitativo_materiais(
         "Comprimento estimado dos circuitos + 10% de folga"
     )
 
-    # ========================================================
-    # QUADRO E PROTEÇÕES — SOMENTE ITENS CONCRETOS DO PROJETO
-    # ========================================================
-
-    numero_circuitos = len(
-        circuitos
-    )
-
-    # O projeto possui um QDC fisicamente posicionado.
-    # A quantidade é real; dimensão/módulos e proteções gerais serão
-    # fechados na fase específica do QDC executivo.
-    if local_qdc:
-        _adicionar_material(
-            materiais,
-            "Quadro",
-            "Quadro de distribuição (QDC)",
-            "QDC posicionado no projeto",
-            "pç",
-            1,
-            "Quantidade física definida no projeto"
-        )
-
-    # Disjuntores terminais agrupados por corrente
-    contagem_disjuntores = {}
-
-    for circuito in circuitos:
-        chave = (
-            circuito["disjuntor"],
-            circuito["tipo"]
-        )
-
-        contagem_disjuntores[
-            chave
-        ] = (
-            contagem_disjuntores.get(
-                chave,
-                0
-            )
-            +
-            1
-        )
-
-    for (
-        corrente_disj,
-        tipo
-    ), quantidade in sorted(
-        contagem_disjuntores.items()
-    ):
-        polos = (
-            "2P"
-            if tipo == "TUE"
-            else "1P"
-        )
-
-        _adicionar_material(
-            materiais,
-            "Proteção",
-            "Disjuntor termomagnético",
-            f"{polos} {corrente_disj} A — circuito {tipo}",
-            "pç",
-            quantidade,
-            "Quantidade e corrente derivadas dos circuitos consolidados do projeto"
-        )
-
-    # Fase 12.9:
-    # DR, DPS, retaguarda, terminais, conectores, anilhas e demais acessórios
-    # deixam de ser estimados. Eles só voltarão ao quantitativo quando forem
-    # efetivamente definidos/gerados pelo projeto executivo.
+    # QDC executivo é consolidado após balanceamento/DR, no renderizador,
+    # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 12.9 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.0 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1254,7 +1536,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 12.9 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.0 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1263,14 +1545,7 @@ def calcular_quantitativo_materiais(
     materiais_estimados_proibidos = {
         "Caixa de passagem",
         "Conector de emenda",
-        "Terminal tubular / ilhós",
         "Identificador de cabos/circuitos",
-        "IDR / DR",
-        "DPS",
-        "Dispositivo de proteção do DPS",
-        "Disjuntor geral",
-        "Barramento de neutro",
-        "Barramento de proteção PE",
     }
 
     materiais = [
@@ -1358,7 +1633,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.9: dados estruturais usados pelo roteamento continuam
+        # Fase 13.0: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2405,7 +2680,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.9:
+    # Fase 13.0:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2428,7 +2703,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 12.9:
+    # Fase 13.0:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -2498,6 +2773,17 @@ def renderizar_materiais(
         parametros_rede,
         circuitos,
         resumo_drs
+    )
+
+    # Fase 13.0 — componentes físicos do QDC derivados do unifilar.
+    # Conectores genéricos ficam deliberadamente fora desta fase.
+    resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
+        materiais,
+        circuitos,
+        resumo_drs,
+        resumo_protecao,
+        resultado_demanda_materiais,
+        local_qdc
     )
 
     if resumo_rotas:
@@ -2671,16 +2957,51 @@ def renderizar_materiais(
     )
 
     st.success(
-        "A Fase 12.9 exibe somente materiais cuja quantidade vem diretamente "
-        "dos pontos, circuitos ou do roteamento físico do projeto."
+        "A Fase 13.0 mantém o quantitativo físico do projeto e acrescenta "
+        "os componentes do QDC que já podem ser derivados do unifilar."
     )
 
     st.caption(
-        "Foram eliminadas estimativas automáticas de caixas de passagem, "
-        "conectores, terminais, anilhas, DR, DPS e demais itens ainda não "
-        "definidos fisicamente. As caixas octogonais dos pontos de iluminação "
-        "também são usadas como caixas de passagem da rede e não são duplicadas."
+        "QDC, disjuntores, IDRs, quantidade de DPS, barramentos N/PE, "
+        "barramento pente, trilho DIN e terminais por bitola são calculados "
+        "a partir da estrutura elétrica já definida. Conectores genéricos "
+        "continuam fora do quantitativo. Parâmetros de DPS que dependem de "
+        "rede/Icc permanecem explicitamente 'a definir', sem valores inventados."
     )
+
+    if resumo_qdc_executivo:
+        st.markdown(
+            "##### 🧰 QDC executivo"
+        )
+        q1, q2, q3, q4 = st.columns(4)
+        q1.metric(
+            "Posições do QDC",
+            resumo_qdc_executivo.get(
+                "qdc_posicoes",
+                0
+            )
+        )
+        q2.metric(
+            "Módulos ocupados",
+            resumo_qdc_executivo.get(
+                "modulos_ocupados",
+                0
+            )
+        )
+        q3.metric(
+            "IDRs",
+            resumo_qdc_executivo.get(
+                "quantidade_drs",
+                0
+            )
+        )
+        q4.metric(
+            "DPS",
+            resumo_qdc_executivo.get(
+                "quantidade_dps",
+                0
+            )
+        )
 
     if not materiais_df.empty:
         st.dataframe(
@@ -2747,7 +3068,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.9: corrente nominal pré-dimensionada pelo maior "
+            "Fase 13.0: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -3292,7 +3613,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 12.9 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 13.0 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -3302,7 +3623,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 12.9: a verificação abaixo usa uma referência preliminar "
+            "Fase 13.0: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -3516,7 +3837,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.9: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 13.0: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -3617,7 +3938,7 @@ definir explicitamente outro método de instalação.
             )
 
             st.caption(
-                "Depois de cada correção de seção, a Fase 12.9 recalcula "
+                "Depois de cada correção de seção, a Fase 13.0 recalcula "
                 "ocupação, redistribuição dos eletrodutos, queda de tensão "
                 "e capacidade de condução até estabilizar."
             )
@@ -4039,7 +4360,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.9: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
+        "Fase 13.0: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -4401,7 +4722,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_9.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_0.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -4410,7 +4731,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_9.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_0.pdf",
             mime="application/pdf",
             use_container_width=True
         )
