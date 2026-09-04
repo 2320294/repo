@@ -848,7 +848,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 13.6 Rev.3.
+    Fase 13.6 Rev.4.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1053,7 +1053,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 13.6 Rev.3.
+    Validação preliminar da Fase 13.6 Rev.4.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1348,7 +1348,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.3.
+    Fase 13.6 Rev.4.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1756,7 +1756,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """Fase 13.6 Rev.3: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
+    """Fase 13.6 Rev.4: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -2010,7 +2010,7 @@ def otimizar_eletrodutos_preliminar(
     limite_circuitos_preferencial=3
 ):
     """
-    Fase 13.6 Rev.3.
+    Fase 13.6 Rev.4.
 
     Para cada trecho físico compara três estratégias:
     1) MANTER o eletroduto atual;
@@ -2157,7 +2157,7 @@ def otimizar_eletrodutos_preliminar(
         "trechos": resultados,
         "observacao": (
             "Simulação de infraestrutura. 'NOVO CAMINHO VIA CAIXA' indica "
-            "redistribuição por outra caixa octogonal; a Fase 13.6 Rev.3 também passa "
+            "redistribuição por outra caixa octogonal; a Fase 13.6 Rev.4 também passa "
             "a reduzir a concentração já na formação da rede troncal."
         ),
     }
