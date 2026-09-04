@@ -345,7 +345,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.5 — a geometria do ambiente só pode ser
+            # Fase 13.5 Rev.1 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -523,7 +523,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.5:
+                # Fase 13.5 Rev.1:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -558,7 +558,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 13.5 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 13.5 REV.1 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -606,7 +606,7 @@ def gerar_cad_unifilar(
         )
 
         # ====================================================
-        # FASE 13.5 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
+        # FASE 13.5 REV.1 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
         # ====================================================
         # O ciclo fecha quatro critérios:
         #   rota física -> queda -> capacidade -> ocupação/rerota.
@@ -1012,7 +1012,7 @@ def gerar_cad_unifilar(
         )
 
         # ====================================================
-        # FASE 13.5 — AUDITORIA ELÉTRICA OBRIGATÓRIA DO QDC
+        # FASE 13.5 REV.1 — AUDITORIA ELÉTRICA OBRIGATÓRIA DO QDC
         # ====================================================
         auditoria_normativa_qdc = auditar_qdc_normativo(
             circuitos_dimensionados,
@@ -1040,7 +1040,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.5: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.5 Rev.1: "
                 + detalhes_bloqueio
             )
 
