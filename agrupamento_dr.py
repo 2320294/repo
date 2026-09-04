@@ -19,7 +19,7 @@ def _calibre(minimo):
 
 def agrupar_circuitos_dr(circuitos, disjuntor_geral_a=None):
     """
-    Fase 13.6 Rev.8.
+    Fase 13.6 Rev.9.
     Agrupa circuitos e pré-dimensiona corrente nominal dos DRs.
     Sensibilidade adotada para proteção adicional dos grupos de tomadas: 30 mA.
     O calibre do DR é escolhido >= maior disjuntor a jusante do grupo.
