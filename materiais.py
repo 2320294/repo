@@ -3280,70 +3280,64 @@ def renderizar_materiais(
         st.markdown("#### ✅ Auditoria elétrica do QDC")
 
         if auditoria_normativa_qdc:
-            a1, a2, a3 = st.columns(3)
-            a1.metric(
-                "Status",
-                auditoria_normativa_qdc.get(
-                    "status",
-                    "—"
-                )
-            )
-            a2.metric(
-                "Bloqueios",
-                int(
-                    auditoria_normativa_qdc.get(
-                        "qtd_bloqueios",
-                        0
-                    )
-                    or 0
-                )
-            )
-            a3.metric(
-                "Verificações pendentes",
-                int(
-                    auditoria_normativa_qdc.get(
-                        "qtd_pendencias",
-                        0
-                    )
-                    or 0
-                )
-            )
+            bloqueios_qdc = int(auditoria_normativa_qdc.get("qtd_bloqueios", 0) or 0)
+            verificacoes_qdc = list(auditoria_normativa_qdc.get("verificacoes", []) or [])
+            verificacoes_auto = [v for v in verificacoes_qdc if str(v.get("Código", "")).startswith("A")]
+            pendencias_exec = [v for v in verificacoes_qdc if str(v.get("Código", "")).startswith("P")]
+            auto_ok = sum(1 for v in verificacoes_auto if v.get("Status") == "OK")
 
-            if auditoria_normativa_qdc.get(
-                "qtd_bloqueios",
-                0
-            ):
+            a1, a2, a3 = st.columns(3)
+            a1.metric("Projeto elétrico", "LIBERADO" if not bloqueios_qdc else "REVISAR")
+            a2.metric("Verificações automáticas", f"{auto_ok}/{len(verificacoes_auto)}")
+            a3.metric("Bloqueios para DXF", bloqueios_qdc)
+
+            if bloqueios_qdc:
                 st.error(
-                    "A vista frontal do QDC fica bloqueada enquanto houver "
-                    "inconsistência elétrica estrutural."
+                    "Há uma inconsistência elétrica estrutural que precisa ser corrigida "
+                    "antes de gerar a vista frontal do QDC."
                 )
             else:
                 st.success(
-                    "Topologia elétrica estrutural aprovada para geração do DXF."
+                    "O AutoElétrica verificou a estrutura do QDC e liberou a geração do DXF."
                 )
 
-            with st.expander(
-                "🔎 Ver verificações da auditoria",
-                expanded=False
-            ):
+            st.markdown("##### 📋 Para o usuário")
+            st.info(
+                "Você não precisa preencher dados avançados para continuar o projeto. "
+                "O sistema usa automaticamente as informações já disponíveis e separa "
+                "as confirmações que dependem do local da obra ou do fabricante."
+            )
+
+            with st.expander("🧑‍🔧 Confirmações para a etapa executiva", expanded=False):
+                st.markdown(
+                    "Estas confirmações **não bloqueiam o desenho do QDC**. Elas devem ser "
+                    "fechadas pelo responsável técnico antes da execução/instalação."
+                )
+                st.markdown(
+                    "**1. Curto-circuito e disjuntores** — confirmar a corrente de curto-circuito "
+                    "presumida no QDC e a capacidade de interrupção dos disjuntores.\n\n"
+                    "**2. Proteções do fabricante** — confirmar seletividade/coordenação e os "
+                    "parâmetros definitivos dos DPS.\n\n"
+                    "**3. Entrada e aterramento** — confirmar o esquema TN/TT/IT e eventuais "
+                    "exigências adicionais da concessionária local."
+                )
+
+            with st.expander("🔎 Auditoria técnica detalhada", expanded=False):
                 st.dataframe(
-                    pd.DataFrame(
-                        auditoria_normativa_qdc.get(
-                            "verificacoes",
-                            []
-                        )
-                        or []
-                    ),
+                    pd.DataFrame(verificacoes_auto),
                     use_container_width=True,
                     hide_index=True
                 )
-
-            st.caption(
-                "Os itens E01–E05 são resolvidos à medida que os dados executivos "
-                "são preenchidos em Parâmetros. Validações dependentes de "
-                "fabricante ou regra local exigem confirmação explícita do "
-                "responsável técnico."
-            )
+                if pendencias_exec:
+                    st.caption(
+                        "Itens executivos mantidos no relatório técnico para rastreabilidade; "
+                        "eles não são apresentados como erros do projeto."
+                    )
+                    st.dataframe(
+                        pd.DataFrame(pendencias_exec),
+                        use_container_width=True,
+                        hide_index=True
+                    )
         return
 
     if pagina == "eletrodutos":

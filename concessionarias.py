@@ -67,28 +67,6 @@ def parametros_rede_padrao():
         "norma_concessionaria": (
             "Perfil normativo ainda não cadastrado"
         ),
-
-        # Fase 13.6 — dados executivos do QDC
-        "icc_qdc_ka": 0.0,
-        "capacidade_interrupcao_dg_ka": 0.0,
-        "capacidade_interrupcao_terminais_ka": 0.0,
-
-        "fabricante_protecao": "",
-        "referencia_seletividade": "",
-        "seletividade_validada_rt": False,
-
-        "dps_tipo": "A definir",
-        "dps_uc_v": 0.0,
-        "dps_up_kv": 0.0,
-        "dps_in_ka": 0.0,
-        "dps_imax_ka": 0.0,
-
-        "esquema_aterramento": "A definir",
-        "arranjo_dps": "",
-        "arranjo_dps_validado_rt": False,
-
-        "norma_concessionaria_referencia": "",
-        "requisitos_concessionaria_validados_rt": False,
     }
 
 
