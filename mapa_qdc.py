@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.2:
+    Fase 13.4 Rev.3:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -817,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.2 — QDC executivo no CAD.
+    Fase 13.4 Rev.3 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -857,9 +857,15 @@ def desenhar_mapa_fisico_qdc(
     modulo_w = 0.78
     disp_h = 1.60
     margem_x = 1.15
-    painel_circuitos_w = 7.10
+    painel_circuitos_w = 8.80
+    separacao_painel = 1.20
     area_din_w = max(9.6, colunas * modulo_w + 2.30)
-    largura = area_din_w + painel_circuitos_w + 1.20
+    largura = (
+        area_din_w
+        + separacao_painel
+        + painel_circuitos_w
+        + 1.00
+    )
 
     # Altura adaptativa por número de trilhos e circuitos.
     trilhos_circuitos = max(
@@ -893,7 +899,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.2",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.3",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1315,19 +1321,25 @@ def desenhar_mapa_fisico_qdc(
                 + 0.12
             )
 
-            # PE nasce no barramento PE.
-            _line(
+            # PE: barramento vertical -> corredor inferior.
+            _polyline(
                 msp,
-                (pe["x"], y_corredor_pe),
-                (x_dir_corredor, y_corredor_pe),
+                [
+                    (pe["x"], pe["y_bottom"]),
+                    (pe["x"], y_corredor_pe),
+                    (x_dir_corredor, y_corredor_pe),
+                ],
                 LPE
             )
 
-            # N nasce no barramento N.
-            _line(
+            # N: barramento vertical -> corredor inferior.
+            _polyline(
                 msp,
-                (x_esq_corredor, y_corredor_n),
-                (neutro["x"], y_corredor_n),
+                [
+                    (neutro["x"], neutro["y_bottom"]),
+                    (neutro["x"], y_corredor_n),
+                    (x_esq_corredor, y_corredor_n),
+                ],
                 LN
             )
 
@@ -1577,7 +1589,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     # Painel lateral
     # -------------------------
-    px1 = qx2 + 0.35
+    px1 = qx2 + separacao_painel
     px2 = x0 + largura - 0.45
     py_top = qy_top
 
@@ -1604,9 +1616,9 @@ def desenhar_mapa_fisico_qdc(
     tabela_x2 = px2 - 0.22
     tabela_y_top = py_top - 0.62
 
-    col_circuito = 0.92
-    col_fase = 0.72
-    col_dj = 1.05
+    col_circuito = 1.05
+    col_fase = 0.85
+    col_dj = 1.10
 
     x_c1 = tabela_x1
     x_c2 = x_c1 + col_circuito
