@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.8:
+    Fase 13.4 Rev.9:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -732,13 +732,16 @@ def _desenhar_dispositivo(
         )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
+        # Fase 13.4 Rev.9:
+        # a sensibilidade do DR fica abaixo do símbolo de teste,
+        # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
             msp,
             f"{int(disp.get('sensibilidade_ma'))}mA",
             x1,
             x2,
-            y1 + altura * 0.27,
-            0.083,
+            y1 + altura * 0.205,
+            0.078,
             layer_txt
         )
 
@@ -817,7 +820,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.8 — QDC executivo no CAD.
+    Fase 13.4 Rev.9 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -899,7 +902,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.8",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.9",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1622,7 +1625,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.4 Rev.8:
+    # Fase 13.4 Rev.9:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
