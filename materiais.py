@@ -41,7 +41,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 13.5 Rev.1:
+# Fase 13.6:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -314,7 +314,7 @@ def _adicionar_material(
 
 
 # ============================================================
-# FASE 13.5 REV.1 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# FASE 13.6 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
 # ============================================================
 
 MODULO_DIN_MM = 17.5
@@ -350,7 +350,7 @@ def _polos_circuito_real(circuito):
 
 def _polos_dr_por_circuitos(circuitos_grupo):
     """
-    Fase 13.5 Rev.1:
+    Fase 13.6:
     o IDR é dimensionado pelos condutores reais do grupo.
     """
     fases = []
@@ -388,7 +388,7 @@ def _adicionar_componentes_qdc_executivo(
     local_qdc
 ):
     """
-    Fase 13.5 Rev.1.
+    Fase 13.6.
 
     Transforma a estrutura já conhecida do unifilar em componentes físicos
     do QDC. Não inclui conectores genéricos: ainda não existe informação
@@ -683,7 +683,7 @@ def _auditar_consistencia_qdc(
     resumo_qdc
 ):
     """
-    Fase 13.5 Rev.1 — auditoria cruzada do QDC.
+    Fase 13.6 — auditoria cruzada do QDC.
 
     A mesma estrutura elétrica usada no quantitativo/unifilar é verificada
     quanto a módulos DIN, polos, DR, barramentos, pente e sequência funcional.
@@ -727,7 +727,7 @@ def _auditar_consistencia_qdc(
     )
 
     # 3. Cobertura DR e exclusividade de grupo.
-    # Fase 13.5 Rev.1:
+    # Fase 13.6:
     # somente circuitos que a própria lógica do projeto classificou para DR
     # são obrigados a aparecer em um grupo IDR. Iluminação comum sem DR não
     # gera alerta apenas por estar fora dos grupos.
@@ -1023,7 +1023,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 13.5 Rev.1:
+    # Fase 13.6:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -1435,17 +1435,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 13.5 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.6 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 13.5 Rev.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.6/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 13.5 Rev.1 — se o CAD desta versão já calculou correções por
+    # Fase 13.6 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1581,7 +1581,7 @@ def calcular_quantitativo_materiais(
     # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 13.5 REV.1 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.6 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1737,7 +1737,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 13.5 REV.1 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.6 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1834,7 +1834,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 13.5 Rev.1: dados estruturais usados pelo roteamento continuam
+        # Fase 13.6: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -3032,7 +3032,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 13.5 Rev.1:
+    # Fase 13.6:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -3055,7 +3055,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 13.5 Rev.1:
+    # Fase 13.6:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -3127,7 +3127,7 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    # Fase 13.5 Rev.1 — componentes físicos do QDC derivados do unifilar.
+    # Fase 13.6 — componentes físicos do QDC derivados do unifilar.
     # Conectores genéricos ficam deliberadamente fora desta fase.
     resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
         materiais,
@@ -3185,7 +3185,7 @@ def renderizar_materiais(
     )
 
     # ========================================================
-    # FASE 13.5 REV.1 — APRESENTAÇÃO MODULAR
+    # FASE 13.6 — APRESENTAÇÃO MODULAR
     # ========================================================
     # Os cálculos continuam centralizados neste motor. A interface apenas
     # apresenta cada diagnóstico no módulo ao qual ele pertence.
@@ -3299,7 +3299,7 @@ def renderizar_materiais(
                 )
             )
             a3.metric(
-                "Pendências executivas",
+                "Verificações pendentes",
                 int(
                     auditoria_normativa_qdc.get(
                         "qtd_pendencias",
@@ -3339,9 +3339,10 @@ def renderizar_materiais(
                 )
 
             st.caption(
-                "Dados dependentes de Icc, fabricante, DPS, esquema de "
-                "aterramento ou exigência específica da concessionária "
-                "permanecem como pendentes; o sistema não inventa valores."
+                "Os itens E01–E05 são resolvidos à medida que os dados executivos "
+                "são preenchidos em Parâmetros. Validações dependentes de "
+                "fabricante ou regra local exigem confirmação explícita do "
+                "responsável técnico."
             )
         return
 
@@ -4037,7 +4038,7 @@ def renderizar_materiais(
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_5_Rev_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_6.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -4046,7 +4047,7 @@ def renderizar_materiais(
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_5_Rev_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_6.pdf",
             mime="application/pdf",
             use_container_width=True
         )

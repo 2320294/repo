@@ -7,7 +7,7 @@ UFS = [
     "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
 ]
 
-# Cadastro inicial para a arquitetura da Fase 13.5 Rev.1.
+# Cadastro inicial para a arquitetura da Fase 13.6.
 # A cobertura municipal e os critérios de demanda serão ampliados
 # gradualmente, sem espalhar regras pelo restante do sistema.
 CONCESSIONARIAS_POR_UF = {
@@ -67,6 +67,28 @@ def parametros_rede_padrao():
         "norma_concessionaria": (
             "Perfil normativo ainda não cadastrado"
         ),
+
+        # Fase 13.6 — dados executivos do QDC
+        "icc_qdc_ka": 0.0,
+        "capacidade_interrupcao_dg_ka": 0.0,
+        "capacidade_interrupcao_terminais_ka": 0.0,
+
+        "fabricante_protecao": "",
+        "referencia_seletividade": "",
+        "seletividade_validada_rt": False,
+
+        "dps_tipo": "A definir",
+        "dps_uc_v": 0.0,
+        "dps_up_kv": 0.0,
+        "dps_in_ka": 0.0,
+        "dps_imax_ka": 0.0,
+
+        "esquema_aterramento": "A definir",
+        "arranjo_dps": "",
+        "arranjo_dps_validado_rt": False,
+
+        "norma_concessionaria_referencia": "",
+        "requisitos_concessionaria_validados_rt": False,
     }
 
 
@@ -141,7 +163,7 @@ def descricao_localidade(parametros):
 
 def perfil_normativo_disponivel(parametros):
     """
-    Na Fase 13.5 Rev.1 a estrutura de perfis está pronta, mas os métodos
+    Na Fase 13.6 a estrutura de perfis está pronta, mas os métodos
     de demanda ainda não são executados. Retorna False para impedir
     que o sistema trate um critério não implementado como definitivo.
     """

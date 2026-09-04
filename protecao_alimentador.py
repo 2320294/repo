@@ -31,7 +31,7 @@ def _polos_dg(tipo):
 
 def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos, resumo_drs):
     """
-    Fase 13.5 Rev.1: consolidação preliminar das proteções e alimentador.
+    Fase 13.6: consolidação preliminar das proteções e alimentador.
     A bitola usa uma ampacidade de referência conservadora interna apenas para
     pré-dimensionamento. O resultado fica explicitamente condicionado à forma
     de instalação, temperatura, agrupamento, queda de tensão e perfil normativo.
@@ -77,10 +77,44 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
         "método de instalação do alimentador",
         "temperatura/agrupamento",
         "queda de tensão",
-        "corrente de curto-circuito presumida no QDC",
-        "capacidade de interrupção dos disjuntores",
-        "curvas/tabelas de seletividade do fabricante",
     ]
+
+    if float(parametros_rede.get("icc_qdc_ka", 0.0) or 0.0) <= 0:
+        pendencias.append(
+            "corrente de curto-circuito presumida no QDC"
+        )
+
+    if (
+        float(
+            parametros_rede.get(
+                "capacidade_interrupcao_dg_ka",
+                0.0
+            )
+            or 0.0
+        )
+        <= 0
+        or float(
+            parametros_rede.get(
+                "capacidade_interrupcao_terminais_ka",
+                0.0
+            )
+            or 0.0
+        )
+        <= 0
+    ):
+        pendencias.append(
+            "capacidade de interrupção dos disjuntores"
+        )
+
+    if not bool(
+        parametros_rede.get(
+            "seletividade_validada_rt",
+            False
+        )
+    ):
+        pendencias.append(
+            "curvas/tabelas de seletividade do fabricante"
+        )
 
     return {
         "corrente_projeto_a": ib,
@@ -93,8 +127,37 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
         "maior_disjuntor_circuito_a": maior_dj,
         "hierarquia_dg_circuitos": "OK" if hierarquia_dj else "REVISAR",
         "hierarquia_dr_circuitos": "OK" if dr_ok else "REVISAR",
-        "capacidade_interrupcao": "A definir pelo Icc e fabricante",
-        "seletividade": "A validar por curvas/tabelas do fabricante",
+        "capacidade_interrupcao": (
+            "Dados cadastrados"
+            if (
+                float(parametros_rede.get("icc_qdc_ka", 0.0) or 0.0) > 0
+                and float(
+                    parametros_rede.get(
+                        "capacidade_interrupcao_dg_ka",
+                        0.0
+                    )
+                    or 0.0
+                ) > 0
+                and float(
+                    parametros_rede.get(
+                        "capacidade_interrupcao_terminais_ka",
+                        0.0
+                    )
+                    or 0.0
+                ) > 0
+            )
+            else "A definir pelo Icc e fabricante"
+        ),
+        "seletividade": (
+            "Validada pelo responsável técnico"
+            if bool(
+                parametros_rede.get(
+                    "seletividade_validada_rt",
+                    False
+                )
+            )
+            else "A validar por curvas/tabelas do fabricante"
+        ),
         "status": "pre_dimensionado" if dg is not None and sf is not None else "incompleto",
         "pendencias": pendencias,
     }

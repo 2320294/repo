@@ -47,7 +47,7 @@ def renderizar_parametros_projeto(
     """
     Parâmetros gerais e perfil de fornecimento do projeto.
 
-    Fase 13.5 Rev.1:
+    Fase 13.6:
     - localização;
     - concessionária;
     - tipo/tensão de fornecimento;
@@ -303,6 +303,295 @@ def renderizar_parametros_projeto(
             "como regra de concessionária."
         )
 
+    st.markdown(
+        "#### 🛡️ Dados executivos do QDC"
+    )
+
+    st.caption(
+        "Estes campos permitem reduzir as pendências da auditoria elétrica. "
+        "Quando o dado depender de fabricante, concessionária ou responsável "
+        "técnico, o sistema exige referência/validação explícita em vez de "
+        "assumir um valor."
+    )
+
+    with st.expander(
+        "Configurar curto-circuito, seletividade, DPS e aterramento",
+        expanded=False
+    ):
+        st.markdown("##### Curto-circuito e capacidade de interrupção")
+
+        c_icc, c_dg, c_term = st.columns(3)
+
+        with c_icc:
+            icc_qdc_ka = st.number_input(
+                "Icc presumida no QDC (kA):",
+                min_value=0.0,
+                max_value=200.0,
+                value=float(
+                    rede.get(
+                        "icc_qdc_ka",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=0.1,
+                format="%.1f",
+                key=_widget_key("qdc_icc_ka")
+            )
+
+        with c_dg:
+            cap_dg_ka = st.number_input(
+                "Capacidade de interrupção do DG (kA):",
+                min_value=0.0,
+                max_value=200.0,
+                value=float(
+                    rede.get(
+                        "capacidade_interrupcao_dg_ka",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=0.1,
+                format="%.1f",
+                key=_widget_key("qdc_cap_dg_ka")
+            )
+
+        with c_term:
+            cap_terminais_ka = st.number_input(
+                "Capacidade mínima dos disjuntores terminais (kA):",
+                min_value=0.0,
+                max_value=200.0,
+                value=float(
+                    rede.get(
+                        "capacidade_interrupcao_terminais_ka",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=0.1,
+                format="%.1f",
+                key=_widget_key("qdc_cap_terminais_ka")
+            )
+
+        st.markdown("##### Seletividade / coordenação")
+
+        fabricante_protecao = st.text_input(
+            "Fabricante / linha dos dispositivos de proteção:",
+            value=str(
+                rede.get(
+                    "fabricante_protecao",
+                    ""
+                )
+                or ""
+            ),
+            placeholder="Ex.: fabricante e família utilizados no projeto",
+            key=_widget_key("qdc_fabricante_protecao")
+        ).strip()
+
+        referencia_seletividade = st.text_input(
+            "Referência da tabela/curva de seletividade:",
+            value=str(
+                rede.get(
+                    "referencia_seletividade",
+                    ""
+                )
+                or ""
+            ),
+            placeholder="Ex.: catálogo, tabela ou documento técnico",
+            key=_widget_key("qdc_referencia_seletividade")
+        ).strip()
+
+        seletividade_validada_rt = st.checkbox(
+            "Responsável técnico confirmou a coordenação/seletividade com base na referência informada",
+            value=bool(
+                rede.get(
+                    "seletividade_validada_rt",
+                    False
+                )
+            ),
+            key=_widget_key("qdc_seletividade_validada_rt")
+        )
+
+        st.markdown("##### DPS")
+
+        tipos_dps = [
+            "A definir",
+            "Tipo 1",
+            "Tipo 2",
+            "Tipo 1+2",
+            "Tipo 3"
+        ]
+
+        dps_tipo_salvo = str(
+            rede.get(
+                "dps_tipo",
+                "A definir"
+            )
+            or "A definir"
+        )
+
+        if dps_tipo_salvo not in tipos_dps:
+            dps_tipo_salvo = "A definir"
+
+        dps_tipo = st.selectbox(
+            "Tipo / classe do DPS:",
+            tipos_dps,
+            index=tipos_dps.index(
+                dps_tipo_salvo
+            ),
+            key=_widget_key("qdc_dps_tipo")
+        )
+
+        d1, d2, d3, d4 = st.columns(4)
+
+        with d1:
+            dps_uc_v = st.number_input(
+                "Uc (V):",
+                min_value=0.0,
+                max_value=2000.0,
+                value=float(
+                    rede.get(
+                        "dps_uc_v",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=1.0,
+                format="%.0f",
+                key=_widget_key("qdc_dps_uc_v")
+            )
+
+        with d2:
+            dps_up_kv = st.number_input(
+                "Up (kV):",
+                min_value=0.0,
+                max_value=20.0,
+                value=float(
+                    rede.get(
+                        "dps_up_kv",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=0.1,
+                format="%.1f",
+                key=_widget_key("qdc_dps_up_kv")
+            )
+
+        with d3:
+            dps_in_ka = st.number_input(
+                "In (kA):",
+                min_value=0.0,
+                max_value=500.0,
+                value=float(
+                    rede.get(
+                        "dps_in_ka",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=0.5,
+                format="%.1f",
+                key=_widget_key("qdc_dps_in_ka")
+            )
+
+        with d4:
+            dps_imax_ka = st.number_input(
+                "Imax (kA):",
+                min_value=0.0,
+                max_value=500.0,
+                value=float(
+                    rede.get(
+                        "dps_imax_ka",
+                        0.0
+                    )
+                    or 0.0
+                ),
+                step=0.5,
+                format="%.1f",
+                key=_widget_key("qdc_dps_imax_ka")
+            )
+
+        st.markdown("##### Esquema de aterramento e ligação do DPS")
+
+        esquemas = [
+            "A definir",
+            "TN-S",
+            "TN-C-S",
+            "TT",
+            "IT"
+        ]
+
+        esquema_salvo = str(
+            rede.get(
+                "esquema_aterramento",
+                "A definir"
+            )
+            or "A definir"
+        )
+
+        if esquema_salvo not in esquemas:
+            esquema_salvo = "A definir"
+
+        esquema_aterramento = st.selectbox(
+            "Esquema de aterramento:",
+            esquemas,
+            index=esquemas.index(
+                esquema_salvo
+            ),
+            key=_widget_key("qdc_esquema_aterramento")
+        )
+
+        arranjo_dps = st.text_input(
+            "Arranjo / ligação do DPS adotado:",
+            value=str(
+                rede.get(
+                    "arranjo_dps",
+                    ""
+                )
+                or ""
+            ),
+            placeholder="Descrever o arranjo definido para o esquema de aterramento",
+            key=_widget_key("qdc_arranjo_dps")
+        ).strip()
+
+        arranjo_dps_validado_rt = st.checkbox(
+            "Responsável técnico confirmou a compatibilidade do arranjo do DPS com o esquema de aterramento",
+            value=bool(
+                rede.get(
+                    "arranjo_dps_validado_rt",
+                    False
+                )
+            ),
+            key=_widget_key("qdc_arranjo_dps_validado_rt")
+        )
+
+        st.markdown("##### Requisitos da concessionária")
+
+        norma_concessionaria_referencia = st.text_input(
+            "Norma / padrão da concessionária utilizado:",
+            value=str(
+                rede.get(
+                    "norma_concessionaria_referencia",
+                    ""
+                )
+                or ""
+            ),
+            placeholder="Ex.: código/título/revisão do padrão técnico",
+            key=_widget_key("qdc_norma_concessionaria_ref")
+        ).strip()
+
+        requisitos_concessionaria_validos = st.checkbox(
+            "Responsável técnico confirmou os requisitos adicionais da concessionária para este padrão de entrada",
+            value=bool(
+                rede.get(
+                    "requisitos_concessionaria_validados_rt",
+                    False
+                )
+            ),
+            key=_widget_key("qdc_concessionaria_validada_rt")
+        )
+
     parametros_rede = {
         "uf": uf,
         "municipio": municipio,
@@ -319,6 +608,29 @@ def renderizar_parametros_projeto(
             float(fator_demanda_manual),
         "norma_concessionaria": (
             "Perfil normativo ainda não cadastrado"
+        ),
+
+        "icc_qdc_ka": float(icc_qdc_ka),
+        "capacidade_interrupcao_dg_ka": float(cap_dg_ka),
+        "capacidade_interrupcao_terminais_ka": float(cap_terminais_ka),
+
+        "fabricante_protecao": fabricante_protecao,
+        "referencia_seletividade": referencia_seletividade,
+        "seletividade_validada_rt": bool(seletividade_validada_rt),
+
+        "dps_tipo": dps_tipo,
+        "dps_uc_v": float(dps_uc_v),
+        "dps_up_kv": float(dps_up_kv),
+        "dps_in_ka": float(dps_in_ka),
+        "dps_imax_ka": float(dps_imax_ka),
+
+        "esquema_aterramento": esquema_aterramento,
+        "arranjo_dps": arranjo_dps,
+        "arranjo_dps_validado_rt": bool(arranjo_dps_validado_rt),
+
+        "norma_concessionaria_referencia": norma_concessionaria_referencia,
+        "requisitos_concessionaria_validados_rt": bool(
+            requisitos_concessionaria_validos
         )
     }
 
@@ -338,7 +650,7 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto, mas nesta Fase 13.5 Rev.1 o cálculo de demanda "
+            "no projeto, mas nesta Fase 13.6 o cálculo de demanda "
             "ainda não é aplicado automaticamente. "
             "O perfil normativo será ativado somente quando "
             "a regra oficial dessa concessionária estiver "
