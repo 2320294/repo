@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.11:
+    Fase 13.4 Rev.12:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -454,6 +454,44 @@ def _polyline(msp, pontos, layer):
     )
 
 
+
+def _no_fase_preenchido(msp, x, y, token, raio=0.045):
+    """
+    Nó elétrico de derivação:
+    círculo sólido na mesma cor/layer da fase correspondente.
+    Usado somente onde existe conexão/ramificação real.
+    """
+    layer = _layer_por_token(token)
+    try:
+        msp.add_circle(
+            (float(x), float(y)),
+            float(raio),
+            dxfattribs={"layer": layer}
+        )
+        hatch = msp.add_hatch(
+            color=256,
+            dxfattribs={"layer": layer}
+        )
+        hatch.paths.add_edge_path().add_arc(
+            center=(float(x), float(y)),
+            radius=float(raio),
+            start_angle=0.0,
+            end_angle=360.0,
+            ccw=True
+        )
+    except Exception:
+        # fallback visual sólido por círculo concêntrico
+        try:
+            msp.add_circle(
+                (float(x), float(y)),
+                max(float(raio) * 0.55, 0.01),
+                dxfattribs={"layer": layer}
+            )
+        except Exception:
+            pass
+
+
+
 def _circle(msp, center, radius, layer):
     return msp.add_circle(
         center,
@@ -690,7 +728,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.4 Rev.11:
+    # Fase 13.4 Rev.12:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -755,7 +793,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.4 Rev.11:
+        # Fase 13.4 Rev.12:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -965,7 +1003,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.11 — QDC executivo no CAD.
+    Fase 13.4 Rev.12 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1047,7 +1085,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.11",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.12",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1107,7 +1145,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.4 Rev.11:
+    # Fase 13.4 Rev.12:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1204,9 +1242,9 @@ def desenhar_mapa_fisico_qdc(
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
     barramentos_y = {
-        "A": top_rail_y + 1.34,
+        "A": top_rail_y + 1.38,
         "B": top_rail_y + 1.18,
-        "C": top_rail_y + 1.02,
+        "C": top_rail_y + 0.98,
     }
 
     if dg_geoms:
@@ -1389,6 +1427,12 @@ def desenhar_mapa_fisico_qdc(
                         token
                     )
                 )
+                _no_fase_preenchido(
+                    msp,
+                    x_polo_dg,
+                    barramentos_y[token],
+                    token
+                )
 
         # DPS: fase -> polo físico do DPS -> PE.
         for d, g in geral_geom:
@@ -1414,6 +1458,12 @@ def desenhar_mapa_fisico_qdc(
                 _layer_por_token(
                     token
                 )
+            )
+            _no_fase_preenchido(
+                msp,
+                x_polo,
+                barramentos_y[token],
+                token
             )
             _texto_central(
                 msp,
@@ -1479,6 +1529,12 @@ def desenhar_mapa_fisico_qdc(
                     _layer_por_token(
                         token
                     )
+                )
+                _no_fase_preenchido(
+                    msp,
+                    xx,
+                    barramentos_y[token],
+                    token
                 )
 
             # Quando sobra polo em IDR de circuito fase-neutro,
@@ -1914,6 +1970,12 @@ def desenhar_mapa_fisico_qdc(
                                     fase_item
                                 )
                             )
+                            _no_fase_preenchido(
+                                msp,
+                                x_polo,
+                                yy_fase,
+                                fase_item
+                            )
 
                     # Fonte do grupo.
                     fonte_disp = None
@@ -2035,6 +2097,12 @@ def desenhar_mapa_fisico_qdc(
                                     fase_item
                                 )
                             )
+                            _no_fase_preenchido(
+                                msp,
+                                x_destino_fase,
+                                yy_destino,
+                                fase_item
+                            )
 
         y_rail -= 3.15
 
@@ -2074,7 +2142,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.4 Rev.11:
+    # Fase 13.4 Rev.12:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35

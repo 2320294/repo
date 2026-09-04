@@ -303,7 +303,7 @@ def _espessura_parede_qdc(
     espessura_max=0.50
 ):
     """
-    Fase 13.4 Rev.11.
+    Fase 13.4 Rev.12.
 
     Mede o vão entre a face do ambiente do QDC e a face paralela
     mais próxima de outro ambiente, no sentido externo da parede.
