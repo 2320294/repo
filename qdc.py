@@ -1738,11 +1738,6 @@ def renderizar_qdc(
             None
         )
 
-    st.success(
-        f"QDC: {ambiente} — "
-        f"{trecho_escolhido['rotulo']}."
-    )
-
     return codificar_qdc(
         ambiente,
         trecho_escolhido[
