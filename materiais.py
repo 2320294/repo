@@ -39,12 +39,11 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Enquanto o CAD ainda não possui o traçado completo dos
-# eletrodutos/circuitos, os COMPRIMENTOS abaixo são estimados
-# geometricamente a partir dos centros dos ambientes e do QDC.
-#
-# A quantidade de pontos/caixas é calculada diretamente do
-# projeto.
+# Fase 12.9:
+# o quantitativo exibido ao usuário não usa mais quantidades
+# presumidas. Pontos/caixas vêm das entidades do projeto e
+# comprimentos de cabos/eletrodutos só aparecem quando há
+# roteamento físico calculado.
 # ============================================================
 
 # Tensões agora vêm dos parâmetros do projeto
@@ -386,13 +385,8 @@ def calcular_quantitativo_materiais(
         for r in tabela_editada
     )
 
-    total_interruptores = sum(
-        _inteiro(
-            cfg.get(
-                "quantidade",
-                0
-            )
-        )
+    configuracoes_interruptores_reais = [
+        cfg
         for chave_cfg, cfg
         in config_interruptores_usuario.items()
         if (
@@ -404,6 +398,40 @@ def calcular_quantitativo_materiais(
                 dict
             )
         )
+    ]
+
+    total_interruptores_simples = sum(
+        1
+        for cfg in configuracoes_interruptores_reais
+        if _inteiro(
+            cfg.get(
+                "quantidade",
+                0
+            )
+        )
+        == 1
+    )
+
+    total_interruptores_paralelos = sum(
+        _inteiro(
+            cfg.get(
+                "quantidade",
+                0
+            )
+        )
+        for cfg in configuracoes_interruptores_reais
+        if _inteiro(
+            cfg.get(
+                "quantidade",
+                0
+            )
+        )
+        >= 2
+    )
+
+    total_interruptores = (
+        total_interruptores_simples
+        + total_interruptores_paralelos
     )
 
     _adicionar_material(
@@ -413,7 +441,7 @@ def calcular_quantitativo_materiais(
         '4x4" — ponto de iluminação',
         "pç",
         total_iluminacao,
-        "1 por ponto de iluminação"
+        "1 por ponto de iluminação desenhado"
     )
 
     _adicionar_material(
@@ -423,7 +451,7 @@ def calcular_quantitativo_materiais(
         '4x2" — tomadas TUG',
         "pç",
         total_tug,
-        "1 por TUG"
+        "1 por ponto TUG desenhado"
     )
 
     _adicionar_material(
@@ -433,7 +461,7 @@ def calcular_quantitativo_materiais(
         '4x2" — tomadas/equipamentos TUE',
         "pç",
         total_tue,
-        "1 por TUE"
+        "1 por ponto TUE desenhado"
     )
 
     _adicionar_material(
@@ -443,54 +471,13 @@ def calcular_quantitativo_materiais(
         '4x2" — interruptores',
         "pç",
         total_interruptores,
-        "1 por interruptor"
+        "1 por interruptor desenhado"
     )
 
-    # Caixa de passagem: estimativa preliminar
-    # 1 por ambiente com pontos elétricos + 1 junto ao QDC.
-    ambientes_com_pontos = sum(
-        1
-        for r in tabela_editada
-        if (
-            _inteiro(
-                r.get(
-                    "Qtd Ilum.",
-                    0
-                )
-            )
-            +
-            _inteiro(
-                r.get(
-                    "Qtd TUG",
-                    r.get(
-                        "TUGs (Qtd)",
-                        0
-                    )
-                )
-            )
-            +
-            _inteiro(
-                r.get(
-                    "Qtd TUE",
-                    0
-                )
-            )
-            > 0
-        )
-    )
-
-    _adicionar_material(
-        materiais,
-        "Caixas",
-        "Caixa de passagem",
-        '4x4" ou dimensão compatível',
-        "pç",
-        max(
-            1,
-            ambientes_com_pontos + 1
-        ),
-        "Estimativa preliminar; confirmar no traçado dos eletrodutos"
-    )
+    # Fase 12.9:
+    # caixas octogonais dos próprios pontos de iluminação também atuam
+    # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
+    # adicional é contabilizada se ela não existir fisicamente no projeto.
 
     _adicionar_material(
         materiais,
@@ -499,28 +486,35 @@ def calcular_quantitativo_materiais(
         "2P+T 10 A",
         "pç",
         total_tug,
-        "Quantidade de TUGs do quadro de cargas"
+        "Quantidade física de pontos TUG do projeto"
     )
 
-    _adicionar_material(
-        materiais,
-        "Tomadas",
-        "Tomada TUE",
-        "2P+T 20 A ou conexão específica",
-        "pç",
-        total_tue,
-        "Quantidade de TUEs; especificação final depende do equipamento"
-    )
+    # TUE: o ponto/caixa é real e permanece no quantitativo.
+    # A peça de conexão final (tomada 20 A, borne, saída direta etc.)
+    # não é inventada porque depende do equipamento e ainda não é
+    # definida como entidade física pelo projeto.
 
-    _adicionar_material(
-        materiais,
-        "Comandos",
-        "Interruptor",
-        "Módulo simples/paralelo conforme comando",
-        "pç",
-        total_interruptores,
-        "Configuração escolhida por ambiente"
-    )
+    if total_interruptores_simples > 0:
+        _adicionar_material(
+            materiais,
+            "Comandos",
+            "Interruptor simples",
+            "Módulo simples",
+            "pç",
+            total_interruptores_simples,
+            "Quantidade física de comandos simples do projeto"
+        )
+
+    if total_interruptores_paralelos > 0:
+        _adicionar_material(
+            materiais,
+            "Comandos",
+            "Interruptor paralelo",
+            "Módulo paralelo",
+            "pç",
+            total_interruptores_paralelos,
+            "Quantidade física de comandos paralelos do projeto"
+        )
 
     # ========================================================
     # CIRCUITOS E CABOS
@@ -892,17 +886,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 12.8 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 12.9 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 12.8/11.2, quando o
+    # cargas elementares por ambiente até a Fase 12.9/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 12.8 — se o CAD desta versão já calculou correções por
+    # Fase 12.9 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1035,103 +1029,26 @@ def calcular_quantitativo_materiais(
     )
 
     # ========================================================
-    # QUADRO E PROTEÇÕES
+    # QUADRO E PROTEÇÕES — SOMENTE ITENS CONCRETOS DO PROJETO
     # ========================================================
 
     numero_circuitos = len(
         circuitos
     )
 
-    # reserva técnica de espaço no quadro
-    modulos_estimados = (
-        numero_circuitos
-        +
-        1     # geral
-        +
-        2     # IDR
-        +
-        2     # DPS / reserva mínima
-    )
-
-    tamanhos_qdc = [
-        12,
-        18,
-        24,
-        36,
-        48
-    ]
-
-    tamanho_qdc = next(
-        (
-            x
-            for x in tamanhos_qdc
-            if x >= math.ceil(
-                modulos_estimados * 1.20
-            )
-        ),
-        48
-    )
-
-    _adicionar_material(
-        materiais,
-        "Quadro",
-        "Quadro de distribuição",
-        f"{tamanho_qdc} módulos DIN, com barramentos N e PE",
-        "pç",
-        1,
-        "Quantidade de circuitos + proteções + reserva técnica"
-    )
-
-    _adicionar_material(
-        materiais,
-        "Quadro",
-        "Barramento de neutro",
-        "Compatível com QDC",
-        "pç",
-        1,
-        "1 por quadro"
-    )
-
-    _adicionar_material(
-        materiais,
-        "Quadro",
-        "Barramento de proteção PE",
-        "Compatível com QDC",
-        "pç",
-        1,
-        "1 por quadro"
-    )
-
-    # disjuntor geral:
-    potencia_total = sum(
-        c["potencia"]
-        for c in circuitos
-    )
-
-    # estimativa simplificada com alimentação 220 V
-    corrente_geral = (
-        potencia_total
-        /
-        tensao_projeto
-        if potencia_total > 0
-        else 0
-    )
-
-    disjuntor_geral = (
-        _disjuntor_por_corrente(
-            corrente_geral
+    # O projeto possui um QDC fisicamente posicionado.
+    # A quantidade é real; dimensão/módulos e proteções gerais serão
+    # fechados na fase específica do QDC executivo.
+    if local_qdc:
+        _adicionar_material(
+            materiais,
+            "Quadro",
+            "Quadro de distribuição (QDC)",
+            "QDC posicionado no projeto",
+            "pç",
+            1,
+            "Quantidade física definida no projeto"
         )
-    )
-
-    _adicionar_material(
-        materiais,
-        "Proteção",
-        "Disjuntor geral",
-        f"{disjuntor_geral} A — curva e nº de polos a confirmar pela alimentação",
-        "pç",
-        1,
-        "Pré-dimensionamento pela carga total; confirmar padrão de fornecimento"
-    )
 
     # Disjuntores terminais agrupados por corrente
     contagem_disjuntores = {}
@@ -1172,95 +1089,16 @@ def calcular_quantitativo_materiais(
             f"{polos} {corrente_disj} A — circuito {tipo}",
             "pç",
             quantidade,
-            "Pré-dimensionado pela corrente da carga; verificar capacidade do condutor"
+            "Quantidade e corrente derivadas dos circuitos consolidados do projeto"
         )
 
-    # DR
-    _adicionar_material(
-        materiais,
-        "Proteção",
-        "IDR / DR",
-        "30 mA — corrente nominal compatível com o quadro",
-        "pç",
-        1,
-        "Proteção adicional; circuitos aplicáveis devem ser definidos no esquema final"
-    )
-
-    # DPS
-    _adicionar_material(
-        materiais,
-        "Proteção",
-        "DPS",
-        "Classe II — tensão compatível com o sistema",
-        "pç",
-        2,
-        "Quantidade preliminar para sistema fase/fase ou fase/neutro; confirmar esquema de alimentação"
-    )
-
-    _adicionar_material(
-        materiais,
-        "Proteção",
-        "Dispositivo de proteção do DPS",
-        "Disjuntor/fusível de retaguarda conforme fabricante",
-        "pç",
-        1,
-        "Dimensionar conforme DPS selecionado"
-    )
+    # Fase 12.9:
+    # DR, DPS, retaguarda, terminais, conectores, anilhas e demais acessórios
+    # deixam de ser estimados. Eles só voltarão ao quantitativo quando forem
+    # efetivamente definidos/gerados pelo projeto executivo.
 
     # ========================================================
-    # ACESSÓRIOS DE MONTAGEM
-    # ========================================================
-
-    _adicionar_material(
-        materiais,
-        "Acessórios",
-        "Conector de emenda",
-        "Compatível com as bitolas dos circuitos",
-        "pç",
-        max(
-            10,
-            (
-                total_iluminacao
-                +
-                total_tug
-                +
-                total_tue
-                +
-                total_interruptores
-            ) * 2
-        ),
-        "Estimativa para derivações e terminações"
-    )
-
-    _adicionar_material(
-        materiais,
-        "Acessórios",
-        "Terminal tubular / ilhós",
-        "Bitolas variadas",
-        "pç",
-        max(
-            20,
-            numero_circuitos * 6
-        ),
-        "Estimativa para terminações no quadro"
-    )
-
-    _adicionar_material(
-        materiais,
-        "Acessórios",
-        "Identificador de cabos/circuitos",
-        "Etiquetas ou anilhas",
-        "pç",
-        max(
-            1,
-            numero_circuitos * 3
-        ),
-        "Identificação dos condutores e circuitos"
-    )
-
-    # ========================================================
-    # FASE 12.8 — SUBSTITUIÇÃO DOS COMPRIMENTOS ESTIMADOS
-    # PELO ROTEAMENTO FÍSICO, QUANDO DISPONÍVEL
+    # FASE 12.9 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1397,7 +1235,7 @@ def calcular_quantitativo_materiais(
                 "Eletroduto corrugado flexível",
                 (
                     f"Ø {diametro} mm — "
-                    "pré-dimensionado por ocupação"
+                    "dimensionado pela ocupação do trecho"
                 ),
                 "m",
                 math.ceil(
@@ -1410,10 +1248,79 @@ def calcular_quantitativo_materiais(
                     )
                 ),
                 (
-                    "Comprimento do traçado físico + 10% de folga; "
+                    "Comprimento do traçado físico + 10% de reserva de instalação; "
                     "diâmetro preliminar pela ocupação dos condutores"
                 )
             )
+
+    # ========================================================
+    # FASE 12.9 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # ========================================================
+    # Nenhum item entra no quantitativo apenas por regra percentual de
+    # quantidade de peças, estimativa por ambiente ou "kit" presumido.
+    # Comprimentos permanecem derivados do roteamento físico; a reserva
+    # de instalação de cabos/eletrodutos é explícita no critério.
+    materiais_estimados_proibidos = {
+        "Caixa de passagem",
+        "Conector de emenda",
+        "Terminal tubular / ilhós",
+        "Identificador de cabos/circuitos",
+        "IDR / DR",
+        "DPS",
+        "Dispositivo de proteção do DPS",
+        "Disjuntor geral",
+        "Barramento de neutro",
+        "Barramento de proteção PE",
+    }
+
+    materiais = [
+        item
+        for item in materiais
+        if item.get(
+            "Material"
+        )
+        not in materiais_estimados_proibidos
+    ]
+
+    # Se o roteamento físico não estiver disponível, não inventa
+    # comprimentos de cabos/eletrodutos.
+    tem_rota_fisica = (
+        isinstance(
+            resumo_rotas,
+            dict
+        )
+        and bool(
+            resumo_rotas.get(
+                "rotas",
+                []
+            )
+        )
+    )
+
+    if not tem_rota_fisica:
+        materiais = [
+            item
+            for item in materiais
+            if item.get(
+                "Categoria"
+            )
+            not in {
+                "Condutores",
+                "Infraestrutura",
+            }
+        ]
+
+    # Remove qualquer resíduo legado explicitamente marcado como estimativa.
+    materiais = [
+        item
+        for item in materiais
+        if "estimativ" not in str(
+            item.get(
+                "Critério",
+                ""
+            )
+        ).casefold()
+    ]
 
     return materiais, circuitos
 
@@ -1451,7 +1358,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 12.8: dados estruturais usados pelo roteamento continuam
+        # Fase 12.9: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2498,7 +2405,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 12.8:
+    # Fase 12.9:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2521,7 +2428,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 12.8:
+    # Fase 12.9:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -2759,6 +2666,22 @@ def renderizar_materiais(
                     "Ib ≤ In ≤ Iz. O sistema não aumenta automaticamente o disjuntor."
                 )
 
+    st.markdown(
+        "#### 📦 Quantitativo físico do projeto"
+    )
+
+    st.success(
+        "A Fase 12.9 exibe somente materiais cuja quantidade vem diretamente "
+        "dos pontos, circuitos ou do roteamento físico do projeto."
+    )
+
+    st.caption(
+        "Foram eliminadas estimativas automáticas de caixas de passagem, "
+        "conectores, terminais, anilhas, DR, DPS e demais itens ainda não "
+        "definidos fisicamente. As caixas octogonais dos pontos de iluminação "
+        "também são usadas como caixas de passagem da rede e não são duplicadas."
+    )
+
     if not materiais_df.empty:
         st.dataframe(
             materiais_df,
@@ -2824,7 +2747,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 12.8: corrente nominal pré-dimensionada pelo maior "
+            "Fase 12.9: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -3369,7 +3292,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 12.8 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 12.9 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -3379,7 +3302,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 12.8: a verificação abaixo usa uma referência preliminar "
+            "Fase 12.9: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -3593,7 +3516,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 12.8: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 12.9: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -3694,7 +3617,7 @@ definir explicitamente outro método de instalação.
             )
 
             st.caption(
-                "Depois de cada correção de seção, a Fase 12.8 recalcula "
+                "Depois de cada correção de seção, a Fase 12.9 recalcula "
                 "ocupação, redistribuição dos eletrodutos, queda de tensão "
                 "e capacidade de condução até estabilizar."
             )
@@ -4116,7 +4039,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 12.8: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
+        "Fase 12.9: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -4478,7 +4401,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_8.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_9.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -4487,7 +4410,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_8.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_12_9.pdf",
             mime="application/pdf",
             use_container_width=True
         )
