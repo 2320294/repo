@@ -39,7 +39,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 13.1:
+# Fase 13.1 Rev.1:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -312,7 +312,7 @@ def _adicionar_material(
 
 
 # ============================================================
-# FASE 13.1 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# FASE 13.1 REV.1 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
 # ============================================================
 
 MODULO_DIN_MM = 17.5
@@ -372,7 +372,7 @@ def _adicionar_componentes_qdc_executivo(
     local_qdc
 ):
     """
-    Fase 13.1.
+    Fase 13.1 Rev.1.
 
     Transforma a estrutura já conhecida do unifilar em componentes físicos
     do QDC. Não inclui conectores genéricos: ainda não existe informação
@@ -667,7 +667,7 @@ def _auditar_consistencia_qdc(
     resumo_qdc
 ):
     """
-    Fase 13.1 — auditoria cruzada do QDC.
+    Fase 13.1 Rev.1 — auditoria cruzada do QDC.
 
     A mesma estrutura elétrica usada no quantitativo/unifilar é verificada
     quanto a módulos DIN, polos, DR, barramentos, pente e sequência funcional.
@@ -711,6 +711,10 @@ def _auditar_consistencia_qdc(
     )
 
     # 3. Cobertura DR e exclusividade de grupo.
+    # Fase 13.1 Rev.1 Rev.1:
+    # somente circuitos que a própria lógica do projeto classificou para DR
+    # são obrigados a aparecer em um grupo IDR. Iluminação comum sem DR não
+    # gera alerta apenas por estar fora dos grupos.
     cobertura = {}
     for dr in drs:
         nome = str(dr.get("dr", "") or "")
@@ -719,25 +723,40 @@ def _auditar_consistencia_qdc(
             if n > 0:
                 cobertura.setdefault(n, []).append(nome)
 
-    sem_dr = []
-    dr_duplicado = []
+    problemas_dr = []
+    qtd_classificados_dr = 0
+
     for c in circuitos:
         n = int(c.get("numero", 0) or 0)
+        grupo_projeto = str(c.get("dr", "") or "").strip()
         grupos = cobertura.get(n, [])
-        if not grupos:
-            sem_dr.append(f"C{n}")
-        elif len(grupos) > 1:
-            dr_duplicado.append(f"C{n}")
 
-    if dr_duplicado:
-        add("Agrupamento dos IDRs", "ATENÇÃO",
-            "Circuitos em mais de um IDR: " + ", ".join(dr_duplicado))
-    elif sem_dr:
-        add("Agrupamento dos IDRs", "ATENÇÃO",
-            "Circuitos sem grupo DR: " + ", ".join(sem_dr))
+        if not grupo_projeto:
+            continue
+
+        qtd_classificados_dr += 1
+
+        if len(grupos) == 0:
+            problemas_dr.append(f"C{n} classificado para DR sem grupo correspondente")
+        elif len(grupos) > 1:
+            problemas_dr.append(f"C{n} associado a mais de um IDR")
+
+    if problemas_dr:
+        add(
+            "Agrupamento dos IDRs",
+            "ATENÇÃO",
+            "; ".join(problemas_dr)
+        )
     else:
-        add("Agrupamento dos IDRs", "OK",
-            f"{len(circuitos)} circuito(s) associados a um único grupo DR")
+        add(
+            "Agrupamento dos IDRs",
+            "OK",
+            (
+                f"{qtd_classificados_dr} circuito(s) classificados para DR "
+                "estão associados corretamente. Circuitos não classificados "
+                "para DR, como iluminação comum, não geram alerta."
+            )
+        )
 
     # 4. Neutros separados por IDR.
     grupos_com_neutro = 0
@@ -988,7 +1007,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 13.1:
+    # Fase 13.1 Rev.1:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -1400,17 +1419,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 13.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.1 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 13.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.1 Rev.1/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 13.1 — se o CAD desta versão já calculou correções por
+    # Fase 13.1 Rev.1 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1546,7 +1565,7 @@ def calcular_quantitativo_materiais(
     # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 13.1 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.1 REV.1 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1702,7 +1721,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 13.1 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.1 REV.1 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1799,7 +1818,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 13.1: dados estruturais usados pelo roteamento continuam
+        # Fase 13.1 Rev.1: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -2897,7 +2916,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 13.1:
+    # Fase 13.1 Rev.1:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2920,7 +2939,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 13.1:
+    # Fase 13.1 Rev.1:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -2992,7 +3011,7 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    # Fase 13.1 — componentes físicos do QDC derivados do unifilar.
+    # Fase 13.1 Rev.1 — componentes físicos do QDC derivados do unifilar.
     # Conectores genéricos ficam deliberadamente fora desta fase.
     resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
         materiais,
@@ -3182,7 +3201,7 @@ def renderizar_materiais(
     )
 
     st.success(
-        "A Fase 13.1 mantém o quantitativo físico do projeto e acrescenta "
+        "A Fase 13.1 Rev.1 mantém o quantitativo físico do projeto e acrescenta "
         "os componentes do QDC que já podem ser derivados do unifilar."
     )
 
@@ -3355,7 +3374,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 13.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 13.1 Rev.1: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -3900,7 +3919,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 13.1 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 13.1 Rev.1 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -3910,7 +3929,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 13.1: a verificação abaixo usa uma referência preliminar "
+            "Fase 13.1 Rev.1: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -4124,7 +4143,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 13.1: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 13.1 Rev.1: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -4225,7 +4244,7 @@ definir explicitamente outro método de instalação.
             )
 
             st.caption(
-                "Depois de cada correção de seção, a Fase 13.1 recalcula "
+                "Depois de cada correção de seção, a Fase 13.1 Rev.1 recalcula "
                 "ocupação, redistribuição dos eletrodutos, queda de tensão "
                 "e capacidade de condução até estabilizar."
             )
@@ -4647,7 +4666,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 13.1: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
+        "Fase 13.1 Rev.1: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -5020,7 +5039,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_1_Rev_1.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -5029,7 +5048,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_1_Rev_1.pdf",
             mime="application/pdf",
             use_container_width=True
         )
