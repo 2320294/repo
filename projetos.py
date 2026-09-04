@@ -7,6 +7,49 @@ from database import (
 )
 
 
+def _ativar_projeto_selecionado():
+    """
+    Aplica imediatamente a seleção da barra lateral e invalida somente
+    caches globais derivados do projeto anterior.
+
+    Os estados editáveis isolados por projeto permanecem preservados.
+    """
+    novo_projeto = st.session_state.get(
+        "selectbox_projeto_ativo",
+        "Selecione um projeto..."
+    )
+
+    projeto_anterior = st.session_state.get(
+        "projeto_ativo",
+        "Selecione um projeto..."
+    )
+
+    if novo_projeto == projeto_anterior:
+        return
+
+    st.session_state["projeto_ativo"] = novo_projeto
+
+    # Caches/derivados não isolados por nome do projeto.
+    chaves_invalidar = (
+        "dimensionamento_rotas",
+        "dimensionamento_rotas_projeto",
+        "dimensionamento_rotas_versao",
+        "resultado_cad",
+        "dxf_gerado",
+        "dxf_gerado_bytes",
+        "arquivo_dxf_gerado",
+        "excel_gerado",
+        "pdf_gerado",
+        "memorial_pdf",
+    )
+
+    for chave in chaves_invalidar:
+        st.session_state.pop(
+            chave,
+            None
+        )
+
+
 def renderizar_gerenciador_projetos():
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -102,17 +145,9 @@ def renderizar_gerenciador_projetos():
         "Selecione o projeto ativo:",
         opcoes_selectbox,
         index=indice_atual,
-        key="selectbox_projeto_ativo"
+        key="selectbox_projeto_ativo",
+        on_change=_ativar_projeto_selecionado
     )
-
-    if (
-        projeto_selecionado
-        != st.session_state.projeto_ativo
-    ):
-        st.session_state.projeto_ativo = (
-            projeto_selecionado
-        )
-        st.rerun()
 
     if (
         projeto_selecionado

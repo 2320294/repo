@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.5:
+    Fase 13.4 Rev.6:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -817,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.5 — QDC executivo no CAD.
+    Fase 13.4 Rev.6 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -857,8 +857,8 @@ def desenhar_mapa_fisico_qdc(
     modulo_w = 0.78
     disp_h = 1.60
     margem_x = 1.15
-    painel_circuitos_w = 8.80
-    separacao_painel = 1.20
+    painel_circuitos_w = 10.20
+    separacao_painel = 1.60
     area_din_w = max(9.6, colunas * modulo_w + 2.30)
     largura = (
         area_din_w
@@ -899,7 +899,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.5",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.6",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1589,7 +1589,15 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     # Painel lateral
     # -------------------------
-    px1 = qx2 + separacao_painel
+    # A tabela deve nascer numa coluna independente da área DIN.
+    # Não usar qx2 como referência: qx2 representa o limite gráfico
+    # do diagrama e, em quadros largos, fazia a tabela sobrepor o QDC.
+    px1 = (
+        x0
+        + margem_x
+        + area_din_w
+        + separacao_painel
+    )
     px2 = x0 + largura - 0.45
     py_top = qy_top
 
