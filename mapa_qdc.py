@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.10:
+    Fase 13.4 Rev.11:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -690,7 +690,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.4 Rev.10:
+    # Fase 13.4 Rev.11:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -755,7 +755,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.4 Rev.10:
+        # Fase 13.4 Rev.11:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -843,6 +843,80 @@ def _centros_polos(geom):
     ]
 
 
+def _indice_fase(token):
+    token = str(
+        token
+        or ""
+    ).upper()
+
+    return {
+        "A": 0,
+        "B": 1,
+        "C": 2,
+    }.get(
+        token,
+        0
+    )
+
+
+def _polo_para_fase(disp, geom, token):
+    """
+    Retorna o centro do polo físico destinado à fase indicada.
+
+    Para aparelhos multipolares, a ordem dos polos acompanha a ordem
+    elétrica das fases presentes no dispositivo.
+    """
+    fases = _fases_do_texto(
+        disp.get(
+            "fase",
+            ""
+        )
+    )
+
+    if disp.get(
+        "tipo"
+    ) == "DG":
+        fases = [
+            "A",
+            "B",
+            "C",
+        ][:len(
+            _centros_polos(
+                geom
+            )
+        )]
+
+    centros = _centros_polos(
+        geom
+    )
+
+    if token in fases:
+        idx = fases.index(
+            token
+        )
+        if idx < len(
+            centros
+        ):
+            return centros[
+                idx
+            ]
+
+    idx_global = _indice_fase(
+        token
+    )
+
+    if idx_global < len(
+        centros
+    ):
+        return centros[
+            idx_global
+        ]
+
+    return centros[
+        0
+    ]
+
+
 def _mapa_fases_polos(disp, geom):
     """Associa as fases elétricas reais aos polos físicos do aparelho."""
     fases = _fases_do_texto(
@@ -891,7 +965,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.10 — QDC executivo no CAD.
+    Fase 13.4 Rev.11 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -973,7 +1047,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.10",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.11",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1032,25 +1106,73 @@ def desenhar_mapa_fisico_qdc(
     # Fileira superior: DG/DPS/IDR
     # -------------------------
     top_rail_y = qy_top - 2.25
-    x = din_x1 + 0.20
-    geral_geom = []
-    for d in gerais:
-        w = modulo_w * max(1, int(d.get("modulos", 1) or 1))
-        if x + w > din_x2 - 0.15:
-            break
 
+    # Fase 13.4 Rev.11:
+    # a fileira superior é dimensionada pela quantidade real de módulos
+    # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
+    total_modulos_gerais = sum(
+        max(
+            1,
+            int(
+                d.get(
+                    "modulos",
+                    1
+                )
+                or 1
+            )
+        )
+        for d in gerais
+    )
+
+    gap_geral = 0.06
+    qtd_gaps_gerais = max(
+        0,
+        len(gerais) - 1
+    )
+
+    largura_util_gerais = max(
+        1.0,
+        (
+            din_x2
+            - din_x1
+            - 0.30
+            - qtd_gaps_gerais * gap_geral
+        )
+    )
+
+    modulo_w_geral = min(
+        modulo_w,
+        largura_util_gerais
+        / max(
+            1,
+            total_modulos_gerais
+        )
+    )
+
+    x = din_x1 + 0.15
+    geral_geom = []
+
+    for d in gerais:
         geom = _desenhar_dispositivo(
             msp,
             d,
             x,
             top_rail_y - 0.85,
-            modulo_w,
+            modulo_w_geral,
             disp_h,
             L,
             LT
         )
-        geral_geom.append((d, geom))
-        x = geom["x2"] + 0.12
+        geral_geom.append(
+            (
+                d,
+                geom
+            )
+        )
+        x = (
+            geom["x2"]
+            + gap_geral
+        )
 
     _desenhar_trilho_com_vazios(
         msp,
@@ -1061,6 +1183,17 @@ def desenhar_mapa_fisico_qdc(
         [g for _, g in geral_geom]
     )
 
+    # Todos os dispositivos gerais calculados precisam estar presentes
+    # na vista frontal; não existe descarte visual de DR/DPS/DG.
+    if len(
+        geral_geom
+    ) != len(
+        gerais
+    ):
+        raise RuntimeError(
+            "Falha ao representar todos os dispositivos gerais do QDC."
+        )
+
     # Entrada elétrica e distribuição superior por fase.
     dg_geoms = [
         (d, g)
@@ -1068,10 +1201,12 @@ def desenhar_mapa_fisico_qdc(
         if d.get("tipo") == "DG"
     ]
 
+    # Barramentos de fase separados verticalmente.
+    # Todas as derivações "morrem" exatamente na barra da respectiva fase.
     barramentos_y = {
-        "A": top_rail_y + 1.22,
-        "B": top_rail_y + 1.08,
-        "C": top_rail_y + 0.94,
+        "A": top_rail_y + 1.34,
+        "B": top_rail_y + 1.18,
+        "C": top_rail_y + 1.02,
     }
 
     if dg_geoms:
@@ -1228,27 +1363,26 @@ def desenhar_mapa_fisico_qdc(
                 _layer_por_token(token)
             )
 
-        # DG alimenta separadamente cada barramento de fase.
+        # DG -> barramentos: uma derivação por fase, terminando exatamente
+        # na respectiva barra.
         if dg_geoms:
             dg_disp, dg_geom = dg_geoms[0]
-            polos_dg = _centros_polos(
-                dg_geom
-            )
-            for idx_fase, token in enumerate(
-                fases_disponiveis
-            ):
-                if idx_fase >= len(
-                    polos_dg
-                ):
-                    break
+
+            for token in fases_disponiveis:
+                x_polo_dg = _polo_para_fase(
+                    dg_disp,
+                    dg_geom,
+                    token
+                )
+
                 _line(
                     msp,
                     (
-                        polos_dg[idx_fase],
+                        x_polo_dg,
                         dg_geom["y2"]
                     ),
                     (
-                        polos_dg[idx_fase],
+                        x_polo_dg,
                         barramentos_y[token]
                     ),
                     _layer_por_token(
@@ -1265,11 +1399,21 @@ def desenhar_mapa_fisico_qdc(
                 g
             )
             x_polo = polos_dps[0]
+            # A derivação do DPS começa na própria barra da fase e termina
+            # no borne superior do aparelho.
             _line(
                 msp,
-                (x_polo, barramentos_y[token]),
-                (x_polo, g["y2"]),
-                _layer_por_token(token)
+                (
+                    x_polo,
+                    barramentos_y[token]
+                ),
+                (
+                    x_polo,
+                    g["y2"]
+                ),
+                _layer_por_token(
+                    token
+                )
             )
             _texto_central(
                 msp,
@@ -1295,19 +1439,46 @@ def desenhar_mapa_fisico_qdc(
             if d.get("tipo") != "IDR":
                 continue
 
-            fases_polos = _mapa_fases_polos(
-                d,
-                g
+            fases_idr = _fases_do_texto(
+                d.get(
+                    "fase",
+                    ""
+                )
             )
 
-            for token, xx in fases_polos:
+            fases_polos = []
+
+            for token in fases_idr:
                 if token not in barramentos_y:
                     continue
+
+                xx = _polo_para_fase(
+                    d,
+                    g,
+                    token
+                )
+
+                fases_polos.append(
+                    (
+                        token,
+                        xx
+                    )
+                )
+
+                # A ligação termina exatamente na barra da fase escolhida.
                 _line(
                     msp,
-                    (xx, barramentos_y[token]),
-                    (xx, g["y2"]),
-                    _layer_por_token(token)
+                    (
+                        xx,
+                        g["y2"]
+                    ),
+                    (
+                        xx,
+                        barramentos_y[token]
+                    ),
+                    _layer_por_token(
+                        token
+                    )
                 )
 
             # Quando sobra polo em IDR de circuito fase-neutro,
@@ -1715,23 +1886,20 @@ def desenhar_mapa_fisico_qdc(
                             )
                         )
 
-                        for idx_fase, fase_item in enumerate(
-                            fases_circuito
-                        ):
-                            if idx_fase >= len(
-                                polos_circuito
-                            ):
-                                break
-
+                        for fase_item in fases_circuito:
                             yy_fase = y_fase_grupo.get(
                                 fase_item,
                                 yp + 0.10
                             )
 
-                            x_polo = polos_circuito[
-                                idx_fase
-                            ]
+                            x_polo = _polo_para_fase(
+                                d_item,
+                                g_item,
+                                fase_item
+                            )
 
+                            # A derivação vertical começa na pista da fase e
+                            # termina no borne do polo correspondente.
                             _line(
                                 msp,
                                 (
@@ -1807,9 +1975,40 @@ def desenhar_mapa_fisico_qdc(
 
                             # Corredores verticais ligeiramente deslocados
                             # para que fases distintas não se sobreponham.
+                            # Corredor individual por fase. O trecho horizontal
+                            # final pertence somente à pista da própria fase.
+                            x_destino_fase = (
+                                (
+                                    x1p
+                                    + x2p
+                                )
+                                / 2.0
+                                + (
+                                    idx_fase
+                                    - (
+                                        len(
+                                            fases_fonte
+                                        )
+                                        - 1
+                                    )
+                                    / 2.0
+                                )
+                                * 0.08
+                            )
+
                             x_corredor = (
                                 x_origem
-                                + idx_fase * 0.035
+                                + (
+                                    idx_fase
+                                    - (
+                                        len(
+                                            fases_fonte
+                                        )
+                                        - 1
+                                    )
+                                    / 2.0
+                                )
+                                * 0.06
                             )
 
                             _polyline(
@@ -1821,17 +2020,14 @@ def desenhar_mapa_fisico_qdc(
                                     ),
                                     (
                                         x_corredor,
-                                        fonte_geom["y1"] - 0.16
+                                        fonte_geom["y1"] - 0.18
                                     ),
                                     (
                                         x_corredor,
                                         yy_destino
                                     ),
                                     (
-                                        (
-                                            x1p
-                                            + x2p
-                                        ) / 2.0,
+                                        x_destino_fase,
                                         yy_destino
                                     ),
                                 ],
@@ -1878,7 +2074,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.4 Rev.10:
+    # Fase 13.4 Rev.11:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
