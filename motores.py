@@ -345,7 +345,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.15 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.16 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -523,7 +523,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.15:
+                # Fase 13.6 Rev.16:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1040,7 +1040,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.15: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.16: "
                 + detalhes_bloqueio
             )
 
