@@ -173,7 +173,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.1:
+    Fase 13.6 Rev.2:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -844,7 +844,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.1:
+    # Fase 13.6 Rev.2:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -909,7 +909,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.1:
+        # Fase 13.6 Rev.2:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1169,7 +1169,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.1 — QDC executivo no CAD.
+    Fase 13.6 Rev.2 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1311,7 +1311,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.1:
+    # Fase 13.6 Rev.2:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2319,8 +2319,13 @@ def desenhar_mapa_fisico_qdc(
                     ]
 
                     # Cada fase ganha uma pista própria, paralela ao pente.
+                    # REV.2: o pente mecânico e as pistas A/B/C possuem
+                    # afastamento vertical próprio. Isto evita sobreposição
+                    # gráfica entre PENTE, fases e textos dos circuitos.
                     # A pista termina exatamente no último disjuntor que usa
                     # aquela fase; o último ponto será apenas uma curva.
+                    AFASTAMENTO_PENTE_FASE = 0.18
+                    AFASTAMENTO_ENTRE_FASES = 0.16
                     y_fase_grupo = {}
                     pontos_pente_por_fase = {}
 
@@ -2329,8 +2334,8 @@ def desenhar_mapa_fisico_qdc(
                     ):
                         yy_fase = (
                             yp
-                            + 0.10
-                            + idx_fase * 0.10
+                            + AFASTAMENTO_PENTE_FASE
+                            + idx_fase * AFASTAMENTO_ENTRE_FASES
                         )
                         y_fase_grupo[
                             fase_grupo
@@ -2390,7 +2395,7 @@ def desenhar_mapa_fisico_qdc(
                         for fase_item in fases_circuito:
                             yy_fase = y_fase_grupo.get(
                                 fase_item,
-                                yp + 0.10
+                                yp + AFASTAMENTO_PENTE_FASE
                             )
 
                             x_polo = _polo_para_fase(
@@ -2617,7 +2622,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.1:
+    # Fase 13.6 Rev.2:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35

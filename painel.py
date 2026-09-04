@@ -217,7 +217,7 @@ def _garantir_dimensionamento_fisico(
     parametros_projeto
 ):
     """
-    Fase 13.6 Rev.1:
+    Fase 13.6 Rev.2:
     cálculo compartilhado pelas páginas Dimensionamento, Eletrodutos
     e Materiais. O cache também considera método B1/B2 e temperatura.
     """
@@ -683,7 +683,7 @@ def renderizar_painel_principal():
             )
         else:
             st.caption(
-                "Pré-dimensionamento da Fase 13.6 Rev.1. O DG depende da validação "
+                "Pré-dimensionamento da Fase 13.6 Rev.2. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
 
