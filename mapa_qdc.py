@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.4:
+    Fase 13.4 Rev.5:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -817,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.4 — QDC executivo no CAD.
+    Fase 13.4 Rev.5 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -899,7 +899,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.4",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.5",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1849,6 +1849,49 @@ def desenhar_mapa_fisico_qdc(
             y_amb -= 0.16
 
         yy = yy_next
+
+
+    # Redesenho final da grade da LISTA DE CIRCUITOS.
+    # Mantém todas as linhas exclusivamente dentro da área da tabela lateral.
+    # Isso evita que linhas funcionais do diagrama visualmente substituam ou
+    # atravessem a grade da tabela.
+    _rect(
+        msp,
+        tabela_x1,
+        tabela_y_bottom,
+        tabela_x2,
+        tabela_y_top,
+        L
+    )
+
+    for xx in (
+        x_c2,
+        x_c3,
+        x_c4
+    ):
+        _line(
+            msp,
+            (xx, tabela_y_bottom),
+            (xx, tabela_y_top),
+            L
+        )
+
+    _line(
+        msp,
+        (tabela_x1, y_cab),
+        (tabela_x2, y_cab),
+        L
+    )
+
+    _yy_grade = y_cab
+    for _item_grade in linhas_tabela:
+        _yy_grade -= _item_grade["altura"]
+        _line(
+            msp,
+            (tabela_x1, _yy_grade),
+            (tabela_x2, _yy_grade),
+            L
+        )
 
     # Legenda.
     leg_y = max(
