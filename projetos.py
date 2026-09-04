@@ -62,6 +62,23 @@ def _ativar_projeto_selecionado():
         "param_rede_tensao_fornecimento",
         "param_rede_metodo_demanda",
         "param_rede_fator_demanda_manual",
+        "param_qdc_esquema_aterramento",
+        "param_qdc_icc_opcao",
+        "param_qdc_icc_ka",
+        "param_qdc_fabricante_protecao",
+        "param_qdc_cap_dg_ka",
+        "param_qdc_cap_terminais_ka",
+        "param_qdc_referencia_seletividade",
+        "param_qdc_seletividade_validada_rt",
+        "param_qdc_dps_tipo",
+        "param_qdc_dps_uc_v",
+        "param_qdc_dps_up_kv",
+        "param_qdc_dps_in_ka",
+        "param_qdc_dps_imax_ka",
+        "param_qdc_arranjo_dps",
+        "param_qdc_arranjo_dps_validado_rt",
+        "param_qdc_norma_concessionaria_ref",
+        "param_qdc_concessionaria_validada_rt",
     )
 
     for chave in chaves_widgets_legados:

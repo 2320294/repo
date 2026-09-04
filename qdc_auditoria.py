@@ -1,5 +1,5 @@
 """
-Fase 13.6 — Auditoria elétrica estrutural do QDC.
+Fase 13.6 Rev.1 — Auditoria elétrica estrutural do QDC.
 
 Valida somente aquilo que o sistema consegue comprovar com os dados do
 projeto. Dados dependentes de Icc, fabricante, esquema de aterramento
@@ -348,33 +348,153 @@ def auditar_qdc_normativo(
         bloqueia=not ok,
     )
 
-    # Pendências executivas: não são inventadas.
-    pendencias = [
-        "Icc presumida no QDC e capacidade de interrupção dos disjuntores",
-        "curvas/tabelas de seletividade e coordenação do fabricante",
-        "classe/tipo e parâmetros Uc, Up, In e Imax dos DPS",
-        "esquema de aterramento definitivo (TN/TT/IT) e ligação de DPS correspondente",
-        "requisitos adicionais da concessionária para o padrão de entrada local",
-    ]
 
-    for i, texto in enumerate(pendencias, start=1):
+    # --------------------------------------------------------
+    # Verificações complementares
+    # --------------------------------------------------------
+
+    icc_conhecida = bool(parametros.get("icc_conhecida", False))
+    icc = float(parametros.get("icc_qdc_ka", 0.0) or 0.0)
+    cap_dg = float(parametros.get("capacidade_interrupcao_dg_ka", 0.0) or 0.0)
+    cap_term = float(parametros.get("capacidade_interrupcao_terminais_ka", 0.0) or 0.0)
+
+    if not icc_conhecida or icc <= 0:
         add(
-            f"P{i:02d}",
-            "Validação executiva pendente",
-            "PENDENTE",
-            texto,
+            "C01",
+            "Curto-circuito e capacidade de interrupção",
+            "A CONFIRMAR",
+            "Icc ainda não informada. Confirmar antes da execução.",
+            bloqueia=False,
+        )
+    elif cap_dg <= 0 or cap_term <= 0:
+        add(
+            "C01",
+            "Curto-circuito e capacidade de interrupção",
+            "PARCIAL",
+            f"Icc registrada: {icc:.1f} kA. Falta confirmar a capacidade dos dispositivos.",
+            bloqueia=False,
+        )
+    else:
+        ok = cap_dg >= icc and cap_term >= icc
+        add(
+            "C01",
+            "Curto-circuito e capacidade de interrupção",
+            "OK" if ok else "ERRO",
+            f"Icc={icc:.1f} kA; DG={cap_dg:.1f} kA; terminais={cap_term:.1f} kA.",
+            bloqueia=not ok,
+        )
+
+    fabricante = _texto(parametros.get("fabricante_protecao"))
+    ref_sel = _texto(parametros.get("referencia_seletividade"))
+    sel_ok = bool(parametros.get("seletividade_validada_rt", False))
+
+    if fabricante and ref_sel and sel_ok:
+        status_sel = "VALIDADO RT"
+        detalhe_sel = f"{fabricante}; referência: {ref_sel}."
+    elif fabricante:
+        status_sel = "PARCIAL"
+        detalhe_sel = f"Fabricante informado: {fabricante}. Falta referência de seletividade."
+    else:
+        status_sel = "OPCIONAL NESTA ETAPA"
+        detalhe_sel = "Fabricante ainda não definido."
+
+    add(
+        "C02",
+        "Fabricante e seletividade",
+        status_sel,
+        detalhe_sel,
+        bloqueia=False,
+    )
+
+    dps_tipo = _texto(parametros.get("dps_tipo"))
+    dps_uc = float(parametros.get("dps_uc_v", 0.0) or 0.0)
+    dps_up = float(parametros.get("dps_up_kv", 0.0) or 0.0)
+    dps_in = float(parametros.get("dps_in_ka", 0.0) or 0.0)
+    dps_imax = float(parametros.get("dps_imax_ka", 0.0) or 0.0)
+
+    dps_completo = (
+        dps_tipo
+        and dps_tipo != "A definir"
+        and dps_uc > 0
+        and dps_up > 0
+        and dps_in > 0
+        and dps_imax > 0
+    )
+
+    if not dps_completo:
+        add(
+            "C03",
+            "Características do DPS",
+            "A CONFIRMAR",
+            "Quantidade física já calculada; dados de fabricante podem ser definidos depois.",
+            bloqueia=False,
+        )
+    elif dps_imax < dps_in:
+        add(
+            "C03",
+            "Características do DPS",
+            "ERRO",
+            f"Imax={dps_imax:.1f} kA é inferior a In={dps_in:.1f} kA.",
+            bloqueia=True,
+        )
+    else:
+        add(
+            "C03",
+            "Características do DPS",
+            "DADOS COMPLETOS",
+            f"{dps_tipo}; Uc={dps_uc:.0f} V; Up={dps_up:.1f} kV; In={dps_in:.1f} kA; Imax={dps_imax:.1f} kA.",
             bloqueia=False,
         )
 
+    esquema = _texto(parametros.get("esquema_aterramento"))
+    arranjo = _texto(parametros.get("arranjo_dps"))
+    arranjo_ok = bool(parametros.get("arranjo_dps_validado_rt", False))
+
+    if not esquema or esquema == "Não sei":
+        status_at = "A CONFIRMAR"
+        detalhe_at = "Esquema de aterramento ainda não definido."
+    elif arranjo and arranjo_ok:
+        status_at = "VALIDADO RT"
+        detalhe_at = f"Esquema {esquema}; arranjo confirmado: {arranjo}."
+    else:
+        status_at = "PARCIAL"
+        detalhe_at = f"Esquema informado: {esquema}. Arranjo do DPS ainda deve ser confirmado."
+
+    add(
+        "C04",
+        "Aterramento e ligação do DPS",
+        status_at,
+        detalhe_at,
+        bloqueia=False,
+    )
+
+    ref_conc = _texto(parametros.get("norma_concessionaria_referencia"))
+    conc_ok = bool(parametros.get("requisitos_concessionaria_validados_rt", False))
+
+    add(
+        "C05",
+        "Requisitos adicionais da concessionária",
+        "VALIDADO RT" if (ref_conc and conc_ok) else "A CONFIRMAR",
+        (
+            f"Referência: {ref_conc}."
+            if (ref_conc and conc_ok)
+            else "Requisitos locais adicionais ficam para confirmação executiva."
+        ),
+        bloqueia=False,
+    )
+
     bloqueios = [v for v in verificacoes if v["Bloqueia DXF"] == "SIM"]
-    qtd_pendencias = sum(1 for v in verificacoes if v["Status"] == "PENDENTE")
+    qtd_pendencias = sum(
+        1 for v in verificacoes
+        if v["Status"] in {"A CONFIRMAR", "PARCIAL", "OPCIONAL NESTA ETAPA"}
+    )
     qtd_erros = sum(1 for v in verificacoes if v["Status"] == "ERRO")
 
     return {
         "status": (
             "BLOQUEADO"
             if bloqueios
-            else "APROVADO COM PENDÊNCIAS"
+            else "LIBERADO"
         ),
         "qtd_bloqueios": len(bloqueios),
         "qtd_erros": qtd_erros,
