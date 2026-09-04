@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.3:
+    Fase 13.4 Rev.4:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -817,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.3 — QDC executivo no CAD.
+    Fase 13.4 Rev.4 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -899,7 +899,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.3",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.4",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1611,7 +1611,9 @@ def desenhar_mapa_fisico_qdc(
         LT
     )
 
-    # Tabela executiva: Circuito | Fase | Disjuntor | Nome do circuito.
+    # Tabela executiva:
+    # Circuito | Fase | Disjuntor | Ambientes
+    # A coluna Ambientes lista todos os ambientes atendidos pelo circuito.
     tabela_x1 = px1 + 0.22
     tabela_x2 = px2 - 0.22
     tabela_y_top = py_top - 0.62
@@ -1627,15 +1629,75 @@ def desenhar_mapa_fisico_qdc(
     x_c5 = tabela_x2
 
     altura_cab = 0.34
-    altura_linha = 0.34
+    altura_linha_base = 0.34
+
+    linhas_tabela = []
+
+    for d in circuitos:
+        ident = str(
+            d.get(
+                "identificador",
+                ""
+            )
+            or ""
+        )
+
+        fase_c = str(
+            d.get(
+                "fase",
+                ""
+            )
+            or ""
+        ).strip()
+
+        dj_c = int(
+            d.get(
+                "corrente_a",
+                0
+            )
+            or 0
+        )
+
+        ambientes_txt = str(
+            d.get(
+                "ambiente",
+                ""
+            )
+            or ""
+        ).strip()
+
+        linhas_ambientes = _quebrar_texto(
+            ambientes_txt or "-",
+            34
+        )
+
+        if not linhas_ambientes:
+            linhas_ambientes = ["-"]
+
+        altura_linha = max(
+            altura_linha_base,
+            0.18
+            + len(
+                linhas_ambientes
+            )
+            * 0.16
+        )
+
+        linhas_tabela.append({
+            "identificador": ident,
+            "fase": fase_c or "-",
+            "disjuntor": f"{dj_c} A",
+            "ambientes": linhas_ambientes,
+            "altura": altura_linha,
+        })
 
     tabela_y_bottom = (
         tabela_y_top
         - altura_cab
-        - len(
-            circuitos
+        - sum(
+            item["altura"]
+            for item in linhas_tabela
         )
-        * altura_linha
     )
 
     _rect(
@@ -1712,7 +1774,7 @@ def desenhar_mapa_fisico_qdc(
 
     _text(
         msp,
-        "Nome do circuito",
+        "Ambientes",
         x_c4 + 0.08,
         tabela_y_top - 0.23,
         0.075,
@@ -1721,7 +1783,8 @@ def desenhar_mapa_fisico_qdc(
 
     yy = y_cab
 
-    for d in circuitos:
+    for item in linhas_tabela:
+        altura_linha = item["altura"]
         yy_next = (
             yy
             - altura_linha
@@ -1740,103 +1803,50 @@ def desenhar_mapa_fisico_qdc(
             L
         )
 
-        ident = str(
-            d.get(
-                "identificador",
-                ""
-            )
-            or ""
+        y_texto = (
+            yy
+            - 0.22
         )
-
-        fase_c = str(
-            d.get(
-                "fase",
-                ""
-            )
-            or ""
-        ).strip()
-
-        dj_c = int(
-            d.get(
-                "corrente_a",
-                0
-            )
-            or 0
-        )
-
-        ambiente = str(
-            d.get(
-                "ambiente",
-                ""
-            )
-            or ""
-        ).strip()
-
-        tipo_c = str(
-            d.get(
-                "tipo_circuito",
-                ""
-            )
-            or ""
-        ).strip()
-
-        nome_circuito = ambiente
-
-        if tipo_c:
-            nome_circuito = (
-                nome_circuito
-                + (
-                    " - "
-                    if nome_circuito
-                    else ""
-                )
-                + tipo_c
-            )
 
         _text(
             msp,
-            ident,
+            item["identificador"],
             x_c1 + 0.08,
-            yy - 0.23,
+            y_texto,
             0.072,
             LT
         )
 
         _text(
             msp,
-            fase_c or "-",
+            item["fase"],
             x_c2 + 0.08,
-            yy - 0.23,
+            y_texto,
             0.072,
             LT
         )
 
         _text(
             msp,
-            f"{dj_c} A",
+            item["disjuntor"],
             x_c3 + 0.08,
-            yy - 0.23,
+            y_texto,
             0.072,
             LT
         )
 
-        linhas_nome = _quebrar_texto(
-            nome_circuito,
-            30
-        )
+        y_amb = y_texto
 
-        _text(
-            msp,
-            (
-                linhas_nome[0]
-                if linhas_nome
-                else "-"
-            ),
-            x_c4 + 0.08,
-            yy - 0.23,
-            0.066,
-            LT
-        )
+        for linha_ambiente in item["ambientes"]:
+            _text(
+                msp,
+                linha_ambiente,
+                x_c4 + 0.08,
+                y_amb,
+                0.066,
+                LT
+            )
+            y_amb -= 0.16
 
         yy = yy_next
 
