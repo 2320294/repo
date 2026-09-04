@@ -60,6 +60,10 @@ from materiais import (
 from unifilar_qdc import (
     desenhar_unifilar_qdc
 )
+from mapa_qdc import (
+    gerar_mapa_fisico_qdc,
+    desenhar_mapa_fisico_qdc
+)
 
 from concessionarias import (
     CHAVE_PARAMETROS_REDE
@@ -133,6 +137,8 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_COMANDO": 6,
             "PROJ_ELETRICA_UNIFILAR_QDC": 7,
             "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO": 7,
+            "PROJ_ELETRICA_MAPA_QDC": 7,
+            "PROJ_ELETRICA_MAPA_QDC_TEXTO": 7,
             "AE_VERSAO": 8
         }
 
@@ -175,6 +181,8 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_COMANDO",
                     "PROJ_ELETRICA_UNIFILAR_QDC",
                     "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO",
+                    "PROJ_ELETRICA_MAPA_QDC",
+                    "PROJ_ELETRICA_MAPA_QDC_TEXTO",
                     "AE_VERSAO"
                 }:
                     msp.delete_entity(ent)
@@ -321,7 +329,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.1 Rev.1 — a geometria do ambiente só pode ser
+            # Fase 13.2 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -499,7 +507,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.1 Rev.1:
+                # Fase 13.2:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -534,7 +542,7 @@ def gerar_cad_unifilar(
                     pontos_eletricos.append(ponto)
 
         # ====================================================
-        # FASE 13.1 REV.1 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
+        # FASE 13.2 — REDE TRONCAL HÍBRIDA + TODAS AS LUMINÁRIAS
         # ====================================================
         # A rede antiga permanece desativada. A partir desta fase o CAD usa
         # um novo roteamento, baseado nos circuitos consolidados.
@@ -582,7 +590,7 @@ def gerar_cad_unifilar(
         )
 
         # ====================================================
-        # FASE 13.1 REV.1 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
+        # FASE 13.2 — DIMENSIONAMENTO ITERATIVO AUTOMÁTICO
         # ====================================================
         # O ciclo fecha quatro critérios:
         #   rota física -> queda -> capacidade -> ocupação/rerota.
@@ -978,6 +986,19 @@ def gerar_cad_unifilar(
             resumo_balanceamento=resumo_balanceamento_unifilar,
             resumo_drs=resumo_drs_unifilar,
             resumo_protecao=resumo_protecao_unifilar
+        )
+
+        mapa_fisico_qdc = gerar_mapa_fisico_qdc(
+            circuitos_dimensionados,
+            resumo_drs_unifilar,
+            resumo_protecao_unifilar,
+            resultado_demanda_unifilar
+        )
+
+        desenhar_mapa_fisico_qdc(
+            msp,
+            mapa_fisico_qdc,
+            polilinhas
         )
 
         doc.saveas(

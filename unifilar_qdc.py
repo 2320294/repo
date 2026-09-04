@@ -807,7 +807,7 @@ def desenhar_unifilar_qdc(
         0.24
     )
 
-    linha_fase = "FASE 13.1 REV.1"
+    linha_fase = "FASE 13.2"
 
     tipo_for = str(
         parametros_rede.get(

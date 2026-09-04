@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 13.1 Rev.1 — rede distribuída por caixas octogonais.
+    Fase 13.2 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -518,7 +518,7 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
-    # Fase 13.1 Rev.1:
+    # Fase 13.2:
     # circuitos terminais devem preferencialmente ser distribuídos em
     # troncos menores, evitando concentrar todos em um único eletroduto.
     # Como referência de topologia, procura limitar a aproximadamente
@@ -800,7 +800,7 @@ def _acumular_circuitos_ate_qdc(
 
 
 # ============================================================
-# FASE 13.1 REV.1 — REDISTRIBUIÇÃO FÍSICA AUTOMÁTICA
+# FASE 13.2 — REDISTRIBUIÇÃO FÍSICA AUTOMÁTICA
 # ============================================================
 
 DIAMETRO_CONDUTOR_REROTA_MM = {
@@ -1088,7 +1088,7 @@ def _avaliar_caminho_alternativo(
     distancia_raiz_candidato
 ):
     """
-    Fase 13.1 Rev.1.
+    Fase 13.2.
 
     Compara o percurso total desde o QDC até o destino, e não apenas
     a ligação local candidato->destino.
@@ -1170,7 +1170,7 @@ def _redistribuir_tronco_caixas_octogonais(
     max_iteracoes=12
 ):
     """
-    Fecha o ciclo da Fase 13.1 Rev.1:
+    Fecha o ciclo da Fase 13.2:
 
     1. calcula a ocupação projetada em Ø25 de cada trecho troncal;
     2. se ultrapassar 40%, procura outra caixa octogonal disponível;
@@ -2010,7 +2010,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 13.1 Rev.1:
+    Fase 13.2:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -2039,7 +2039,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 13.1 Rev.1
+    Fase 13.2
 
     - todo interruptor do ambiente recebe ligação;
     - interruptores paralelos não podem ficar soltos;
@@ -2652,7 +2652,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 13.1 Rev.1.
+    Fase 13.2.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -2820,7 +2820,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 13.1 Rev.1 — ramais dedicados das TUEs.
+    Fase 13.2 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2992,7 +2992,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 13.1 Rev.1
+    Fase 13.2
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente

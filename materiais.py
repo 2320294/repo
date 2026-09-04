@@ -14,6 +14,7 @@ from formacao_circuitos import formar_circuitos_definitivos
 from versao import VERSAO_SISTEMA
 from dimensionamento_rotas import verificar_capacidade_conducao_preliminar
 from dimensionamento_rotas import otimizar_eletrodutos_preliminar
+from mapa_qdc import gerar_mapa_fisico_qdc, dataframe_slots
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -39,7 +40,7 @@ from reportlab.platypus import (
 # instalação, capacidade de condução de corrente, agrupamento,
 # temperatura, queda de tensão e proteção.
 #
-# Fase 13.1 Rev.1:
+# Fase 13.2:
 # o quantitativo exibido ao usuário não usa mais quantidades
 # presumidas. Pontos/caixas vêm das entidades do projeto e
 # comprimentos de cabos/eletrodutos só aparecem quando há
@@ -312,7 +313,7 @@ def _adicionar_material(
 
 
 # ============================================================
-# FASE 13.1 REV.1 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
+# FASE 13.2 — QDC EXECUTIVO / QUANTITATIVO DERIVADO DO UNIFILAR
 # ============================================================
 
 MODULO_DIN_MM = 17.5
@@ -372,7 +373,7 @@ def _adicionar_componentes_qdc_executivo(
     local_qdc
 ):
     """
-    Fase 13.1 Rev.1.
+    Fase 13.2.
 
     Transforma a estrutura já conhecida do unifilar em componentes físicos
     do QDC. Não inclui conectores genéricos: ainda não existe informação
@@ -667,7 +668,7 @@ def _auditar_consistencia_qdc(
     resumo_qdc
 ):
     """
-    Fase 13.1 Rev.1 — auditoria cruzada do QDC.
+    Fase 13.2 — auditoria cruzada do QDC.
 
     A mesma estrutura elétrica usada no quantitativo/unifilar é verificada
     quanto a módulos DIN, polos, DR, barramentos, pente e sequência funcional.
@@ -711,7 +712,7 @@ def _auditar_consistencia_qdc(
     )
 
     # 3. Cobertura DR e exclusividade de grupo.
-    # Fase 13.1 Rev.1 Rev.1:
+    # Fase 13.2 Rev.1:
     # somente circuitos que a própria lógica do projeto classificou para DR
     # são obrigados a aparecer em um grupo IDR. Iluminação comum sem DR não
     # gera alerta apenas por estar fora dos grupos.
@@ -1007,7 +1008,7 @@ def calcular_quantitativo_materiais(
         "1 por interruptor desenhado"
     )
 
-    # Fase 13.1 Rev.1:
+    # Fase 13.2:
     # caixas octogonais dos próprios pontos de iluminação também atuam
     # como nós de passagem/distribuição da rede. Nenhuma caixa de passagem
     # adicional é contabilizada se ela não existir fisicamente no projeto.
@@ -1419,17 +1420,17 @@ def calcular_quantitativo_materiais(
             })
 
         # ========================================================
-    # FASE 13.1 REV.1 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
+    # FASE 13.2 — FORMAÇÃO DEFINITIVA DOS CIRCUITOS
     # ========================================================
     # A estimativa geométrica de cabos/eletrodutos continua baseada nas
-    # cargas elementares por ambiente até a Fase 13.1 Rev.1/11.2, quando o
+    # cargas elementares por ambiente até a Fase 13.2/11.2, quando o
     # roteamento físico passará a fornecer os comprimentos reais.
     circuitos = formar_circuitos_definitivos(
         circuitos_elementares,
         _disjuntor_por_corrente
     )
 
-    # Fase 13.1 Rev.1 — se o CAD desta versão já calculou correções por
+    # Fase 13.2 — se o CAD desta versão já calculou correções por
     # queda de tensão, a tabela de circuitos passa a refletir a seção final.
     correcoes_por_numero = {}
 
@@ -1565,7 +1566,7 @@ def calcular_quantitativo_materiais(
     # porque somente ali estão disponíveis polos, grupos DR e proteção geral.
 
     # ========================================================
-    # FASE 13.1 REV.1 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
+    # FASE 13.2 — COMPRIMENTOS REAIS DERIVADOS DO ROTEAMENTO FÍSICO
     # ========================================================
     if (
         isinstance(
@@ -1721,7 +1722,7 @@ def calcular_quantitativo_materiais(
             )
 
     # ========================================================
-    # FASE 13.1 REV.1 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
+    # FASE 13.2 — FILTRO EXECUTIVO: SOMENTE QUANTIDADES DO PROJETO
     # ========================================================
     # Nenhum item entra no quantitativo apenas por regra percentual de
     # quantidade de peças, estimativa por ambiente ou "kit" presumido.
@@ -1818,7 +1819,7 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
                 lambda valor: f"C{int(valor):02d}"
             )
 
-        # Fase 13.1 Rev.1: dados estruturais usados pelo roteamento continuam
+        # Fase 13.2: dados estruturais usados pelo roteamento continuam
         # dentro dos circuitos em memória, mas não são expostos ao usuário.
         circuitos_df = circuitos_df.drop(
             columns=["ambientes", "origens"],
@@ -1839,7 +1840,9 @@ def _gerar_excel_materiais_circuitos(
     iteracoes_df=None,
     auditoria_final_df=None,
     auditoria_trechos_df=None,
-    auditoria_qdc_df=None
+    auditoria_qdc_df=None,
+    mapa_qdc_df=None,
+    mapa_qdc_dispositivos_df=None
 ):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
@@ -2011,6 +2014,38 @@ def _gerar_excel_materiais_circuitos(
                 )
             )
 
+        if (
+            mapa_qdc_df is not None
+            and not mapa_qdc_df.empty
+        ):
+            mapa_qdc_df.to_excel(
+                writer,
+                sheet_name="Mapa_QDC",
+                index=False
+            )
+            abas.append(
+                (
+                    "Mapa_QDC",
+                    mapa_qdc_df
+                )
+            )
+
+        if (
+            mapa_qdc_dispositivos_df is not None
+            and not mapa_qdc_dispositivos_df.empty
+        ):
+            mapa_qdc_dispositivos_df.to_excel(
+                writer,
+                sheet_name="Mapa_QDC_Dispositivos",
+                index=False
+            )
+            abas.append(
+                (
+                    "Mapa_QDC_Dispositivos",
+                    mapa_qdc_dispositivos_df
+                )
+            )
+
         workbook = writer.book
         cabecalho = workbook.add_format({
             "bold": True, "bg_color": "#EAF2FF", "border": 1,
@@ -2108,7 +2143,9 @@ def _gerar_pdf_materiais_circuitos(
     iteracoes_df=None,
     auditoria_final_df=None,
     auditoria_trechos_df=None,
-    auditoria_qdc_df=None
+    auditoria_qdc_df=None,
+    mapa_qdc_df=None,
+    mapa_qdc_dispositivos_df=None
 ):
     resumo_balanceamento = dict(resumo_balanceamento or {})
     resumo_protecao = dict(resumo_protecao or {})
@@ -2850,6 +2887,69 @@ def _gerar_pdf_materiais_circuitos(
             )
         )
 
+    if (
+        mapa_qdc_df is not None
+        and not mapa_qdc_df.empty
+    ):
+        story += [
+            Spacer(1,8),
+            Paragraph(
+                "16. MAPA FÍSICO DO QDC",
+                secao
+            )
+        ]
+
+        colunas_mapa = len(
+            mapa_qdc_df.columns
+        )
+        largura_col = (
+            26.0 * cm
+            / max(
+                1,
+                colunas_mapa
+            )
+        )
+
+        story.append(
+            _pdf_tabela(
+                mapa_qdc_df,
+                [
+                    largura_col
+                    for _ in mapa_qdc_df.columns
+                ],
+                fonte=5.6
+            )
+        )
+
+        if (
+            mapa_qdc_dispositivos_df is not None
+            and not mapa_qdc_dispositivos_df.empty
+        ):
+            story += [
+                Spacer(1,6),
+                Paragraph(
+                    "Lista de dispositivos e posições DIN",
+                    texto
+                )
+            ]
+
+            story.append(
+                _pdf_tabela(
+                    mapa_qdc_dispositivos_df,
+                    [
+                        2.2*cm,
+                        1.5*cm,
+                        5.8*cm,
+                        2.0*cm,
+                        1.5*cm,
+                        1.5*cm,
+                        2.0*cm,
+                        2.0*cm,
+                    ],
+                    fonte=5.3
+                )
+            )
+
     story += [
         Spacer(1,8),
         Paragraph(
@@ -2916,7 +3016,7 @@ def renderizar_materiais(
         parametros_rede
     )
 
-    # Fase 13.1 Rev.1:
+    # Fase 13.2:
     # os números definitivos dos circuitos só existem depois do balanceamento.
     # Por isso, as correções por queda de tensão são reaplicadas neste ponto
     # para refletirem corretamente na tabela de circuitos, Excel e PDF.
@@ -2939,7 +3039,7 @@ def renderizar_materiais(
                 circuito["criterio_bitola"] = (
                     "Seção elevada automaticamente por queda de tensão"
                 )
-    # Fase 13.1 Rev.1:
+    # Fase 13.2:
     # reaplica a seção FINAL calculada pelo ciclo iterativo
     # (queda de tensão + capacidade de condução + reroteamento).
     if isinstance(resumo_rotas, dict):
@@ -3011,7 +3111,7 @@ def renderizar_materiais(
         resumo_drs
     )
 
-    # Fase 13.1 Rev.1 — componentes físicos do QDC derivados do unifilar.
+    # Fase 13.2 — componentes físicos do QDC derivados do unifilar.
     # Conectores genéricos ficam deliberadamente fora desta fase.
     resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
         materiais,
@@ -3028,6 +3128,16 @@ def renderizar_materiais(
         resumo_protecao,
         resultado_demanda_materiais,
         resumo_qdc_executivo
+    )
+
+    mapa_fisico_qdc = gerar_mapa_fisico_qdc(
+        circuitos,
+        resumo_drs,
+        resumo_protecao,
+        resultado_demanda_materiais,
+        qdc_posicoes=resumo_qdc_executivo.get(
+            "qdc_posicoes"
+        )
     )
 
     if resumo_rotas:
@@ -3201,7 +3311,7 @@ def renderizar_materiais(
     )
 
     st.success(
-        "A Fase 13.1 Rev.1 mantém o quantitativo físico do projeto e acrescenta "
+        "A Fase 13.2 mantém o quantitativo físico do projeto e acrescenta "
         "os componentes do QDC que já podem ser derivados do unifilar."
     )
 
@@ -3309,6 +3419,100 @@ def renderizar_materiais(
             "DG, DPS e sequência funcional."
         )
 
+    if mapa_fisico_qdc:
+        st.markdown(
+            "##### 🧩 Mapa físico do QDC"
+        )
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric(
+            "Configuração",
+            (
+                f"{mapa_fisico_qdc.get('linhas', 0)} trilho(s) × "
+                f"{mapa_fisico_qdc.get('colunas', 0)} posições"
+            )
+        )
+        m2.metric(
+            "Módulos de dispositivos",
+            mapa_fisico_qdc.get(
+                "modulos_dispositivos",
+                0
+            )
+        )
+        m3.metric(
+            "Posições livres",
+            mapa_fisico_qdc.get(
+                "posicoes_livres",
+                0
+            )
+        )
+
+        mapa_slots_df = pd.DataFrame(
+            dataframe_slots(
+                mapa_fisico_qdc
+            )
+        )
+
+        st.dataframe(
+            mapa_slots_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        with st.expander(
+            "🔎 Ver lista de dispositivos e posições",
+            expanded=False
+        ):
+            dispositivos_mapa_df = pd.DataFrame(
+                [
+                    {
+                        "Dispositivo": d.get(
+                            "identificador"
+                        ),
+                        "Tipo": d.get(
+                            "tipo"
+                        ),
+                        "Descrição": d.get(
+                            "descricao"
+                        ),
+                        "Grupo": d.get(
+                            "grupo"
+                        ),
+                        "Fase": d.get(
+                            "fase"
+                        ),
+                        "Módulos": d.get(
+                            "modulos"
+                        ),
+                        "Posição inicial": d.get(
+                            "posicao_inicial"
+                        ),
+                        "Posição final": d.get(
+                            "posicao_final"
+                        ),
+                    }
+                    for d in (
+                        mapa_fisico_qdc.get(
+                            "dispositivos",
+                            []
+                        )
+                        or []
+                    )
+                ]
+            )
+
+            st.dataframe(
+                dispositivos_mapa_df,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.caption(
+            "O mapa usa a mesma estrutura de DG, DPS, IDRs e disjuntores "
+            "do unifilar. Dispositivos com mais de um módulo não são divididos "
+            "entre fileiras; as posições restantes ficam identificadas como LIVRE."
+        )
+
     if not materiais_df.empty:
         st.dataframe(
             materiais_df,
@@ -3374,7 +3578,7 @@ def renderizar_materiais(
                 f"{grupo['descricao']} — {lista}"
             )
         st.caption(
-            "Fase 13.1 Rev.1: corrente nominal pré-dimensionada pelo maior "
+            "Fase 13.2: corrente nominal pré-dimensionada pelo maior "
             "disjuntor a jusante e sensibilidade de 30 mA para os grupos "
             "de tomadas. A seletividade completa depende das curvas e "
             "dados do fabricante."
@@ -3919,7 +4123,7 @@ elevada, o sistema prefere redistribuir os circuitos usando outra caixa octogona
 de iluminação, em vez de subir para Ø32/Ø40/Ø50 nos circuitos terminais.
 
 Cada caixa octogonal 4x4 é tratada com até **8 entradas/saídas** de eletroduto.
-Na Fase 13.1 Rev.1 a redistribuição deixa de ser somente uma recomendação: o novo
+Na Fase 13.2 a redistribuição deixa de ser somente uma recomendação: o novo
 caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapassa 40%.
                     """
                 )
@@ -3929,7 +4133,7 @@ caminho é criado fisicamente no roteamento quando a ocupação em Ø25 ultrapas
         )
 
         st.caption(
-            "Fase 13.1 Rev.1: a verificação abaixo usa uma referência preliminar "
+            "Fase 13.2: a verificação abaixo usa uma referência preliminar "
             "para condutores de cobre com isolação PVC 70 °C. "
             "Nesta fase o sistema apenas verifica e recomenda; não altera "
             "automaticamente a bitola por capacidade de condução."
@@ -4143,7 +4347,7 @@ definir explicitamente outro método de instalação.
                 )
 
         st.info(
-            "Fase 13.1 Rev.1: um trecho com 7 circuitos não faz o sistema assumir "
+            "Fase 13.2: um trecho com 7 circuitos não faz o sistema assumir "
             "que todo o percurso possui 7 circuitos. Cada trecho é calculado "
             "separadamente e o circuito informa qual trecho é o governante."
         )
@@ -4244,7 +4448,7 @@ definir explicitamente outro método de instalação.
             )
 
             st.caption(
-                "Depois de cada correção de seção, a Fase 13.1 Rev.1 recalcula "
+                "Depois de cada correção de seção, a Fase 13.2 recalcula "
                 "ocupação, redistribuição dos eletrodutos, queda de tensão "
                 "e capacidade de condução até estabilizar."
             )
@@ -4666,7 +4870,7 @@ definir explicitamente outro método de instalação.
     )
 
     st.caption(
-        "Fase 13.1 Rev.1: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
+        "Fase 13.2: os circuitos abaixo já usam as bitolas finais do ciclo iterativo. "
         "TUEs permanecem dedicadas; TUGs de cozinha/serviço permanecem "
         "exclusivas do ambiente; iluminação e demais TUGs podem ser "
         "agrupadas dentro dos limites preliminares definidos pelo sistema."
@@ -4694,6 +4898,8 @@ definir explicitamente outro método de instalação.
     auditoria_final_export_df = None
     auditoria_trechos_export_df = None
     auditoria_qdc_export_df = None
+    mapa_qdc_export_df = None
+    mapa_qdc_dispositivos_export_df = None
 
     if resumo_rotas:
         dados_validacao_export = (
@@ -4988,6 +5194,35 @@ definir explicitamente outro método de instalação.
             )
         )
 
+    if "mapa_fisico_qdc" in locals() and mapa_fisico_qdc:
+        mapa_qdc_export_df = pd.DataFrame(
+            dataframe_slots(
+                mapa_fisico_qdc
+            )
+        )
+
+        mapa_qdc_dispositivos_export_df = pd.DataFrame(
+            [
+                {
+                    "Dispositivo": d.get("identificador"),
+                    "Tipo": d.get("tipo"),
+                    "Descrição": d.get("descricao"),
+                    "Grupo": d.get("grupo"),
+                    "Fase": d.get("fase"),
+                    "Módulos": d.get("modulos"),
+                    "Posição inicial": d.get("posicao_inicial"),
+                    "Posição final": d.get("posicao_final"),
+                }
+                for d in (
+                    mapa_fisico_qdc.get(
+                        "dispositivos",
+                        []
+                    )
+                    or []
+                )
+            ]
+        )
+
     nome_projeto = str(
         st.session_state.get(
             "projeto_ativo",
@@ -5008,7 +5243,9 @@ definir explicitamente outro método de instalação.
         iteracoes_df=iteracoes_export_df,
         auditoria_final_df=auditoria_final_export_df,
         auditoria_trechos_df=auditoria_trechos_export_df,
-        auditoria_qdc_df=auditoria_qdc_export_df
+        auditoria_qdc_df=auditoria_qdc_export_df,
+        mapa_qdc_df=mapa_qdc_export_df,
+        mapa_qdc_dispositivos_df=mapa_qdc_dispositivos_export_df
     )
     pdf_bytes = _gerar_pdf_materiais_circuitos(
         nome_projeto,
@@ -5030,7 +5267,9 @@ definir explicitamente outro método de instalação.
         iteracoes_df=iteracoes_export_df,
         auditoria_final_df=auditoria_final_export_df,
         auditoria_trechos_df=auditoria_trechos_export_df,
-        auditoria_qdc_df=auditoria_qdc_export_df
+        auditoria_qdc_df=auditoria_qdc_export_df,
+        mapa_qdc_df=mapa_qdc_export_df,
+        mapa_qdc_dispositivos_df=mapa_qdc_dispositivos_export_df
     )
 
     col_excel, col_pdf = st.columns(2)
@@ -5039,7 +5278,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📊 Exportar para Excel",
             data=excel_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_1_Rev_1.xlsx",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_2.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
@@ -5048,7 +5287,7 @@ definir explicitamente outro método de instalação.
         st.download_button(
             "📄 Gerar PDF",
             data=pdf_bytes,
-            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_1_Rev_1.pdf",
+            file_name=f"{nome_arquivo}_Circuitos_Materiais_Fase_13_2.pdf",
             mime="application/pdf",
             use_container_width=True
         )
