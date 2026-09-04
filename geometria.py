@@ -154,7 +154,7 @@ def get_inside_normal(
 
 def get_inside_normal_polygon(vx, vy, start_x, start_y, polilinha, probe=0.05, cx=None, cy=None):
     """
-    Fase 13.6 Rev.14: retorna a normal que aponta realmente para dentro do polígono.
+    Fase 13.6 Rev.15: retorna a normal que aponta realmente para dentro do polígono.
     Em ambientes côncavos (L/U/T/recuos), não depende do centro global.
     Testa as duas faces da parede com pequenos deslocamentos progressivos.
     """
