@@ -100,7 +100,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.4 Rev.7:
+    Fase 13.4 Rev.8:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -817,7 +817,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.4 Rev.7 — QDC executivo no CAD.
+    Fase 13.4 Rev.8 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -899,7 +899,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.7",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.4 REV.8",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1620,15 +1620,31 @@ def desenhar_mapa_fisico_qdc(
     )
 
     # Tabela executiva:
-    # Circuito | Fase | Disjuntor | Ambientes
-    # A coluna Ambientes lista todos os ambientes atendidos pelo circuito.
-    tabela_x1 = px1 + 0.22
-    tabela_x2 = px2 - 0.22
-    tabela_y_top = py_top - 0.62
+    # Circuito | Fase | Disj. | Ambientes
+    #
+    # Fase 13.4 Rev.8:
+    # cada célula é desenhada como um retângulo independente.
+    # Evita linhas horizontais longas escapando para dentro do diagrama.
+    tabela_x1 = px1 + 0.35
+    tabela_largura = min(
+        9.20,
+        max(
+            7.80,
+            px2 - tabela_x1 - 0.35
+        )
+    )
+    tabela_x2 = tabela_x1 + tabela_largura
+    tabela_y_top = py_top - 0.72
 
     col_circuito = 1.05
     col_fase = 0.85
     col_dj = 1.10
+    col_ambientes = (
+        tabela_largura
+        - col_circuito
+        - col_fase
+        - col_dj
+    )
 
     x_c1 = tabela_x1
     x_c2 = x_c1 + col_circuito
@@ -1636,8 +1652,8 @@ def desenhar_mapa_fisico_qdc(
     x_c4 = x_c3 + col_dj
     x_c5 = tabela_x2
 
-    altura_cab = 0.34
-    altura_linha_base = 0.34
+    altura_cab = 0.42
+    altura_linha_base = 0.38
 
     linhas_tabela = []
 
@@ -1674,9 +1690,19 @@ def desenhar_mapa_fisico_qdc(
             or ""
         ).strip()
 
+        # Usa largura visual da coluna Ambientes para definir a quebra.
+        max_chars_amb = max(
+            22,
+            int(
+                col_ambientes
+                / 0.066
+                / 0.58
+            )
+        )
+
         linhas_ambientes = _quebrar_texto(
             ambientes_txt or "-",
-            34
+            max_chars_amb
         )
 
         if not linhas_ambientes:
@@ -1688,7 +1714,7 @@ def desenhar_mapa_fisico_qdc(
             + len(
                 linhas_ambientes
             )
-            * 0.16
+            * 0.17
         )
 
         linhas_tabela.append({
@@ -1699,207 +1725,95 @@ def desenhar_mapa_fisico_qdc(
             "altura": altura_linha,
         })
 
-    tabela_y_bottom = (
-        tabela_y_top
-        - altura_cab
-        - sum(
-            item["altura"]
-            for item in linhas_tabela
-        )
-    )
+    # Cabeçalho: quatro células independentes.
+    y_top = tabela_y_top
+    y_bottom = y_top - altura_cab
 
-    _rect(
-        msp,
-        tabela_x1,
-        tabela_y_bottom,
-        tabela_x2,
-        tabela_y_top,
-        L
-    )
+    cabecalhos = [
+        (x_c1, x_c2, "Circuito"),
+        (x_c2, x_c3, "Fase"),
+        (x_c3, x_c4, "Disj."),
+        (x_c4, x_c5, "Ambientes"),
+    ]
 
-    for xx in (
-        x_c2,
-        x_c3,
-        x_c4
-    ):
-        _line(
+    for xa, xb, titulo_coluna in cabecalhos:
+        _rect(
             msp,
-            (
-                xx,
-                tabela_y_bottom
-            ),
-            (
-                xx,
-                tabela_y_top
-            ),
+            xa,
+            y_bottom,
+            xb,
+            y_top,
             L
         )
+        _text(
+            msp,
+            titulo_coluna,
+            xa + 0.08,
+            y_top - 0.27,
+            0.075,
+            LT
+        )
 
-    y_cab = (
-        tabela_y_top
-        - altura_cab
-    )
+    yy_top = y_bottom
 
-    _line(
-        msp,
-        (
-            tabela_x1,
-            y_cab
-        ),
-        (
-            tabela_x2,
-            y_cab
-        ),
-        L
-    )
-
-    _text(
-        msp,
-        "Circuito",
-        x_c1 + 0.08,
-        tabela_y_top - 0.23,
-        0.075,
-        LT
-    )
-
-    _text(
-        msp,
-        "Fase",
-        x_c2 + 0.08,
-        tabela_y_top - 0.23,
-        0.075,
-        LT
-    )
-
-    _text(
-        msp,
-        "Disj.",
-        x_c3 + 0.08,
-        tabela_y_top - 0.23,
-        0.075,
-        LT
-    )
-
-    _text(
-        msp,
-        "Ambientes",
-        x_c4 + 0.08,
-        tabela_y_top - 0.23,
-        0.075,
-        LT
-    )
-
-    yy = y_cab
-
+    # Linhas: cada uma composta de quatro retângulos.
     for item in linhas_tabela:
         altura_linha = item["altura"]
-        yy_next = (
-            yy
-            - altura_linha
-        )
+        yy_bottom = yy_top - altura_linha
 
-        _line(
-            msp,
+        celulas = [
             (
-                tabela_x1,
-                yy_next
+                x_c1,
+                x_c2,
+                [item["identificador"]],
+                0.072
             ),
             (
-                tabela_x2,
-                yy_next
+                x_c2,
+                x_c3,
+                [item["fase"]],
+                0.072
             ),
-            L
-        )
+            (
+                x_c3,
+                x_c4,
+                [item["disjuntor"]],
+                0.072
+            ),
+            (
+                x_c4,
+                x_c5,
+                item["ambientes"],
+                0.066
+            ),
+        ]
 
-        y_texto = (
-            yy
-            - 0.22
-        )
-
-        _text(
-            msp,
-            item["identificador"],
-            x_c1 + 0.08,
-            y_texto,
-            0.072,
-            LT
-        )
-
-        _text(
-            msp,
-            item["fase"],
-            x_c2 + 0.08,
-            y_texto,
-            0.072,
-            LT
-        )
-
-        _text(
-            msp,
-            item["disjuntor"],
-            x_c3 + 0.08,
-            y_texto,
-            0.072,
-            LT
-        )
-
-        y_amb = y_texto
-
-        for linha_ambiente in item["ambientes"]:
-            _text(
+        for xa, xb, textos, altura_texto in celulas:
+            _rect(
                 msp,
-                linha_ambiente,
-                x_c4 + 0.08,
-                y_amb,
-                0.066,
-                LT
+                xa,
+                yy_bottom,
+                xb,
+                yy_top,
+                L
             )
-            y_amb -= 0.16
 
-        yy = yy_next
+            y_txt = yy_top - 0.24
 
+            for texto_celula in textos:
+                _text(
+                    msp,
+                    texto_celula,
+                    xa + 0.08,
+                    y_txt,
+                    altura_texto,
+                    LT
+                )
+                y_txt -= 0.17
 
-    # Redesenho final da grade da LISTA DE CIRCUITOS.
-    # Mantém todas as linhas exclusivamente dentro da área da tabela lateral.
-    # Isso evita que linhas funcionais do diagrama visualmente substituam ou
-    # atravessem a grade da tabela.
-    _rect(
-        msp,
-        tabela_x1,
-        tabela_y_bottom,
-        tabela_x2,
-        tabela_y_top,
-        L
-    )
+        yy_top = yy_bottom
 
-    for xx in (
-        x_c2,
-        x_c3,
-        x_c4
-    ):
-        _line(
-            msp,
-            (xx, tabela_y_bottom),
-            (xx, tabela_y_top),
-            L
-        )
-
-    _line(
-        msp,
-        (tabela_x1, y_cab),
-        (tabela_x2, y_cab),
-        L
-    )
-
-    _yy_grade = y_cab
-    for _item_grade in linhas_tabela:
-        _yy_grade -= _item_grade["altura"]
-        _line(
-            msp,
-            (tabela_x1, _yy_grade),
-            (tabela_x2, _yy_grade),
-            L
-        )
+    tabela_y_bottom = yy_top
 
     # Legenda.
     leg_y = max(
