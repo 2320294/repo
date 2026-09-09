@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.49:
+    Fase 13.6 Rev.50:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.49 — PASSAGENS "POR TRÁS" DOS DISJUNTORES
+# FASE 13.6 REV.50 — PASSAGENS "POR TRÁS" DOS DISJUNTORES
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -725,228 +725,6 @@ def _polyline(msp, pontos, layer):
     )
 
 
-
-
-def _uniformizar_horizontais_reais_no_vao(
-    msp,
-    y_base_superior,
-    y_topo_inferior,
-    tolerancia=1e-6
-):
-    """
-    Rev.49 — uniformização FINAL baseada na geometria que realmente foi
-    desenhada, não em uma previsão da quantidade de cabos.
-
-    1) localiza todos os segmentos horizontais reais A/B/C/N/PE dentro do vão;
-    2) obtém os níveis Y únicos realmente existentes;
-    3) calcula:
-         D = base_superior - topo_inferior
-         E = D / (Q_real + 1)
-    4) move cada nível real para:
-         Y(i) = base_superior - (i + 1) * E
-    5) ajusta as pontas dos segmentos verticais conectados;
-    6) ajusta os candidatos das bolinhas para acompanhar o novo Y.
-
-    Dessa forma não pode existir "nível fantasma": Q_real vem do DXF
-    efetivamente desenhado.
-    """
-    y_sup = float(y_base_superior)
-    y_inf = float(y_topo_inferior)
-
-    if y_sup <= y_inf + tolerancia:
-        return 0
-
-    try:
-        entidades = list(msp)
-    except Exception:
-        return 0
-
-    horizontais = []
-
-    for ent in entidades:
-        try:
-            if ent.dxftype() != "LINE":
-                continue
-            if str(ent.dxf.layer) not in _QDC_LAYERS_CONDUTORES:
-                continue
-
-            a = ent.dxf.start
-            b = ent.dxf.end
-            ax, ay = float(a.x), float(a.y)
-            bx, by = float(b.x), float(b.y)
-
-            if abs(ay - by) > tolerancia:
-                continue
-            if abs(ax - bx) <= tolerancia:
-                continue
-
-            yy = (ay + by) / 2.0
-
-            # Somente horizontais realmente ENTRE as duas faces.
-            if not (
-                y_inf + tolerancia
-                < yy
-                < y_sup - tolerancia
-            ):
-                continue
-
-            horizontais.append(
-                {
-                    "ent": ent,
-                    "layer": str(ent.dxf.layer),
-                    "x1": ax,
-                    "x2": bx,
-                    "y": yy,
-                }
-            )
-        except Exception:
-            continue
-
-    if not horizontais:
-        return 0
-
-    # Agrupa Ys geometricamente iguais.
-    niveis = []
-    for item in sorted(
-        horizontais,
-        key=lambda h: -h["y"]
-    ):
-        yy = item["y"]
-        existente = next(
-            (
-                n
-                for n in niveis
-                if abs(n - yy) <= tolerancia
-            ),
-            None
-        )
-        if existente is None:
-            niveis.append(yy)
-
-    niveis = sorted(niveis, reverse=True)
-    q_real = len(niveis)
-
-    if q_real <= 0:
-        return 0
-
-    distancia = y_sup - y_inf
-    passo = distancia / (q_real + 1)
-
-    mapa_y = {
-        y_antigo: (
-            y_sup
-            - (indice + 1) * passo
-        )
-        for indice, y_antigo
-        in enumerate(niveis)
-    }
-
-    def _novo_y(yy):
-        for antigo, novo in mapa_y.items():
-            if abs(float(yy) - antigo) <= tolerancia:
-                return novo
-        return None
-
-    # Pontos onde um horizontal realmente se conecta a um vertical.
-    pontos_conexao = set()
-
-    # Move os horizontais.
-    for item in horizontais:
-        ent = item["ent"]
-        novo_y = _novo_y(item["y"])
-        if novo_y is None:
-            continue
-
-        try:
-            a = ent.dxf.start
-            b = ent.dxf.end
-            ax, az = float(a.x), float(getattr(a, "z", 0.0))
-            bx, bz = float(b.x), float(getattr(b, "z", 0.0))
-
-            ent.dxf.start = (ax, novo_y, az)
-            ent.dxf.end = (bx, novo_y, bz)
-
-            pontos_conexao.add(
-                (
-                    item["layer"],
-                    round(ax, 7),
-                    round(item["y"], 7),
-                    novo_y,
-                )
-            )
-            pontos_conexao.add(
-                (
-                    item["layer"],
-                    round(bx, 7),
-                    round(item["y"], 7),
-                    novo_y,
-                )
-            )
-        except Exception:
-            continue
-
-    # Ajusta somente as extremidades verticais que tocavam os horizontais.
-    for ent in entidades:
-        try:
-            if ent.dxftype() != "LINE":
-                continue
-
-            layer = str(ent.dxf.layer)
-            if layer not in _QDC_LAYERS_CONDUTORES:
-                continue
-
-            a = ent.dxf.start
-            b = ent.dxf.end
-            ax, ay = float(a.x), float(a.y)
-            bx, by = float(b.x), float(b.y)
-
-            if abs(ax - bx) > tolerancia:
-                continue
-
-            novo_ay = None
-            novo_by = None
-
-            for lyr, px, py_antigo, py_novo in pontos_conexao:
-                if lyr != layer:
-                    continue
-                if abs(ax - px) > tolerancia:
-                    continue
-
-                if abs(ay - py_antigo) <= tolerancia:
-                    novo_ay = py_novo
-                if abs(by - py_antigo) <= tolerancia:
-                    novo_by = py_novo
-
-            if novo_ay is not None:
-                ent.dxf.start = (
-                    ax,
-                    novo_ay,
-                    float(getattr(a, "z", 0.0))
-                )
-
-            if novo_by is not None:
-                ent.dxf.end = (
-                    bx,
-                    novo_by,
-                    float(getattr(b, "z", 0.0))
-                )
-        except Exception:
-            continue
-
-    # As bolinhas são finalizadas somente no fim do QDC; portanto
-    # seus candidatos precisam acompanhar o deslocamento dos níveis.
-    for cand in _QDC_NODE_CANDIDATES:
-        if cand.get("msp") is not msp:
-            continue
-
-        novo = _novo_y(
-            cand.get("y", 0.0)
-        )
-
-        if novo is not None:
-            cand["y"] = float(novo)
-
-    return q_real
 
 
 def _eh_ultimo_ponto_da_fase(x, pontos_fase, tolerancia=1e-6):
@@ -1376,7 +1154,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1469,7 +1247,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1511,7 +1289,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.49:
+        # Fase 13.6 Rev.50:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1790,7 +1568,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.49 — QDC executivo no CAD.
+    Fase 13.6 Rev.50 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1828,7 +1606,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1856,7 +1634,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.49 — padrão modular do QDC.
+    # Fase 13.6 Rev.50 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1883,7 +1661,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1921,7 +1699,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.49",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.50",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1981,7 +1759,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2018,7 +1796,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.49 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.50 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2116,16 +1894,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.49 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.50 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2226,7 +2004,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.49 — ENTRADA DA REDE
+        # FASE 13.6 REV.50 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2292,7 +2070,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.49:
+        # Fase 13.6 Rev.50:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2371,7 +2149,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.49 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.50 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2680,7 +2458,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.49 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.50 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2863,7 +2641,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.49 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.50 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3037,7 +2815,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.49 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.50 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3117,106 +2895,129 @@ def desenhar_mapa_fisico_qdc(
                     in dr_disp_geom_por_grupo.items()
                 }
 
-                # Rev.47 — contar SOMENTE cabos com trecho horizontal real.
-                # A Rev.46 podia reservar níveis para ligações puramente
-                # verticais, criando "buracos" visuais na grade.
+                # Rev.50 — GRADE DETERMINÍSTICA, SEM REESCRITA POSTERIOR.
+                #
+                # A lista abaixo representa exatamente as pistas horizontais
+                # que o código desta fileira irá desenhar.
+                #
+                # Regra:
+                # - cada grupo com >=2 DJs cria pista horizontal por fase usada;
+                # - neutro cria pista horizontal quando houver >=2 destinos N;
+                # - grupo com 1 DJ só entra na grade se origem e destino
+                #   tiverem X diferentes (há trecho horizontal real);
+                # - PE dos DPS só existe no primeiro vão.
+                #
+                # Assim não há "nível fantasma" e também não precisamos mover
+                # entidades já desenhadas, evitando pontas e perda de nós.
                 condutores_horizontais = []
 
-                def _fonte_do_grupo_grade(grupo_grade):
-                    geom_fonte = dr_geom_por_grupo.get(grupo_grade)
-                    disp_fonte = None
-                    if geom_fonte is not None:
-                        for dgg, ggg in geral_geom:
-                            if ggg is geom_fonte:
-                                disp_fonte = dgg
-                                break
+                def _fonte_grade(grupo_grade):
+                    par = dr_disp_geom_por_grupo.get(grupo_grade)
+                    if par is not None:
+                        return par
                     if (
-                        geom_fonte is None
-                        and str(grupo_grade).upper() == "SEM DR"
+                        str(grupo_grade).upper() == "SEM DR"
                         and dg_geoms
                     ):
-                        disp_fonte, geom_fonte = dg_geoms[0]
-                    return disp_fonte, geom_fonte
-
-                def _tem_horizontal_fase_grade(grupo_grade, itens_grade, fase_grade):
-                    destinos = sorted(set(
-                        _polo_para_fase(dg, gg, fase_grade)
-                        for dg, gg in itens_grade
-                        if fase_grade in _fases_do_texto(dg.get("fase", ""))
-                    ))
-                    if not destinos:
-                        return False
-                    if len(destinos) >= 2 and max(destinos)-min(destinos) > 1e-9:
-                        return True
-
-                    disp_fonte, geom_fonte = _fonte_do_grupo_grade(grupo_grade)
-                    if not disp_fonte or not geom_fonte:
-                        return False
-
-                    if disp_fonte.get("tipo") == "IDR":
-                        fases_fonte_grade = [
-                            t for t in ("A","B","C")
-                            if t in (disp_fonte.get("condutores", []) or [])
-                        ]
-                    elif disp_fonte.get("tipo") == "DG":
-                        fases_fonte_grade = _fases_alimentador(mapa)
-                    else:
-                        fases_fonte_grade = _fases_do_texto(
-                            disp_fonte.get("fase", "")
-                        )
-                    if fase_grade not in fases_fonte_grade:
-                        return False
-
-                    x_fonte = _polo_para_fase(
-                        disp_fonte, geom_fonte, fase_grade
-                    )
-                    return any(abs(xd-x_fonte) > 1e-9 for xd in destinos)
-
-                def _tem_horizontal_neutro_grade(grupo_grade, itens_grade):
-                    itens_n = [
-                        (dg, gg) for dg, gg in itens_grade
-                        if gg.get("tem_neutro")
-                    ]
-                    if not itens_n:
-                        return False
-                    destinos_n = sorted(set(
-                        _x_passagem_lateral_disjuntor(gg, "dir", 0.12)
-                        for _, gg in itens_n
-                    ))
-                    if len(destinos_n) >= 2 and max(destinos_n)-min(destinos_n) > 1e-9:
-                        return True
-
-                    par_idr = dr_disp_geom_por_grupo.get(grupo_grade)
-                    if par_idr is not None:
-                        di, gi = par_idr
-                        x_fonte_n = _mapa_condutores_polos(di, gi).get("N")
-                    else:
-                        x_fonte_n = neutro["x"]
-                    if x_fonte_n is None:
-                        return False
-                    return any(abs(xd-x_fonte_n) > 1e-9 for xd in destinos_n)
+                        return dg_geoms[0]
+                    return (None, None)
 
                 for grupo_grade, itens_grade in grupos_fileira:
-                    fases_grade = []
-                    for dg, gg in itens_grade:
-                        for fg in _fases_do_texto(dg.get("fase", "")):
-                            if fg in ("A","B","C") and fg not in fases_grade:
-                                fases_grade.append(fg)
+                    usar_pista_grade = len(itens_grade) >= 2
 
-                    for fg in ("A","B","C"):
-                        if (
-                            fg in fases_grade
-                            and _tem_horizontal_fase_grade(
-                                grupo_grade, itens_grade, fg
-                            )
+                    # Fases A/B/C
+                    fases_usadas_grade = []
+                    for d_grade, g_grade in itens_grade:
+                        for fase_grade in _fases_do_texto(
+                            d_grade.get("fase", "")
                         ):
-                            condutores_horizontais.append((grupo_grade, fg))
+                            if (
+                                fase_grade in ("A", "B", "C")
+                                and fase_grade not in fases_usadas_grade
+                            ):
+                                fases_usadas_grade.append(fase_grade)
 
-                    if _tem_horizontal_neutro_grade(grupo_grade, itens_grade):
-                        condutores_horizontais.append((grupo_grade, "N"))
+                    disp_fonte_grade, geom_fonte_grade = _fonte_grade(
+                        grupo_grade
+                    )
+
+                    for fase_grade in ("A", "B", "C"):
+                        if fase_grade not in fases_usadas_grade:
+                            continue
+
+                        deve_reservar = usar_pista_grade
+
+                        if (
+                            not deve_reservar
+                            and len(itens_grade) == 1
+                            and disp_fonte_grade
+                            and geom_fonte_grade
+                        ):
+                            d_unico_grade, g_unico_grade = itens_grade[0]
+                            x_origem_grade = _polo_para_fase(
+                                disp_fonte_grade,
+                                geom_fonte_grade,
+                                fase_grade
+                            )
+                            x_destino_grade = _polo_para_fase(
+                                d_unico_grade,
+                                g_unico_grade,
+                                fase_grade
+                            )
+                            deve_reservar = (
+                                abs(x_origem_grade - x_destino_grade) > 1e-9
+                            )
+
+                        if deve_reservar:
+                            condutores_horizontais.append(
+                                (grupo_grade, fase_grade)
+                            )
+
+                    # Neutro
+                    itens_n_grade = [
+                        (d_grade, g_grade)
+                        for d_grade, g_grade in itens_grade
+                        if g_grade.get("tem_neutro")
+                    ]
+
+                    if len(itens_n_grade) >= 2:
+                        condutores_horizontais.append(
+                            (grupo_grade, "N")
+                        )
+                    elif len(itens_n_grade) == 1:
+                        _, g_n_grade = itens_n_grade[0]
+                        x_destino_n_grade = _x_passagem_lateral_disjuntor(
+                            g_n_grade,
+                            "dir",
+                            0.12
+                        )
+
+                        if (
+                            disp_fonte_grade
+                            and geom_fonte_grade
+                            and disp_fonte_grade.get("tipo") == "IDR"
+                        ):
+                            x_origem_n_grade = _mapa_condutores_polos(
+                                disp_fonte_grade,
+                                geom_fonte_grade
+                            ).get("N")
+                        else:
+                            x_origem_n_grade = neutro["x"]
+
+                        if (
+                            x_origem_n_grade is not None
+                            and abs(
+                                x_origem_n_grade - x_destino_n_grade
+                            ) > 1e-9
+                        ):
+                            condutores_horizontais.append(
+                                (grupo_grade, "N")
+                            )
 
                 if trilho == 0 and dps_geom_pe:
-                    condutores_horizontais.append(("__GERAL__", "PE"))
+                    condutores_horizontais.append(
+                        ("__GERAL__", "PE")
+                    )
 
                 # Ordem visual: PE -> A -> B -> C -> N.
                 ordem_fase_grade = {
@@ -3626,7 +3427,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.49:
+                    # Fase 13.6 Rev.50:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4151,18 +3952,6 @@ def desenhar_mapa_fisico_qdc(
                                     _layer_por_token(fase_item)
                                 )
 
-        # ====================================================
-        # REV.49 — UNIFORMIZAÇÃO FINAL DA GEOMETRIA REAL
-        # ====================================================
-        # Neste ponto TODAS as ligações horizontais deste vão já foram
-        # desenhadas. Portanto Q é obtido diretamente das entidades LINE
-        # existentes, eliminando qualquer nível reservado sem cabo.
-        _uniformizar_horizontais_reais_no_vao(
-            msp,
-            y_base_fileira_superior,
-            y_topo_fileira_inferior
-        )
-
         y_rail -= 3.15
 
     # -------------------------
@@ -4201,7 +3990,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.49:
+    # Fase 13.6 Rev.50:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
