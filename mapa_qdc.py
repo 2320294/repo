@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.58:
+    Fase 13.6 Rev.59:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.58 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.59 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1233,7 +1233,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1326,7 +1326,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1368,7 +1368,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.58:
+        # Fase 13.6 Rev.59:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1666,7 +1666,6 @@ def _x_desvio_para_nao_invadir_dj(
     dj_destino_geom=None,
     margem=0.12,
     tolerancia=1e-9,
-    x_uniforme=None,
 ):
     """
     Rev.56 — prioridade absoluta do cabo que ENTRA no disjuntor.
@@ -1700,11 +1699,7 @@ def _x_desvio_para_nao_invadir_dj(
         dentro_x = rx1 + tolerancia < x_original < rx2 - tolerancia
 
         if cruza_y and dentro_x:
-            # Rev.58 — quando fornecido, o corredor uniforme tem prioridade.
-            if x_uniforme is not None:
-                return float(x_uniforme)
-
-            # Fallback compatível com revisões anteriores.
+            # Escolhe o lado mais próximo para o desvio.
             dist_esq = abs(x_original - rx1)
             dist_dir = abs(rx2 - x_original)
             if dist_esq <= dist_dir:
@@ -1714,38 +1709,228 @@ def _x_desvio_para_nao_invadir_dj(
     return x_original
 
 
-def _niveis_horizontais_uniformes_x(
-    x_esquerda,
-    x_direita,
-    quantidade,
-):
+def _grade_x_uniforme(x_esq, x_dir, quantidade):
     """
-    Rev.58 — grade horizontal uniforme.
+    Rev.59 — mesma filosofia do espaçamento vertical aplicada ao eixo X.
 
-    H = x_direita - x_esquerda
+    H = x_dir - x_esq
+    Q = quantidade REAL de cabos verticais de passagem
     E = H / (Q + 1)
 
-    Retorna Q posições X igualmente espaçadas:
-        X(i) = x_esquerda + (i + 1) * E
+    X(i) = x_esq + (i + 1) * E
     """
     q = max(0, int(quantidade or 0))
-
     if q <= 0:
         return []
 
-    x1 = float(x_esquerda)
-    x2 = float(x_direita)
-
+    x1 = float(x_esq)
+    x2 = float(x_dir)
     if x2 <= x1:
         return []
 
-    largura = x2 - x1
-    passo = largura / (q + 1)
+    h = x2 - x1
+    e = h / (q + 1)
 
     return [
-        x1 + (i + 1) * passo
+        x1 + (i + 1) * e
         for i in range(q)
     ]
+
+
+def _agrupar_obstaculos_por_fileira(rects, tolerancia=0.08):
+    """
+    Agrupa DJs por faixa Y para permitir um desvio limpo ao redor
+    de um conjunto de aparelhos da mesma fileira.
+    """
+    grupos = []
+
+    for r in sorted(
+        [
+            rr for rr in rects
+            if str(rr.get("tipo", "")).upper() == "DJ"
+        ],
+        key=lambda rr: -float(rr["y2"])
+    ):
+        colocado = False
+
+        for grupo in grupos:
+            if (
+                abs(float(grupo[0]["y1"]) - float(r["y1"])) <= tolerancia
+                and abs(float(grupo[0]["y2"]) - float(r["y2"])) <= tolerancia
+            ):
+                grupo.append(r)
+                colocado = True
+                break
+
+        if not colocado:
+            grupos.append([r])
+
+    for grupo in grupos:
+        grupo.sort(key=lambda rr: float(rr["x1"]))
+
+    return grupos
+
+
+def _desvio_lateral_fora_da_fileira(
+    x_atual,
+    grupo_fileira,
+    margem=0.08,
+    tolerancia=1e-9,
+):
+    """
+    Se x_atual atravessa algum DJ da fileira, encontra o bloco contíguo
+    de aparelhos que contém esse X e retorna o lado livre mais próximo.
+
+    Isso garante a prioridade física do cabo que entra no DJ:
+    quem apenas passa desvia por fora do aparelho.
+    """
+    x = float(x_atual)
+
+    intervalos = [
+        (
+            float(r["x1"]),
+            float(r["x2"])
+        )
+        for r in grupo_fileira
+    ]
+
+    alvo = None
+    for idx, (x1, x2) in enumerate(intervalos):
+        if x1 + tolerancia < x < x2 - tolerancia:
+            alvo = idx
+            break
+
+    if alvo is None:
+        return x
+
+    # Expande para aparelhos praticamente contíguos.
+    esq = alvo
+    dir_ = alvo
+
+    while esq > 0:
+        gap = intervalos[esq][0] - intervalos[esq - 1][1]
+        if gap <= 2.0 * margem + tolerancia:
+            esq -= 1
+        else:
+            break
+
+    while dir_ < len(intervalos) - 1:
+        gap = intervalos[dir_ + 1][0] - intervalos[dir_][1]
+        if gap <= 2.0 * margem + tolerancia:
+            dir_ += 1
+        else:
+            break
+
+    limite_esq = intervalos[esq][0] - margem
+    limite_dir = intervalos[dir_][1] + margem
+
+    if abs(x - limite_esq) <= abs(limite_dir - x):
+        return limite_esq
+    return limite_dir
+
+
+def _rotear_saida_com_prioridade(
+    msp,
+    x_inicio,
+    y_inicio,
+    y_final,
+    layer,
+    x_corredor,
+    geom_origem,
+    grupos_dj,
+    margem_y=0.08,
+):
+    """
+    Rev.59 — rota final de um condutor de circuito.
+
+    1. sai reto do próprio borne;
+    2. no primeiro vão livre muda para seu corredor X uniforme;
+    3. ao encontrar um DJ inferior, NÃO atravessa seu corpo:
+       faz um pequeno desvio lateral;
+    4. volta ao mesmo corredor abaixo do aparelho;
+    5. termina na cota final dos circuitos.
+
+    O DJ de origem não é obstáculo para a própria fase que sai dele.
+    """
+    x0 = float(x_inicio)
+    y0 = float(y_inicio)
+    yf = float(y_final)
+    xc = float(x_corredor)
+
+    if y0 <= yf:
+        return
+
+    # Mantém um pequeno trecho reto imediatamente após o borne.
+    y_transicao = y0 - 0.12
+
+    if y_transicao < yf:
+        y_transicao = (y0 + yf) / 2.0
+
+    pontos = [
+        (x0, y0),
+        (x0, y_transicao),
+    ]
+
+    if abs(xc - x0) > 1e-9:
+        pontos.append((xc, y_transicao))
+
+    x_atual = xc
+    y_atual = y_transicao
+
+    origem_id = id(geom_origem) if geom_origem is not None else None
+
+    # Fileiras inferiores, de cima para baixo.
+    for grupo in grupos_dj:
+        if not grupo:
+            continue
+
+        y1 = min(float(r["y1"]) for r in grupo)
+        y2 = max(float(r["y2"]) for r in grupo)
+
+        # Fora da faixa vertical da rota restante.
+        if y2 >= y_atual - 1e-9:
+            continue
+        if y1 <= yf + 1e-9:
+            continue
+
+        # Ignora a geometria de origem caso esteja no grupo.
+        grupo_util = [
+            r for r in grupo
+            if r.get("geom_id") != origem_id
+        ]
+
+        if not grupo_util:
+            continue
+
+        x_desvio = _desvio_lateral_fora_da_fileira(
+            x_atual,
+            grupo_util,
+            margem=0.08
+        )
+
+        if abs(x_desvio - x_atual) <= 1e-9:
+            continue
+
+        y_acima = y2 + margem_y
+        y_abaixo = y1 - margem_y
+
+        if y_acima < y_atual - 1e-9:
+            pontos.append((x_atual, y_acima))
+
+        pontos.append((x_desvio, y_acima))
+        pontos.append((x_desvio, y_abaixo))
+        pontos.append((x_atual, y_abaixo))
+
+        y_atual = y_abaixo
+
+    if y_atual > yf + 1e-9:
+        pontos.append((x_atual, yf))
+
+    _polyline(
+        msp,
+        pontos,
+        layer
+    )
 
 
 def _destino_alinhado_prioritario(x_origem, pontos, tolerancia=1e-9):
@@ -1763,7 +1948,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.58 — QDC executivo no CAD.
+    Fase 13.6 Rev.59 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1801,7 +1986,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1829,7 +2014,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.58 — padrão modular do QDC.
+    # Fase 13.6 Rev.59 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1856,7 +2041,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1896,7 +2081,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.58",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.59",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1957,7 +2142,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1994,7 +2179,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.58 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.59 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2092,16 +2277,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.58 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.59 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2202,7 +2387,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.58 — ENTRADA DA REDE
+        # FASE 13.6 REV.59 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2268,7 +2453,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.58:
+        # Fase 13.6 Rev.59:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2352,7 +2537,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.58 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.59 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2634,7 +2819,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.58 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.59 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2828,74 +3013,6 @@ def desenhar_mapa_fisico_qdc(
             < 0.05
         ]
 
-        # ====================================================
-        # REV.58 — GRADE HORIZONTAL UNIFORME PARA DESVIOS
-        # ====================================================
-        # Cabos que entram no próprio DJ NÃO participam da grade:
-        # eles têm prioridade para permanecer no eixo do borne.
-        #
-        # A grade é usada somente pelos condutores verticais que precisam
-        # atravessar/desviar desta fileira sem conexão com o aparelho.
-        #
-        # Limites úteis:
-        # - entre PE e N;
-        # - respeitando uma margem lateral de segurança.
-        x_grade_esq = din_x1 + 0.12
-        x_grade_dir = din_x2 - 0.12
-
-        # Quantidade máxima de corredores de desvio possíveis nesta fileira.
-        # Um por polo/cabo vertical não conectado que possa atravessar.
-        qtd_corredores_x = max(
-            1,
-            sum(
-                max(
-                    1,
-                    int(g_grade.get("modulos", 1) or 1)
-                )
-                for g_grade in desta_fileira_geom
-            )
-        )
-
-        niveis_x_desvio = _niveis_horizontais_uniformes_x(
-            x_grade_esq,
-            x_grade_dir,
-            qtd_corredores_x
-        )
-
-        indice_nivel_x_desvio = 0
-
-        def _proximo_x_desvio(x_referencia):
-            """
-            Retorna o corredor X uniforme mais próximo do eixo original.
-            Cada corredor é consumido uma única vez dentro da fileira.
-            """
-            nonlocal indice_nivel_x_desvio
-
-            if not niveis_x_desvio:
-                return float(x_referencia)
-
-            disponiveis = list(
-                enumerate(
-                    niveis_x_desvio[
-                        indice_nivel_x_desvio:
-                    ],
-                    start=indice_nivel_x_desvio
-                )
-            )
-
-            if not disponiveis:
-                return float(x_referencia)
-
-            idx_escolhido, x_escolhido = min(
-                disponiveis,
-                key=lambda par: abs(
-                    float(par[1]) - float(x_referencia)
-                )
-            )
-
-            indice_nivel_x_desvio = idx_escolhido + 1
-            return float(x_escolhido)
-
         _desenhar_trilho_com_vazios(
             msp,
             din_x1,
@@ -2905,7 +3022,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.58 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.59 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -2914,7 +3031,7 @@ def desenhar_mapa_fisico_qdc(
         # 2P / 220 V: F + F + PE
         # 3P:         F + F + F + PE
         #
-        # As saídas de todos os circuitos terminam na mesma cota global abaixo da última fileira.
+        # As saídas finais são roteadas após a criação de todas as fileiras.
         # Rev.54 — corredores técnicos precisam existir em TODAS
         # as fileiras, pois a distribuição de N/PE pode referenciá-los
         # mesmo quando a ponta final do circuito não é desenhada ali.
@@ -2954,17 +3071,10 @@ def desenhar_mapa_fisico_qdc(
                     )
                     xs_fases_saida.append(x_borne_fase)
 
-                    # Rev.27: saída terminal absolutamente simples.
-                    # O condutor permanece no mesmo eixo do borne até a
-                    # saída inferior do QDC — nenhuma curva intermediária.
+                    # Rev.59 — NÃO desenhar a descida final agora.
+                    # Precisamos primeiro conhecer TODOS os DJs das fileiras
+                    # inferiores para preservar a prioridade de quem entra reto.
                     x_fase_saida = x_borne_fase
-
-                    _line(
-                        msp,
-                        (x_borne_fase, g_saida["y1"]),
-                        (x_borne_fase, y_saida_circuito),
-                        _layer_por_token(fase_saida)
-                    )
 
                 # Rev.56 — PE não nasce mais como pequeno trecho local.
                 # Cada circuito receberá seu próprio cabo a partir de um borne
@@ -3036,7 +3146,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.58 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.59 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3655,18 +3765,11 @@ def desenhar_mapa_fisico_qdc(
                                 0.12
                             )
 
-                            _line(
-                                msp,
-                                (
-                                    x_n_saida,
-                                    y_n_grupo
-                                ),
-                                (
-                                    x_n_saida,
-                                    y_saida_circuito
-                                ),
-                                LN
-                            )
+                            # Rev.59 — saída final de N também é adiada.
+                            # Guardamos o ponto real de origem para roteá-lo
+                            # depois que todas as fileiras estiverem prontas.
+                            g_n["x_saida_n_origem"] = float(x_n_saida)
+                            g_n["y_saida_n_origem"] = float(y_n_grupo)
 
                             # Bolinha azul SOMENTE em ramificação real.
                             # O extremo mais distante da fonte é apenas a
@@ -3728,7 +3831,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.58:
+                    # Fase 13.6 Rev.59:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4050,17 +4153,6 @@ def desenhar_mapa_fisico_qdc(
                                 if not pontos_destino_fase:
                                     continue
 
-                                # Rev.58 — se ainda existem destinos desviados,
-                                # o tronco vertical da fonte usa um corredor X
-                                # da grade uniforme. O destino reto, quando
-                                # existe, permanece exatamente no eixo do borne.
-                                x_tronco_distribuicao = x_origem
-
-                                if x_destino_reto is not None:
-                                    x_tronco_distribuicao = _proximo_x_desvio(
-                                        x_origem
-                                    )
-
                                 # A alimentação entra pelo extremo mais
                                 # próximo da fonte. A pista permanece limitada
                                 # aos polos extremos. Na Rev.34, nenhum dos dois
@@ -4097,12 +4189,12 @@ def desenhar_mapa_fisico_qdc(
                                     if x_destino_reto is None:
                                         _line(
                                             msp,
-                                            (x_tronco_distribuicao, fonte_geom["y1"]),
-                                            (x_tronco_distribuicao, yy_destino),
+                                            (x_origem, fonte_geom["y1"]),
+                                            (x_origem, yy_destino),
                                             _layer_por_token(fase_item)
                                         )
                                     troncos_fonte_fase[chave_tronco] = {
-                                        "x": x_tronco_distribuicao,
+                                        "x": x_origem,
                                         "y": yy_destino,
                                         "layer": _layer_por_token(fase_item),
                                     }
@@ -4132,7 +4224,7 @@ def desenhar_mapa_fisico_qdc(
 
                                 _line(
                                     msp,
-                                    (x_tronco_distribuicao, yy_destino),
+                                    (x_origem, yy_destino),
                                     (x_destino_fase, yy_destino),
                                     _layer_por_token(fase_item)
                                 )
@@ -4179,7 +4271,7 @@ def desenhar_mapa_fisico_qdc(
                                     # a fonte precisa chegar pela esquerda.
                                     fonte_chega_lado_oposto_esq = (
                                         eh_extremo_esquerdo
-                                        and x_tronco_distribuicao < x_no - 1e-9
+                                        and x_origem < x_no - 1e-9
                                     )
 
                                     # Na extremidade direita a pista segue
@@ -4187,7 +4279,7 @@ def desenhar_mapa_fisico_qdc(
                                     # a fonte precisa chegar pela direita.
                                     fonte_chega_lado_oposto_dir = (
                                         eh_extremo_direito
-                                        and x_tronco_distribuicao > x_no + 1e-9
+                                        and x_origem > x_no + 1e-9
                                     )
 
                                     eh_derivacao_no_extremo = (
@@ -4298,16 +4390,11 @@ def desenhar_mapa_fisico_qdc(
                                 # próprio DJ tem prioridade para ficar RETO.
                                 # Apenas o trecho de passagem/origem pode ser
                                 # deslocado se cruzar outro DJ.
-                                x_candidato_uniforme = _proximo_x_desvio(
-                                    x_origem
-                                )
-
                                 x_passagem = _x_desvio_para_nao_invadir_dj(
                                     x_origem,
                                     fonte_geom["y1"],
                                     y_corredor_direto,
                                     dj_destino_geom=g_unico,
-                                    x_uniforme=x_candidato_uniforme,
                                 )
 
                                 pontos_rota = [
@@ -4331,7 +4418,123 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.58 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.59 — SAÍDAS F/N COM PRIORIDADE REAL
+    # ========================================================
+    # Agora todos os DJs já foram criados e registrados.
+    # Portanto podemos saber exatamente quais cabos atravessam fileiras
+    # inferiores e quais aparelhos precisam permanecer livres.
+
+    grupos_dj_saida = _agrupar_obstaculos_por_fileira(
+        _QDC_DJ_RECTS
+    )
+
+    # Menor Y1 = última fileira física.
+    y_ultima_fileira_dj = min(
+        (
+            float(g_saida["y1"])
+            for _, g_saida in circuitos_geom
+        ),
+        default=y_saida_circuito_global
+    )
+
+    cabos_saida_final = []
+
+    for d_saida_final, g_saida_final in circuitos_geom:
+        fases_saida_final = _fases_do_texto(
+            d_saida_final.get("fase", "")
+        )
+
+        for fase_saida_final in fases_saida_final:
+            cabos_saida_final.append({
+                "token": fase_saida_final,
+                "x": float(
+                    _polo_para_fase(
+                        d_saida_final,
+                        g_saida_final,
+                        fase_saida_final
+                    )
+                ),
+                "y": float(g_saida_final["y1"]),
+                "geom": g_saida_final,
+                "ident": str(
+                    d_saida_final.get("identificador", "") or ""
+                ),
+            })
+
+        if (
+            "x_saida_n_origem" in g_saida_final
+            and "y_saida_n_origem" in g_saida_final
+        ):
+            cabos_saida_final.append({
+                "token": "N",
+                "x": float(g_saida_final["x_saida_n_origem"]),
+                "y": float(g_saida_final["y_saida_n_origem"]),
+                "geom": g_saida_final,
+                "ident": str(
+                    d_saida_final.get("identificador", "") or ""
+                ),
+            })
+
+    # Só entra na grade quem precisa atravessar pelo menos uma fileira inferior.
+    cabos_passagem = [
+        cabo
+        for cabo in cabos_saida_final
+        if float(cabo["y"]) > y_ultima_fileira_dj + 0.10
+    ]
+
+    # Mesma fórmula do espaçamento vertical, agora no eixo X.
+    x_grade_saida_esq = din_x1 + 0.18
+    x_grade_saida_dir = din_x2 - 0.18
+
+    niveis_x_saida = _grade_x_uniforme(
+        x_grade_saida_esq,
+        x_grade_saida_dir,
+        len(cabos_passagem)
+    )
+
+    # Para não provocar cruzamentos desnecessários:
+    # cabos ordenados da esquerda para a direita recebem corredores
+    # também da esquerda para a direita.
+    cabos_passagem_ordenados = sorted(
+        cabos_passagem,
+        key=lambda cabo: (
+            float(cabo["x"]),
+            float(cabo["y"]),
+            str(cabo["ident"]),
+            str(cabo["token"]),
+        )
+    )
+
+    corredor_por_cabo = {
+        id(cabo): x_nivel
+        for cabo, x_nivel in zip(
+            cabos_passagem_ordenados,
+            niveis_x_saida
+        )
+    }
+
+    for cabo in cabos_saida_final:
+        precisa_passar = id(cabo) in corredor_por_cabo
+
+        if precisa_passar:
+            x_corredor_saida = corredor_por_cabo[id(cabo)]
+        else:
+            # Última fileira: mantém a prioridade de continuar reto.
+            x_corredor_saida = float(cabo["x"])
+
+        _rotear_saida_com_prioridade(
+            msp,
+            cabo["x"],
+            cabo["y"],
+            y_saida_circuito_global,
+            _layer_por_token(cabo["token"]),
+            x_corredor_saida,
+            cabo["geom"],
+            grupos_dj_saida,
+        )
+
+    # ========================================================
+    # FASE 13.6 REV.59 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4385,7 +4588,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.58 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.59 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -4420,8 +4623,7 @@ def desenhar_mapa_fisico_qdc(
                 (d_ch, g_ch, tokens_ch)
             )
 
-        # Rev.58 — espaçamento horizontal uniforme na zona final:
-        # dentro do circuito pequeno; entre circuitos maior e regular.
+        # Espaçamento interno menor e espaço entre circuitos maior.
         espaco_interno = 0.10
         espaco_entre_circuitos = 0.42
 
@@ -4671,7 +4873,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.58:
+    # Fase 13.6 Rev.59:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
