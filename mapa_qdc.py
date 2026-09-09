@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.60:
+    Fase 13.6 Rev.61:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.60 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.61 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -900,7 +900,7 @@ def _finalizar_nos_topologicos(msp):
 
 
 
-def _remover_segmento_vertical_saida(
+def _remover_descida_vertical_exata(
     msp,
     x,
     y_inicio,
@@ -909,14 +909,12 @@ def _remover_segmento_vertical_saida(
     tol=1e-7,
 ):
     """
-    Rev.60 — remove somente a descida final reta de um circuito.
-
-    Não toca em barramentos, pistas horizontais, derivações, alimentação
-    de DR/DG ou qualquer geometria já aprovada da Rev.57.
+    Rev.61 — remove somente a descida final reta original.
+    Não altera barramentos, entradas dos DJs, DRs, DPS, PE ou derivações.
     """
-    y_lo = min(float(y_inicio), float(y_fim))
-    y_hi = max(float(y_inicio), float(y_fim))
     x = float(x)
+    ylo = min(float(y_inicio), float(y_fim))
+    yhi = max(float(y_inicio), float(y_fim))
 
     for ent in list(msp):
         try:
@@ -927,24 +925,16 @@ def _remover_segmento_vertical_saida(
 
             a = ent.dxf.start
             b = ent.dxf.end
-
             ax, ay = float(a.x), float(a.y)
             bx, by = float(b.x), float(b.y)
 
-            if abs(ax - bx) > tol:
-                continue
-            if abs(ax - x) > tol:
+            if abs(ax - bx) > tol or abs(ax - x) > tol:
                 continue
 
             elo = min(ay, by)
             ehi = max(ay, by)
 
-            # A descida final original contém exatamente o intervalo
-            # do borne inferior até a cota global.
-            if (
-                elo <= y_lo + tol
-                and ehi >= y_hi - tol
-            ):
+            if elo <= ylo + tol and ehi >= yhi - tol:
                 try:
                     msp.delete_entity(ent)
                 except Exception:
@@ -956,228 +946,226 @@ def _remover_segmento_vertical_saida(
             continue
 
 
-def _djs_inferiores_que_cruzam_saida(
-    x,
-    y_inicio,
-    y_fim,
-    geom_origem,
-    margem=0.06,
-    tol=1e-9,
-):
+def _niveis_x_uniformes_rev61(x1, x2, quantidade):
     """
-    Retorna somente DJs de fileiras inferiores cujo corpo intercepta
-    a vertical X da saída do circuito.
+    Mesma regra matemática aprovada no espaçamento vertical:
+
+        H = x2 - x1
+        Q = quantidade de cabos
+        E = H / (Q + 1)
+        X(i) = x1 + (i + 1) * E
     """
-    x = float(x)
-    y_lo = min(float(y_inicio), float(y_fim))
-    y_hi = max(float(y_inicio), float(y_fim))
-    origem_id = id(geom_origem)
+    q = max(0, int(quantidade or 0))
+    if q <= 0:
+        return []
 
-    cruzados = []
+    xa = float(x1)
+    xb = float(x2)
+    if xb <= xa:
+        return []
 
-    for r in _QDC_DJ_RECTS:
-        if str(r.get("tipo", "")).upper() != "DJ":
-            continue
+    h = xb - xa
+    e = h / (q + 1)
 
-        if r.get("geom_id") == origem_id:
-            continue
-
-        rx1 = float(r["x1"])
-        rx2 = float(r["x2"])
-        ry1 = float(r["y1"])
-        ry2 = float(r["y2"])
-
-        # Apenas aparelhos realmente abaixo da origem.
-        if ry2 >= y_hi - tol:
-            continue
-
-        cruza_vertical = (
-            y_hi > ry1 + tol
-            and y_lo < ry2 - tol
-        )
-        dentro_corpo = (
-            rx1 + tol
-            < x
-            < rx2 - tol
-        )
-
-        if cruza_vertical and dentro_corpo:
-            cruzados.append(r)
-
-    # De cima para baixo.
-    cruzados.sort(
-        key=lambda rr: -float(rr["y2"])
-    )
-
-    return cruzados
+    return [
+        xa + (i + 1) * e
+        for i in range(q)
+    ]
 
 
-def _rotear_descida_final_com_desvios_locais(
-    msp,
-    x,
-    y_inicio,
-    y_fim,
-    layer,
-    geom_origem,
-    margem_x=0.08,
-    margem_y=0.08,
-):
-    """
-    Rev.60 — prioridade física do DJ inferior.
-
-    O cabo mantém o X original em toda a descida.
-    Somente ao encontrar um DJ inferior que não é seu destino:
-      1) aproxima até logo acima do aparelho;
-      2) desvia para o lado mais próximo;
-      3) desce por fora do corpo;
-      4) volta imediatamente ao X original;
-      5) continua reto.
-
-    Portanto NÃO há redistribuição global, nova grade X ou alteração
-    do que já estava aprovado na Rev.57.
-    """
-    x = float(x)
-    yi = float(y_inicio)
-    yf = float(y_fim)
-
-    if yi <= yf:
-        return
-
-    cruzados = _djs_inferiores_que_cruzam_saida(
-        x,
-        yi,
-        yf,
-        geom_origem
-    )
-
-    pontos = [(x, yi)]
-    y_atual = yi
-
-    for r in cruzados:
-        rx1 = float(r["x1"])
-        rx2 = float(r["x2"])
-        ry1 = float(r["y1"])
-        ry2 = float(r["y2"])
-
-        y_acima = ry2 + margem_y
-        y_abaixo = ry1 - margem_y
-
-        # escolhe o lado mais próximo do eixo original
-        x_esq = rx1 - margem_x
-        x_dir = rx2 + margem_x
-
-        if abs(x - x_esq) <= abs(x_dir - x):
-            x_desvio = x_esq
-        else:
-            x_desvio = x_dir
-
-        if y_acima < y_atual - 1e-9:
-            pontos.append((x, y_acima))
-
-        pontos.extend([
-            (x_desvio, y_acima),
-            (x_desvio, y_abaixo),
-            (x, y_abaixo),
-        ])
-
-        y_atual = y_abaixo
-
-    if y_atual > yf + 1e-9:
-        pontos.append((x, yf))
-
-    _polyline(
-        msp,
-        pontos,
-        layer
-    )
-
-
-def _corrigir_prioridade_saidas_finais_rev60(
+def _corrigir_passagens_finais_rev61(
     msp,
     circuitos_geom,
     y_saida_circuito_global,
+    din_x2,
+    neutro,
 ):
     """
-    Corrige somente F e N das descidas finais.
-    Deve rodar depois de TODOS os DJs existirem e antes do clipping final.
+    Rev.61 — prioridade limpa dos DJs da última fileira.
+
+    - circuitos da última fileira permanecem totalmente RETOS;
+    - F/N de circuitos superiores que precisariam atravessar a última
+      fileira são retirados da região dos aparelhos;
+    - todos esses cabos usam corredores verticais à DIREITA da última
+      fileira, igualmente espaçados;
+    - acima da última fileira cada cabo vai horizontalmente ao seu corredor;
+    - abaixo da última fileira volta horizontalmente ao X original;
+    - não há dogleg dentro/ao redor de cada DJ.
     """
-    for d_c, g_c in circuitos_geom:
-        # Fases
+    if not circuitos_geom:
+        return
+
+    # Identifica as fileiras físicas pela base y1.
+    niveis_y = sorted(
+        {
+            round(float(g["y1"]), 6)
+            for _, g in circuitos_geom
+        },
+        reverse=True
+    )
+
+    if len(niveis_y) <= 1:
+        return
+
+    y1_ultima = min(niveis_y)
+
+    ultima_fileira = [
+        (d, g)
+        for d, g in circuitos_geom
+        if abs(float(g["y1"]) - y1_ultima) <= 1e-5
+    ]
+
+    if not ultima_fileira:
+        return
+
+    y_topo_ultima = max(
+        float(g["y2"])
+        for _, g in ultima_fileira
+    )
+    y_base_ultima = min(
+        float(g["y1"])
+        for _, g in ultima_fileira
+    )
+
+    x_direita_ultima = max(
+        float(g["x2"])
+        for _, g in ultima_fileira
+    )
+
+    # Cabos que realmente precisam passar pela última fileira.
+    cabos_passagem = []
+
+    for d, g in circuitos_geom:
+        if abs(float(g["y1"]) - y1_ultima) <= 1e-5:
+            continue  # DJ da última fileira: prioridade reta absoluta.
+
         fases = _fases_do_texto(
-            d_c.get("fase", "")
+            d.get("fase", "")
         )
 
         for fase in fases:
-            x_f = _polo_para_fase(
-                d_c,
-                g_c,
-                fase
-            )
-            layer_f = _layer_por_token(fase)
+            cabos_passagem.append({
+                "tipo": "F",
+                "token": fase,
+                "x": float(
+                    _polo_para_fase(
+                        d,
+                        g,
+                        fase
+                    )
+                ),
+                "y_inicio": float(g["y1"]),
+                "layer": _layer_por_token(fase),
+                "geom": g,
+                "ident": str(
+                    d.get("identificador", "") or ""
+                ),
+            })
 
-            cruzados = _djs_inferiores_que_cruzam_saida(
-                x_f,
-                g_c["y1"],
-                y_saida_circuito_global,
-                g_c
-            )
-
-            if not cruzados:
-                continue
-
-            _remover_segmento_vertical_saida(
-                msp,
-                x_f,
-                g_c["y1"],
-                y_saida_circuito_global,
-                layer_f
-            )
-
-            _rotear_descida_final_com_desvios_locais(
-                msp,
-                x_f,
-                g_c["y1"],
-                y_saida_circuito_global,
-                layer_f,
-                g_c
-            )
-
-        # Neutro: somente se a descida final realmente existir
-        # no eixo lateral direito deste DJ.
+        # Neutro final somente em 1P.
         if (
             len(fases) == 1
-            and int(d_c.get("modulos", 1) or 1) == 1
+            and int(d.get("modulos", 1) or 1) == 1
         ):
-            x_n = _x_passagem_lateral_disjuntor(
-                g_c,
-                "dir",
-                0.12
+            cabos_passagem.append({
+                "tipo": "N",
+                "token": "N",
+                "x": float(
+                    _x_passagem_lateral_disjuntor(
+                        g,
+                        "dir",
+                        0.12
+                    )
+                ),
+                "y_inicio": float(g["y1"]),
+                "layer": "PROJ_ELETRICA_QDC_NEUTRO",
+                "geom": g,
+                "ident": str(
+                    d.get("identificador", "") or ""
+                ),
+            })
+
+    if not cabos_passagem:
+        return
+
+    # Corredor lateral disponível entre o fim da última fileira
+    # e o barramento N, usando toda a faixa livre sem invadir o N.
+    x_esq_corredores = x_direita_ultima + 0.18
+    x_dir_corredores = float(neutro["x"]) - 0.24
+
+    # Se a fileira quase preencher tudo, ainda usa a faixa entre din_x2 e N.
+    if x_dir_corredores <= x_esq_corredores + 0.10:
+        x_esq_corredores = float(din_x2) + 0.08
+
+    # Caso extremo: pequena expansão virtual para a esquerda do N,
+    # sempre mantendo margem física do barramento.
+    if x_dir_corredores <= x_esq_corredores + 0.10:
+        x_esq_corredores = x_dir_corredores - max(
+            0.40,
+            0.12 * (len(cabos_passagem) + 1)
+        )
+
+    # Ordena pelos X originais para evitar cruzamentos.
+    cabos_passagem.sort(
+        key=lambda c: (
+            float(c["x"]),
+            str(c["ident"]),
+            str(c["token"]),
+        )
+    )
+
+    niveis_x = _niveis_x_uniformes_rev61(
+        x_esq_corredores,
+        x_dir_corredores,
+        len(cabos_passagem)
+    )
+
+    # Faixas Y:
+    # transições ocorrem fora do corpo dos DJs da última fileira.
+    y_acima = y_topo_ultima + 0.16
+    y_abaixo = y_base_ultima - 0.16
+
+    for cabo, x_corredor in zip(
+        cabos_passagem,
+        niveis_x
+    ):
+        x_orig = float(cabo["x"])
+        y_ini = float(cabo["y_inicio"])
+        layer = cabo["layer"]
+
+        # Remove somente a antiga descida reta até a saída global.
+        _remover_descida_vertical_exata(
+            msp,
+            x_orig,
+            y_ini,
+            y_saida_circuito_global,
+            layer
+        )
+
+        # Mantém a saída reta do próprio DJ superior até o corredor acima
+        # da última fileira. Depois desvia para a lateral, atravessa toda
+        # a fileira por fora e volta ao X original abaixo dela.
+        pontos = [
+            (x_orig, y_ini),
+        ]
+
+        if y_ini > y_acima + 1e-9:
+            pontos.append(
+                (x_orig, y_acima)
             )
 
-            cruzados_n = _djs_inferiores_que_cruzam_saida(
-                x_n,
-                g_c["y1"],
-                y_saida_circuito_global,
-                g_c
-            )
+        pontos.extend([
+            (x_corredor, y_acima),
+            (x_corredor, y_abaixo),
+            (x_orig, y_abaixo),
+            (x_orig, y_saida_circuito_global),
+        ])
 
-            if cruzados_n:
-                _remover_segmento_vertical_saida(
-                    msp,
-                    x_n,
-                    g_c["y1"],
-                    y_saida_circuito_global,
-                    "PROJ_ELETRICA_QDC_NEUTRO"
-                )
-
-                _rotear_descida_final_com_desvios_locais(
-                    msp,
-                    x_n,
-                    g_c["y1"],
-                    y_saida_circuito_global,
-                    "PROJ_ELETRICA_QDC_NEUTRO",
-                    g_c
-                )
+        _polyline(
+            msp,
+            pontos,
+            layer
+        )
 
 
 def _reclipar_condutores_com_todos_aparelhos(msp):
@@ -1513,7 +1501,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1606,7 +1594,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1648,7 +1636,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.60:
+        # Fase 13.6 Rev.61:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -2004,7 +1992,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.60 — QDC executivo no CAD.
+    Fase 13.6 Rev.61 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -2042,7 +2030,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -2070,7 +2058,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.60 — padrão modular do QDC.
+    # Fase 13.6 Rev.61 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -2097,7 +2085,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2137,7 +2125,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.60",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.61",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -2198,7 +2186,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2235,7 +2223,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.60 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.61 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2333,16 +2321,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.60 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.61 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2443,7 +2431,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.60 — ENTRADA DA REDE
+        # FASE 13.6 REV.61 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2509,7 +2497,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.60:
+        # Fase 13.6 Rev.61:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2593,7 +2581,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.60 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.61 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2875,7 +2863,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.60 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.61 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -3078,7 +3066,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.60 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.61 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3209,7 +3197,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.60 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.61 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3901,7 +3889,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.60:
+                    # Fase 13.6 Rev.61:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4488,7 +4476,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.60 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.61 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4542,7 +4530,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.60 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.61 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -4827,7 +4815,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.60:
+    # Fase 13.6 Rev.61:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
@@ -5136,16 +5124,18 @@ def desenhar_mapa_fisico_qdc(
         )
         yy_d -= 0.22
 
-    # Rev.60 — todos os DJs já existem.
-    # Corrigir SOMENTE as descidas finais que atravessariam outro DJ.
-    # Toda a distribuição aprovada da Rev.57 permanece intacta.
-    _corrigir_prioridade_saidas_finais_rev60(
+    # Rev.61 — todos os DJs já existem.
+    # Corrigir SOMENTE as passagens F/N das fileiras superiores pela
+    # última fileira, preservando o eixo reto de C08/C10/C06/C09 etc.
+    _corrigir_passagens_finais_rev61(
         msp,
         circuitos_geom,
-        y_saida_circuito_global
+        y_saida_circuito_global,
+        din_x2,
+        neutro
     )
 
-    # Rev.57 preservada — recorte final dos cabos que passam por trás.
+    # Rev.57 preservada — recorte final dos cabos atrás dos aparelhos.
     _reclipar_condutores_com_todos_aparelhos(msp)
 
     # Rev.37 — com toda a fiação pronta, confirmar os nós reais.
