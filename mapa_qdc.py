@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.62:
+    Fase 13.6 Rev.63:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.62 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.63 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1233,7 +1233,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1326,7 +1326,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1368,7 +1368,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.62:
+        # Fase 13.6 Rev.63:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1724,7 +1724,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.62 — QDC executivo no CAD.
+    Fase 13.6 Rev.63 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1762,7 +1762,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1790,7 +1790,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.62 — padrão modular do QDC.
+    # Fase 13.6 Rev.63 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1817,7 +1817,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1857,7 +1857,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.62",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.63",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1918,7 +1918,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1955,7 +1955,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.62 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.63 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2053,16 +2053,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.62 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.63 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2163,7 +2163,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.62 — ENTRADA DA REDE
+        # FASE 13.6 REV.63 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2229,7 +2229,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.62:
+        # Fase 13.6 Rev.63:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2313,7 +2313,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.62 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.63 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2595,7 +2595,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.62 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.63 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2700,6 +2700,51 @@ def desenhar_mapa_fisico_qdc(
     idx_circ = 0
     circuitos_geom = []
 
+    # Rev.63 — corredores exclusivos de neutro à direita.
+    # IMPORTANTE: isto é apenas geometria. A topologia elétrica da Rev.57
+    # permanece exatamente a mesma: cada neutro nasce no barramento N do
+    # seu próprio grupo/saída de IDR e termina no mesmo circuito.
+    qtd_neutros_rev63 = sum(
+        1
+        for d_rev63 in circuitos
+        if (
+            len(_fases_do_texto(d_rev63.get("fase", ""))) == 1
+            and int(d_rev63.get("modulos", 1) or 1) == 1
+        )
+    )
+    idx_neutro_rev63 = 0
+
+    x_ini_corredor_n_rev63 = din_x2 + 0.10
+    x_fim_corredor_n_rev63 = float(neutro["x"]) - 0.20
+
+    if qtd_neutros_rev63 > 0:
+        largura_corredor_n_rev63 = (
+            x_fim_corredor_n_rev63
+            - x_ini_corredor_n_rev63
+        )
+
+        # Nunca encostar no barramento N. Se a faixa estiver apertada,
+        # abre a distribuição para a esquerda, ainda fora dos DJs.
+        if largura_corredor_n_rev63 <= 0.12:
+            x_ini_corredor_n_rev63 = (
+                x_fim_corredor_n_rev63
+                - max(
+                    0.40,
+                    0.10 * (qtd_neutros_rev63 + 1)
+                )
+            )
+            largura_corredor_n_rev63 = (
+                x_fim_corredor_n_rev63
+                - x_ini_corredor_n_rev63
+            )
+
+        passo_corredor_n_rev63 = (
+            largura_corredor_n_rev63
+            / (qtd_neutros_rev63 + 1)
+        )
+    else:
+        passo_corredor_n_rev63 = 0.0
+
     # Rev.33 — memoriza a última ramificação de cada saída física.
     # Chave: (identificador da fonte, fase) -> último Y atendido.
     # Permite usar uma única saída do DR/DG e ramificar nas fileiras.
@@ -2798,7 +2843,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.62 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.63 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -2929,7 +2974,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.62 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.63 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3548,12 +3593,45 @@ def desenhar_mapa_fisico_qdc(
                                 0.12
                             )
 
-                            # Rev.62 — o neutro final NÃO desce mais
-                            # pelo miolo do QDC. Guardamos o ponto real de
-                            # derivação; depois ele será desviado pela lateral
-                            # direita, sem conexão com o barramento N.
-                            g_n["rev62_x_n_origem"] = float(x_n_saida)
-                            g_n["rev62_y_n_origem"] = float(y_n_grupo)
+                            # Rev.63 — mesma ligação elétrica da Rev.57,
+                            # porém com desvio geométrico pela lateral direita.
+                            #
+                            # Não removemos/recriamos a ligação depois:
+                            # a rota nasce aqui, diretamente no ponto real
+                            # de derivação do grupo, evitando qualquer ruptura.
+                            x_corredor_n_rev63 = (
+                                x_ini_corredor_n_rev63
+                                + (idx_neutro_rev63 + 1)
+                                * passo_corredor_n_rev63
+                            )
+
+                            # Cada neutro possui seu corredor exclusivo.
+                            # O retorno ao X original acontece somente na
+                            # cota final, abaixo de todos os disjuntores.
+                            _polyline(
+                                msp,
+                                [
+                                    (
+                                        x_n_saida,
+                                        y_n_grupo
+                                    ),
+                                    (
+                                        x_corredor_n_rev63,
+                                        y_n_grupo
+                                    ),
+                                    (
+                                        x_corredor_n_rev63,
+                                        y_saida_circuito
+                                    ),
+                                    (
+                                        x_n_saida,
+                                        y_saida_circuito
+                                    ),
+                                ],
+                                LN
+                            )
+
+                            idx_neutro_rev63 += 1
 
                             # Bolinha azul SOMENTE em ramificação real.
                             # O extremo mais distante da fonte é apenas a
@@ -3615,7 +3693,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.62:
+                    # Fase 13.6 Rev.63:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4202,107 +4280,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.62 — NEUTROS PELA LATERAL DIREITA
-    # ========================================================
-    # Filosofia equivalente ao PE individual da esquerda, porém:
-    # - NÃO nasce do barramento N;
-    # - NÃO retorna ao barramento N;
-    # - usa a lateral direita SOMENTE como desvio geométrico;
-    # - cada circuito 1P mantém seu neutro eletricamente individual;
-    # - o neutro sai do ponto real de derivação do grupo e retorna
-    #   à posição do circuito somente abaixo da última fileira de DJs.
-    neutros_laterais = []
-
-    for d_n_lat, g_n_lat in circuitos_geom:
-        if (
-            "rev62_x_n_origem" in g_n_lat
-            and "rev62_y_n_origem" in g_n_lat
-        ):
-            neutros_laterais.append(
-                (
-                    d_n_lat,
-                    g_n_lat,
-                    float(g_n_lat["rev62_x_n_origem"]),
-                    float(g_n_lat["rev62_y_n_origem"]),
-                )
-            )
-
-    if neutros_laterais:
-        # Corredores à direita do conjunto DIN, mas antes do barramento N.
-        # Um corredor por neutro, igualmente espaçado.
-        x_inicio_n_lat = din_x2 + 0.10
-        x_fim_n_lat = float(neutro["x"]) - 0.22
-
-        # Se a faixa disponível for pequena, usamos corredores imediatamente
-        # à esquerda do barramento N, mantendo margem física.
-        if x_fim_n_lat <= x_inicio_n_lat + 0.10:
-            x_inicio_n_lat = x_fim_n_lat - max(
-                0.36,
-                0.10 * (len(neutros_laterais) + 1)
-            )
-
-        largura_n_lat = x_fim_n_lat - x_inicio_n_lat
-        passo_n_lat = (
-            largura_n_lat
-            / (len(neutros_laterais) + 1)
-        )
-
-        xs_corredores_n = [
-            x_inicio_n_lat
-            + (i_n + 1) * passo_n_lat
-            for i_n in range(len(neutros_laterais))
-        ]
-
-        # Ordena pelo X original para reduzir cruzamentos.
-        neutros_laterais = sorted(
-            neutros_laterais,
-            key=lambda item: (
-                item[2],
-                str(item[0].get("identificador", "") or "")
-            )
-        )
-
-        # Retorno somente abaixo da última fileira física.
-        y_retorno_n_lat = y_saida_circuito_global + 0.06
-
-        for (
-            d_n_lat,
-            g_n_lat,
-            x_origem_n_lat,
-            y_origem_n_lat
-        ), x_corredor_n_lat in zip(
-            neutros_laterais,
-            xs_corredores_n
-        ):
-            x_saida_n_lat = _x_passagem_lateral_disjuntor(
-                g_n_lat,
-                "dir",
-                0.12
-            )
-
-            _polyline(
-                msp,
-                [
-                    # sai do ponto de derivação real do neutro
-                    (x_origem_n_lat, y_origem_n_lat),
-
-                    # desloca horizontalmente para a lateral direita
-                    (x_corredor_n_lat, y_origem_n_lat),
-
-                    # desce totalmente fora do miolo dos DJs
-                    (x_corredor_n_lat, y_retorno_n_lat),
-
-                    # só então retorna à posição final do circuito
-                    (x_saida_n_lat, y_retorno_n_lat),
-
-                    # pequena ponta final até a cota global
-                    (x_saida_n_lat, y_saida_circuito_global),
-                ],
-                LN
-            )
-
-    # ========================================================
-    # FASE 13.6 REV.62 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.63 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4356,7 +4334,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.62 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.63 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -4641,7 +4619,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.62:
+    # Fase 13.6 Rev.63:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
