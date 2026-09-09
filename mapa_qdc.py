@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.42:
+    Fase 13.6 Rev.43:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.42 — PASSAGENS "POR TRÁS" DOS DISJUNTORES
+# FASE 13.6 REV.43 — PASSAGENS "POR TRÁS" DOS DISJUNTORES
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1154,7 +1154,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1247,7 +1247,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1289,7 +1289,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.42:
+        # Fase 13.6 Rev.43:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1568,7 +1568,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.42 — QDC executivo no CAD.
+    Fase 13.6 Rev.43 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1606,7 +1606,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1634,7 +1634,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.42 — padrão modular do QDC.
+    # Fase 13.6 Rev.43 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1661,7 +1661,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1699,7 +1699,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.42",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.43",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1759,7 +1759,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1796,7 +1796,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.42 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.43 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -1894,16 +1894,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.42 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.43 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2004,7 +2004,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.42 — ENTRADA DA REDE
+        # FASE 13.6 REV.43 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2070,7 +2070,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.42:
+        # Fase 13.6 Rev.43:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2149,7 +2149,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.42 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.43 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2159,16 +2159,20 @@ def desenhar_mapa_fisico_qdc(
             for token in fases_disponiveis
         }
 
-        if dg_geoms:
-            dg_disp, dg_geom = dg_geoms[0]
-            for token in fases_disponiveis:
-                pontos_superiores_por_fase[token].append(
-                    _polo_para_fase(
-                        dg_disp,
-                        dg_geom,
-                        token
-                    )
-                )
+        # Rev.43 — TOPOLOGIA ELÉTRICA PÓS-DG
+        #
+        # Regra adotada para esta vista:
+        #   REDE A/B/C -> DG -> distribuição A/B/C -> DPS/IDRs/circuitos.
+        #
+        # Portanto, nenhuma derivação de fase destinada aos IDRs ou DPS
+        # nasce mais do lado de entrada do DG.
+        #
+        # Os barramentos horizontais superiores continuam visualmente acima
+        # da fileira, mas são energizados pelos BORNES INFERIORES do DG
+        # através de corredores laterais externos ao corpo do aparelho.
+        #
+        # PE não atravessa DG/IDR.
+        # N segue pelos barramentos N e pelos IDRs que efetivamente o utilizam.
 
         for d, g in geral_geom:
             tipo_d = str(
@@ -2180,17 +2184,19 @@ def desenhar_mapa_fisico_qdc(
             ).upper()
 
             if tipo_d == "DPS":
-                token = _fases_do_texto(
+                fases_d = _fases_do_texto(
                     d.get(
-                        "fase"
+                        "fase",
+                        ""
                     )
-                )[0]
+                )
+                if not fases_d:
+                    continue
+                token = fases_d[0]
 
                 if token in pontos_superiores_por_fase:
                     pontos_superiores_por_fase[token].append(
-                        _centros_polos(
-                            g
-                        )[0]
+                        _centros_polos(g)[0]
                     )
 
             elif tipo_d == "IDR":
@@ -2212,79 +2218,115 @@ def desenhar_mapa_fisico_qdc(
                         and token in mapa_polos
                     ):
                         pontos_superiores_por_fase[token].append(
-                            mapa_polos[
-                                token
-                            ]
+                            mapa_polos[token]
                         )
 
-        # Cada pista de fase termina no último consumidor daquela fase.
-        # Não há prolongamento "morto" após a última derivação.
-        for token in fases_disponiveis:
-            pontos_token = pontos_superiores_por_fase.get(
-                token,
-                []
-            )
-
-            if len(
-                pontos_token
-            ) >= 2:
-                _line(
-                    msp,
-                    (
-                        min(
-                            pontos_token
-                        ),
-                        barramentos_y[token]
-                    ),
-                    (
-                        max(
-                            pontos_token
-                        ),
-                        barramentos_y[token]
-                    ),
-                    _layer_por_token(
-                        token
-                    )
-                )
-
-        # DG -> barramentos.
+        # Fonte real das barras superiores = lado de CARGA do DG.
         if dg_geoms:
             dg_disp, dg_geom = dg_geoms[0]
 
-            for token in fases_disponiveis:
+            qtd_fases_dg = len(fases_disponiveis)
+            if int(dg_geom.get("modulos", 0) or 0) < qtd_fases_dg:
+                raise RuntimeError(
+                    "DG com número de polos inferior ao número de fases "
+                    "do alimentador. Revise o fornecimento/proteção geral."
+                )
+
+            # Corredores laterais entre o barramento PE e o DG.
+            # Distribuímos um corredor por fase para não sobrepor A/B/C.
+            x_lim_esq = pe["x"] + 0.26
+            x_lim_dir = dg_geom["x1"] - 0.14
+
+            largura_corredores = max(
+                0.18,
+                x_lim_dir - x_lim_esq
+            )
+
+            if qtd_fases_dg <= 1:
+                xs_riser = [
+                    (x_lim_esq + x_lim_dir) / 2.0
+                ]
+            else:
+                passo_x_riser = largura_corredores / (
+                    qtd_fases_dg + 1
+                )
+                xs_riser = [
+                    x_lim_esq + (i + 1) * passo_x_riser
+                    for i in range(qtd_fases_dg)
+                ]
+
+            for idx_fase, token in enumerate(fases_disponiveis):
                 x_polo_dg = _polo_para_fase(
                     dg_disp,
                     dg_geom,
                     token
                 )
+                x_riser = xs_riser[
+                    min(idx_fase, len(xs_riser) - 1)
+                ]
 
+                # Pequenos níveis distintos abaixo do DG para que A/B/C
+                # saiam pelos três polos sem se sobrepor.
+                y_saida_pos_dg = (
+                    dg_geom["y1"]
+                    - 0.16
+                    - idx_fase * 0.10
+                )
+
+                # Saída do DG -> corredor externo -> barramento pós-DG.
+                _polyline(
+                    msp,
+                    [
+                        (x_polo_dg, dg_geom["y1"]),
+                        (x_polo_dg, y_saida_pos_dg),
+                        (x_riser, y_saida_pos_dg),
+                        (x_riser, barramentos_y[token]),
+                    ],
+                    _layer_por_token(token)
+                )
+
+                # O ponto onde o riser encontra a barra é a origem física
+                # da distribuição pós-DG.
+                pontos_superiores_por_fase[token].append(
+                    x_riser
+                )
+
+        # Barramentos de distribuição pós-DG.
+        # Cada fase vai da origem pós-DG até o último consumidor daquela fase.
+        for token in fases_disponiveis:
+            pontos_token = sorted(
+                pontos_superiores_por_fase.get(
+                    token,
+                    []
+                )
+            )
+
+            if len(pontos_token) >= 2:
                 _line(
                     msp,
                     (
-                        x_polo_dg,
-                        dg_geom["y2"]
-                    ),
-                    (
-                        x_polo_dg,
+                        min(pontos_token),
                         barramentos_y[token]
                     ),
-                    _layer_por_token(
+                    (
+                        max(pontos_token),
+                        barramentos_y[token]
+                    ),
+                    _layer_por_token(token)
+                )
+
+                # Nó no encontro do riser com a barra somente se houver
+                # continuidade/derivação real; Rev.37 decide globalmente.
+                if dg_geoms:
+                    x_riser_token = pontos_token[0]
+                    _no_fase_preenchido(
+                        msp,
+                        x_riser_token,
+                        barramentos_y[token],
                         token
                     )
-                )
 
-                _desenhar_no_se_derivacao(
-                    msp,
-                    x_polo_dg,
-                    barramentos_y[token],
-                    token,
-                    pontos_superiores_por_fase.get(
-                        token,
-                        []
-                    )
-                )
-
-        # DPS: fase -> polo físico do DPS -> PE.
+        # DPS: fase PÓS-DG -> polo físico do DPS -> PE.
         # Rev.19: o PE dos DPS é representado como um único tronco
         # horizontal. L1/L2... recebem nó apenas quando são derivações
         # reais; o último DPS é apenas a curva final horizontal -> vertical.
@@ -2335,7 +2377,7 @@ def desenhar_mapa_fisico_qdc(
         # Rev.39: desenho do tronco PE dos DPS adiado para a grade
         # harmônica da primeira fileira, evitando coincidência com fase A.
 
-        # IDRs: cada fase entra em seu polo físico correspondente.
+        # IDRs: cada fase PÓS-DG entra em seu polo físico correspondente.
         for d, g in geral_geom:
             if d.get("tipo") != "IDR":
                 continue
@@ -2398,7 +2440,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.42 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.43 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2581,7 +2623,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.42 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.43 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -2755,7 +2797,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.42 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.43 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3248,7 +3290,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.42:
+                    # Fase 13.6 Rev.43:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -3811,7 +3853,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.42:
+    # Fase 13.6 Rev.43:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
