@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.48:
+    Fase 13.6 Rev.49:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.48 — PASSAGENS "POR TRÁS" DOS DISJUNTORES
+# FASE 13.6 REV.49 — PASSAGENS "POR TRÁS" DOS DISJUNTORES
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -725,6 +725,228 @@ def _polyline(msp, pontos, layer):
     )
 
 
+
+
+def _uniformizar_horizontais_reais_no_vao(
+    msp,
+    y_base_superior,
+    y_topo_inferior,
+    tolerancia=1e-6
+):
+    """
+    Rev.49 — uniformização FINAL baseada na geometria que realmente foi
+    desenhada, não em uma previsão da quantidade de cabos.
+
+    1) localiza todos os segmentos horizontais reais A/B/C/N/PE dentro do vão;
+    2) obtém os níveis Y únicos realmente existentes;
+    3) calcula:
+         D = base_superior - topo_inferior
+         E = D / (Q_real + 1)
+    4) move cada nível real para:
+         Y(i) = base_superior - (i + 1) * E
+    5) ajusta as pontas dos segmentos verticais conectados;
+    6) ajusta os candidatos das bolinhas para acompanhar o novo Y.
+
+    Dessa forma não pode existir "nível fantasma": Q_real vem do DXF
+    efetivamente desenhado.
+    """
+    y_sup = float(y_base_superior)
+    y_inf = float(y_topo_inferior)
+
+    if y_sup <= y_inf + tolerancia:
+        return 0
+
+    try:
+        entidades = list(msp)
+    except Exception:
+        return 0
+
+    horizontais = []
+
+    for ent in entidades:
+        try:
+            if ent.dxftype() != "LINE":
+                continue
+            if str(ent.dxf.layer) not in _QDC_LAYERS_CONDUTORES:
+                continue
+
+            a = ent.dxf.start
+            b = ent.dxf.end
+            ax, ay = float(a.x), float(a.y)
+            bx, by = float(b.x), float(b.y)
+
+            if abs(ay - by) > tolerancia:
+                continue
+            if abs(ax - bx) <= tolerancia:
+                continue
+
+            yy = (ay + by) / 2.0
+
+            # Somente horizontais realmente ENTRE as duas faces.
+            if not (
+                y_inf + tolerancia
+                < yy
+                < y_sup - tolerancia
+            ):
+                continue
+
+            horizontais.append(
+                {
+                    "ent": ent,
+                    "layer": str(ent.dxf.layer),
+                    "x1": ax,
+                    "x2": bx,
+                    "y": yy,
+                }
+            )
+        except Exception:
+            continue
+
+    if not horizontais:
+        return 0
+
+    # Agrupa Ys geometricamente iguais.
+    niveis = []
+    for item in sorted(
+        horizontais,
+        key=lambda h: -h["y"]
+    ):
+        yy = item["y"]
+        existente = next(
+            (
+                n
+                for n in niveis
+                if abs(n - yy) <= tolerancia
+            ),
+            None
+        )
+        if existente is None:
+            niveis.append(yy)
+
+    niveis = sorted(niveis, reverse=True)
+    q_real = len(niveis)
+
+    if q_real <= 0:
+        return 0
+
+    distancia = y_sup - y_inf
+    passo = distancia / (q_real + 1)
+
+    mapa_y = {
+        y_antigo: (
+            y_sup
+            - (indice + 1) * passo
+        )
+        for indice, y_antigo
+        in enumerate(niveis)
+    }
+
+    def _novo_y(yy):
+        for antigo, novo in mapa_y.items():
+            if abs(float(yy) - antigo) <= tolerancia:
+                return novo
+        return None
+
+    # Pontos onde um horizontal realmente se conecta a um vertical.
+    pontos_conexao = set()
+
+    # Move os horizontais.
+    for item in horizontais:
+        ent = item["ent"]
+        novo_y = _novo_y(item["y"])
+        if novo_y is None:
+            continue
+
+        try:
+            a = ent.dxf.start
+            b = ent.dxf.end
+            ax, az = float(a.x), float(getattr(a, "z", 0.0))
+            bx, bz = float(b.x), float(getattr(b, "z", 0.0))
+
+            ent.dxf.start = (ax, novo_y, az)
+            ent.dxf.end = (bx, novo_y, bz)
+
+            pontos_conexao.add(
+                (
+                    item["layer"],
+                    round(ax, 7),
+                    round(item["y"], 7),
+                    novo_y,
+                )
+            )
+            pontos_conexao.add(
+                (
+                    item["layer"],
+                    round(bx, 7),
+                    round(item["y"], 7),
+                    novo_y,
+                )
+            )
+        except Exception:
+            continue
+
+    # Ajusta somente as extremidades verticais que tocavam os horizontais.
+    for ent in entidades:
+        try:
+            if ent.dxftype() != "LINE":
+                continue
+
+            layer = str(ent.dxf.layer)
+            if layer not in _QDC_LAYERS_CONDUTORES:
+                continue
+
+            a = ent.dxf.start
+            b = ent.dxf.end
+            ax, ay = float(a.x), float(a.y)
+            bx, by = float(b.x), float(b.y)
+
+            if abs(ax - bx) > tolerancia:
+                continue
+
+            novo_ay = None
+            novo_by = None
+
+            for lyr, px, py_antigo, py_novo in pontos_conexao:
+                if lyr != layer:
+                    continue
+                if abs(ax - px) > tolerancia:
+                    continue
+
+                if abs(ay - py_antigo) <= tolerancia:
+                    novo_ay = py_novo
+                if abs(by - py_antigo) <= tolerancia:
+                    novo_by = py_novo
+
+            if novo_ay is not None:
+                ent.dxf.start = (
+                    ax,
+                    novo_ay,
+                    float(getattr(a, "z", 0.0))
+                )
+
+            if novo_by is not None:
+                ent.dxf.end = (
+                    bx,
+                    novo_by,
+                    float(getattr(b, "z", 0.0))
+                )
+        except Exception:
+            continue
+
+    # As bolinhas são finalizadas somente no fim do QDC; portanto
+    # seus candidatos precisam acompanhar o deslocamento dos níveis.
+    for cand in _QDC_NODE_CANDIDATES:
+        if cand.get("msp") is not msp:
+            continue
+
+        novo = _novo_y(
+            cand.get("y", 0.0)
+        )
+
+        if novo is not None:
+            cand["y"] = float(novo)
+
+    return q_real
 
 
 def _eh_ultimo_ponto_da_fase(x, pontos_fase, tolerancia=1e-6):
@@ -1154,7 +1376,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1247,7 +1469,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1289,7 +1511,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.48:
+        # Fase 13.6 Rev.49:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1568,7 +1790,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.48 — QDC executivo no CAD.
+    Fase 13.6 Rev.49 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1606,7 +1828,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1634,7 +1856,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.48 — padrão modular do QDC.
+    # Fase 13.6 Rev.49 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1661,7 +1883,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1699,7 +1921,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.48",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.49",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1759,7 +1981,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1796,7 +2018,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.48 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.49 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -1894,16 +2116,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.48 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.49 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2004,7 +2226,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.48 — ENTRADA DA REDE
+        # FASE 13.6 REV.49 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2070,7 +2292,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.48:
+        # Fase 13.6 Rev.49:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2149,7 +2371,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.48 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.49 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2458,7 +2680,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.48 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.49 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2641,7 +2863,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.48 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.49 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -2815,7 +3037,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.48 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.49 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3404,7 +3626,7 @@ def desenhar_mapa_fisico_qdc(
                                 LN
                             )
 
-                    # Fase 13.6 Rev.48:
+                    # Fase 13.6 Rev.49:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -3929,6 +4151,18 @@ def desenhar_mapa_fisico_qdc(
                                     _layer_por_token(fase_item)
                                 )
 
+        # ====================================================
+        # REV.49 — UNIFORMIZAÇÃO FINAL DA GEOMETRIA REAL
+        # ====================================================
+        # Neste ponto TODAS as ligações horizontais deste vão já foram
+        # desenhadas. Portanto Q é obtido diretamente das entidades LINE
+        # existentes, eliminando qualquer nível reservado sem cabo.
+        _uniformizar_horizontais_reais_no_vao(
+            msp,
+            y_base_fileira_superior,
+            y_topo_fileira_inferior
+        )
+
         y_rail -= 3.15
 
     # -------------------------
@@ -3967,7 +4201,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.48:
+    # Fase 13.6 Rev.49:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
