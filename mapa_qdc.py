@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.68:
+    Fase 13.6 Rev.69:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.68 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.69 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1233,7 +1233,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1326,7 +1326,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1368,7 +1368,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.68:
+        # Fase 13.6 Rev.69:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1724,7 +1724,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.68 — QDC executivo no CAD.
+    Fase 13.6 Rev.69 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1762,7 +1762,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1790,7 +1790,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.68 — padrão modular do QDC.
+    # Fase 13.6 Rev.69 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1817,7 +1817,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1857,7 +1857,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.68",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.69",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1918,7 +1918,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -1955,7 +1955,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.68 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.69 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2053,16 +2053,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.68 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.69 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2163,7 +2163,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.68 — ENTRADA DA REDE
+        # FASE 13.6 REV.69 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2229,7 +2229,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.68:
+        # Fase 13.6 Rev.69:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2313,7 +2313,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.68 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.69 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2595,7 +2595,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.68 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.69 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2802,7 +2802,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.68 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.69 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -2933,7 +2933,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.68 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.69 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3448,7 +3448,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.68:
+                    # Fase 13.6 Rev.69:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4035,7 +4035,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.68 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.69 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -4103,7 +4103,7 @@ def desenhar_mapa_fisico_qdc(
         # ====================================================
         # REV.68 — CORREDORES N À DIREITA DO BARRAMENTO
         # ====================================================
-        # 1º corredor (SEM DR / 3º borne): exatamente 0,10 à direita.
+        # 1º corredor: exatamente 0,10 após a FACE DIREITA do barramento N.
         # Demais corredores: exatamente 0,08 entre si.
         #
         # Se não existir circuito SEM DR, o primeiro neutro disponível
@@ -4117,7 +4117,10 @@ def desenhar_mapa_fisico_qdc(
             )
         )
 
-        x_primeiro_n68 = float(neutro["x"]) + 0.10
+        # Rev.69 — 0,10 medidos a partir do FIM/FACE DIREITA
+        # do desenho do barramento N. O barramento tem meia largura 0,18.
+        x_face_direita_barramento_n69 = float(neutro["x"]) + 0.18
+        x_primeiro_n68 = x_face_direita_barramento_n69 + 0.10
         passo_x_n68 = 0.08
 
         # Separa SEM DR dos neutros pós-DR.
@@ -4131,62 +4134,80 @@ def desenhar_mapa_fisico_qdc(
         ]
 
         # ----------------------------------------------------
-        # SEM DR
+        # SEM DR — REV.69
         # ----------------------------------------------------
-        # Todos os circuitos SEM DR continuam eletricamente ligados ao
-        # 3º borne do barramento N. O primeiro corredor vertical fica
-        # exatamente 0,10 à direita do barramento; se houver mais de um,
-        # os demais ficam 0,08 à direita do anterior.
-        for idx_sem_n68, item_n68 in enumerate(neutros_sem_dr_n68):
-            x_corredor_n68 = (
-                x_primeiro_n68
-                + idx_sem_n68 * passo_x_n68
-            )
+        # Todos os neutros SEM DR nascem no 3º borne do barramento N.
+        # O borne em si NÃO recebe bolinha.
+        #
+        # O tronco sai do 3º borne até a direita do barramento e percorre
+        # horizontalmente os corredores. Cada descida é uma derivação real.
+        # Assim, nos pontos intermediários:
+        #   chegada + continuidade + descida = 3 ramos -> bolinha azul.
+        if neutros_sem_dr_n68:
+            y_borne_sem_n69 = float(neutros_sem_dr_n68[0]["y_fonte"])
 
-            # A saída do 3º borne permanece horizontal até o corredor.
-            y_borne_n68 = float(item_n68["y_fonte"])
+            xs_sem_n69 = [
+                x_primeiro_n68 + i * passo_x_n68
+                for i in range(len(neutros_sem_dr_n68))
+            ]
 
-            # Retorno somente abaixo de todos os DJs.
-            y_retorno_n68 = (
-                y_saida_circuito_global
-                + 0.08
-                + idx_sem_n68 * 0.018
-            )
-
-            _polyline(
+            # Um único tronco desde o 3º borne até o último corredor.
+            _line(
                 msp,
-                [
-                    (item_n68["x_fonte"], y_borne_n68),
-                    (x_corredor_n68, y_borne_n68),
-                    (x_corredor_n68, y_retorno_n68),
-                    (item_n68["x_destino"], y_retorno_n68),
-                    (item_n68["x_destino"], y_saida_circuito_global),
-                ],
+                (float(neutro["x"]), y_borne_sem_n69),
+                (xs_sem_n69[-1], y_borne_sem_n69),
                 LN
             )
 
-            # Se houver mais de um circuito SEM DR partindo do mesmo
-            # 3º borne/tronco, a regra global confirmará a bolinha apenas
-            # onde realmente houver 3 ramos.
-            _no_fase_preenchido(
-                msp,
-                item_n68["x_fonte"],
-                y_borne_n68,
-                "N"
-            )
+            for idx_sem_n68, (item_n68, x_corredor_n68) in enumerate(
+                zip(neutros_sem_dr_n68, xs_sem_n69)
+            ):
+                y_retorno_n68 = (
+                    y_saida_circuito_global
+                    + 0.08
+                    + idx_sem_n68 * 0.018
+                )
+
+                _polyline(
+                    msp,
+                    [
+                        (x_corredor_n68, y_borne_sem_n69),
+                        (x_corredor_n68, y_retorno_n68),
+                        (item_n68["x_destino"], y_retorno_n68),
+                        (item_n68["x_destino"], y_saida_circuito_global),
+                    ],
+                    LN
+                )
+
+                # Candidato somente em derivação do TRONCO.
+                # O último ponto é apenas fim+descida (2 ramos), portanto
+                # a regra global não desenhará bolinha nele.
+                _no_fase_preenchido(
+                    msp,
+                    x_corredor_n68,
+                    y_borne_sem_n69,
+                    "N"
+                )
 
         # ----------------------------------------------------
-        # COM DR
+        # COM DR — REV.69
         # ----------------------------------------------------
-        # Os neutros pós-DR descem reto pelo borne N do próprio DR até
-        # um nível horizontal. Esse nível pode coincidir com PE/A/B/C
-        # já usados no lado ESQUERDO, pois aqui o N segue para a DIREITA.
+        # Cada DR usa sua própria saída N.
+        # Para cada DR/grupo existe um único tronco horizontal N no nível Y
+        # escolhido. Os circuitos daquele DR derivam desse tronco.
         #
-        # Isso evita criar níveis verticais extras e mantém o espaçamento
-        # visual do vão já aprovado.
+        # Os níveis Y podem coincidir com PE/A/B/C do lado esquerdo,
+        # porque aqui os neutros seguem para a DIREITA.
         base_idx_n68 = len(neutros_sem_dr_n68)
 
-        # Fallback apenas se faltarem níveis compartilháveis.
+        # Agrupa os neutros por DR.
+        grupos_neutro_dr_n69 = {}
+        for item_n69 in neutros_dr_n68:
+            grupos_neutro_dr_n69.setdefault(
+                item_n69["grupo"],
+                []
+            ).append(item_n69)
+
         y_base_superior_n68 = min(
             float(g_n68["y1"])
             for _d_n68, g_n68 in geral_geom
@@ -4196,60 +4217,90 @@ def desenhar_mapa_fisico_qdc(
             for _d_n68, g_n68 in circuitos_geom
         )
         h_n68 = y_base_superior_n68 - y_topo_inferior_n68
-        q_fallback_n68 = max(1, len(neutros_dr_n68))
+        q_grupos_n69 = max(1, len(grupos_neutro_dr_n69))
         e_fallback_n68 = (
-            h_n68 / (q_fallback_n68 + 1)
+            h_n68 / (q_grupos_n69 + 1)
             if h_n68 > 0
             else 0.10
         )
 
-        for idx_dr_n68, item_n68 in enumerate(neutros_dr_n68):
-            x_corredor_n68 = (
-                x_primeiro_n68
-                + (base_idx_n68 + idx_dr_n68) * passo_x_n68
+        idx_global_corredor_n69 = base_idx_n68
+
+        for idx_grupo_n69, grupo_n69 in enumerate(
+            sorted(grupos_neutro_dr_n69)
+        ):
+            itens_dr_n69 = sorted(
+                grupos_neutro_dr_n69[grupo_n69],
+                key=lambda item: str(
+                    item["d"].get("identificador", "") or ""
+                )
             )
 
-            if idx_dr_n68 < len(niveis_compartilhados_n68):
-                y_horizontal_n68 = niveis_compartilhados_n68[idx_dr_n68]
+            if idx_grupo_n69 < len(niveis_compartilhados_n68):
+                y_horizontal_n69 = niveis_compartilhados_n68[idx_grupo_n69]
             else:
-                y_horizontal_n68 = (
+                y_horizontal_n69 = (
                     y_base_superior_n68
-                    - (idx_dr_n68 + 1) * e_fallback_n68
+                    - (idx_grupo_n69 + 1) * e_fallback_n68
                 )
 
-            y_retorno_n68 = (
-                y_saida_circuito_global
-                + 0.08
-                + (base_idx_n68 + idx_dr_n68) * 0.018
-            )
+            x_fonte_grupo_n69 = float(itens_dr_n69[0]["x_fonte"])
+            y_fonte_grupo_n69 = float(itens_dr_n69[0]["y_fonte"])
 
-            # Saída do DR: primeiro RETO para baixo; só no nível escolhido
-            # vira para a direita.
-            _polyline(
+            xs_corredores_grupo_n69 = []
+            for _ in itens_dr_n69:
+                xs_corredores_grupo_n69.append(
+                    x_primeiro_n68
+                    + idx_global_corredor_n69 * passo_x_n68
+                )
+                idx_global_corredor_n69 += 1
+
+            # Saída do DR: desce reto até o nível horizontal.
+            _line(
                 msp,
-                [
-                    (item_n68["x_fonte"], item_n68["y_fonte"]),
-                    (item_n68["x_fonte"], y_horizontal_n68),
-                    (x_corredor_n68, y_horizontal_n68),
-                    (x_corredor_n68, y_retorno_n68),
-                    (item_n68["x_destino"], y_retorno_n68),
-                    (item_n68["x_destino"], y_saida_circuito_global),
-                ],
+                (x_fonte_grupo_n69, y_fonte_grupo_n69),
+                (x_fonte_grupo_n69, y_horizontal_n69),
                 LN
             )
 
-            # Candidato azul no ponto em que a saída vertical do DR
-            # encontra a derivação horizontal. A Rev.37 só desenhará a
-            # bolinha se houver 3 ou mais ramos reais.
-            _no_fase_preenchido(
+            # Tronco do grupo até o último circuito.
+            _line(
                 msp,
-                item_n68["x_fonte"],
-                y_horizontal_n68,
-                "N"
+                (x_fonte_grupo_n69, y_horizontal_n69),
+                (xs_corredores_grupo_n69[-1], y_horizontal_n69),
+                LN
             )
 
+            for idx_item_n69, (item_n69, x_corredor_n69) in enumerate(
+                zip(itens_dr_n69, xs_corredores_grupo_n69)
+            ):
+                y_retorno_n69 = (
+                    y_saida_circuito_global
+                    + 0.08
+                    + (base_idx_n68 + idx_item_n69) * 0.018
+                )
+
+                _polyline(
+                    msp,
+                    [
+                        (x_corredor_n69, y_horizontal_n69),
+                        (x_corredor_n69, y_retorno_n69),
+                        (item_n69["x_destino"], y_retorno_n69),
+                        (item_n69["x_destino"], y_saida_circuito_global),
+                    ],
+                    LN
+                )
+
+                # Nó candidato somente na derivação do tronco.
+                _no_fase_preenchido(
+                    msp,
+                    x_corredor_n69,
+                    y_horizontal_n69,
+                    "N"
+                )
+
     # ========================================================
-    # FASE 13.6 REV.68 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.69 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4303,7 +4354,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.68 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.69 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -4588,7 +4639,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.68:
+    # Fase 13.6 Rev.69:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
