@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.90:
+    Fase 13.6 Rev.91:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.90 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.91 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1715,7 +1715,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1808,7 +1808,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1850,7 +1850,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.90:
+        # Fase 13.6 Rev.91:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -2206,7 +2206,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.90 — QDC executivo no CAD.
+    Fase 13.6 Rev.91 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -2247,7 +2247,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -2275,7 +2275,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.90 — padrão modular do QDC.
+    # Fase 13.6 Rev.91 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -2302,7 +2302,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2342,7 +2342,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.90",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.91",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -2403,7 +2403,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2440,7 +2440,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.90 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.91 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2538,16 +2538,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.90 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.91 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2648,7 +2648,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.90 — ENTRADA DA REDE
+        # FASE 13.6 REV.91 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2714,7 +2714,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.90:
+        # Fase 13.6 Rev.91:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2798,7 +2798,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.90 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.91 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -3080,7 +3080,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.90 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.91 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -3222,6 +3222,150 @@ def desenhar_mapa_fisico_qdc(
     y_saida_circuito_global = y_rail_ultima_fileira - 2.28
     y_identificacao_saida_global = y_saida_circuito_global - 0.22
 
+    # ========================================================
+    # FASE 13.6 REV.91 — GRADE DA SAÍDA FINAL DO QDC
+    # ========================================================
+    # Nesta revisão o H fica explicitamente definido.
+    #
+    # LIMITE SUPERIOR:
+    # 0,10 m abaixo da base do pequeno retângulo terminal inferior
+    # (retângulo = 0,075 m de altura).
+    #
+    # LIMITE INFERIOR:
+    # 0,20 m acima da antiga cota global de saída.
+    #
+    # Portanto:
+    # H = limite_superior - limite_inferior
+    # E = H / (Q + 1)
+    #
+    # Q = TODOS os condutores finais que precisarão de trecho
+    # horizontal nesta faixa: fases + neutros + PE.
+    #
+    # Cada condutor recebe UM nível Y exclusivo. A partir desse
+    # nível ele segue na HORIZONTAL e só vira PARA BAIXO quando
+    # chega à posição definitiva do seu circuito.
+    mapa_nivel_saida_rev91 = {}
+    mapa_x_handoff_rev91 = {}
+
+    q_condutores_saida_rev91 = 0
+    dados_tokens_saida_rev91 = []
+
+    for d_rev91 in circuitos:
+        fases_rev91 = _fases_do_texto(
+            d_rev91.get("fase", "")
+        )
+        tokens_rev91 = list(fases_rev91)
+
+        if (
+            len(fases_rev91) == 1
+            and int(d_rev91.get("modulos", 1) or 1) == 1
+        ):
+            tokens_rev91.append("N")
+
+        tokens_rev91.append("PE")
+
+        ident_rev91 = str(
+            d_rev91.get("identificador", "") or ""
+        ).strip().upper()
+
+        for token_rev91 in tokens_rev91:
+            dados_tokens_saida_rev91.append(
+                (ident_rev91, token_rev91)
+            )
+
+    q_condutores_saida_rev91 = len(
+        dados_tokens_saida_rev91
+    )
+
+    # Geometria determinística da última linha de DJs.
+    y1_ultima_fileira_rev91 = (
+        y_rail_ultima_fileira - 0.85
+    )
+
+    # Base do retângulo terminal inferior:
+    # y1 do DJ - 0,075 m.
+    y_base_terminal_inferior_rev91 = (
+        y1_ultima_fileira_rev91 - 0.075
+    )
+
+    y_limite_superior_saida_rev91 = (
+        y_base_terminal_inferior_rev91 - 0.10
+    )
+
+    y_limite_inferior_saida_rev91 = (
+        y_saida_circuito_global + 0.20
+    )
+
+    h_saida_rev91 = (
+        y_limite_superior_saida_rev91
+        - y_limite_inferior_saida_rev91
+    )
+
+    if h_saida_rev91 <= 0:
+        raise RuntimeError(
+            "Faixa vertical inválida para a saída final do QDC."
+        )
+
+    e_saida_rev91 = (
+        h_saida_rev91
+        / (q_condutores_saida_rev91 + 1)
+        if q_condutores_saida_rev91 > 0
+        else 0.0
+    )
+
+    for idx_saida_rev91, chave_saida_rev91 in enumerate(
+        dados_tokens_saida_rev91,
+        start=1
+    ):
+        mapa_nivel_saida_rev91[
+            chave_saida_rev91
+        ] = (
+            y_limite_superior_saida_rev91
+            - idx_saida_rev91 * e_saida_rev91
+        )
+
+    def _nivel_final_rev91(disp_rev91, token_rev91):
+        ident_rev91 = str(
+            disp_rev91.get("identificador", "") or ""
+        ).strip().upper()
+
+        return mapa_nivel_saida_rev91.get(
+            (ident_rev91, str(token_rev91).upper()),
+            y_saida_circuito_global
+        )
+
+    def _registrar_x_handoff_rev91(
+        disp_rev91,
+        token_rev91,
+        x_rev91
+    ):
+        ident_rev91 = str(
+            disp_rev91.get("identificador", "") or ""
+        ).strip().upper()
+
+        mapa_x_handoff_rev91[
+            (ident_rev91, str(token_rev91).upper())
+        ] = float(x_rev91)
+
+    def _x_handoff_rev91(
+        disp_rev91,
+        token_rev91,
+        fallback_rev91
+    ):
+        ident_rev91 = str(
+            disp_rev91.get("identificador", "") or ""
+        ).strip().upper()
+
+        return float(
+            mapa_x_handoff_rev91.get(
+                (
+                    ident_rev91,
+                    str(token_rev91).upper()
+                ),
+                fallback_rev91
+            )
+        )
+
     for trilho in range(trilhos_circuitos):
         x = x_alinhamento_dispositivos
         usados = 0
@@ -3287,7 +3431,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.90 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.91 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3376,16 +3520,39 @@ def desenhar_mapa_fisico_qdc(
                                 # Rev.78 — permanece no eixo deslocado até
                                 # a saída. Não existe retorno horizontal
                                 # excedente para a direita.
-                                (x_desvio_rev75, y_saida_circuito),
+                                (
+                                    x_desvio_rev75,
+                                    _nivel_final_rev91(
+                                        d_saida,
+                                        fase_saida
+                                    )
+                                ),
                             ],
                             _layer_por_token(fase_saida)
                         )
+
+                        _registrar_x_handoff_rev91(
+                            d_saida,
+                            fase_saida,
+                            x_desvio_rev75
+                        )
                     else:
+                        y_nivel_fase_rev91 = _nivel_final_rev91(
+                            d_saida,
+                            fase_saida
+                        )
+
                         _line(
                             msp,
                             (x_borne_fase, g_saida["y1"]),
-                            (x_borne_fase, y_saida_circuito),
+                            (x_borne_fase, y_nivel_fase_rev91),
                             _layer_por_token(fase_saida)
+                        )
+
+                        _registrar_x_handoff_rev91(
+                            d_saida,
+                            fase_saida,
+                            x_borne_fase
                         )
 
                 # Rev.56 — PE não nasce mais como pequeno trecho local.
@@ -3458,7 +3625,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.90 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.91 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -4017,7 +4184,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.90:
+                    # Fase 13.6 Rev.91:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4764,7 +4931,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.90 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.91 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -4891,10 +5058,9 @@ def desenhar_mapa_fisico_qdc(
             for idx_sem_n68, (item_n68, x_corredor_n68) in enumerate(
                 zip(neutros_sem_dr_n68, xs_sem_n69)
             ):
-                y_retorno_n68 = (
-                    y_saida_circuito_global
-                    + 0.08
-                    + idx_sem_n68 * 0.018
+                y_retorno_n68 = _nivel_final_rev91(
+                    item_n68["d"],
+                    "N"
                 )
 
                 _polyline(
@@ -4902,10 +5068,18 @@ def desenhar_mapa_fisico_qdc(
                     [
                         (x_corredor_n68, y_borne_sem_n69),
                         (x_corredor_n68, y_retorno_n68),
-                        (item_n68["x_destino"], y_retorno_n68),
-                        (item_n68["x_destino"], y_saida_circuito_global),
+                        (
+                            item_n68["x_destino"],
+                            y_retorno_n68
+                        ),
                     ],
                     LN
+                )
+
+                _registrar_x_handoff_rev91(
+                    item_n68["d"],
+                    "N",
+                    item_n68["x_destino"]
                 )
 
                 # Candidato somente em derivação do TRONCO.
@@ -5003,10 +5177,9 @@ def desenhar_mapa_fisico_qdc(
             for idx_item_n69, (item_n69, x_corredor_n69) in enumerate(
                 zip(itens_dr_n69, xs_corredores_grupo_n69)
             ):
-                y_retorno_n69 = (
-                    y_saida_circuito_global
-                    + 0.08
-                    + (base_idx_n68 + idx_item_n69) * 0.018
+                y_retorno_n69 = _nivel_final_rev91(
+                    item_n69["d"],
+                    "N"
                 )
 
                 _polyline(
@@ -5014,10 +5187,18 @@ def desenhar_mapa_fisico_qdc(
                     [
                         (x_corredor_n69, y_horizontal_n69),
                         (x_corredor_n69, y_retorno_n69),
-                        (item_n69["x_destino"], y_retorno_n69),
-                        (item_n69["x_destino"], y_saida_circuito_global),
+                        (
+                            item_n69["x_destino"],
+                            y_retorno_n69
+                        ),
                     ],
                     LN
+                )
+
+                _registrar_x_handoff_rev91(
+                    item_n69["d"],
+                    "N",
+                    item_n69["x_destino"]
                 )
 
                 # Nó candidato somente na derivação do tronco.
@@ -5029,7 +5210,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
     # ========================================================
-    # FASE 13.6 REV.90 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.91 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -5063,11 +5244,11 @@ def desenhar_mapa_fisico_qdc(
                 0.16
             )
 
-            # Nível individual logo acima da ponta final global.
-            y_final_pe_circ = (
-                y_saida_circuito_global
-                + 0.10
-                + idx_pe_circ * 0.035
+            # Rev.91 — o PE entra diretamente no nível E exclusivo
+            # do circuito. Não existe mais a escadaria de 0,035 m.
+            y_final_pe_circ = _nivel_final_rev91(
+                d_pe,
+                "PE"
             )
 
             _polyline(
@@ -5077,32 +5258,38 @@ def desenhar_mapa_fisico_qdc(
                     (x_corredor_pe_circ, y_borne_pe_circ),
                     (x_corredor_pe_circ, y_final_pe_circ),
                     (x_saida_pe_circ, y_final_pe_circ),
-                    (x_saida_pe_circ, y_saida_circuito_global),
                 ],
                 LPE
             )
 
+            _registrar_x_handoff_rev91(
+                d_pe,
+                "PE",
+                x_saida_pe_circ
+            )
+
     # ========================================================
-    # FASE 13.6 REV.90 — SAÍDAS FINAIS ORGANIZADAS POR CIRCUITO
+    # FASE 13.6 REV.91 — SAÍDA FINAL SEM ESCADARIA
     # ========================================================
-    # ESCOPO:
-    # somente abaixo do último nível de disjuntores até a saída
-    # final dos circuitos. A geometria superior aprovada na Rev.88
-    # não é alterada.
+    # A grade vertical já foi calculada ANTES do desenho:
     #
-    # REGRAS VISUAIS:
-    # - 1 circuito = 1 grupo próprio;
-    # - condutores do mesmo circuito: 0,08 m entre eixos;
-    # - grupos de circuitos: 0,18 m entre bordas úteis;
-    # - C01, C02... centralizado sob o respectivo grupo;
-    # - cada condutor recebe nível horizontal próprio na transição;
-    # - os níveis horizontais são distribuídos uniformemente pela
-    #   altura disponível: E = H / (Q + 1);
-    # - depois da transição, cada cabo desce RETO até a saída final;
-    # - sem textos F/N/PE.
+    #   H = y_limite_superior_saida_rev91
+    #       - y_limite_inferior_saida_rev91
     #
-    # As ligações elétricas até y_saida_circuito_global já foram
-    # construídas pelas regras aprovadas da Rev.88.
+    #   E = H / (Q + 1)
+    #
+    # Cada cabo chega ao seu nível E ainda no eixo de origem.
+    # AQUI ele:
+    #   1. segue SOMENTE na horizontal;
+    #   2. chega à posição definitiva do seu circuito;
+    #   3. vira SOMENTE para baixo;
+    #   4. segue reto até a saída.
+    #
+    # Isso elimina o efeito visual de "escadaria".
+    #
+    # Espaçamentos horizontais:
+    # - 0,08 m entre cabos do mesmo circuito;
+    # - 0,35 m entre circuitos.
     if circuitos_geom:
         dados_chicotes = []
 
@@ -5113,11 +5300,10 @@ def desenhar_mapa_fisico_qdc(
 
             tokens_ch = list(fases_ch)
 
-            tem_neutro_ch = (
+            if (
                 len(fases_ch) == 1
                 and int(d_ch.get("modulos", 1) or 1) == 1
-            )
-            if tem_neutro_ch:
+            ):
                 tokens_ch.append("N")
 
             tokens_ch.append("PE")
@@ -5126,13 +5312,11 @@ def desenhar_mapa_fisico_qdc(
                 (d_ch, g_ch, tokens_ch)
             )
 
-        qtd_circuitos_saida = len(dados_chicotes)
-
         # ----------------------------------------------------
-        # ESPAÇAMENTO HORIZONTAL DOS GRUPOS
+        # ESPAÇAMENTO HORIZONTAL — FIXO
         # ----------------------------------------------------
         espaco_interno = 0.08
-        espaco_entre_circuitos = 0.18
+        espaco_entre_circuitos = 0.35
 
         larguras = [
             (
@@ -5145,112 +5329,25 @@ def desenhar_mapa_fisico_qdc(
 
         largura_necessaria = (
             sum(larguras)
-            + max(0, qtd_circuitos_saida - 1)
+            + max(0, len(dados_chicotes) - 1)
             * espaco_entre_circuitos
         )
 
-        largura_disponivel_saida = max(
-            1.0,
-            din_x2 - din_x1 - 0.60
-        )
-
-        # Se o quadro for excepcionalmente carregado, preserva
-        # primeiro os 0,08 internos e reduz apenas o espaço entre
-        # circuitos até o mínimo visual de 0,12.
-        if (
-            qtd_circuitos_saida > 1
-            and largura_necessaria > largura_disponivel_saida
-        ):
-            espaco_entre_circuitos = max(
-                0.12,
-                (
-                    largura_disponivel_saida
-                    - sum(larguras)
-                )
-                / (qtd_circuitos_saida - 1)
-            )
-
-            largura_necessaria = (
-                sum(larguras)
-                + max(0, qtd_circuitos_saida - 1)
-                * espaco_entre_circuitos
-            )
-
-        # Último fallback: somente se ainda não couber, reduz
-        # proporcionalmente mantendo a razão entre os espaços.
-        if largura_necessaria > largura_disponivel_saida:
-            fator_saida = max(
-                0.70,
-                largura_disponivel_saida
-                / largura_necessaria
-            )
-            espaco_interno *= fator_saida
-            espaco_entre_circuitos *= fator_saida
-
-            larguras = [
-                (
-                    0.0
-                    if len(tokens_ch) <= 1
-                    else (len(tokens_ch) - 1)
-                    * espaco_interno
-                )
-                for _, _, tokens_ch in dados_chicotes
-            ]
-
-            largura_necessaria = (
-                sum(larguras)
-                + max(0, qtd_circuitos_saida - 1)
-                * espaco_entre_circuitos
-            )
-
+        # Não reduzir 0,35 m. Se necessário, a faixa final utiliza
+        # a largura que realmente precisa, mantendo o conjunto centrado.
         x_inicio_chicotes = (
             (din_x1 + din_x2) / 2.0
             - largura_necessaria / 2.0
         )
 
-        # ----------------------------------------------------
-        # ESPAÇAMENTO VERTICAL DAS TRANSIÇÕES
-        # ----------------------------------------------------
-        # Cada condutor terá uma única horizontal de transição.
-        qtd_condutores_saida = sum(
-            len(tokens_ch)
-            for _, _, tokens_ch in dados_chicotes
-        )
-
-        y_topo_transicao = (
-            y_saida_circuito_global - 0.12
-        )
-
-        # Saída final suficientemente abaixo da última fileira.
+        # A ponta final fica abaixo da faixa H.
         y_final_chicotes = (
-            y_saida_circuito_global - 1.25
+            y_saida_circuito_global - 0.45
         )
-
-        # Reserva uma faixa acima dos textos.
-        y_base_transicao = (
-            y_final_chicotes + 0.28
-        )
-
-        altura_transicao = max(
-            0.30,
-            y_topo_transicao - y_base_transicao
-        )
-
-        if qtd_condutores_saida > 0:
-            passo_vertical_saida = (
-                altura_transicao
-                / (qtd_condutores_saida + 1)
-            )
-        else:
-            passo_vertical_saida = 0.0
-
         y_texto_chicotes = (
             y_final_chicotes - 0.22
         )
 
-        # Índice GLOBAL: garante que duas horizontais de cabos
-        # diferentes nunca ocupem o mesmo nível.
-        indice_global_condutor = 0
         x_cursor_chicote = x_inicio_chicotes
 
         for idx_ch, (
@@ -5258,7 +5355,6 @@ def desenhar_mapa_fisico_qdc(
             g_ch,
             tokens_ch
         ) in enumerate(dados_chicotes):
-
             largura_ch = larguras[idx_ch]
 
             if len(tokens_ch) <= 1:
@@ -5288,13 +5384,11 @@ def desenhar_mapa_fisico_qdc(
                 d_ch.get("fase", "")
             )
 
-            # ------------------------------------------------
-            # Fontes já aprovadas até a cota de saída global.
-            # ------------------------------------------------
-            fontes_ch = []
+            # X de fallback apenas para segurança.
+            fontes_fallback_ch = []
 
             for fase_ch in fases_ch:
-                fontes_ch.append(
+                fontes_fallback_ch.append(
                     (
                         fase_ch,
                         _polo_para_fase(
@@ -5306,7 +5400,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
             if "N" in tokens_ch:
-                fontes_ch.append(
+                fontes_fallback_ch.append(
                     (
                         "N",
                         _x_passagem_lateral_disjuntor(
@@ -5317,7 +5411,7 @@ def desenhar_mapa_fisico_qdc(
                     )
                 )
 
-            fontes_ch.append(
+            fontes_fallback_ch.append(
                 (
                     "PE",
                     _x_passagem_lateral_disjuntor(
@@ -5328,59 +5422,60 @@ def desenhar_mapa_fisico_qdc(
                 )
             )
 
-            # ------------------------------------------------
-            # Transição organizada.
-            # ------------------------------------------------
             for (
                 token_ch,
-                x_origem_ch
+                x_fallback_ch
             ), x_destino_ch in zip(
-                fontes_ch,
+                fontes_fallback_ch,
                 xs_destinos_ch
             ):
-                indice_global_condutor += 1
-
-                y_cond_ch = (
-                    y_topo_transicao
-                    - indice_global_condutor
-                    * passo_vertical_saida
+                y_nivel_ch = _nivel_final_rev91(
+                    d_ch,
+                    token_ch
                 )
 
-                # Trecho 1: desce da conexão aprovada.
-                # Trecho 2: desloca horizontalmente no nível exclusivo.
-                # Trecho 3: desce reto até a saída final.
-                _polyline(
+                x_origem_ch = _x_handoff_rev91(
+                    d_ch,
+                    token_ch,
+                    x_fallback_ch
+                )
+
+                # Rev.91:
+                # HORIZONTAL primeiro.
+                if abs(
+                    x_destino_ch - x_origem_ch
+                ) > 1e-9:
+                    _line(
+                        msp,
+                        (
+                            x_origem_ch,
+                            y_nivel_ch
+                        ),
+                        (
+                            x_destino_ch,
+                            y_nivel_ch
+                        ),
+                        _layer_por_token(token_ch)
+                    )
+
+                # SOMENTE aqui o cabo vira para baixo.
+                _line(
                     msp,
-                    [
-                        (
-                            x_origem_ch,
-                            y_saida_circuito_global
-                        ),
-                        (
-                            x_origem_ch,
-                            y_cond_ch
-                        ),
-                        (
-                            x_destino_ch,
-                            y_cond_ch
-                        ),
-                        (
-                            x_destino_ch,
-                            y_final_chicotes
-                        ),
-                    ],
+                    (
+                        x_destino_ch,
+                        y_nivel_ch
+                    ),
+                    (
+                        x_destino_ch,
+                        y_final_chicotes
+                    ),
                     _layer_por_token(token_ch)
                 )
 
             ident_ch = str(
-                d_ch.get(
-                    "identificador",
-                    ""
-                )
-                or ""
+                d_ch.get("identificador", "") or ""
             )
 
-            # Identificação centralizada no grupo.
             largura_texto_grupo = max(
                 0.18,
                 largura_ch / 2.0 + 0.08
@@ -5396,7 +5491,6 @@ def desenhar_mapa_fisico_qdc(
                 LT
             )
 
-            # Próximo circuito começa depois da borda útil do atual.
             x_cursor_chicote += (
                 largura_ch
                 + espaco_entre_circuitos
@@ -5438,7 +5532,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | DR | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.90:
+    # Fase 13.6 Rev.91:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
