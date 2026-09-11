@@ -603,7 +603,7 @@ def desenhar_interruptores(
     ):
         nome = ambiente["nome"]
 
-        # Fase 13.6 Rev.103: varanda, terraço e garagem têm comando de iluminação
+        # Fase 13.6 Rev.104: varanda, terraço e garagem têm comando de iluminação
         # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
         # mesmo que exista configuração antiga salva no projeto.
         if _ambiente_sem_interruptor_proprio(nome):
@@ -723,6 +723,34 @@ def desenhar_interruptores(
                     msp,
                     geo["centro"],
                     RAIO_INTERRUPTOR
+                )
+
+            # Fase 13.6 Rev.104 — mesmo "risquinho" usado nas tomadas.
+            # O ponto de tangência é a face interna da parede.
+            # O traço total mede 10 cm: 5 cm para dentro e 5 cm para fora.
+            cx_int, cy_int = geo["centro"]
+            tx_int, ty_int = geo["tangencia"]
+            dx_int = cx_int - tx_int
+            dy_int = cy_int - ty_int
+            comp_int = math.hypot(dx_int, dy_int)
+            if comp_int > 1e-9:
+                nx_int = dx_int / comp_int
+                ny_int = dy_int / comp_int
+                meio_traco_int = 0.05
+                p_ext_int = (
+                    tx_int - nx_int * meio_traco_int,
+                    ty_int - ny_int * meio_traco_int
+                )
+                p_int_int = (
+                    tx_int + nx_int * meio_traco_int,
+                    ty_int + ny_int * meio_traco_int
+                )
+                msp.add_line(
+                    p_ext_int,
+                    p_int_int,
+                    dxfattribs={
+                        "layer": "PROJ_ELETRICA_INTERRUPTOR"
+                    }
                 )
 
             rot = geo["rot"]
