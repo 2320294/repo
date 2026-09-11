@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.74:
+    Fase 13.6 Rev.75:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.74 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.75 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -767,9 +767,6 @@ def _desenhar_no_se_derivacao(msp, x, y, token, pontos_fase):
 # Rev.37 — candidatos a nós. A decisão final é feita somente após
 # todos os condutores terem sido desenhados.
 _QDC_NODE_CANDIDATES = []
-
-# Rev.74 — pontos onde, por regra executiva, NÃO deve existir bolinha,
-# mesmo que a análise geométrica encontre três segmentos coincidentes.
 _QDC_NODE_SUPPRESSIONS = []
 
 
@@ -866,32 +863,26 @@ def _ramos_reais_no_ponto(msp, x, y, token, tol=1e-6):
     return ramos
 
 
-def _suprimir_no_topologico_rev74(msp, x, token, y_min, y_max):
-    """Suprime bolinhas do token no eixo X dentro de uma faixa Y."""
+def _registrar_supressao_no_rev75(msp, x, y, token, raio_busca=0.03):
     _QDC_NODE_SUPPRESSIONS.append({
         "msp": msp,
         "x": float(x),
+        "y": float(y),
         "token": str(token).upper(),
-        "y_min": min(float(y_min), float(y_max)),
-        "y_max": max(float(y_min), float(y_max)),
+        "raio_busca": float(raio_busca),
     })
 
 
-def _no_suprimido_rev74(msp, x, y, token, tol=1e-6):
-    px = float(x)
-    py = float(y)
-    tok = str(token).upper()
-
+def _no_suprimido_rev75(msp, x, y, token):
     for item in _QDC_NODE_SUPPRESSIONS:
         if item.get("msp") is not msp:
             continue
-        if str(item.get("token", "")).upper() != tok:
+        if str(item.get("token", "")).upper() != str(token).upper():
             continue
-        if abs(float(item["x"]) - px) > tol:
-            continue
-        if float(item["y_min"]) - tol <= py <= float(item["y_max"]) + tol:
+        dx = float(item["x"]) - float(x)
+        dy = float(item["y"]) - float(y)
+        if (dx * dx + dy * dy) ** 0.5 <= float(item["raio_busca"]):
             return True
-
     return False
 
 
@@ -915,7 +906,7 @@ def _finalizar_nos_topologicos(msp):
             continue
         vistos.add(chave)
 
-        if _no_suprimido_rev74(
+        if _no_suprimido_rev75(
             msp,
             cand["x"],
             cand["y"],
@@ -938,148 +929,6 @@ def _finalizar_nos_topologicos(msp):
                 cand["token"],
                 cand["raio"]
             )
-
-
-
-def _aplicar_regra_geral_3a_fileira_rev74(
-    msp,
-    circuitos_geom,
-    y_saida_circuito_global,
-    deslocamento_x=0.10,
-    descida_inicial=0.10,
-):
-    """
-    Rev.74 — regra geral para quadros com pelo menos 3 fileiras de DJs.
-
-    1º DJ da 2ª fileira:
-    - 1º condutor do DJ sai 0,10 abaixo do terminal;
-    - vira 0,10 para a esquerda;
-    - desce reto pelo novo eixo, inclusive por trás da 3ª fileira;
-    - volta ao eixo original somente na cota final dos circuitos.
-
-    1º DJ da 3ª fileira:
-    - seu 1º condutor de entrada mantém prioridade reta;
-    - bolinha de derivação é suprimida no trecho de alimentação desse borne.
-    """
-    if not circuitos_geom:
-        return
-
-    # Agrupa fileiras pelo Y inferior do corpo dos DJs.
-    grupos_y = {}
-    for d, g in circuitos_geom:
-        chave_y = round(float(g["y1"]), 5)
-        grupos_y.setdefault(chave_y, []).append((d, g))
-
-    # Do topo para baixo: maior y1 = fileira superior.
-    fileiras = [
-        sorted(grupos_y[y], key=lambda par: float(par[1]["x1"]))
-        for y in sorted(grupos_y.keys(), reverse=True)
-    ]
-
-    if len(fileiras) < 3:
-        return
-
-    segunda = fileiras[1]
-    terceira = fileiras[2]
-
-    if not segunda or not terceira:
-        return
-
-    d2, g2 = segunda[0]
-    d3, g3 = terceira[0]
-
-    fases2 = _fases_do_texto(d2.get("fase", ""))
-    fases3 = _fases_do_texto(d3.get("fase", ""))
-
-    if not fases2 or not fases3:
-        return
-
-    # ------------------------------------------------------------
-    # SAÍDA DO 1º DJ DA 2ª FILEIRA
-    # ------------------------------------------------------------
-    fase_saida_2 = fases2[0]
-    layer_saida_2 = _layer_por_token(fase_saida_2)
-    x_borne_2 = float(_polo_para_fase(d2, g2, fase_saida_2))
-    y_borne_saida_2 = float(g2["y1"])
-    y_saida_final = float(y_saida_circuito_global)
-
-    x_desviado_2 = x_borne_2 - float(deslocamento_x)
-    y_primeira_quebra_2 = y_borne_saida_2 - float(descida_inicial)
-
-    # Remove APENAS a descida reta original que nasce exatamente
-    # no borne inferior do 1º DJ da 2ª fileira e chega à saída global.
-    for ent in list(msp):
-        try:
-            if ent.dxftype() != "LINE":
-                continue
-            if str(ent.dxf.layer) != str(layer_saida_2):
-                continue
-
-            a = ent.dxf.start
-            b = ent.dxf.end
-            ax, ay = float(a.x), float(a.y)
-            bx, by = float(b.x), float(b.y)
-
-            if abs(ax - bx) > 1e-8:
-                continue
-            if abs(ax - x_borne_2) > 1e-6:
-                continue
-
-            ylo = min(ay, by)
-            yhi = max(ay, by)
-
-            toca_borne = (
-                abs(ay - y_borne_saida_2) <= 1e-5
-                or abs(by - y_borne_saida_2) <= 1e-5
-            )
-
-            chega_saida = ylo <= y_saida_final + 1e-5
-
-            if toca_borne and chega_saida:
-                try:
-                    msp.delete_entity(ent)
-                except Exception:
-                    try:
-                        ent.destroy()
-                    except Exception:
-                        pass
-        except Exception:
-            continue
-
-    # Nova rota:
-    # borne -> desce 0,10 -> esquerda 0,10 -> reto até saída -> volta ao eixo.
-    _polyline(
-        msp,
-        [
-            (x_borne_2, y_borne_saida_2),
-            (x_borne_2, y_primeira_quebra_2),
-            (x_desviado_2, y_primeira_quebra_2),
-            (x_desviado_2, y_saida_final),
-            (x_borne_2, y_saida_final),
-        ],
-        layer_saida_2
-    )
-
-    # ------------------------------------------------------------
-    # ENTRADA DO 1º DJ DA 3ª FILEIRA
-    # ------------------------------------------------------------
-    # O primeiro condutor/fase do circuito corresponde ao 1º borne físico.
-    fase_entrada_3 = fases3[0]
-    x_borne_3 = float(_polo_para_fase(d3, g3, fase_entrada_3))
-
-    # Suprimir qualquer bolinha candidata no eixo do 1º borne,
-    # entre a base da 2ª fileira e o topo da 3ª.
-    y_faixa_sup = float(g2["y1"])
-    y_faixa_inf = float(g3["y2"])
-
-    _suprimir_no_topologico_rev74(
-        msp,
-        x_borne_3,
-        fase_entrada_3,
-        y_faixa_inf,
-        y_faixa_sup
-    )
-
 
 
 
@@ -1416,7 +1265,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1509,7 +1358,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1551,7 +1400,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.74:
+        # Fase 13.6 Rev.75:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1907,7 +1756,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.74 — QDC executivo no CAD.
+    Fase 13.6 Rev.75 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1946,7 +1795,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1974,7 +1823,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.74 — padrão modular do QDC.
+    # Fase 13.6 Rev.75 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -2001,7 +1850,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2041,7 +1890,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.74",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.75",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -2102,7 +1951,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2139,7 +1988,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.74 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.75 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2237,16 +2086,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.74 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.75 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2347,7 +2196,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.74 — ENTRADA DA REDE
+        # FASE 13.6 REV.75 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2413,7 +2262,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.74:
+        # Fase 13.6 Rev.75:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2497,7 +2346,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.74 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.75 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2779,7 +2628,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.74 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.75 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2986,7 +2835,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.74 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.75 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3035,17 +2884,46 @@ def desenhar_mapa_fisico_qdc(
                     )
                     xs_fases_saida.append(x_borne_fase)
 
-                    # Rev.27: saída terminal absolutamente simples.
-                    # O condutor permanece no mesmo eixo do borne até a
-                    # saída inferior do QDC — nenhuma curva intermediária.
-                    x_fase_saida = x_borne_fase
+                    # Rev.75 — quando houver 3ª fileira, o 1º condutor
+                    # do 1º DJ da 2ª fileira sai 0,10 para baixo,
+                    # vira 0,10 para a esquerda e segue reto até a saída.
+                    primeira_geom_da_fileira = min(
+                        desta_fileira_geom,
+                        key=lambda gg: float(gg["x1"])
+                    ) if desta_fileira_geom else None
 
-                    _line(
-                        msp,
-                        (x_borne_fase, g_saida["y1"]),
-                        (x_borne_fase, y_saida_circuito),
-                        _layer_por_token(fase_saida)
+                    eh_primeiro_dj_segunda_fileira = (
+                        trilhos_circuitos >= 3
+                        and trilho == 1
+                        and primeira_geom_da_fileira is not None
+                        and abs(
+                            float(g_saida["x1"])
+                            - float(primeira_geom_da_fileira["x1"])
+                        ) <= 1e-6
                     )
+
+                    if eh_primeiro_dj_segunda_fileira and idx_fase_saida == 0:
+                        x_desvio_rev75 = float(x_borne_fase) - 0.10
+                        y_quebra_rev75 = float(g_saida["y1"]) - 0.10
+
+                        _polyline(
+                            msp,
+                            [
+                                (x_borne_fase, g_saida["y1"]),
+                                (x_borne_fase, y_quebra_rev75),
+                                (x_desvio_rev75, y_quebra_rev75),
+                                (x_desvio_rev75, y_saida_circuito),
+                                (x_borne_fase, y_saida_circuito),
+                            ],
+                            _layer_por_token(fase_saida)
+                        )
+                    else:
+                        _line(
+                            msp,
+                            (x_borne_fase, g_saida["y1"]),
+                            (x_borne_fase, y_saida_circuito),
+                            _layer_por_token(fase_saida)
+                        )
 
                 # Rev.56 — PE não nasce mais como pequeno trecho local.
                 # Cada circuito receberá seu próprio cabo a partir de um borne
@@ -3117,7 +2995,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.74 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.75 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3632,7 +3510,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.74:
+                    # Fase 13.6 Rev.75:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4219,7 +4097,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.74 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.75 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -4484,7 +4362,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
     # ========================================================
-    # FASE 13.6 REV.74 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.75 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4538,7 +4416,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.74 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.75 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -4823,7 +4701,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.74:
+    # Fase 13.6 Rev.75:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
@@ -5132,16 +5010,48 @@ def desenhar_mapa_fisico_qdc(
         )
         yy_d -= 0.22
 
-    # Rev.74 — regra geral para quadros com 3ª fileira:
-    # 1º DJ da 2ª fileira desvia 0,10 à esquerda após descer 0,10;
-    # 1º DJ da 3ª fileira mantém entrada reta e sem bolinha de derivação.
-    _aplicar_regra_geral_3a_fileira_rev74(
-        msp,
-        circuitos_geom,
-        y_saida_circuito_global,
-        deslocamento_x=0.10,
-        descida_inicial=0.10
-    )
+    # Rev.75 — 1º DJ da 3ª fileira: entrada do 1º borne sem bolinha.
+    if trilhos_circuitos >= 3 and circuitos_geom:
+        fileiras_rev75 = {}
+        for d_rev75, g_rev75 in circuitos_geom:
+            chave_y_rev75 = round(float(g_rev75["y1"]), 5)
+            fileiras_rev75.setdefault(chave_y_rev75, []).append((d_rev75, g_rev75))
+
+        lista_fileiras_rev75 = [
+            sorted(fileiras_rev75[y_rev75], key=lambda par: float(par[1]["x1"]))
+            for y_rev75 in sorted(fileiras_rev75.keys(), reverse=True)
+        ]
+
+        if len(lista_fileiras_rev75) >= 3 and lista_fileiras_rev75[2]:
+            d3_rev75, g3_rev75 = lista_fileiras_rev75[2][0]
+            fases3_rev75 = _fases_do_texto(d3_rev75.get("fase", ""))
+
+            if fases3_rev75:
+                fase3_rev75 = fases3_rev75[0]
+                x3_rev75 = float(_polo_para_fase(d3_rev75, g3_rev75, fase3_rev75))
+
+                candidatos_rev75 = [
+                    cand for cand in _QDC_NODE_CANDIDATES
+                    if (
+                        cand.get("msp") is msp
+                        and str(cand.get("token", "")).upper() == str(fase3_rev75).upper()
+                        and abs(float(cand["x"]) - x3_rev75) <= 0.02
+                        and float(cand["y"]) >= float(g3_rev75["y2"]) - 0.05
+                    )
+                ]
+
+                if candidatos_rev75:
+                    alvo_rev75 = min(
+                        candidatos_rev75,
+                        key=lambda cand: abs(float(cand["y"]) - float(g3_rev75["y2"]))
+                    )
+                    _registrar_supressao_no_rev75(
+                        msp,
+                        alvo_rev75["x"],
+                        alvo_rev75["y"],
+                        fase3_rev75,
+                        0.03
+                    )
 
     # Rev.57 — agora TODOS os DG/DPS/DR/DJs de TODAS as fileiras
     # já existem. Fazemos o recorte final dos cabos que passam por trás.
