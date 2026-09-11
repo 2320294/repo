@@ -183,8 +183,82 @@ def _criterio_legenda_unifilar(criterio):
     return mapa.get(chave, chave.replace("_", " ").title() if chave else "Trecho de eletroduto")
 
 
+def _ponto_real_rota_unifilar(msp, rota):
+    """Rev.112: devolve ponto e direção SOBRE a geometria física do eletroduto.
+
+    A Rev.111 usava o meio da corda inicio-fim. Em eletrodutos desenhados como
+    ARC, esse ponto não pertence ao arco e a chamada parecia flutuar.
+    Agora a posição é calculada na entidade DXF efetivamente desenhada.
+    """
+    handle = rota.get("handle_entidade")
+    entidade = None
+    try:
+        if handle:
+            entidade = msp.doc.entitydb.get(str(handle))
+    except Exception:
+        entidade = None
+
+    if entidade is not None:
+        tipo = str(entidade.dxftype()).upper()
+
+        if tipo == "ARC":
+            try:
+                cx, cy = float(entidade.dxf.center.x), float(entidade.dxf.center.y)
+                r = float(entidade.dxf.radius)
+                a1 = float(entidade.dxf.start_angle) % 360.0
+                a2 = float(entidade.dxf.end_angle) % 360.0
+                delta = (a2 - a1) % 360.0
+                am = math.radians((a1 + delta * 0.5) % 360.0)
+                ponto = (cx + r * math.cos(am), cy + r * math.sin(am))
+                # Tangente ao arco no sentido CCW; para a chamada apenas a
+                # perpendicular importa, portanto o sentido não altera a ancoragem.
+                tang = (-math.sin(am), math.cos(am))
+                normal = (-tang[1], tang[0])
+                return ponto, tang, normal
+            except Exception:
+                pass
+
+        if tipo == "LWPOLYLINE":
+            try:
+                pts = [(float(v[0]), float(v[1])) for v in entidade.get_points("xy")]
+                if len(pts) >= 2:
+                    segs=[]
+                    total=0.0
+                    for a,b in zip(pts[:-1],pts[1:]):
+                        d=math.hypot(b[0]-a[0], b[1]-a[1])
+                        if d>1e-9:
+                            segs.append((a,b,d))
+                            total += d
+                    alvo=total*0.5
+                    acum=0.0
+                    for a,b,d in segs:
+                        if acum+d >= alvo:
+                            f=(alvo-acum)/d
+                            ponto=(a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f)
+                            tang=((b[0]-a[0])/d,(b[1]-a[1])/d)
+                            normal=(-tang[1],tang[0])
+                            return ponto,tang,normal
+                        acum += d
+            except Exception:
+                pass
+
+    # Fallback seguro para arquivos/rotas antigas sem handle.
+    p1, p2 = rota.get("inicio"), rota.get("fim")
+    if not p1 or not p2:
+        return None
+    dx=float(p2[0])-float(p1[0])
+    dy=float(p2[1])-float(p1[1])
+    comp=math.hypot(dx,dy)
+    if comp < 1e-9:
+        return None
+    tang=(dx/comp,dy/comp)
+    normal=(-tang[1],tang[0])
+    ponto=((float(p1[0])+float(p2[0]))/2.0,(float(p1[1])+float(p2[1]))/2.0)
+    return ponto,tang,normal
+
+
 def _desenhar_quadro_chamada_unifilar(msp, ponto, tangente, normal, numero):
-    """Rev.111: balão quadrado compacto, sempre fisicamente ligado ao eletroduto."""
+    """Rev.112: quadrado numerado com leader ancorado na geometria real do eletroduto."""
     cx, cy = float(ponto[0]), float(ponto[1])
     nx, ny = normal
     # Alterna o lado pela direção da normal, mantendo distância curta do eletroduto.
@@ -214,69 +288,122 @@ def _desenhar_quadro_chamada_unifilar(msp, ponto, tangente, normal, numero):
 
 
 def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
-    """Rev.111: tabela que retira do corpo da planta as informações dos condutores."""
+    """Rev.112: legenda dimensionada e com texto confinado em cada célula.
+
+    Usa MTEXT com largura da própria célula e altura de linha variável. Isso
+    impede Circuito(s), Condutores, Seção e Trecho/Função de se sobreporem.
+    """
     if not registros:
         return
 
-    bboxes = [a.get("bbox") for a in (ambientes_geom or []) if a.get("bbox")]
+    bboxes=[a.get("bbox") for a in (ambientes_geom or []) if a.get("bbox")]
     if bboxes:
-        min_x = min(b[0] for b in bboxes)
-        max_x = max(b[1] for b in bboxes)
-        min_y = min(b[2] for b in bboxes)
+        min_x=min(b[0] for b in bboxes)
+        max_x=max(b[1] for b in bboxes)
+        min_y=min(b[2] for b in bboxes)
     else:
-        min_x, max_x, min_y = 0.0, 12.0, 0.0
+        min_x,max_x,min_y=0.0,12.0,0.0
 
-    # Tabela abaixo da planta: não disputa espaço com o mapa executivo do QDC à direita.
-    x0 = min_x
-    largura_planta = max(8.0, max_x - min_x)
-    larguras = [0.65, 1.65, 2.55, 1.30, max(3.20, largura_planta - 6.15)]
-    largura = sum(larguras)
-    h_titulo = 0.42
-    h_linha = 0.34
-    altura = h_titulo + h_linha * (len(registros) + 1)
-    y_top = min_y - 0.65
-    y_bot = y_top - altura
-    layer = "PROJ_ELETRICA_TEXTO"
+    x0=min_x
+    largura_planta=max(8.0,max_x-min_x)
 
-    def linha(p1, p2):
-        msp.add_line(p1, p2, dxfattribs={"layer": layer})
+    # Larguras independentes do tamanho estreito da planta. A coluna de
+    # condutores recebe espaço suficiente e os textos longos quebram linha.
+    larguras=[0.75, 2.25, 4.60, 2.55, 4.60]
+    largura=sum(larguras)
+    h_titulo=0.48
+    h_header=0.40
+    layer="PROJ_ELETRICA_TEXTO"
+    txt_h=0.085
+    margem_x=0.08
+    margem_y=0.08
 
-    # Moldura e título.
-    linha((x0, y_top), (x0+largura, y_top))
-    linha((x0, y_bot), (x0+largura, y_bot))
-    linha((x0, y_top), (x0, y_bot))
-    linha((x0+largura, y_top), (x0+largura, y_bot))
-    msp.add_text("LEGENDA DOS ELETRODUTOS", dxfattribs={
-        "layer": layer, "height": 0.16, "insert": (x0+0.12, y_top-0.27)
+    def estimar_linhas(texto, largura_cel):
+        texto=str(texto or "")
+        if not texto:
+            return 1
+        # Aproximação conservadora para caracteres CAD nessa altura.
+        chars=max(6,int((largura_cel-2*margem_x)/(txt_h*0.62)))
+        partes=[]
+        for bloco in texto.split(" | "):
+            if len(bloco)<=chars:
+                partes.append(bloco)
+            else:
+                palavras=bloco.split()
+                atual=""
+                for palavra in palavras:
+                    teste=(atual+" "+palavra).strip()
+                    if atual and len(teste)>chars:
+                        partes.append(atual)
+                        atual=palavra
+                    else:
+                        atual=teste
+                if atual:
+                    partes.append(atual)
+        return max(1,len(partes))
+
+    def altura_registro(reg):
+        vals=[f"{reg['numero']:02d}",reg['circuitos'],reg['condutores'],reg['secoes'],reg['trecho']]
+        linhas=max(estimar_linhas(v,larguras[i]) for i,v in enumerate(vals))
+        return max(0.38, 0.18 + linhas*0.14)
+
+    alturas=[altura_registro(r) for r in registros]
+    altura=h_titulo+h_header+sum(alturas)
+    y_top=min_y-0.65
+    y_bot=y_top-altura
+
+    def linha(p1,p2):
+        msp.add_line(p1,p2,dxfattribs={"layer":layer})
+
+    # Moldura externa.
+    linha((x0,y_top),(x0+largura,y_top))
+    linha((x0,y_bot),(x0+largura,y_bot))
+    linha((x0,y_top),(x0,y_bot))
+    linha((x0+largura,y_top),(x0+largura,y_bot))
+
+    msp.add_text("LEGENDA DOS ELETRODUTOS",dxfattribs={
+        "layer":layer,"height":0.16,"insert":(x0+0.12,y_top-0.30)
     })
 
-    y_header_top = y_top - h_titulo
-    linha((x0, y_header_top), (x0+largura, y_header_top))
-    headers = ["No", "Circuito(s)", "Condutores", "Secao mm2", "Trecho / funcao"]
+    y_header_top=y_top-h_titulo
+    y_data_top=y_header_top-h_header
+    linha((x0,y_header_top),(x0+largura,y_header_top))
+    linha((x0,y_data_top),(x0+largura,y_data_top))
+
     xs=[x0]
     for w in larguras:
         xs.append(xs[-1]+w)
     for xx in xs[1:-1]:
-        linha((xx, y_header_top), (xx, y_bot))
-    for i, cab in enumerate(headers):
-        msp.add_text(cab, dxfattribs={"layer":layer,"height":0.10,"insert":(xs[i]+0.07,y_header_top-0.22)})
+        linha((xx,y_header_top),(xx,y_bot))
 
-    y = y_header_top - h_linha
-    linha((x0, y), (x0+largura, y))
-    for reg in registros:
-        vals=[f"{reg['numero']:02d}", reg['circuitos'], reg['condutores'], reg['secoes'], reg['trecho']]
+    headers=["Nº","Circuito(s)","Condutores","Seção mm²","Trecho / função"]
+    for i,cab in enumerate(headers):
+        msp.add_text(cab,dxfattribs={
+            "layer":layer,"height":0.095,"insert":(xs[i]+margem_x,y_header_top-0.25)
+        })
+
+    y_top_reg=y_data_top
+    for reg,h_reg in zip(registros,alturas):
+        y_inf=y_top_reg-h_reg
+        vals=[f"{reg['numero']:02d}",reg['circuitos'],reg['condutores'],reg['secoes'],reg['trecho']]
         for i,val in enumerate(vals):
-            texto=str(val)
-            # Evita que descrição longa invada a célula; a informação elétrica essencial permanece integral.
-            if i==4 and len(texto)>52:
-                texto=texto[:49]+"..."
-            msp.add_text(texto, dxfattribs={"layer":layer,"height":0.09,"insert":(xs[i]+0.07,y+0.105)})
-        y -= h_linha
-        linha((x0, y), (x0+largura, y))
+            # MTEXT respeita a largura da célula; não invade a coluna seguinte.
+            mt=msp.add_mtext(str(val),dxfattribs={
+                "layer":layer,
+                "char_height":txt_h,
+                "insert":(xs[i]+margem_x,y_top_reg-margem_y),
+                "width":max(0.20,larguras[i]-2*margem_x),
+            })
+            try:
+                mt.dxf.attachment_point=1  # TOP_LEFT
+            except Exception:
+                pass
+        linha((x0,y_inf),(x0+largura,y_inf))
+        y_top_reg=y_inf
 
 
 def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, ambientes_geom):
-    """Fase 13.6 Rev.111 — identificação limpa por chamadas numeradas.
+    """Fase 13.6 Rev.112 — identificação limpa por chamadas numeradas.
 
     Cada eletroduto recebe somente um pequeno quadrado numerado ligado por leader.
     F/N/R/PE, circuitos, seções e função do trecho ficam concentrados na tabela.
@@ -345,9 +472,16 @@ def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, amb
         if chave_geom in vistos_geom:
             continue
         vistos_geom.add(chave_geom)
-        frac=0.50
-        ponto=(float(p1[0])+dx*frac, float(p1[1])+dy*frac)
-        _desenhar_quadro_chamada_unifilar(msp, ponto, u, nvec, numero)
+        # Rev.112: ancora a chamada na entidade física REAL. Para ARC, o
+        # ponto é calculado sobre o arco e não no meio da corda. Assim a ponta
+        # livre do leader toca exatamente o eletroduto correspondente.
+        geo_real=_ponto_real_rota_unifilar(msp, rota)
+        if geo_real is None:
+            continue
+        ponto_real,tang_real,normal_real=geo_real
+        _desenhar_quadro_chamada_unifilar(
+            msp, ponto_real, tang_real, normal_real, numero
+        )
 
     _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom)
 
@@ -602,7 +736,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.111 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.112 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -780,7 +914,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.111:
+                # Fase 13.6 Rev.112:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1222,7 +1356,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.111 — chamadas numeradas nos eletrodutos; detalhes elétricos
+        # Fase 13.6 Rev.112 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
         _desenhar_identificacao_condutos_unifilar(
             msp, rotas_fisicas, circuitos_dimensionados, ambientes_geom
@@ -1256,7 +1390,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.111 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.112 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1297,7 +1431,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.111: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.112: "
                 + detalhes_bloqueio
             )
 
