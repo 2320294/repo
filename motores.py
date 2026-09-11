@@ -151,7 +151,7 @@ def _condutores_circuito_unifilar(circuito, criterio=""):
         polos = 0
 
     # Ramais de comando de iluminação.
-    # Rev.115: three-way representado pela topologia física real.
+    # Rev.116: three-way representado pela topologia física real.
     if tipo.startswith("ILUM"):
         if criterio in {
             "LUZ_PARA_INTERRUPTOR",
@@ -162,7 +162,12 @@ def _condutores_circuito_unifilar(circuito, criterio=""):
             return ["F", "R", "R"]
         if criterio == "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO":
             return ["R", "R"]
+        if criterio == "LUZ_PARA_INTERRUPTOR_PARALELO_2":
+            # Rev.116: 2 viajantes + 1 retorno no eletroduto que liga a
+            # caixa da luminária ao segundo interruptor paralelo.
+            return ["R", "R", "R"]
         if criterio == "INTERRUPTOR_PARA_LUZ_PARALELO_2":
+            # Compatibilidade com rotas antigas da Rev.116.
             return ["R"]
         if criterio in {
             "LUZ_PARA_INTERRUPTOR_PARALELO",
@@ -184,6 +189,7 @@ def _criterio_legenda_unifilar(criterio):
         "LUZ_PARA_INTERRUPTOR": "Iluminacao -> interruptor",
         "LUZ_PARA_INTERRUPTOR_PARALELO": "Iluminacao -> interruptor paralelo",
         "LUZ_PARA_INTERRUPTOR_PARALELO_1": "Luminaria -> 1o interruptor paralelo",
+        "LUZ_PARA_INTERRUPTOR_PARALELO_2": "Luminaria -> 2o interruptor paralelo",
         "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO": "1o -> 2o interruptor paralelo",
         "INTERRUPTOR_PARA_LUZ_PARALELO_2": "2o interruptor paralelo -> luminaria",
         "LUZ_PARA_INTERRUPTOR_PARALELO_EXTRA": "Luminaria -> interruptor paralelo extra",
@@ -296,7 +302,7 @@ def _desenhar_quadro_chamada_unifilar(
     ocupados=None,
     indice_chamada=0,
 ):
-    """Rev.115: balão circular numerado com anti-colisão e leader preso ao eletroduto.
+    """Rev.116: balão circular numerado com anti-colisão e leader preso ao eletroduto.
 
     Regras:
     - o leader SEMPRE nasce no ponto real do eletroduto;
@@ -391,7 +397,7 @@ def _desenhar_quadro_chamada_unifilar(
 
 
 def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
-    """Rev.115: LEGENDA DE FIAÇÃO gráfica, compacta e baseada na referência do usuário.
+    """Rev.116: LEGENDA DE FIAÇÃO gráfica, compacta e baseada na referência do usuário.
 
     Em vez de repetir textos longos, cada linha mostra:
       - balão circular numerado;
@@ -540,7 +546,7 @@ def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
 
 
 def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, ambientes_geom):
-    """Fase 13.6 Rev.115 — balões anti-colisão + legenda gráfica de fiação."""
+    """Fase 13.6 Rev.116 — balões anti-colisão + legenda gráfica de fiação."""
     por_numero = {}
     for c in circuitos or []:
         try:
@@ -891,7 +897,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.115 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.116 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -1069,7 +1075,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.115:
+                # Fase 13.6 Rev.116:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1511,7 +1517,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.115 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
+        # Fase 13.6 Rev.116 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
         _desenhar_identificacao_condutos_unifilar(
             msp, rotas_fisicas, circuitos_dimensionados, ambientes_geom
@@ -1545,7 +1551,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.115 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.116 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1586,7 +1592,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.115: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.116: "
                 + detalhes_bloqueio
             )
 

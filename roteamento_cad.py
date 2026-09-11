@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 13.6 Rev.115 — rede distribuída por caixas octogonais.
+    Fase 13.6 Rev.116 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -518,7 +518,7 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
-    # Fase 13.6 Rev.115:
+    # Fase 13.6 Rev.116:
     # circuitos terminais devem preferencialmente ser distribuídos em
     # troncos menores, evitando concentrar todos em um único eletroduto.
     # Como referência de topologia, procura limitar a aproximadamente
@@ -1088,7 +1088,7 @@ def _avaliar_caminho_alternativo(
     distancia_raiz_candidato
 ):
     """
-    Fase 13.6 Rev.115.
+    Fase 13.6 Rev.116.
 
     Compara o percurso total desde o QDC até o destino, e não apenas
     a ligação local candidato->destino.
@@ -1170,7 +1170,7 @@ def _redistribuir_tronco_caixas_octogonais(
     max_iteracoes=12
 ):
     """
-    Fecha o ciclo da Fase 13.6 Rev.115:
+    Fecha o ciclo da Fase 13.6 Rev.116:
 
     1. calcula a ocupação projetada em Ø25 de cada trecho troncal;
     2. se ultrapassar 40%, procura outra caixa octogonal disponível;
@@ -1703,7 +1703,7 @@ def _propagar_circuitos_para_luminarias_secundarias(
     arestas_dependentes,
 ):
     """
-    Fase 13.6 Rev.115 — coerência física de circuitos nos pontos de luz.
+    Fase 13.6 Rev.116 — coerência física de circuitos nos pontos de luz.
 
     A árvore das luminárias secundárias nasce na luminária principal do
     ambiente. Se um circuito de TUG/TUE/comando parte de uma luminária
@@ -2125,7 +2125,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 13.6 Rev.115:
+    Fase 13.6 Rev.116:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -2154,7 +2154,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.115
+    Fase 13.6 Rev.116
 
     Topologia interna por ambiente, separando fisicamente comando de
     iluminação e alimentação das TUGs.
@@ -2162,10 +2162,13 @@ def _arestas_tugs_internas(
     Interruptor simples:
       luminária -> interruptor = circuito(s) de iluminação.
 
-    Dois ou mais interruptores paralelos (three-way):
-      luminária -> primeiro paralelo;
-      primeiro paralelo -> segundo paralelo;
-      segundo paralelo -> luminária.
+    Dois interruptores paralelos (three-way), topologia residencial pela
+    caixa octogonal da luminária:
+      luminária -> primeiro paralelo = fase + 2 viajantes;
+      luminária -> segundo paralelo = 2 viajantes + 1 retorno final.
+
+    Não é criado eletroduto físico direto entre os dois interruptores quando
+    ambos chegam à mesma caixa octogonal do teto.
 
     A cadeia de TUGs continua usando o interruptor mais próximo da primeira
     tomada como caixa de passagem, porém SOMENTE os circuitos de TUG são
@@ -2266,13 +2269,18 @@ def _arestas_tugs_internas(
                 "indice_interruptor": 1,
             })
         else:
-            # Regra three-way Rev.115. O primeiro paralelo é o de menor
-            # porta_numero (ordem estável definida pela configuração de portas).
+            # Regra three-way Rev.116 — topologia residencial preferencial.
+            # Os dois eletrodutos dos interruptores partem diretamente da
+            # caixa octogonal/luminária; os viajantes passam pela caixa de luz.
+            # Assim NÃO existe, por padrão, eletroduto físico direto I1 -> I2.
+            #
+            # Luminária -> paralelo 1: Fase + 2 viajantes.
+            # Luminária -> paralelo 2: 2 viajantes + 1 retorno final.
             primeiro = pontos_int[0]
             segundo = pontos_int[1]
 
-            # Usa UMA mesma luminária como nó do comando three-way. Escolhe a
-            # que minimiza o percurso total até os dois interruptores.
+            # Usa UMA mesma luminária como nó central do comando three-way.
+            # Escolhe a que minimiza o percurso total até os dois interruptores.
             origem_luz = min(
                 luzes,
                 key=lambda pt: _dist(pt, primeiro) + _dist(pt, segundo),
@@ -2287,30 +2295,23 @@ def _arestas_tugs_internas(
                     "circuitos": set(circuitos_luz_amb),
                     "criterio": "LUZ_PARA_INTERRUPTOR_PARALELO_1",
                     "indice_interruptor": 1,
+                    "topologia_three_way": "CAIXA_LUZ_CENTRAL",
                 },
                 {
                     "origem_ambiente": ambiente,
                     "destino_ambiente": ambiente,
-                    "inicio": primeiro,
+                    "inicio": origem_luz,
                     "fim": segundo,
                     "circuitos": set(circuitos_luz_amb),
-                    "criterio": "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO",
+                    "criterio": "LUZ_PARA_INTERRUPTOR_PARALELO_2",
                     "indice_interruptor": 2,
-                },
-                {
-                    "origem_ambiente": ambiente,
-                    "destino_ambiente": ambiente,
-                    "inicio": segundo,
-                    "fim": origem_luz,
-                    "circuitos": set(circuitos_luz_amb),
-                    "criterio": "INTERRUPTOR_PARA_LUZ_PARALELO_2",
-                    "indice_interruptor": 2,
+                    "topologia_three_way": "CAIXA_LUZ_CENTRAL",
                 },
             ])
 
             # Caso excepcional de 3+ comandos configurados: mantém os extras
-            # ligados à mesma luminária, sem alterar a topologia dos dois
-            # primeiros paralelos já definida acima.
+            # ligados à mesma caixa de luz, sem interferir na topologia dos
+            # dois primeiros paralelos.
             for indice_extra, interruptor in enumerate(pontos_int[2:], start=3):
                 arestas.append({
                     "origem_ambiente": ambiente,
@@ -2320,6 +2321,7 @@ def _arestas_tugs_internas(
                     "circuitos": set(circuitos_luz_amb),
                     "criterio": "LUZ_PARA_INTERRUPTOR_PARALELO_EXTRA",
                     "indice_interruptor": indice_extra,
+                    "topologia_three_way": "CAIXA_LUZ_CENTRAL",
                 })
 
     # ---------------------------------------------------------------
@@ -2657,7 +2659,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 13.6 Rev.115.
+    Fase 13.6 Rev.116.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -2825,7 +2827,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.115 — ramais dedicados das TUEs.
+    Fase 13.6 Rev.116 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2986,10 +2988,10 @@ def _arestas_tues_dedicadas(
     return arestas
 
 
-def _agrupar_arestas_coincidentes_rev115(arestas):
+def _agrupar_arestas_coincidentes_rev116(arestas):
     """Une arestas que representam o MESMO eletroduto físico.
 
-    A Rev.115 pode ter, no mesmo trecho geométrico, condutores de comando da
+    A Rev.116 pode ter, no mesmo trecho geométrico, condutores de comando da
     iluminação e alimentação de TUG. O CAD deve desenhar/medir esse eletroduto
     uma única vez, mantendo o critério específico de cada circuito para a
     legenda e para o quantitativo de cabos.
@@ -3057,7 +3059,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 13.6 Rev.115
+    Fase 13.6 Rev.116
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -3168,7 +3170,7 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
-    # Fase 13.6 Rev.115 — circuitos terminais que partem de uma
+    # Fase 13.6 Rev.116 — circuitos terminais que partem de uma
     # luminária secundária também percorrem a árvore de caixas octogonais
     # até a luminária principal. Isso evita divergência entre o traçado,
     # a legenda de fiação e o quantitativo de cabos.
@@ -3207,9 +3209,9 @@ def desenhar_rotas_qdc_iluminacao(
         + iluminacao_controlada
     )
 
-    # Rev.115: um eletroduto físico deve aparecer UMA vez mesmo quando
+    # Rev.116: um eletroduto físico deve aparecer UMA vez mesmo quando
     # transporta, simultaneamente, circuitos com funções diferentes.
-    todas_arestas = _agrupar_arestas_coincidentes_rev115(todas_arestas)
+    todas_arestas = _agrupar_arestas_coincidentes_rev116(todas_arestas)
 
     for indice, trecho in enumerate(
         todas_arestas
@@ -3390,6 +3392,7 @@ def desenhar_rotas_qdc_iluminacao(
                             "LUZ_PARA_INTERRUPTOR",
                             "LUZ_PARA_INTERRUPTOR_PARALELO",
                             "LUZ_PARA_INTERRUPTOR_PARALELO_1",
+                            "LUZ_PARA_INTERRUPTOR_PARALELO_2",
                             "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO",
                             "INTERRUPTOR_PARA_LUZ_PARALELO_2",
                             "LUZ_PARA_INTERRUPTOR_PARALELO_EXTRA",
@@ -3454,7 +3457,7 @@ def desenhar_rotas_qdc_iluminacao(
                 list(trecho.get("criterios_fisicos", []) or []),
             "entidade":
                 tipo_entidade,
-            # Fase 13.6 Rev.115 — referência da entidade física real.
+            # Fase 13.6 Rev.116 — referência da entidade física real.
             # Usada pelas chamadas numeradas para ancorar o leader
             # exatamente SOBRE o ARC/LWPOLYLINE desenhado, evitando
             # balões aparentemente flutuantes em trechos curvos.
