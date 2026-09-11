@@ -494,6 +494,16 @@ def _geometria_interruptor(
         )
     )
 
+    # Fase 13.6 Rev.106:
+    # desloca o conjunto do interruptor 5 cm para FORA da parede.
+    # A normal aponta para dentro do ambiente; portanto, subtrair 0.05
+    # leva a tangência para o lado externo. O círculo acompanha o traço.
+    ponto_tangencia_parede = ponto_tangencia
+    ponto_tangencia = (
+        ponto_tangencia_parede[0] - normal[0] * 0.05,
+        ponto_tangencia_parede[1] - normal[1] * 0.05
+    )
+
     centro = (
         ponto_tangencia[0]
         + normal[0]
@@ -508,6 +518,8 @@ def _geometria_interruptor(
         "centro": centro,
         "tangencia":
             ponto_tangencia,
+        "tangencia_parede":
+            ponto_tangencia_parede,
         "rot": rot,
         "lado_referencia": lado,
         "criterio_posicao":
@@ -603,7 +615,7 @@ def desenhar_interruptores(
     ):
         nome = ambiente["nome"]
 
-        # Fase 13.6 Rev.105: varanda, terraço e garagem têm comando de iluminação
+        # Fase 13.6 Rev.106: varanda, terraço e garagem têm comando de iluminação
         # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
         # mesmo que exista configuração antiga salva no projeto.
         if _ambiente_sem_interruptor_proprio(nome):
@@ -725,7 +737,7 @@ def desenhar_interruptores(
                     RAIO_INTERRUPTOR
                 )
 
-            # Fase 13.6 Rev.105 — símbolo do interruptor igual ao esquema
+            # Fase 13.6 Rev.106 — símbolo do interruptor igual ao esquema
             # geométrico já aprovado nas tomadas:
             #
             #   [ponta dentro da parede] ---- [face/tangência] ---- [círculo]
@@ -743,10 +755,12 @@ def desenhar_interruptores(
                 nx_int = dx_int / comp_int
                 ny_int = dy_int / comp_int
 
-                # 5 cm para o lado de dentro da parede, oposto ao círculo.
+                # A tangência do símbolo foi deslocada 5 cm para fora.
+                # Recuando 10 cm chegamos a 5 cm para dentro da parede:
+                # 5 cm externos + 5 cm internos = traço total de 10 cm.
                 p_parede_int = (
-                    tx_int - nx_int * 0.05,
-                    ty_int - ny_int * 0.05
+                    tx_int - nx_int * 0.10,
+                    ty_int - ny_int * 0.10
                 )
 
                 # O outro extremo é a tangência real do círculo.
