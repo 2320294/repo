@@ -151,7 +151,7 @@ def _condutores_circuito_unifilar(circuito, criterio=""):
         polos = 0
 
     # Ramais de comando de iluminação.
-    # Rev.116: three-way representado pela topologia física real.
+    # Rev.117: three-way representado pela topologia física real.
     if tipo.startswith("ILUM"):
         if criterio in {
             "LUZ_PARA_INTERRUPTOR",
@@ -163,11 +163,11 @@ def _condutores_circuito_unifilar(circuito, criterio=""):
         if criterio == "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO":
             return ["R", "R"]
         if criterio == "LUZ_PARA_INTERRUPTOR_PARALELO_2":
-            # Rev.116: 2 viajantes + 1 retorno no eletroduto que liga a
+            # Rev.117: 2 viajantes + 1 retorno no eletroduto que liga a
             # caixa da luminária ao segundo interruptor paralelo.
             return ["R", "R", "R"]
         if criterio == "INTERRUPTOR_PARA_LUZ_PARALELO_2":
-            # Compatibilidade com rotas antigas da Rev.116.
+            # Compatibilidade com rotas antigas da Rev.117.
             return ["R"]
         if criterio in {
             "LUZ_PARA_INTERRUPTOR_PARALELO",
@@ -302,7 +302,7 @@ def _desenhar_quadro_chamada_unifilar(
     ocupados=None,
     indice_chamada=0,
 ):
-    """Rev.116: balão circular numerado com anti-colisão e leader preso ao eletroduto.
+    """Rev.117: balão circular numerado com anti-colisão e leader preso ao eletroduto.
 
     Regras:
     - o leader SEMPRE nasce no ponto real do eletroduto;
@@ -397,7 +397,7 @@ def _desenhar_quadro_chamada_unifilar(
 
 
 def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
-    """Rev.116: LEGENDA DE FIAÇÃO gráfica, compacta e baseada na referência do usuário.
+    """Rev.117: LEGENDA DE FIAÇÃO gráfica, compacta e baseada na referência do usuário.
 
     Em vez de repetir textos longos, cada linha mostra:
       - balão circular numerado;
@@ -419,10 +419,36 @@ def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
 
     layer = "PROJ_ELETRICA_TEXTO"
 
-    # Dimensões compactas e previsíveis.
+    # Fase 13.6 Rev.117 — dimensões automáticas por conteúdo.
+    # A legenda deixa de herdar a largura da planta: cresce somente quando a
+    # quantidade de circuitos/condutores daquela linha realmente exigir.
     x0 = min_x
-    largura_num = 0.90
-    largura_fiacao = max(6.2, min(10.0, max_x-min_x))
+
+    def _largura_texto_rev117(texto, altura, fator=0.62):
+        return max(0.0, len(str(texto or "")) * float(altura) * float(fator))
+
+    def _largura_grupo_rev117(grupo):
+        conds = grupo.get("condutores") or []
+        bit = str(grupo.get("bitola") or "-")
+        circ = str(grupo.get("circuito") or "").replace("C", "")
+        largura_cond = max(0.19, (max(1, len(conds)) - 1) * 0.115 + 0.19)
+        largura_circ = _largura_texto_rev117(circ, 0.10)
+        largura_bit = _largura_texto_rev117(f"{bit} mm²", 0.085)
+        return max(0.48, largura_cond, largura_circ, largura_bit) + 0.22
+
+    largura_num = max(0.62, _largura_texto_rev117("Nº", 0.11) + 0.26)
+    largura_header_fiacao = _largura_texto_rev117("FIAÇÃO DO TRECHO", 0.11) + 0.50
+    largura_conteudo_fiacao = 0.0
+    for _reg_rev117 in registros:
+        _grupos_rev117 = _reg_rev117.get("grupos") or []
+        if not _grupos_rev117:
+            largura_conteudo_fiacao = max(largura_conteudo_fiacao, 1.80)
+            continue
+        _larguras_rev117 = [_largura_grupo_rev117(g) for g in _grupos_rev117]
+        _pacote_rev117 = sum(_larguras_rev117) + max(0, len(_larguras_rev117)-1) * 0.14
+        largura_conteudo_fiacao = max(largura_conteudo_fiacao, _pacote_rev117 + 0.65)
+
+    largura_fiacao = max(2.80, largura_header_fiacao, largura_conteudo_fiacao)
     largura = largura_num + largura_fiacao
     h_titulo = 0.50
     h_header = 0.42
@@ -488,24 +514,26 @@ def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
             pass
 
         # Linha base da fiação
-        xa = x_sep + 0.35
-        xb = x0 + largura - 0.25
+        xa = x_sep + 0.28
+        xb = x0 + largura - 0.20
         linha((xa, yc), (xb, yc))
 
         grupos = reg.get("grupos") or []
         if not grupos:
             continue
 
-        # Cada circuito ocupa um grupo próprio ao longo da linha.
-        # O passo cresce apenas o necessário para manter leitura limpa.
-        passo_grupo = 1.35
-        inicio = xa + 0.75
-        total = (len(grupos)-1)*passo_grupo
-        if inicio + total > xb - 0.35:
-            passo_grupo = max(0.85, (xb-inicio-0.35)/max(1, len(grupos)-1))
+        # Fase 13.6 Rev.117 — cada grupo ocupa exatamente o espaço necessário
+        # para número do circuito, símbolos dos condutores e bitola. O conjunto
+        # é centralizado na linha, eliminando grandes vazios entre grupos.
+        larguras_grupos = [_largura_grupo_rev117(g) for g in grupos]
+        gap_grupos = 0.14
+        largura_pacote = sum(larguras_grupos) + max(0, len(grupos)-1) * gap_grupos
+        cursor_x = (xa + xb - largura_pacote) / 2.0
 
         for gi, grupo in enumerate(grupos):
-            gx = inicio + gi*passo_grupo
+            largura_g = larguras_grupos[gi]
+            gx = cursor_x + largura_g / 2.0
+            cursor_x += largura_g + gap_grupos
             conds = grupo.get("condutores") or []
             bit = str(grupo.get("bitola") or "-")
             circ = str(grupo.get("circuito") or "")
@@ -546,7 +574,7 @@ def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
 
 
 def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, ambientes_geom):
-    """Fase 13.6 Rev.116 — balões anti-colisão + legenda gráfica de fiação."""
+    """Fase 13.6 Rev.117 — balões anti-colisão + legenda gráfica de fiação."""
     por_numero = {}
     for c in circuitos or []:
         try:
@@ -897,7 +925,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.116 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.117 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -1075,7 +1103,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.116:
+                # Fase 13.6 Rev.117:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1517,7 +1545,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.116 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
+        # Fase 13.6 Rev.117 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
         _desenhar_identificacao_condutos_unifilar(
             msp, rotas_fisicas, circuitos_dimensionados, ambientes_geom
@@ -1551,7 +1579,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.116 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.117 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1592,7 +1620,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.116: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.117: "
                 + detalhes_bloqueio
             )
 
