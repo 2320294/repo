@@ -139,8 +139,6 @@ def gerar_cad_unifilar(
             "PROJ_ELETRICA_ROTEAMENTO_TEXTO": 3,
             "PROJ_ELETRICA_DIMENSIONAMENTO": 6,
             "PROJ_ELETRICA_COMANDO": 6,
-            "PROJ_ELETRICA_UNIFILAR_QDC": 7,
-            "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO": 7,
             "PROJ_ELETRICA_MAPA_QDC": 7,
             "PROJ_ELETRICA_MAPA_QDC_TEXTO": 7,
             "PROJ_ELETRICA_QDC_FASE_A": 7,
@@ -189,8 +187,6 @@ def gerar_cad_unifilar(
                     "PROJ_ELETRICA_ROTEAMENTO",
                     "PROJ_ELETRICA_ROTEAMENTO_TEXTO",
                     "PROJ_ELETRICA_COMANDO",
-                    "PROJ_ELETRICA_UNIFILAR_QDC",
-                    "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO",
                     "PROJ_ELETRICA_MAPA_QDC",
                     "PROJ_ELETRICA_MAPA_QDC_TEXTO",
                     "PROJ_ELETRICA_QDC_FASE_A",
@@ -345,7 +341,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.97 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.98 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -523,7 +519,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.97:
+                # Fase 13.6 Rev.98:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -992,17 +988,10 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        desenhar_unifilar_qdc(
-            msp=msp,
-            circuitos=circuitos_dimensionados,
-            polilinhas_ambientes=polilinhas,
-            tensao_projeto=tensao_projeto,
-            parametros_rede=parametros_rede_unifilar,
-            resultado_demanda=resultado_demanda_unifilar,
-            resumo_balanceamento=resumo_balanceamento_unifilar,
-            resumo_drs=resumo_drs_unifilar,
-            resumo_protecao=resumo_protecao_unifilar
-        )
+        # Fase 13.6 Rev.98 — diagrama unifilar retirado do DXF.
+        # Os cálculos elétricos continuam sendo executados normalmente
+        # e alimentam o diagrama de montagem, auditoria e relatórios.
+
 
         mapa_fisico_qdc = gerar_mapa_fisico_qdc(
             circuitos_dimensionados,
@@ -1040,7 +1029,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.97: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.98: "
                 + detalhes_bloqueio
             )
 
@@ -1055,7 +1044,9 @@ def gerar_cad_unifilar(
         desenhar_mapa_fisico_qdc(
             msp,
             mapa_fisico_qdc,
-            polilinhas
+            polilinhas,
+            parametros_rede=parametros_rede_unifilar,
+            resumo_balanceamento=resumo_balanceamento_unifilar
         )
 
         doc.saveas(
