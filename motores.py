@@ -114,7 +114,7 @@ def _linha_vetorial(msp, p1, p2, layer="PROJ_ELETRICA_TEXTO"):
 def _simbolo_condutor_unifilar(msp, centro, tangente, normal, tipo, escala=0.085):
     """Desenha a convenção gráfica de condutor sobre o eletroduto.
 
-    Referência visual adotada na Rev.110:
+    Referência visual adotada na Rev.111:
       F = traço transversal completo;
       N = traço transversal com pequeno gancho superior;
       R = traço transversal somente para um lado do eletroduto;
@@ -163,12 +163,125 @@ def _condutores_circuito_unifilar(circuito, criterio=""):
     return ["F", "F", "PE"] if bifasico else ["F", "N", "PE"]
 
 
-def _desenhar_simbologia_condutores_unifilar(msp, rotas_fisicas, circuitos):
-    """Fase 13.6 Rev.110 — identificação unifilar diretamente nos eletrodutos.
+def _descricao_condutores_unifilar(circuito, criterio=""):
+    conds = _condutores_circuito_unifilar(circuito, criterio)
+    return "+".join(conds)
 
-    Substitui os textos flutuantes da Rev.110. Cada circuito do trecho recebe
-    seu grupo de símbolos F/N/R/PE transversal ao eletroduto, número do circuito
-    acima e seção abaixo. A posição acompanha a direção real do trecho.
+
+def _criterio_legenda_unifilar(criterio):
+    mapa = {
+        "LUZ_PARA_INTERRUPTOR": "Iluminacao -> interruptor",
+        "LUZ_PARA_INTERRUPTOR_PARALELO": "Iluminacao -> interruptor paralelo",
+        "INTERRUPTOR_CONTROLADOR_PARA_ILUMINACAO_EXTERNA": "Comando de iluminacao externa",
+        "QDC_PARA_ILUMINACAO": "QDC -> iluminacao",
+        "QDC_PARA_LUZ": "QDC -> iluminacao",
+        "ILUMINACAO_PARA_TOMADA": "Iluminacao -> tomada",
+        "TOMADA_PARA_TOMADA": "Tomada -> tomada",
+        "TUE": "Circuito dedicado TUE",
+    }
+    chave = str(criterio or "").upper().strip()
+    return mapa.get(chave, chave.replace("_", " ").title() if chave else "Trecho de eletroduto")
+
+
+def _desenhar_quadro_chamada_unifilar(msp, ponto, tangente, normal, numero):
+    """Rev.111: balão quadrado compacto, sempre fisicamente ligado ao eletroduto."""
+    cx, cy = float(ponto[0]), float(ponto[1])
+    nx, ny = normal
+    # Alterna o lado pela direção da normal, mantendo distância curta do eletroduto.
+    lado = 0.22
+    bx = cx + nx * lado
+    by = cy + ny * lado
+    tam = 0.18
+    h = tam / 2.0
+    layer = "PROJ_ELETRICA_TEXTO"
+
+    # Leader termina exatamente na borda do quadrado, não no centro.
+    ex = bx - nx * h
+    ey = by - ny * h
+    msp.add_line((cx, cy), (ex, ey), dxfattribs={"layer": layer})
+    msp.add_lwpolyline(
+        [(bx-h, by-h), (bx+h, by-h), (bx+h, by+h), (bx-h, by+h), (bx-h, by-h)],
+        dxfattribs={"layer": layer},
+    )
+    txt = msp.add_text(
+        str(numero),
+        dxfattribs={"layer": layer, "height": 0.085, "insert": (bx, by)},
+    )
+    try:
+        txt.set_placement((bx, by), align=ezdxf.enums.TextEntityAlignment.MIDDLE_CENTER)
+    except Exception:
+        pass
+
+
+def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
+    """Rev.111: tabela que retira do corpo da planta as informações dos condutores."""
+    if not registros:
+        return
+
+    bboxes = [a.get("bbox") for a in (ambientes_geom or []) if a.get("bbox")]
+    if bboxes:
+        min_x = min(b[0] for b in bboxes)
+        max_x = max(b[1] for b in bboxes)
+        min_y = min(b[2] for b in bboxes)
+    else:
+        min_x, max_x, min_y = 0.0, 12.0, 0.0
+
+    # Tabela abaixo da planta: não disputa espaço com o mapa executivo do QDC à direita.
+    x0 = min_x
+    largura_planta = max(8.0, max_x - min_x)
+    larguras = [0.65, 1.65, 2.55, 1.30, max(3.20, largura_planta - 6.15)]
+    largura = sum(larguras)
+    h_titulo = 0.42
+    h_linha = 0.34
+    altura = h_titulo + h_linha * (len(registros) + 1)
+    y_top = min_y - 0.65
+    y_bot = y_top - altura
+    layer = "PROJ_ELETRICA_TEXTO"
+
+    def linha(p1, p2):
+        msp.add_line(p1, p2, dxfattribs={"layer": layer})
+
+    # Moldura e título.
+    linha((x0, y_top), (x0+largura, y_top))
+    linha((x0, y_bot), (x0+largura, y_bot))
+    linha((x0, y_top), (x0, y_bot))
+    linha((x0+largura, y_top), (x0+largura, y_bot))
+    msp.add_text("LEGENDA DOS ELETRODUTOS", dxfattribs={
+        "layer": layer, "height": 0.16, "insert": (x0+0.12, y_top-0.27)
+    })
+
+    y_header_top = y_top - h_titulo
+    linha((x0, y_header_top), (x0+largura, y_header_top))
+    headers = ["No", "Circuito(s)", "Condutores", "Secao mm2", "Trecho / funcao"]
+    xs=[x0]
+    for w in larguras:
+        xs.append(xs[-1]+w)
+    for xx in xs[1:-1]:
+        linha((xx, y_header_top), (xx, y_bot))
+    for i, cab in enumerate(headers):
+        msp.add_text(cab, dxfattribs={"layer":layer,"height":0.10,"insert":(xs[i]+0.07,y_header_top-0.22)})
+
+    y = y_header_top - h_linha
+    linha((x0, y), (x0+largura, y))
+    for reg in registros:
+        vals=[f"{reg['numero']:02d}", reg['circuitos'], reg['condutores'], reg['secoes'], reg['trecho']]
+        for i,val in enumerate(vals):
+            texto=str(val)
+            # Evita que descrição longa invada a célula; a informação elétrica essencial permanece integral.
+            if i==4 and len(texto)>52:
+                texto=texto[:49]+"..."
+            msp.add_text(texto, dxfattribs={"layer":layer,"height":0.09,"insert":(xs[i]+0.07,y+0.105)})
+        y -= h_linha
+        linha((x0, y), (x0+largura, y))
+
+
+def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, ambientes_geom):
+    """Fase 13.6 Rev.111 — identificação limpa por chamadas numeradas.
+
+    Cada eletroduto recebe somente um pequeno quadrado numerado ligado por leader.
+    F/N/R/PE, circuitos, seções e função do trecho ficam concentrados na tabela.
+    Configurações elétricas iguais reutilizam o mesmo número para reduzir a tabela,
+    mas TODO trecho físico continua recebendo sua chamada no DXF.
     """
     por_numero = {}
     for c in circuitos or []:
@@ -179,23 +292,25 @@ def _desenhar_simbologia_condutores_unifilar(msp, rotas_fisicas, circuitos):
         if n > 0:
             por_numero[n] = c
 
-    vistos = set()
+    codigos = {}
+    registros = []
+    vistos_geom = set()
+
     for rota in rotas_fisicas or []:
-        p1 = rota.get("inicio")
-        p2 = rota.get("fim")
+        p1, p2 = rota.get("inicio"), rota.get("fim")
         if not p1 or not p2:
             continue
-        dx = float(p2[0]) - float(p1[0])
-        dy = float(p2[1]) - float(p1[1])
+        dx, dy = float(p2[0])-float(p1[0]), float(p2[1])-float(p1[1])
         comp = math.hypot(dx, dy)
-        if comp < 0.35:
+        if comp < 0.25:
             continue
-        u = (dx/comp, dy/comp)
-        nvec = (-u[1], u[0])
-        ids = []
+        u=(dx/comp, dy/comp)
+        nvec=(-u[1],u[0])
+
+        ids=[]
         for raw in rota.get("circuitos", []) or []:
             try:
-                num = int(str(raw).upper().replace("C", ""))
+                num=int(str(raw).upper().replace("C", ""))
             except (TypeError, ValueError):
                 continue
             if num in por_numero and num not in ids:
@@ -203,52 +318,38 @@ def _desenhar_simbologia_condutores_unifilar(msp, rotas_fisicas, circuitos):
         if not ids:
             continue
         ids.sort()
+        criterio=str(rota.get("criterio", "") or "")
 
-        # Um grupo por circuito, distribuído ao redor do meio do trecho.
-        passo_grupo = 0.34
-        centro_base = 0.50 - ((len(ids)-1) * passo_grupo / max(comp, 1e-9)) / 2.0
-        for idx, numero in enumerate(ids):
-            frac = centro_base + idx * passo_grupo / comp
-            frac = max(0.18, min(0.82, frac))
-            cx = float(p1[0]) + dx*frac
-            cy = float(p1[1]) + dy*frac
-            chave = (round(cx,3), round(cy,3), numero, str(rota.get("criterio", "")))
-            if chave in vistos:
-                continue
-            vistos.add(chave)
+        detalhes=[]
+        secoes=[]
+        for num in ids:
+            circ=por_numero[num]
+            detalhes.append(f"C{num:02d}: {_descricao_condutores_unifilar(circ, criterio)}")
+            bit=_bitola_txt_unifilar(circ.get("bitola", circ.get("bitola_mm2", 0))) or "-"
+            secoes.append(f"C{num:02d}: {bit}")
+        circuitos_txt=" + ".join(f"C{n:02d}" for n in ids)
+        cond_txt=" | ".join(detalhes)
+        sec_txt=" | ".join(secoes)
+        trecho=_criterio_legenda_unifilar(criterio)
+        chave=(tuple(ids), cond_txt, sec_txt, trecho)
 
-            circ = por_numero[numero]
-            conds = _condutores_circuito_unifilar(circ, rota.get("criterio", ""))
-            espac = 0.085
-            desloc0 = -((len(conds)-1)*espac)/2.0
-            for j, cond in enumerate(conds):
-                du = desloc0 + j*espac
-                centro = (cx + u[0]*du, cy + u[1]*du)
-                _simbolo_condutor_unifilar(msp, centro, u, nvec, cond)
+        if chave not in codigos:
+            numero=len(codigos)+1
+            codigos[chave]=numero
+            registros.append({"numero":numero,"circuitos":circuitos_txt,"condutores":cond_txt,"secoes":sec_txt,"trecho":trecho})
+        numero=codigos[chave]
 
-            bitola = _bitola_txt_unifilar(circ.get("bitola", circ.get("bitola_mm2", 0)))
-            # Textos ficam do mesmo lado do conjunto e rotacionados com o trecho.
-            ang = math.degrees(math.atan2(dy, dx))
-            if ang > 90 or ang < -90:
-                ang += 180
-            pos_num = (cx + nvec[0]*0.20, cy + nvec[1]*0.20)
-            pos_bit = (cx - nvec[0]*0.22, cy - nvec[1]*0.22)
-            msp.add_text(
-                str(numero),
-                dxfattribs={"layer":"PROJ_ELETRICA_TEXTO", "height":0.09,
-                            "insert":pos_num, "rotation":ang},
-            )
-            # Conforme a referência, 1,5 mm² pode ser omitido; acima disso indicamos.
-            try:
-                bitola_val = float(circ.get("bitola", circ.get("bitola_mm2", 0)) or 0)
-            except (TypeError, ValueError):
-                bitola_val = 0.0
-            if bitola and abs(bitola_val - 1.5) > 1e-6:
-                msp.add_text(
-                    bitola,
-                    dxfattribs={"layer":"PROJ_ELETRICA_TEXTO", "height":0.08,
-                                "insert":pos_bit, "rotation":ang},
-                )
+        # Não duplica chamada sobre a mesma geometria física/código.
+        geom=tuple(sorted(((round(float(p1[0]),3),round(float(p1[1]),3)),(round(float(p2[0]),3),round(float(p2[1]),3)))))
+        chave_geom=(geom, numero)
+        if chave_geom in vistos_geom:
+            continue
+        vistos_geom.add(chave_geom)
+        frac=0.50
+        ponto=(float(p1[0])+dx*frac, float(p1[1])+dy*frac)
+        _desenhar_quadro_chamada_unifilar(msp, ponto, u, nvec, numero)
+
+    _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom)
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -501,7 +602,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.110 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.111 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -679,7 +780,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.110:
+                # Fase 13.6 Rev.111:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1121,10 +1222,10 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.110 — simbologia dos condutores diretamente nos
-        # eletrodutos: circuito acima, seção abaixo e F/N/R/PE por convenção.
-        _desenhar_simbologia_condutores_unifilar(
-            msp, rotas_fisicas, circuitos_dimensionados
+        # Fase 13.6 Rev.111 — chamadas numeradas nos eletrodutos; detalhes elétricos
+        # concentrados em tabela para manter a planta limpa.
+        _desenhar_identificacao_condutos_unifilar(
+            msp, rotas_fisicas, circuitos_dimensionados, ambientes_geom
         )
 
         # Etiquetas de auditoria: Ø do eletroduto e circuitos por trecho.
@@ -1155,7 +1256,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.110 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.111 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1196,7 +1297,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.110: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.111: "
                 + detalhes_bloqueio
             )
 
