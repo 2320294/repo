@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 13.6 Rev.118 — rede distribuída por caixas octogonais.
+    Fase 13.6 Rev.119 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -518,7 +518,7 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
-    # Fase 13.6 Rev.118:
+    # Fase 13.6 Rev.119:
     # circuitos terminais devem preferencialmente ser distribuídos em
     # troncos menores, evitando concentrar todos em um único eletroduto.
     # Como referência de topologia, procura limitar a aproximadamente
@@ -1088,7 +1088,7 @@ def _avaliar_caminho_alternativo(
     distancia_raiz_candidato
 ):
     """
-    Fase 13.6 Rev.118.
+    Fase 13.6 Rev.119.
 
     Compara o percurso total desde o QDC até o destino, e não apenas
     a ligação local candidato->destino.
@@ -1170,7 +1170,7 @@ def _redistribuir_tronco_caixas_octogonais(
     max_iteracoes=12
 ):
     """
-    Fecha o ciclo da Fase 13.6 Rev.118:
+    Fecha o ciclo da Fase 13.6 Rev.119:
 
     1. calcula a ocupação projetada em Ø25 de cada trecho troncal;
     2. se ultrapassar 40%, procura outra caixa octogonal disponível;
@@ -1703,7 +1703,7 @@ def _propagar_circuitos_para_luminarias_secundarias(
     arestas_dependentes,
 ):
     """
-    Fase 13.6 Rev.118 — coerência física de circuitos nos pontos de luz.
+    Fase 13.6 Rev.119 — coerência física de circuitos nos pontos de luz.
 
     A árvore das luminárias secundárias nasce na luminária principal do
     ambiente. Se um circuito de TUG/TUE/comando parte de uma luminária
@@ -2125,7 +2125,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 13.6 Rev.118:
+    Fase 13.6 Rev.119:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -2154,7 +2154,7 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.118
+    Fase 13.6 Rev.119
 
     Topologia interna por ambiente, separando fisicamente comando de
     iluminação e alimentação das TUGs.
@@ -2269,7 +2269,7 @@ def _arestas_tugs_internas(
                 "indice_interruptor": 1,
             })
         else:
-            # Regra three-way Rev.118 — topologia residencial preferencial.
+            # Regra three-way Rev.119 — topologia residencial preferencial.
             # Os dois eletrodutos dos interruptores partem diretamente da
             # caixa octogonal/luminária; os viajantes passam pela caixa de luz.
             # Assim NÃO existe, por padrão, eletroduto físico direto I1 -> I2.
@@ -2659,7 +2659,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 13.6 Rev.118.
+    Fase 13.6 Rev.119.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -2827,7 +2827,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.118 — ramais dedicados das TUEs.
+    Fase 13.6 Rev.119 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -2991,7 +2991,7 @@ def _arestas_tues_dedicadas(
 def _agrupar_arestas_coincidentes_rev116(arestas):
     """Une arestas que representam o MESMO eletroduto físico.
 
-    A Rev.118 pode ter, no mesmo trecho geométrico, condutores de comando da
+    A Rev.119 pode ter, no mesmo trecho geométrico, condutores de comando da
     iluminação e alimentação de TUG. O CAD deve desenhar/medir esse eletroduto
     uma única vez, mantendo o critério específico de cada circuito para a
     legenda e para o quantitativo de cabos.
@@ -3059,7 +3059,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 13.6 Rev.118
+    Fase 13.6 Rev.119
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -3170,7 +3170,7 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
-    # Fase 13.6 Rev.118 — circuitos terminais que partem de uma
+    # Fase 13.6 Rev.119 — circuitos terminais que partem de uma
     # luminária secundária também percorrem a árvore de caixas octogonais
     # até a luminária principal. Isso evita divergência entre o traçado,
     # a legenda de fiação e o quantitativo de cabos.
@@ -3209,7 +3209,7 @@ def desenhar_rotas_qdc_iluminacao(
         + iluminacao_controlada
     )
 
-    # Rev.118: um eletroduto físico deve aparecer UMA vez mesmo quando
+    # Rev.119: um eletroduto físico deve aparecer UMA vez mesmo quando
     # transporta, simultaneamente, circuitos com funções diferentes.
     todas_arestas = _agrupar_arestas_coincidentes_rev116(todas_arestas)
 
@@ -3457,7 +3457,7 @@ def desenhar_rotas_qdc_iluminacao(
                 list(trecho.get("criterios_fisicos", []) or []),
             "entidade":
                 tipo_entidade,
-            # Fase 13.6 Rev.118 — referência da entidade física real.
+            # Fase 13.6 Rev.119 — referência da entidade física real.
             # Usada pelas chamadas numeradas para ancorar o leader
             # exatamente SOBRE o ARC/LWPOLYLINE desenhado, evitando
             # balões aparentemente flutuantes em trechos curvos.
