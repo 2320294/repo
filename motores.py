@@ -90,6 +90,72 @@ from protecao_alimentador import (
 )
 
 
+
+def _normalizar_rotulo_unifilar(txt):
+    import unicodedata
+    base = unicodedata.normalize("NFKD", str(txt or ""))
+    return " ".join("".join(c for c in base if not unicodedata.combining(c)).upper().split())
+
+
+def _desenhar_identificacao_circuitos_planta(msp, pontos_eletricos, circuitos):
+    """Fase 13.6 Rev.109 — identificação inicial do unifilar na planta.
+
+    Identifica cada ponto com o circuito definitivo e a seção final calculada.
+    A associação é feita por ambiente + natureza da carga. Para TUEs repetidas
+    no mesmo ambiente, preserva a ordem física dos pontos/circuitos.
+    """
+    por_chave = {}
+    for c in circuitos or []:
+        numero = int(c.get("numero", 0) or 0)
+        if numero <= 0:
+            continue
+        tipo = str(c.get("tipo", "") or "").upper()
+        tipo_chave = "ILUMINACAO" if tipo.startswith("ILUM") else tipo
+        ambientes = c.get("ambientes") or [c.get("ambiente", "")]
+        for amb in ambientes:
+            chave = (_normalizar_rotulo_unifilar(amb), tipo_chave)
+            por_chave.setdefault(chave, []).append(c)
+
+    usados_tue = {}
+    vistos = set()
+    for pto in pontos_eletricos or []:
+        xy = pto.get("ponto")
+        if not xy:
+            continue
+        tipo = str(pto.get("tipo", "") or "").upper()
+        tipo_chave = "ILUMINACAO" if tipo.startswith("ILUM") else tipo
+        chave = (_normalizar_rotulo_unifilar(pto.get("ambiente", "")), tipo_chave)
+        candidatos = por_chave.get(chave, [])
+        if not candidatos:
+            continue
+        if tipo_chave == "TUE" and len(candidatos) > 1:
+            idx = usados_tue.get(chave, 0)
+            circuito = candidatos[min(idx, len(candidatos)-1)]
+            usados_tue[chave] = idx + 1
+        else:
+            circuito = candidatos[0]
+        numero = int(circuito.get("numero", 0) or 0)
+        bitola = float(circuito.get("bitola", 0.0) or 0.0)
+        if numero <= 0 or bitola <= 0:
+            continue
+        # Em ambientes com várias luminárias do mesmo circuito, identifica
+        # cada ponto: facilita leitura sem depender da posição do primeiro nó.
+        key = (round(float(xy[0]), 4), round(float(xy[1]), 4), numero)
+        if key in vistos:
+            continue
+        vistos.add(key)
+        bitola_txt = (f"{bitola:.1f}".replace(".", ",") if bitola % 1 else f"{int(bitola)}")
+        texto = f"C{numero:02d}  {bitola_txt} mm²"
+        msp.add_text(
+            texto,
+            dxfattribs={
+                "layer": "PROJ_ELETRICA_TEXTO",
+                "height": 0.10,
+                "insert": (float(xy[0]) + 0.18, float(xy[1]) + 0.18),
+            },
+        )
+
+
 def gerar_cad_unifilar(
     dxf_bytes,
     dados_editados,
@@ -341,7 +407,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.108 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.109 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -519,7 +585,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.108:
+                # Fase 13.6 Rev.109:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -960,6 +1026,13 @@ def gerar_cad_unifilar(
             circuitos_dimensionados
         )
 
+
+        # Fase 13.6 Rev.109 — primeira etapa da identificação unifilar:
+        # circuito + seção final junto aos pontos elétricos.
+        _desenhar_identificacao_circuitos_planta(
+            msp, pontos_eletricos, circuitos_dimensionados
+        )
+
         # Etiquetas de auditoria: Ø do eletroduto e circuitos por trecho.
         # Ficam em camada congelada para manter a planta limpa.
         desenhar_dimensionamento_rotas(
@@ -988,7 +1061,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.108 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.109 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1029,7 +1102,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.108: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.109: "
                 + detalhes_bloqueio
             )
 
