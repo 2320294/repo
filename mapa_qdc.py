@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.80:
+    Fase 13.6 Rev.81:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.80 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.81 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1311,7 +1311,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1404,7 +1404,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1446,7 +1446,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.80:
+        # Fase 13.6 Rev.81:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -1802,7 +1802,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.80 — QDC executivo no CAD.
+    Fase 13.6 Rev.81 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -1841,7 +1841,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -1869,7 +1869,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.80 — padrão modular do QDC.
+    # Fase 13.6 Rev.81 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -1896,7 +1896,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -1936,7 +1936,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.80",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.81",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -1997,7 +1997,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2034,7 +2034,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.80 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.81 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2132,16 +2132,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.80 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.81 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2242,7 +2242,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.80 — ENTRADA DA REDE
+        # FASE 13.6 REV.81 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2308,7 +2308,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.80:
+        # Fase 13.6 Rev.81:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2392,7 +2392,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.80 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.81 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2674,7 +2674,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.80 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.81 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -2881,7 +2881,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.80 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.81 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3052,7 +3052,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.80 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.81 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3567,7 +3567,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.80:
+                    # Fase 13.6 Rev.81:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -3837,59 +3837,50 @@ def desenhar_mapa_fisico_qdc(
                                 #   L/R = demais DJs
                                 #
                                 # Portanto registramos a bolinha nesse ponto.
-                                if (
-                                    x_destino_reto is not None
-                                    and pontos_desviados
-                                ):
-                                    # Rev.78 — derivação estrutural conhecida:
-                                    # fonte + continuação reta + ramificação.
-                                    # Desenha imediatamente para não depender
-                                    # do clipping dos segmentos.
-                                    _desenhar_no_confirmado(
-                                        msp,
-                                        x_origem,
-                                        yy_destino,
-                                        fase_item,
-                                        0.035
+                                # Rev.81 — distribuição por TOPOLOGIA REAL.
+                                #
+                                # Separamos os destinos em ramos à esquerda
+                                # e à direita da fonte. Cada ramo termina
+                                # exatamente no seu último DJ.
+                                #
+                                # Isso resolve duas coisas de forma determinística:
+                                # 1) nenhuma pista horizontal "sobra";
+                                # 2) as bolinhas aparecem somente onde a
+                                #    própria distribuição realmente deriva.
+
+                                pontos_destino_fase = sorted(
+                                    set(
+                                        float(xx_rev81)
+                                        for xx_rev81 in pontos_desviados
                                     )
+                                )
 
-                                pontos_destino_fase = pontos_desviados
-                                if not pontos_destino_fase:
-                                    continue
+                                pontos_esquerda_rev81 = [
+                                    xx_rev81
+                                    for xx_rev81 in pontos_destino_fase
+                                    if xx_rev81 < float(x_origem) - 1e-9
+                                ]
+                                pontos_direita_rev81 = [
+                                    xx_rev81
+                                    for xx_rev81 in pontos_destino_fase
+                                    if xx_rev81 > float(x_origem) + 1e-9
+                                ]
 
-                                # A alimentação entra pelo extremo mais
-                                # próximo da fonte. A pista permanece limitada
-                                # aos polos extremos. Na Rev.34, nenhum dos dois
-                                # extremos recebe bolinha de derivação.
-                                x_min_fase = min(pontos_destino_fase)
-                                x_max_fase = max(pontos_destino_fase)
-
-                                if abs(x_origem - x_min_fase) <= abs(
-                                    x_origem - x_max_fase
-                                ):
-                                    x_destino_fase = x_min_fase
-                                    x_terminal_final = x_max_fase
-                                else:
-                                    x_destino_fase = x_max_fase
-                                    x_terminal_final = x_min_fase
-
-                                # Rev.33 — uma única saída por fase da fonte.
-                                # Se a mesma fase do mesmo DR/DG alimentar outra
-                                # fileira, prolongamos o tronco existente e
-                                # marcamos a ramificação anterior com bolinha.
+                                # ------------------------------------------------
+                                # TRONCO VERTICAL DA FONTE
+                                # ------------------------------------------------
                                 ident_fonte = str(
                                     fonte_disp.get("identificador", "")
                                     if fonte_disp
                                     else ""
                                 ).strip().upper()
+
                                 chave_tronco = (
                                     ident_fonte,
                                     str(fase_item).strip().upper()
                                 )
 
                                 if chave_tronco not in troncos_fonte_fase:
-                                    # Se já existe a entrada reta, o mesmo
-                                    # eixo vertical é o tronco da derivação.
                                     if x_destino_reto is None:
                                         _line(
                                             msp,
@@ -3897,11 +3888,13 @@ def desenhar_mapa_fisico_qdc(
                                             (x_origem, yy_destino),
                                             _layer_por_token(fase_item)
                                         )
+
                                     troncos_fonte_fase[chave_tronco] = {
                                         "x": x_origem,
                                         "y": yy_destino,
                                         "layer": _layer_por_token(fase_item),
                                     }
+
                                 else:
                                     tronco = troncos_fonte_fase[chave_tronco]
                                     y_anterior = tronco["y"]
@@ -3914,141 +3907,158 @@ def desenhar_mapa_fisico_qdc(
                                             tronco["layer"]
                                         )
 
-                                        # Rev.78 — derivação real conhecida:
-                                        # chegada + continuidade do tronco +
-                                        # saída horizontal.
-                                        _desenhar_no_confirmado(
+                                        # Aqui existe, por definição:
+                                        # chegada + continuidade vertical +
+                                        # saída horizontal da fileira anterior.
+                                        if not _ja_existe_no_confirmado(
                                             msp,
                                             tronco["x"],
                                             y_anterior,
-                                            fase_item,
-                                            0.035
-                                        )
+                                            fase_item
+                                        ):
+                                            _desenhar_no_confirmado(
+                                                msp,
+                                                tronco["x"],
+                                                y_anterior,
+                                                fase_item,
+                                                0.035
+                                            )
 
                                         tronco["y"] = yy_destino
 
-                                # Rev.79 — pista horizontal EXATA.
-                                # Inclui somente a fonte e os destinos que
-                                # realmente precisam da ramificação horizontal.
-                                # Não existe prolongamento/rebarba além deles.
-                                extremos_pista_rev79 = [
-                                    float(x_origem)
-                                ] + [
-                                    float(xx_rev79)
-                                    for xx_rev79 in pontos_destino_fase
-                                ]
-
-                                x_inicio_pista_rev79 = min(
-                                    extremos_pista_rev79
-                                )
-                                x_fim_pista_rev79 = max(
-                                    extremos_pista_rev79
-                                )
-
-                                if (
-                                    abs(
-                                        x_fim_pista_rev79
-                                        - x_inicio_pista_rev79
-                                    ) > 1e-9
-                                ):
+                                # ------------------------------------------------
+                                # PISTAS HORIZONTAIS SEM REBARBA
+                                # ------------------------------------------------
+                                # Nunca desenhamos uma única linha de mínimo a
+                                # máximo. Cada lado nasce na fonte e termina
+                                # exatamente no último destino daquele lado.
+                                if pontos_esquerda_rev81:
                                     _line(
                                         msp,
+                                        (x_origem, yy_destino),
                                         (
-                                            x_inicio_pista_rev79,
-                                            yy_destino
-                                        ),
-                                        (
-                                            x_fim_pista_rev79,
+                                            min(pontos_esquerda_rev81),
                                             yy_destino
                                         ),
                                         _layer_por_token(fase_item)
                                     )
 
-                                # Rev.37 — registra candidatos; decisão final é global.
+                                if pontos_direita_rev81:
+                                    _line(
+                                        msp,
+                                        (x_origem, yy_destino),
+                                        (
+                                            max(pontos_direita_rev81),
+                                            yy_destino
+                                        ),
+                                        _layer_por_token(fase_item)
+                                    )
+
+                                # ------------------------------------------------
+                                # NÓ NA FONTE
+                                # ------------------------------------------------
+                                # Com DJ alinhado:
+                                # chegada vertical + continuação reta ao DJ +
+                                # pelo menos um ramo lateral = derivação.
                                 #
-                                # Ponto intermediário:
-                                # horizontal existe nos dois sentidos e há
-                                # descida para DJ -> derivação real.
-                                #
-                                # Ponto extremo alimentado:
-                                # só recebe bolinha se a alimentação chegar
-                                # pelo lado OPOSTO ao sentido em que a pista
-                                # continua. Nesse caso existem três ramos:
-                                # entrada horizontal + continuação horizontal
-                                # + descida vertical.
-                                #
-                                # Se a alimentação chegar pelo mesmo lado em
-                                # que a pista continua, o ponto é apenas uma
-                                # curva horizontal -> vertical e NÃO é nó.
-                                for x_no in pontos_destino_fase:
-                                    eh_extremo_esquerdo = (
-                                        abs(x_no - x_min_fase) <= 1e-9
-                                    )
-                                    eh_extremo_direito = (
-                                        abs(x_no - x_max_fase) <= 1e-9
-                                    )
-                                    eh_extremo = (
-                                        eh_extremo_esquerdo
-                                        or eh_extremo_direito
-                                    )
-
-                                    eh_intermediario = not eh_extremo
-
-                                    eh_extremo_alimentado = (
-                                        eh_extremo
-                                        and abs(
-                                            x_no - x_destino_fase
-                                        ) <= 1e-9
-                                    )
-
-                                    # Na extremidade esquerda a pista segue
-                                    # para a direita. Para haver derivação real,
-                                    # a fonte precisa chegar pela esquerda.
-                                    fonte_chega_lado_oposto_esq = (
-                                        eh_extremo_esquerdo
-                                        and x_origem < x_no - 1e-9
-                                    )
-
-                                    # Na extremidade direita a pista segue
-                                    # para a esquerda. Para haver derivação real,
-                                    # a fonte precisa chegar pela direita.
-                                    fonte_chega_lado_oposto_dir = (
-                                        eh_extremo_direito
-                                        and x_origem > x_no + 1e-9
-                                    )
-
-                                    eh_derivacao_no_extremo = (
-                                        eh_extremo_alimentado
+                                # Sem DJ alinhado:
+                                # só é derivação se houver ramo para os DOIS lados.
+                                fonte_tem_derivacao_rev81 = (
+                                    (
+                                        x_destino_reto is not None
                                         and (
-                                            fonte_chega_lado_oposto_esq
-                                            or fonte_chega_lado_oposto_dir
+                                            pontos_esquerda_rev81
+                                            or pontos_direita_rev81
                                         )
                                     )
+                                    or
+                                    (
+                                        x_destino_reto is None
+                                        and pontos_esquerda_rev81
+                                        and pontos_direita_rev81
+                                    )
+                                )
 
-                                    if (
-                                        eh_intermediario
-                                        or eh_derivacao_no_extremo
+                                if fonte_tem_derivacao_rev81:
+                                    if not _ja_existe_no_confirmado(
+                                        msp,
+                                        x_origem,
+                                        yy_destino,
+                                        fase_item
                                     ):
-                                        _no_fase_preenchido(
+                                        _desenhar_no_confirmado(
                                             msp,
-                                            x_no,
+                                            x_origem,
                                             yy_destino,
-                                            fase_item
+                                            fase_item,
+                                            0.035
                                         )
 
-                                # Rev.77 — reforço topológico:
-                                # em distribuição para 3 ou mais destinos,
-                                # todo ponto interno da pista é candidato de nó.
-                                # A decisão final continua sendo da regra global
-                                # de 3 ramos, então curvas simples não ganham bola.
-                                if len(pontos_destino_fase) >= 3:
-                                    for x_no_rev77 in pontos_destino_fase[1:-1]:
-                                        _no_fase_preenchido(
+                                # ------------------------------------------------
+                                # NÓS NOS DESTINOS À ESQUERDA
+                                # ------------------------------------------------
+                                # O mais distante à esquerda é o fim do ramo:
+                                # curva para baixo, SEM bolinha.
+                                #
+                                # Todos os outros pontos desse ramo têm:
+                                # continuidade horizontal + descida ao DJ,
+                                # portanto são derivações reais.
+                                if pontos_esquerda_rev81:
+                                    x_final_esq_rev81 = min(
+                                        pontos_esquerda_rev81
+                                    )
+
+                                    for x_no_rev81 in pontos_esquerda_rev81:
+                                        if abs(
+                                            x_no_rev81 - x_final_esq_rev81
+                                        ) <= 1e-9:
+                                            continue
+
+                                        if not _ja_existe_no_confirmado(
                                             msp,
-                                            x_no_rev77,
+                                            x_no_rev81,
                                             yy_destino,
                                             fase_item
-                                        )
+                                        ):
+                                            _desenhar_no_confirmado(
+                                                msp,
+                                                x_no_rev81,
+                                                yy_destino,
+                                                fase_item,
+                                                0.035
+                                            )
+
+                                # ------------------------------------------------
+                                # NÓS NOS DESTINOS À DIREITA
+                                # ------------------------------------------------
+                                # O mais distante à direita é o fim do ramo:
+                                # curva para baixo, SEM bolinha.
+                                #
+                                # Os anteriores são derivações reais.
+                                if pontos_direita_rev81:
+                                    x_final_dir_rev81 = max(
+                                        pontos_direita_rev81
+                                    )
+
+                                    for x_no_rev81 in pontos_direita_rev81:
+                                        if abs(
+                                            x_no_rev81 - x_final_dir_rev81
+                                        ) <= 1e-9:
+                                            continue
+
+                                        if not _ja_existe_no_confirmado(
+                                            msp,
+                                            x_no_rev81,
+                                            yy_destino,
+                                            fase_item
+                                        ):
+                                            _desenhar_no_confirmado(
+                                                msp,
+                                                x_no_rev81,
+                                                yy_destino,
+                                                fase_item,
+                                                0.035
+                                            )
 
                         else:
                             # Um único disjuntor:
@@ -4167,7 +4177,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.80 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.81 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -4432,7 +4442,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
     # ========================================================
-    # FASE 13.6 REV.80 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.81 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4486,7 +4496,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.80 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.81 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -4771,7 +4781,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.80:
+    # Fase 13.6 Rev.81:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
