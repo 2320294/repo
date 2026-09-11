@@ -216,9 +216,9 @@ def salvar_dados_projeto(
             config_interruptores
         )
 
-    # Fase 13.6 Rev.99:
+    # Fase 13.6 Rev.100:
     # "tensao_projeto" é uma coluna legada do banco, com CHECK histórico
-    # limitado aos valores antigos (110/220). A partir da Fase 13.6 Rev.99,
+    # limitado aos valores antigos (110/220). A partir da Fase 13.6 Rev.100,
     # a fonte de verdade é parametros_rede["tensao_fornecimento"],
     # persistida dentro de config_interruptores.
     #
