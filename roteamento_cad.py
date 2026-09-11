@@ -475,7 +475,7 @@ def _construir_rede_hibrida(
     nos
 ):
     """
-    Fase 13.6 Rev.114 — rede distribuída por caixas octogonais.
+    Fase 13.6 Rev.115 — rede distribuída por caixas octogonais.
 
     Além do critério de menor percurso total, força uma quantidade mínima
     de troncos de saída do QDC para evitar concentrar todos os circuitos
@@ -518,7 +518,7 @@ def _construir_rede_hibrida(
         circuitos_unicos
     )
 
-    # Fase 13.6 Rev.114:
+    # Fase 13.6 Rev.115:
     # circuitos terminais devem preferencialmente ser distribuídos em
     # troncos menores, evitando concentrar todos em um único eletroduto.
     # Como referência de topologia, procura limitar a aproximadamente
@@ -1088,7 +1088,7 @@ def _avaliar_caminho_alternativo(
     distancia_raiz_candidato
 ):
     """
-    Fase 13.6 Rev.114.
+    Fase 13.6 Rev.115.
 
     Compara o percurso total desde o QDC até o destino, e não apenas
     a ligação local candidato->destino.
@@ -1170,7 +1170,7 @@ def _redistribuir_tronco_caixas_octogonais(
     max_iteracoes=12
 ):
     """
-    Fecha o ciclo da Fase 13.6 Rev.114:
+    Fecha o ciclo da Fase 13.6 Rev.115:
 
     1. calcula a ocupação projetada em Ø25 de cada trecho troncal;
     2. se ultrapassar 40%, procura outra caixa octogonal disponível;
@@ -1703,7 +1703,7 @@ def _propagar_circuitos_para_luminarias_secundarias(
     arestas_dependentes,
 ):
     """
-    Fase 13.6 Rev.114 — coerência física de circuitos nos pontos de luz.
+    Fase 13.6 Rev.115 — coerência física de circuitos nos pontos de luz.
 
     A árvore das luminárias secundárias nasce na luminária principal do
     ambiente. Se um circuito de TUG/TUE/comando parte de uma luminária
@@ -2125,7 +2125,7 @@ def _linha_parede_entre_tugs(
     layer=LAYER_ROTA
 ):
     """
-    Fase 13.6 Rev.114:
+    Fase 13.6 Rev.115:
     desenha TUG -> TUG pelo eixo da parede.
     """
     pontos = _pontos_linha_parede_entre_tugs(
@@ -2154,343 +2154,233 @@ def _arestas_tugs_internas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.114
+    Fase 13.6 Rev.115
 
-    - todo interruptor do ambiente recebe ligação;
-    - interruptores paralelos não podem ficar soltos;
-    - mesmo ambientes sem TUG mantêm luminária -> interruptor;
-    - para iniciar a cadeia de TUGs, usa o interruptor mais próximo da TUG 1.
+    Topologia interna por ambiente, separando fisicamente comando de
+    iluminação e alimentação das TUGs.
+
+    Interruptor simples:
+      luminária -> interruptor = circuito(s) de iluminação.
+
+    Dois ou mais interruptores paralelos (three-way):
+      luminária -> primeiro paralelo;
+      primeiro paralelo -> segundo paralelo;
+      segundo paralelo -> luminária.
+
+    A cadeia de TUGs continua usando o interruptor mais próximo da primeira
+    tomada como caixa de passagem, porém SOMENTE os circuitos de TUG são
+    registrados nesse caminho. Isso mantém desenho, legenda e quantitativo
+    coerentes e evita atribuir circuitos de tomada aos trechos de comando.
     """
     principal_por_ambiente = {
-        n["ambiente"]: tuple(
-            n["ponto"]
-        )
+        n["ambiente"]: tuple(n["ponto"])
         for n in nos
     }
 
     luminarias_por_ambiente = {
-        n["ambiente"]: [
-            tuple(pt)
-            for pt in n.get(
-                "luminarias",
-                []
-            )
-        ]
+        n["ambiente"]: [tuple(pt) for pt in n.get("luminarias", [])]
         for n in nos
     }
 
     tug_por_ambiente = {}
-
     for p in pontos_eletricos or []:
-        if str(
-            p.get(
-                "tipo",
-                ""
-            )
-        ).upper() != "TUG":
+        if str(p.get("tipo", "")).upper() != "TUG":
             continue
-
-        amb = _normalizar_nome(
-            p.get(
-                "ambiente"
-            )
-        )
-
-        if (
-            not amb
-            or not p.get(
-                "ponto"
-            )
-        ):
+        amb = _normalizar_nome(p.get("ambiente"))
+        if not amb or not p.get("ponto"):
             continue
-
-        tug_por_ambiente.setdefault(
-            amb,
-            []
-        ).append(
-            p
-        )
+        tug_por_ambiente.setdefault(amb, []).append(p)
 
     for amb in tug_por_ambiente:
-        tug_por_ambiente[
-            amb
-        ].sort(
+        tug_por_ambiente[amb].sort(
             key=lambda p: (
-                int(
-                    p.get(
-                        "ordem_perimetro",
-                        9999
-                    )
-                    or 9999
-                ),
-                float(
-                    p.get(
-                        "distancia_perimetro",
-                        0.0
-                    )
-                    or 0.0
-                )
+                int(p.get("ordem_perimetro", 9999) or 9999),
+                float(p.get("distancia_perimetro", 0.0) or 0.0),
             )
         )
 
+    # Preserva metadados do interruptor (porta_numero, paralelo etc.) para
+    # definir de modo determinístico o 1º e o 2º paralelo.
     ints_por_ambiente = {}
-
     for p in pontos_interruptores or []:
-        amb = _normalizar_nome(
-            p.get(
-                "ambiente"
+        amb = _normalizar_nome(p.get("ambiente"))
+        pt = p.get("ponto_tangencia") or p.get("ponto")
+        if not amb or not pt:
+            continue
+        reg = dict(p)
+        reg["_ponto_rota"] = tuple(pt)
+        ints_por_ambiente.setdefault(amb, []).append(reg)
+
+    for amb, regs in ints_por_ambiente.items():
+        regs.sort(
+            key=lambda r: (
+                int(r.get("porta_numero", 9999) or 9999),
+                round(float(r["_ponto_rota"][0]), 6),
+                round(float(r["_ponto_rota"][1]), 6),
             )
         )
-
-        pt = (
-            p.get(
-                "ponto_tangencia"
-            )
-            or p.get(
-                "ponto"
-            )
-        )
-
-        if amb and pt:
-            ints_por_ambiente.setdefault(
-                amb,
-                []
-            ).append(
-                tuple(pt)
-            )
 
     tug_circuitos = {}
     iluminacao_circuitos = {}
-
     for c in circuitos or []:
-        tipo_c = str(
-            c.get(
-                "tipo",
-                ""
-            )
-        ).upper()
-
-        if tipo_c == "ILUMINAÇÃO".upper():
-            numero = int(
-                c.get(
-                    "numero",
-                    0
-                )
-                or 0
-            )
-
-            for amb in _ambientes_circuito(
-                c
-            ):
-                iluminacao_circuitos.setdefault(
-                    _normalizar_nome(
-                        amb
-                    ),
-                    set()
-                ).add(
-                    numero
-                )
-
-        if tipo_c != "TUG":
+        tipo_c = str(c.get("tipo", "")).upper()
+        numero = int(c.get("numero", 0) or 0)
+        if numero <= 0:
             continue
-
-        numero = int(
-            c.get(
-                "numero",
-                0
-            )
-            or 0
-        )
-
-        for amb in _ambientes_circuito(
-            c
-        ):
-            tug_circuitos.setdefault(
-                _normalizar_nome(
-                    amb
-                ),
-                set()
-            ).add(
-                numero
-            )
+        if tipo_c == "ILUMINAÇÃO".upper():
+            for amb in _ambientes_circuito(c):
+                iluminacao_circuitos.setdefault(_normalizar_nome(amb), set()).add(numero)
+        elif tipo_c == "TUG":
+            for amb in _ambientes_circuito(c):
+                tug_circuitos.setdefault(_normalizar_nome(amb), set()).add(numero)
 
     arestas = []
 
-    # Primeiro conecta TODOS os interruptores existentes.
-    for ambiente, interruptores in ints_por_ambiente.items():
-        luzes = luminarias_por_ambiente.get(
-            ambiente,
-            []
-        )
-
-        principal = principal_por_ambiente.get(
-            ambiente
-        )
-
+    # ---------------------------------------------------------------
+    # COMANDO DE ILUMINAÇÃO
+    # ---------------------------------------------------------------
+    for ambiente, interruptores_reg in ints_por_ambiente.items():
+        luzes = list(luminarias_por_ambiente.get(ambiente, []) or [])
+        principal = principal_por_ambiente.get(ambiente)
         if not luzes and principal:
             luzes = [principal]
-
         if not luzes:
             continue
 
-        circuitos_amb = (
-            set(
-                tug_circuitos.get(
-                    ambiente,
-                    set()
-                )
-            )
-            |
-            set(
-                iluminacao_circuitos.get(
-                    ambiente,
-                    set()
-                )
-            )
-        )
+        circuitos_luz_amb = set(iluminacao_circuitos.get(ambiente, set()))
+        if not circuitos_luz_amb:
+            continue
 
-        for indice_int, interruptor in enumerate(
-            interruptores,
-            start=1
-        ):
+        pontos_int = [r["_ponto_rota"] for r in interruptores_reg]
+
+        if len(pontos_int) == 1:
+            interruptor = pontos_int[0]
+            origem_luz = min(luzes, key=lambda pt: _dist(pt, interruptor))
+            arestas.append({
+                "origem_ambiente": ambiente,
+                "destino_ambiente": ambiente,
+                "inicio": origem_luz,
+                "fim": interruptor,
+                "circuitos": set(circuitos_luz_amb),
+                "criterio": "LUZ_PARA_INTERRUPTOR",
+                "indice_interruptor": 1,
+            })
+        else:
+            # Regra three-way Rev.115. O primeiro paralelo é o de menor
+            # porta_numero (ordem estável definida pela configuração de portas).
+            primeiro = pontos_int[0]
+            segundo = pontos_int[1]
+
+            # Usa UMA mesma luminária como nó do comando three-way. Escolhe a
+            # que minimiza o percurso total até os dois interruptores.
             origem_luz = min(
                 luzes,
-                key=lambda pt:
-                    _dist(
-                        pt,
-                        interruptor
-                    )
+                key=lambda pt: _dist(pt, primeiro) + _dist(pt, segundo),
             )
 
-            arestas.append({
-                "origem_ambiente":
-                    ambiente,
-                "destino_ambiente":
-                    ambiente,
-                "inicio":
-                    origem_luz,
-                "fim":
-                    interruptor,
-                "circuitos":
-                    circuitos_amb,
-                "criterio":
-                    (
-                        "LUZ_PARA_INTERRUPTOR"
-                        if len(interruptores) == 1
-                        else "LUZ_PARA_INTERRUPTOR_PARALELO"
-                    ),
-                "indice_interruptor":
-                    indice_int,
-            })
+            arestas.extend([
+                {
+                    "origem_ambiente": ambiente,
+                    "destino_ambiente": ambiente,
+                    "inicio": origem_luz,
+                    "fim": primeiro,
+                    "circuitos": set(circuitos_luz_amb),
+                    "criterio": "LUZ_PARA_INTERRUPTOR_PARALELO_1",
+                    "indice_interruptor": 1,
+                },
+                {
+                    "origem_ambiente": ambiente,
+                    "destino_ambiente": ambiente,
+                    "inicio": primeiro,
+                    "fim": segundo,
+                    "circuitos": set(circuitos_luz_amb),
+                    "criterio": "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO",
+                    "indice_interruptor": 2,
+                },
+                {
+                    "origem_ambiente": ambiente,
+                    "destino_ambiente": ambiente,
+                    "inicio": segundo,
+                    "fim": origem_luz,
+                    "circuitos": set(circuitos_luz_amb),
+                    "criterio": "INTERRUPTOR_PARA_LUZ_PARALELO_2",
+                    "indice_interruptor": 2,
+                },
+            ])
 
-    # Depois cria a cadeia das TUGs.
+            # Caso excepcional de 3+ comandos configurados: mantém os extras
+            # ligados à mesma luminária, sem alterar a topologia dos dois
+            # primeiros paralelos já definida acima.
+            for indice_extra, interruptor in enumerate(pontos_int[2:], start=3):
+                arestas.append({
+                    "origem_ambiente": ambiente,
+                    "destino_ambiente": ambiente,
+                    "inicio": origem_luz,
+                    "fim": interruptor,
+                    "circuitos": set(circuitos_luz_amb),
+                    "criterio": "LUZ_PARA_INTERRUPTOR_PARALELO_EXTRA",
+                    "indice_interruptor": indice_extra,
+                })
+
+    # ---------------------------------------------------------------
+    # CADEIA DE TUGs
+    # ---------------------------------------------------------------
     for ambiente, tugs in tug_por_ambiente.items():
         if not tugs:
             continue
 
-        principal = principal_por_ambiente.get(
-            ambiente
-        )
-
+        principal = principal_por_ambiente.get(ambiente)
         if principal is None:
             continue
 
-        interruptores = ints_por_ambiente.get(
-            ambiente,
-            []
-        )
+        interruptores_reg = ints_por_ambiente.get(ambiente, [])
+        interruptores = [r["_ponto_rota"] for r in interruptores_reg]
+        circuitos_tug_amb = set(tug_circuitos.get(ambiente, set()))
+        if not circuitos_tug_amb:
+            continue
 
-        circuitos_amb = (
-            set(
-                tug_circuitos.get(
-                    ambiente,
-                    set()
-                )
-            )
-            |
-            set(
-                iluminacao_circuitos.get(
-                    ambiente,
-                    set()
-                )
-            )
-        )
-
-        primeira_tug = (
-            tugs[0].get(
-                "ponto_conexao_parede"
-            )
-            or tugs[0].get(
-                "ponto"
-            )
-        )
+        primeira_tug = tugs[0].get("ponto_conexao_parede") or tugs[0].get("ponto")
 
         if interruptores:
-            interruptor_inicio = min(
-                interruptores,
-                key=lambda pt:
-                    _dist(
-                        pt,
-                        primeira_tug
-                    )
-            )
+            interruptor_inicio = min(interruptores, key=lambda pt: _dist(pt, primeira_tug))
+            # A alimentação da TUG chega à caixa do interruptor a partir da
+            # luminária principal/distribuição. Esse é um trecho de passagem
+            # da TUG, não um condutor de comando da iluminação.
+            if _dist(principal, interruptor_inicio) > 1e-9:
+                arestas.append({
+                    "origem_ambiente": ambiente,
+                    "destino_ambiente": ambiente,
+                    "inicio": principal,
+                    "fim": interruptor_inicio,
+                    "circuitos": set(circuitos_tug_amb),
+                    "criterio": "LUZ_PARA_INTERRUPTOR_TUG",
+                })
             atual = interruptor_inicio
         else:
             interruptor_inicio = None
             atual = principal
 
-        for indice, tug in enumerate(
-            tugs,
-            start=1
-        ):
-            destino = tuple(
-                tug.get(
-                    "ponto_conexao_parede"
-                )
-                or tug["ponto"]
-            )
-
+        for indice, tug in enumerate(tugs, start=1):
+            destino = tuple(tug.get("ponto_conexao_parede") or tug["ponto"])
             aresta = {
-                "origem_ambiente":
-                    ambiente,
-                "destino_ambiente":
-                    ambiente,
-                "inicio":
-                    atual,
-                "fim":
-                    destino,
-                "circuitos":
-                    circuitos_amb,
-                "criterio":
-                    (
-                        "INTERRUPTOR_PARA_TUG1"
-                        if indice == 1
-                        and interruptor_inicio is not None
-                        else (
-                            "LUZ_PARA_TUG1"
-                            if indice == 1
-                            else "CADEIA_TUG"
-                        )
-                    ),
-                "tug_destino":
-                    tug,
+                "origem_ambiente": ambiente,
+                "destino_ambiente": ambiente,
+                "inicio": atual,
+                "fim": destino,
+                "circuitos": set(circuitos_tug_amb),
+                "criterio": (
+                    "INTERRUPTOR_PARA_TUG1"
+                    if indice == 1 and interruptor_inicio is not None
+                    else ("LUZ_PARA_TUG1" if indice == 1 else "CADEIA_TUG")
+                ),
+                "tug_destino": tug,
             }
-
             if indice > 1:
-                aresta[
-                    "tug_origem"
-                ] = tugs[
-                    indice - 2
-                ]
-
-            arestas.append(
-                aresta
-            )
-
+                aresta["tug_origem"] = tugs[indice - 2]
+            arestas.append(aresta)
             atual = destino
 
     return arestas
-
 
 def _ambiente_sem_interruptor_proprio_rota(
     nome
@@ -2767,7 +2657,7 @@ def _arestas_iluminacao_ambiente_controlado(
     circuitos=None
 ):
     """
-    Fase 13.6 Rev.114.
+    Fase 13.6 Rev.115.
 
     Varanda/terraço/garagem:
     - identifica qual soleira/porta é realmente compartilhada com o
@@ -2935,7 +2825,7 @@ def _arestas_tues_dedicadas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.114 — ramais dedicados das TUEs.
+    Fase 13.6 Rev.115 — ramais dedicados das TUEs.
 
     Cada TUE parte da luminária mais próxima do mesmo ambiente.
     Não deriva de TUG e não entra na cadeia perimetral das tomadas gerais.
@@ -3096,6 +2986,66 @@ def _arestas_tues_dedicadas(
     return arestas
 
 
+def _agrupar_arestas_coincidentes_rev115(arestas):
+    """Une arestas que representam o MESMO eletroduto físico.
+
+    A Rev.115 pode ter, no mesmo trecho geométrico, condutores de comando da
+    iluminação e alimentação de TUG. O CAD deve desenhar/medir esse eletroduto
+    uma única vez, mantendo o critério específico de cada circuito para a
+    legenda e para o quantitativo de cabos.
+    """
+    grupos = {}
+    ordem = []
+
+    def chave_ponto(pt):
+        return (round(float(pt[0]), 6), round(float(pt[1]), 6))
+
+    for aresta in arestas or []:
+        p1 = tuple(aresta.get("inicio") or ())
+        p2 = tuple(aresta.get("fim") or ())
+        if len(p1) < 2 or len(p2) < 2:
+            continue
+        a = chave_ponto(p1)
+        b = chave_ponto(p2)
+        geom = tuple(sorted((a, b)))
+        chave = (
+            geom,
+            _normalizar_nome(aresta.get("origem_ambiente")),
+            _normalizar_nome(aresta.get("destino_ambiente")),
+        )
+
+        criterio = str(aresta.get("criterio", "") or "")
+        circuitos = set(aresta.get("circuitos", set()) or set())
+
+        if chave not in grupos:
+            item = dict(aresta)
+            item["circuitos"] = set(circuitos)
+            item["criterios_por_circuito"] = {int(n): criterio for n in circuitos}
+            item["criterios_fisicos"] = [criterio] if criterio else []
+            grupos[chave] = item
+            ordem.append(chave)
+            continue
+
+        item = grupos[chave]
+        item["circuitos"].update(circuitos)
+        for n in circuitos:
+            item.setdefault("criterios_por_circuito", {})[int(n)] = criterio
+        if criterio and criterio not in item.setdefault("criterios_fisicos", []):
+            item["criterios_fisicos"].append(criterio)
+
+        # Mantém metadados necessários ao desenho de TUGs quando existirem.
+        for campo in ("tug_origem", "tug_destino"):
+            if not item.get(campo) and aresta.get(campo):
+                item[campo] = aresta.get(campo)
+
+        # Para classificação visual, prefira o critério de comando quando o
+        # primeiro item do grupo era apenas passagem de TUG.
+        if item.get("criterio") == "LUZ_PARA_INTERRUPTOR_TUG" and criterio != "LUZ_PARA_INTERRUPTOR_TUG":
+            item["criterio"] = criterio
+
+    return [grupos[ch] for ch in ordem]
+
+
 def desenhar_rotas_qdc_iluminacao(
     msp,
     qdc_info,
@@ -3107,7 +3057,7 @@ def desenhar_rotas_qdc_iluminacao(
     soleiras_raw=None,
 ):
     """
-    Fase 13.6 Rev.114
+    Fase 13.6 Rev.115
 
     - Rede troncal híbrida.
     - Pode criar mais de uma saída no QDC quando a rede existente
@@ -3218,7 +3168,7 @@ def desenhar_rotas_qdc_iluminacao(
         )
     )
 
-    # Fase 13.6 Rev.114 — circuitos terminais que partem de uma
+    # Fase 13.6 Rev.115 — circuitos terminais que partem de uma
     # luminária secundária também percorrem a árvore de caixas octogonais
     # até a luminária principal. Isso evita divergência entre o traçado,
     # a legenda de fiação e o quantitativo de cabos.
@@ -3256,6 +3206,10 @@ def desenhar_rotas_qdc_iluminacao(
         + tues_dedicadas
         + iluminacao_controlada
     )
+
+    # Rev.115: um eletroduto físico deve aparecer UMA vez mesmo quando
+    # transporta, simultaneamente, circuitos com funções diferentes.
+    todas_arestas = _agrupar_arestas_coincidentes_rev115(todas_arestas)
 
     for indice, trecho in enumerate(
         todas_arestas
@@ -3435,6 +3389,11 @@ def desenhar_rotas_qdc_iluminacao(
                         in {
                             "LUZ_PARA_INTERRUPTOR",
                             "LUZ_PARA_INTERRUPTOR_PARALELO",
+                            "LUZ_PARA_INTERRUPTOR_PARALELO_1",
+                            "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO",
+                            "INTERRUPTOR_PARA_LUZ_PARALELO_2",
+                            "LUZ_PARA_INTERRUPTOR_PARALELO_EXTRA",
+                            "LUZ_PARA_INTERRUPTOR_TUG",
                             "INTERRUPTOR_PARA_TUG1",
                             "LUZ_PARA_TUG1",
                             "CADEIA_TUG",
@@ -3489,9 +3448,13 @@ def desenhar_rotas_qdc_iluminacao(
                     "criterio",
                     ""
                 ),
+            "criterios_por_circuito":
+                dict(trecho.get("criterios_por_circuito", {}) or {}),
+            "criterios_fisicos":
+                list(trecho.get("criterios_fisicos", []) or []),
             "entidade":
                 tipo_entidade,
-            # Fase 13.6 Rev.114 — referência da entidade física real.
+            # Fase 13.6 Rev.115 — referência da entidade física real.
             # Usada pelas chamadas numeradas para ancorar o leader
             # exatamente SOBRE o ARC/LWPOLYLINE desenhado, evitando
             # balões aparentemente flutuantes em trechos curvos.

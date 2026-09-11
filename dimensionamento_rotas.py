@@ -139,6 +139,55 @@ def _condutores_circuito(circuito):
     ]
 
 
+
+
+def _condutores_circuito_rota(circuito, rota):
+    """Rev.115: composição de condutores dependente da função física do trecho.
+
+    Mantém a composição padrão F+N+PE nos trechos de alimentação e cargas,
+    mas representa corretamente os ramais de comando de iluminação.
+    """
+    tipo = _tipo(circuito)
+    numero = int(circuito.get("numero", 0) or 0)
+    criterios_por_circuito = (rota or {}).get("criterios_por_circuito", {}) or {}
+    criterio = str(
+        criterios_por_circuito.get(numero)
+        or criterios_por_circuito.get(str(numero))
+        or (rota or {}).get("criterio", "")
+        or ""
+    ).upper().strip()
+    bitola = _bitola(circuito)
+
+    if tipo == "ILUMINAÇÃO".upper():
+        if criterio == "LUZ_PARA_INTERRUPTOR":
+            return [
+                {"funcao": "Fase", "cor": "Vermelho", "bitola_mm2": bitola},
+                {"funcao": "Retorno", "cor": "Preto", "bitola_mm2": bitola},
+                {"funcao": "Proteção (PE)", "cor": "Verde ou verde/amarelo", "bitola_mm2": bitola},
+            ]
+        if criterio == "LUZ_PARA_INTERRUPTOR_PARALELO_1":
+            return [
+                {"funcao": "Fase", "cor": "Vermelho", "bitola_mm2": bitola},
+                {"funcao": "Viajante", "cor": "Preto", "bitola_mm2": bitola},
+                {"funcao": "Viajante", "cor": "Preto", "bitola_mm2": bitola},
+            ]
+        if criterio == "INTERRUPTOR_PARA_INTERRUPTOR_PARALELO":
+            return [
+                {"funcao": "Viajante", "cor": "Preto", "bitola_mm2": bitola},
+                {"funcao": "Viajante", "cor": "Preto", "bitola_mm2": bitola},
+            ]
+        if criterio == "INTERRUPTOR_PARA_LUZ_PARALELO_2":
+            return [
+                {"funcao": "Retorno", "cor": "Preto", "bitola_mm2": bitola},
+            ]
+        if criterio == "LUZ_PARA_INTERRUPTOR_PARALELO_EXTRA":
+            return [
+                {"funcao": "Fase", "cor": "Vermelho", "bitola_mm2": bitola},
+                {"funcao": "Retorno", "cor": "Preto", "bitola_mm2": bitola},
+            ]
+
+    return _condutores_circuito(circuito)
+
 def _area_ocupada_condutor(bitola_mm2):
     d = DIAMETRO_CONDUTOR_MM.get(
         float(bitola_mm2)
@@ -308,8 +357,9 @@ def dimensionar_rotas(
             if circuito is None:
                 continue
 
-            for condutor in _condutores_circuito(
-                circuito
+            for condutor in _condutores_circuito_rota(
+                circuito,
+                rota
             ):
                 item = dict(
                     condutor
@@ -848,7 +898,7 @@ def corrigir_bitolas_por_queda(
     limite_queda_pct=QUEDA_REFERENCIA_PCT
 ):
     """
-    Fase 13.6 Rev.114.
+    Fase 13.6 Rev.115.
 
     Corrige automaticamente APENAS a seção necessária por queda de tensão.
 
@@ -1053,7 +1103,7 @@ def validar_eletrica_rotas(
     circuitos
 ):
     """
-    Validação preliminar da Fase 13.6 Rev.114.
+    Validação preliminar da Fase 13.6 Rev.115.
 
     Verifica:
     - maior percurso físico de cada circuito;
@@ -1348,7 +1398,7 @@ def diagnosticar_agrupamento_rotas(
     circuitos
 ):
     """
-    Fase 13.6 Rev.114.
+    Fase 13.6 Rev.115.
 
     Analisa a concentração física já conhecida no roteamento, sem aplicar
     automaticamente fatores de capacidade de condução.
@@ -1756,7 +1806,7 @@ def verificar_capacidade_conducao_preliminar(
     metodo_instalacao="B1",
     temperatura_ambiente_c=30
 ):
-    """Fase 13.6 Rev.114: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
+    """Fase 13.6 Rev.115: verifica a capacidade trecho a trecho e identifica o trecho crítico."""
     metodo = str(metodo_instalacao or "B1").upper().strip()
     if metodo not in CAPACIDADE_REFERENCIA_A:
         metodo = "B1"
@@ -2010,7 +2060,7 @@ def otimizar_eletrodutos_preliminar(
     limite_circuitos_preferencial=3
 ):
     """
-    Fase 13.6 Rev.114.
+    Fase 13.6 Rev.115.
 
     Para cada trecho físico compara três estratégias:
     1) MANTER o eletroduto atual;
@@ -2157,7 +2207,7 @@ def otimizar_eletrodutos_preliminar(
         "trechos": resultados,
         "observacao": (
             "Simulação de infraestrutura. 'NOVO CAMINHO VIA CAIXA' indica "
-            "redistribuição por outra caixa octogonal; a Fase 13.6 Rev.114 também passa "
+            "redistribuição por outra caixa octogonal; a Fase 13.6 Rev.115 também passa "
             "a reduzir a concentração já na formação da rede troncal."
         ),
     }
