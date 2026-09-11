@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.84:
+    Fase 13.6 Rev.85:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.84 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.85 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -772,6 +772,11 @@ _QDC_NODE_SUPPRESSIONS = []
 # Rev.82 — nós cuja existência é conhecida pela lógica elétrica.
 # Eles são desenhados somente ao FINAL, após toda a geometria e clipping.
 _QDC_LOGICAL_NODES = []
+
+# Rev.85 — pistas horizontais lógicas de distribuição por fase.
+# Guardamos o intervalo elétrico exato de cada pista para reconstruí-la
+# no final, sem depender de encontros geométricos de linhas da mesma fase.
+_QDC_LOGICAL_PHASE_TRACKS = []
 
 
 def _no_fase_preenchido(msp, x, y, token, raio=0.035):
@@ -1078,6 +1083,154 @@ def _aparar_sobras_horizontais_fase_rev84(msp, tol=1e-6):
                         ent_h.dxf.end = (novo_min, y, 0.0)
                 except Exception:
                     continue
+
+
+def _registrar_pista_horizontal_rev85(
+    msp,
+    x1,
+    x2,
+    y,
+    token,
+    tol=1e-9,
+):
+    """
+    Desenha e registra uma pista horizontal lógica.
+
+    O intervalo registrado é a verdade elétrica da rota. Mais tarde,
+    qualquer geometria coincidente no mesmo layer/Y será descartada e
+    a pista será reconstruída somente com estes intervalos.
+    """
+    x1 = float(x1)
+    x2 = float(x2)
+    y = float(y)
+    token = str(token).upper()
+
+    if abs(x2 - x1) <= tol:
+        return None
+
+    lo = min(x1, x2)
+    hi = max(x1, x2)
+
+    _QDC_LOGICAL_PHASE_TRACKS.append({
+        "msp": msp,
+        "layer": _layer_por_token(token),
+        "token": token,
+        "y": y,
+        "x1": lo,
+        "x2": hi,
+    })
+
+    return _line(
+        msp,
+        (x1, y),
+        (x2, y),
+        _layer_por_token(token)
+    )
+
+
+def _normalizar_pistas_horizontais_rev85(msp, tol=1e-6):
+    """
+    Reconstrói as pistas horizontais A/B/C a partir da topologia registrada.
+
+    Importante:
+    - atua SOMENTE nos níveis Y que foram explicitamente registrados;
+    - não toca neutro, PE, barramentos superiores ou outras cotas;
+    - elimina linhas coincidentes/antigas que provocavam o "resto";
+    - depois redesenha somente os intervalos lógicos verdadeiros.
+    """
+    registros = [
+        r for r in _QDC_LOGICAL_PHASE_TRACKS
+        if r.get("msp") is msp
+    ]
+
+    if not registros:
+        return
+
+    # Agrupa por layer e nível Y.
+    grupos = {}
+    for r in registros:
+        chave = (
+            str(r["layer"]),
+            round(float(r["y"]), 7),
+        )
+        grupos.setdefault(chave, []).append(
+            (float(r["x1"]), float(r["x2"]))
+        )
+
+    for (layer, y_round), intervalos in grupos.items():
+        y = float(y_round)
+
+        # Mescla SOMENTE intervalos lógicos que realmente se tocam.
+        ints = sorted(
+            (min(a, b), max(a, b))
+            for a, b in intervalos
+            if abs(b - a) > tol
+        )
+
+        if not ints:
+            continue
+
+        unidos = [list(ints[0])]
+        for lo, hi in ints[1:]:
+            if lo <= unidos[-1][1] + tol:
+                unidos[-1][1] = max(unidos[-1][1], hi)
+            else:
+                unidos.append([lo, hi])
+
+        x_global_min = min(lo for lo, _ in unidos)
+        x_global_max = max(hi for _, hi in unidos)
+
+        # Remove QUALQUER horizontal A/B/C existente nesse corredor lógico.
+        # É justamente aqui que desaparece a continuação indevida da fase A.
+        try:
+            entidades = list(msp)
+        except Exception:
+            entidades = []
+
+        for ent in entidades:
+            try:
+                if ent.dxftype() != "LINE":
+                    continue
+                if str(ent.dxf.layer) != layer:
+                    continue
+
+                a = ent.dxf.start
+                b = ent.dxf.end
+                ax, ay = float(a.x), float(a.y)
+                bx, by = float(b.x), float(b.y)
+
+                if abs(ay - by) > tol:
+                    continue
+                if abs(ay - y) > tol:
+                    continue
+
+                lo_ent = min(ax, bx)
+                hi_ent = max(ax, bx)
+
+                # Só apaga linhas que pertencem à região da pista registrada.
+                if (
+                    hi_ent >= x_global_min - 0.50
+                    and lo_ent <= x_global_max + 0.50
+                ):
+                    try:
+                        msp.delete_entity(ent)
+                    except Exception:
+                        try:
+                            ent.destroy()
+                        except Exception:
+                            pass
+            except Exception:
+                continue
+
+        # Redesenha exclusivamente os intervalos elétricos registrados.
+        for lo, hi in unidos:
+            if hi - lo <= tol:
+                continue
+            msp.add_line(
+                (lo, y),
+                (hi, y),
+                dxfattribs={"layer": layer}
+            )
 
 
 def _registrar_no_logico_rev82(msp, x, y, token, raio=0.035):
@@ -1562,7 +1715,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1655,7 +1808,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1697,7 +1850,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.84:
+        # Fase 13.6 Rev.85:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -2053,7 +2206,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.84 — QDC executivo no CAD.
+    Fase 13.6 Rev.85 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -2068,6 +2221,7 @@ def desenhar_mapa_fisico_qdc(
     _QDC_NODE_CANDIDATES.clear()
     _QDC_NODE_SUPPRESSIONS.clear()
     _QDC_LOGICAL_NODES.clear()
+    _QDC_LOGICAL_PHASE_TRACKS.clear()
 
     pontos = []
     for pol in polilinhas_ambientes or []:
@@ -2093,7 +2247,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -2121,7 +2275,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.84 — padrão modular do QDC.
+    # Fase 13.6 Rev.85 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -2148,7 +2302,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2188,7 +2342,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.84",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.85",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -2249,7 +2403,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2286,7 +2440,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.84 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.85 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2384,16 +2538,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.84 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.85 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2494,7 +2648,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.84 — ENTRADA DA REDE
+        # FASE 13.6 REV.85 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2560,7 +2714,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.84:
+        # Fase 13.6 Rev.85:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2644,7 +2798,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.84 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.85 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -2926,7 +3080,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.84 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.85 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -3133,7 +3287,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.84 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.85 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3304,7 +3458,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.84 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.85 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -3863,7 +4017,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.84:
+                    # Fase 13.6 Rev.85:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4238,25 +4392,21 @@ def desenhar_mapa_fisico_qdc(
                                 # máximo. Cada lado nasce na fonte e termina
                                 # exatamente no último destino daquele lado.
                                 if pontos_esquerda_rev81:
-                                    _line(
+                                    _registrar_pista_horizontal_rev85(
                                         msp,
-                                        (x_pivo_rev82, yy_destino),
-                                        (
-                                            min(pontos_esquerda_rev81),
-                                            yy_destino
-                                        ),
-                                        _layer_por_token(fase_item)
+                                        x_pivo_rev82,
+                                        min(pontos_esquerda_rev81),
+                                        yy_destino,
+                                        fase_item
                                     )
 
                                 if pontos_direita_rev81:
-                                    _line(
+                                    _registrar_pista_horizontal_rev85(
                                         msp,
-                                        (x_pivo_rev82, yy_destino),
-                                        (
-                                            max(pontos_direita_rev81),
-                                            yy_destino
-                                        ),
-                                        _layer_por_token(fase_item)
+                                        x_pivo_rev82,
+                                        max(pontos_direita_rev81),
+                                        yy_destino,
+                                        fase_item
                                     )
 
                                 # ------------------------------------------------
@@ -4482,7 +4632,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.84 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.85 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -4747,7 +4897,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
     # ========================================================
-    # FASE 13.6 REV.84 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.85 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -4801,7 +4951,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.84 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.85 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -5086,7 +5236,7 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.84:
+    # Fase 13.6 Rev.85:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
@@ -5446,12 +5596,15 @@ def desenhar_mapa_fisico_qdc(
     # Rev.37 — com toda a fiação pronta, confirmar os nós reais.
     _finalizar_nos_topologicos(msp)
 
-    # Rev.83 — com toda a fiação já pronta e recortada, remove somente
-    # prolongamentos horizontais sem conexão elétrica real.
+    # Rev.84 — mantém o aparo conservador para demais casos.
     _aparar_sobras_horizontais_fase_rev84(msp)
 
-    # Rev.83 — as bolinhas lógicas são o ÚLTIMO elemento elétrico
-    # desenhado, depois inclusive do aparo de sobras.
+    # Rev.85 — nos corredores de distribuição conhecidos, a geometria
+    # horizontal é reconstruída a partir da TOPOLOGIA registrada.
+    # Isto impede que a fase A herde prolongamentos de outro cabo A.
+    _normalizar_pistas_horizontais_rev85(msp)
+
+    # As bolinhas continuam sendo desenhadas por último.
     _desenhar_nos_logicos_finais_rev82(msp)
 
     return {
