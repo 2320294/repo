@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.87:
+    Fase 13.6 Rev.88:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.87 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.88 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1715,7 +1715,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1808,7 +1808,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1850,7 +1850,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.87:
+        # Fase 13.6 Rev.88:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -2206,7 +2206,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.87 — QDC executivo no CAD.
+    Fase 13.6 Rev.88 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -2247,7 +2247,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -2275,7 +2275,7 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.87 — padrão modular do QDC.
+    # Fase 13.6 Rev.88 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
@@ -2302,7 +2302,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2342,7 +2342,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.87",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.88",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -2403,7 +2403,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2440,7 +2440,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.87 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.88 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2538,16 +2538,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.87 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.88 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2648,7 +2648,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.87 — ENTRADA DA REDE
+        # FASE 13.6 REV.88 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2714,7 +2714,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.87:
+        # Fase 13.6 Rev.88:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2798,7 +2798,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.87 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.88 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -3080,7 +3080,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.87 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.88 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -3287,7 +3287,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.87 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.88 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3458,7 +3458,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.87 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.88 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -4017,7 +4017,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.87:
+                    # Fase 13.6 Rev.88:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -4464,16 +4464,20 @@ def desenhar_mapa_fisico_qdc(
                                 x_inicio_pista_rev86 = float(
                                     troncos_fonte_fase.get(
                                         chave_tronco,
-                                        {"x": x_pivo_rev82}
+                                        {"x": x_origem}
                                     )["x"]
                                 )
 
-                                # Na primeira passagem ainda não houve mudança
-                                # de fileira; se existe DJ reto, o pivô continua
-                                # sendo o borne reto.
+                                # Rev.88 — DJ alinhado pode receber o cabo reto,
+                                # mas não muda a origem elétrica do tronco para
+                                # as fileiras seguintes.
                                 if x_destino_reto is not None:
-                                    x_inicio_pista_rev86 = float(
+                                    x_pivo_local_rev88 = float(
                                         x_destino_reto
+                                    )
+                                else:
+                                    x_pivo_local_rev88 = float(
+                                        x_inicio_pista_rev86
                                     )
 
                                 # Rev.86 — classificação lateral usa o X REAL
@@ -4482,19 +4486,19 @@ def desenhar_mapa_fisico_qdc(
                                     float(xx_rev86)
                                     for xx_rev86 in pontos_destino_fase
                                     if float(xx_rev86)
-                                    < x_inicio_pista_rev86 - 1e-9
+                                    < x_pivo_local_rev88 - 1e-9
                                 ]
                                 pontos_direita_rev81 = [
                                     float(xx_rev86)
                                     for xx_rev86 in pontos_destino_fase
                                     if float(xx_rev86)
-                                    > x_inicio_pista_rev86 + 1e-9
+                                    > x_pivo_local_rev88 + 1e-9
                                 ]
 
                                 if pontos_esquerda_rev81:
                                     _registrar_pista_horizontal_rev85(
                                         msp,
-                                        x_inicio_pista_rev86,
+                                        x_pivo_local_rev88,
                                         min(pontos_esquerda_rev81),
                                         yy_destino,
                                         fase_item
@@ -4503,7 +4507,7 @@ def desenhar_mapa_fisico_qdc(
                                 if pontos_direita_rev81:
                                     _registrar_pista_horizontal_rev85(
                                         msp,
-                                        x_inicio_pista_rev86,
+                                        x_pivo_local_rev88,
                                         max(pontos_direita_rev81),
                                         yy_destino,
                                         fase_item
@@ -4615,15 +4619,14 @@ def desenhar_mapa_fisico_qdc(
                                                 0.035
                                             )
 
-                                # Rev.86 — a próxima fileira não volta ao polo
-                                # original do DR. Ela continua a partir do ponto
-                                # REAL escolhido nesta fileira.
+                                # Rev.88 — IMPORTANTE:
+                                # o tronco permanece eletricamente ligado à FONTE
+                                # (DG/DR correspondente). Um DJ da fileira anterior
+                                # nunca vira fonte do DJ da fileira seguinte.
+                                #
+                                # Atualizamos apenas o Y já alcançado; o X permanece
+                                # no polo da fonte para preservar a origem elétrica.
                                 if chave_tronco in troncos_fonte_fase:
-                                    troncos_fonte_fase[
-                                        chave_tronco
-                                    ]["x"] = float(
-                                        x_continuacao_rev86
-                                    )
                                     troncos_fonte_fase[
                                         chave_tronco
                                     ]["y"] = float(
@@ -4715,70 +4718,43 @@ def desenhar_mapa_fisico_qdc(
                                         )
                                         tronco["y"] = y_corredor_direto
 
-                                # Rev.87 — GRUPO UNITÁRIO EM FILEIRA POSTERIOR.
+                                # Rev.88 — GRUPO UNITÁRIO EM FILEIRA POSTERIOR.
                                 #
-                                # A Rev.86 passou corretamente a continuidade
-                                # entre fileiras para o X real do tronco. Porém
-                                # este bloco de "um único disjuntor" ainda
-                                # começava a rota horizontal em x_origem, isto é,
-                                # no polo original do DR.
-                                #
-                                # Resultado: quando C08 estava sozinho na fileira
-                                # seguinte, o tronco descia corretamente pelo eixo
-                                # herdado de C05, mas a rota de C08 nascia de novo
-                                # no DR. Como o antigo trecho podia ser aparado,
-                                # C08 acabava visualmente sem as fases.
-                                #
-                                # Agora a rota horizontal nasce EXATAMENTE no X
-                                # atual do tronco compartilhado.
-                                tronco_atual_rev87 = troncos_fonte_fase.get(
+                                # A origem elétrica permanece no DR/DG correspondente.
+                                # O cabo pode passar GRAFICAMENTE por trás de outro DJ,
+                                # mas nunca deriva eletricamente da saída desse DJ.
+                                tronco_fonte_rev88 = troncos_fonte_fase.get(
                                     chave_tronco
                                 )
 
-                                x_inicio_rev87 = float(
-                                    tronco_atual_rev87["x"]
-                                    if tronco_atual_rev87 is not None
+                                x_inicio_rev88 = float(
+                                    tronco_fonte_rev88["x"]
+                                    if tronco_fonte_rev88 is not None
                                     else x_origem
                                 )
 
-                                # O desvio geométrico também deve partir do
-                                # mesmo eixo real. Não se consulta novamente o
-                                # polo original do DR para a fileira posterior.
-                                x_passagem = _x_desvio_para_nao_invadir_dj(
-                                    x_inicio_rev87,
+                                # O corredor horizontal é exatamente:
+                                # fonte (DR/DG) -> borne do DJ destino.
+                                # Não existe extensão depois do destino.
+                                _registrar_pista_horizontal_rev85(
+                                    msp,
+                                    x_inicio_rev88,
+                                    x_destino,
                                     y_corredor_direto,
-                                    y_corredor_direto,
-                                    dj_destino_geom=g_unico,
+                                    fase_item
                                 )
 
-                                pontos_rota = [
-                                    (x_inicio_rev87, y_corredor_direto),
-                                ]
-
-                                if abs(
-                                    x_passagem - x_inicio_rev87
-                                ) > 1e-9:
-                                    pontos_rota.extend([
-                                        (x_passagem, y_corredor_direto),
-                                    ])
-
-                                pontos_rota.extend([
+                                # Trecho final reto entrando no borne.
+                                _line(
+                                    msp,
                                     (x_destino, y_corredor_direto),
                                     (x_destino, g_unico["y2"]),
-                                ])
-
-                                _polyline(
-                                    msp,
-                                    pontos_rota,
                                     _layer_por_token(fase_item)
                                 )
 
-                                # O próprio DJ unitário passa a ser o ponto de
-                                # continuidade caso exista outra fileira abaixo.
+                                # Mantém somente a altura alcançada.
+                                # O X continua sendo o polo da fonte.
                                 if chave_tronco in troncos_fonte_fase:
-                                    troncos_fonte_fase[
-                                        chave_tronco
-                                    ]["x"] = float(x_destino)
                                     troncos_fonte_fase[
                                         chave_tronco
                                     ]["y"] = float(
@@ -4788,7 +4764,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.87 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.88 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -5053,7 +5029,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
     # ========================================================
-    # FASE 13.6 REV.87 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.88 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -5107,7 +5083,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.87 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
+    # FASE 13.6 REV.88 — CHICOTES FINAIS AGRUPADOS POR CIRCUITO
     # ========================================================
     # Regras visuais:
     # - cabos do MESMO circuito ficam próximos;
@@ -5390,9 +5366,9 @@ def desenhar_mapa_fisico_qdc(
     )
 
     # Tabela executiva:
-    # Circuito | Fase | Disj. | Ambientes
+    # Circuito | Fase | DR | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.87:
+    # Fase 13.6 Rev.88:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
     tabela_x1 = px1 + 0.35
@@ -5408,19 +5384,22 @@ def desenhar_mapa_fisico_qdc(
 
     col_circuito = 1.05
     col_fase = 0.85
+    col_dr = 0.90
     col_dj = 1.10
     col_ambientes = (
         tabela_largura
         - col_circuito
         - col_fase
+        - col_dr
         - col_dj
     )
 
     x_c1 = tabela_x1
     x_c2 = x_c1 + col_circuito
     x_c3 = x_c2 + col_fase
-    x_c4 = x_c3 + col_dj
-    x_c5 = tabela_x2
+    x_c4 = x_c3 + col_dr
+    x_c5 = x_c4 + col_dj
+    x_c6 = tabela_x2
 
     altura_cab = 0.42
     altura_linha_base = 0.38
@@ -5443,6 +5422,14 @@ def desenhar_mapa_fisico_qdc(
                 ""
             )
             or ""
+        ).strip()
+
+        grupo_dr_c = str(
+            d.get(
+                "grupo",
+                "SEM DR"
+            )
+            or "SEM DR"
         ).strip()
 
         dj_c = int(
@@ -5491,6 +5478,7 @@ def desenhar_mapa_fisico_qdc(
         linhas_tabela.append({
             "identificador": ident,
             "fase": fase_c or "-",
+            "dr": grupo_dr_c or "SEM DR",
             "disjuntor": f"{dj_c} A",
             "ambientes": linhas_ambientes,
             "altura": altura_linha,
@@ -5503,8 +5491,9 @@ def desenhar_mapa_fisico_qdc(
     cabecalhos = [
         (x_c1, x_c2, "Circuito"),
         (x_c2, x_c3, "Fase"),
-        (x_c3, x_c4, "Disj."),
-        (x_c4, x_c5, "Ambientes"),
+        (x_c3, x_c4, "DR"),
+        (x_c4, x_c5, "Disj."),
+        (x_c5, x_c6, "Ambientes"),
     ]
 
     for xa, xb, titulo_coluna in cabecalhos:
@@ -5548,12 +5537,18 @@ def desenhar_mapa_fisico_qdc(
             (
                 x_c3,
                 x_c4,
-                [item["disjuntor"]],
-                0.072
+                [item["dr"]],
+                0.068
             ),
             (
                 x_c4,
                 x_c5,
+                [item["disjuntor"]],
+                0.072
+            ),
+            (
+                x_c5,
+                x_c6,
                 item["ambientes"],
                 0.066
             ),
