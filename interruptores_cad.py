@@ -494,7 +494,7 @@ def _geometria_interruptor(
         )
     )
 
-    # Fase 13.6 Rev.112:
+    # Fase 13.6 Rev.113:
     # A face da parede é o CENTRO do risquinho de 10 cm.
     #
     # A normal aponta PARA DENTRO do ambiente.
@@ -618,7 +618,7 @@ def desenhar_interruptores(
     ):
         nome = ambiente["nome"]
 
-        # Fase 13.6 Rev.112: varanda, terraço e garagem têm comando de iluminação
+        # Fase 13.6 Rev.113: varanda, terraço e garagem têm comando de iluminação
         # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
         # mesmo que exista configuração antiga salva no projeto.
         if _ambiente_sem_interruptor_proprio(nome):
@@ -740,7 +740,7 @@ def desenhar_interruptores(
                     RAIO_INTERRUPTOR
                 )
 
-            # Fase 13.6 Rev.112 — símbolo do interruptor igual ao esquema
+            # Fase 13.6 Rev.113 — símbolo do interruptor igual ao esquema
             # geométrico já aprovado nas tomadas:
             #
             #   [ponta dentro da parede] ---- [face/tangência] ---- [círculo]
@@ -758,7 +758,7 @@ def desenhar_interruptores(
                 nx_int = dx_int / comp_int
                 ny_int = dy_int / comp_int
 
-                # Fase 13.6 Rev.112:
+                # Fase 13.6 Rev.113:
                 # O extremo junto ao círculo está 5 cm PARA DENTRO do ambiente.
                 # Para atravessar a face e alcançar a extremidade oposta,
                 # onde o conduíte se conecta dentro da parede, recuamos 10 cm.
