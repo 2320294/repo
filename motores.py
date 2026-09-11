@@ -97,64 +97,158 @@ def _normalizar_rotulo_unifilar(txt):
     return " ".join("".join(c for c in base if not unicodedata.combining(c)).upper().split())
 
 
-def _desenhar_identificacao_circuitos_planta(msp, pontos_eletricos, circuitos):
-    """Fase 13.6 Rev.109 — identificação inicial do unifilar na planta.
+def _bitola_txt_unifilar(valor):
+    try:
+        v = float(valor or 0.0)
+    except (TypeError, ValueError):
+        v = 0.0
+    if v <= 0:
+        return ""
+    return (f"{v:.1f}".replace(".", ",") if v % 1 else f"{int(v)}")
 
-    Identifica cada ponto com o circuito definitivo e a seção final calculada.
-    A associação é feita por ambiente + natureza da carga. Para TUEs repetidas
-    no mesmo ambiente, preserva a ordem física dos pontos/circuitos.
+
+def _linha_vetorial(msp, p1, p2, layer="PROJ_ELETRICA_TEXTO"):
+    msp.add_line(tuple(p1), tuple(p2), dxfattribs={"layer": layer})
+
+
+def _simbolo_condutor_unifilar(msp, centro, tangente, normal, tipo, escala=0.085):
+    """Desenha a convenção gráfica de condutor sobre o eletroduto.
+
+    Referência visual adotada na Rev.110:
+      F = traço transversal completo;
+      N = traço transversal com pequeno gancho superior;
+      R = traço transversal somente para um lado do eletroduto;
+      PE = traço transversal com barra no topo (T).
+    O símbolo é rotacionado automaticamente para ficar transversal ao trecho.
     """
-    por_chave = {}
+    cx, cy = centro
+    ux, uy = tangente
+    nx, ny = normal
+    def pt(du=0.0, dn=0.0):
+        return (cx + ux*du + nx*dn, cy + uy*du + ny*dn)
+
+    tipo = str(tipo or "F").upper()
+    if tipo == "F":
+        _linha_vetorial(msp, pt(0, -escala), pt(0, escala))
+    elif tipo == "N":
+        _linha_vetorial(msp, pt(0, -escala*0.55), pt(0, escala))
+        _linha_vetorial(msp, pt(0, escala), pt(-escala*0.55, escala))
+    elif tipo == "R":
+        _linha_vetorial(msp, pt(0, 0), pt(0, escala))
+    elif tipo == "PE":
+        _linha_vetorial(msp, pt(0, -escala*0.35), pt(0, escala))
+        _linha_vetorial(msp, pt(-escala*0.55, escala), pt(escala*0.55, escala))
+
+
+def _condutores_circuito_unifilar(circuito, criterio=""):
+    """Retorna somente os condutores representáveis com os dados do projeto."""
+    tipo = str(circuito.get("tipo", "") or "").upper()
+    criterio = str(criterio or "").upper()
+    fase = str(circuito.get("fase", circuito.get("fases", "")) or "").upper()
+    try:
+        polos = int(circuito.get("polos", 0) or 0)
+    except (TypeError, ValueError):
+        polos = 0
+
+    # No trecho luminária <-> interruptor, a iluminação leva fase e retorno;
+    # o neutro não é representado nesse ramal de comando.
+    if tipo.startswith("ILUM") and criterio in {
+        "LUZ_PARA_INTERRUPTOR",
+        "LUZ_PARA_INTERRUPTOR_PARALELO",
+        "INTERRUPTOR_CONTROLADOR_PARA_ILUMINACAO_EXTERNA",
+    }:
+        return ["F", "R", "PE"]
+
+    bifasico = polos >= 2 or any(sep in fase for sep in ("-", "/", "+"))
+    return ["F", "F", "PE"] if bifasico else ["F", "N", "PE"]
+
+
+def _desenhar_simbologia_condutores_unifilar(msp, rotas_fisicas, circuitos):
+    """Fase 13.6 Rev.110 — identificação unifilar diretamente nos eletrodutos.
+
+    Substitui os textos flutuantes da Rev.110. Cada circuito do trecho recebe
+    seu grupo de símbolos F/N/R/PE transversal ao eletroduto, número do circuito
+    acima e seção abaixo. A posição acompanha a direção real do trecho.
+    """
+    por_numero = {}
     for c in circuitos or []:
-        numero = int(c.get("numero", 0) or 0)
-        if numero <= 0:
-            continue
-        tipo = str(c.get("tipo", "") or "").upper()
-        tipo_chave = "ILUMINACAO" if tipo.startswith("ILUM") else tipo
-        ambientes = c.get("ambientes") or [c.get("ambiente", "")]
-        for amb in ambientes:
-            chave = (_normalizar_rotulo_unifilar(amb), tipo_chave)
-            por_chave.setdefault(chave, []).append(c)
+        try:
+            n = int(c.get("numero", 0) or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if n > 0:
+            por_numero[n] = c
 
-    usados_tue = {}
     vistos = set()
-    for pto in pontos_eletricos or []:
-        xy = pto.get("ponto")
-        if not xy:
+    for rota in rotas_fisicas or []:
+        p1 = rota.get("inicio")
+        p2 = rota.get("fim")
+        if not p1 or not p2:
             continue
-        tipo = str(pto.get("tipo", "") or "").upper()
-        tipo_chave = "ILUMINACAO" if tipo.startswith("ILUM") else tipo
-        chave = (_normalizar_rotulo_unifilar(pto.get("ambiente", "")), tipo_chave)
-        candidatos = por_chave.get(chave, [])
-        if not candidatos:
+        dx = float(p2[0]) - float(p1[0])
+        dy = float(p2[1]) - float(p1[1])
+        comp = math.hypot(dx, dy)
+        if comp < 0.35:
             continue
-        if tipo_chave == "TUE" and len(candidatos) > 1:
-            idx = usados_tue.get(chave, 0)
-            circuito = candidatos[min(idx, len(candidatos)-1)]
-            usados_tue[chave] = idx + 1
-        else:
-            circuito = candidatos[0]
-        numero = int(circuito.get("numero", 0) or 0)
-        bitola = float(circuito.get("bitola", 0.0) or 0.0)
-        if numero <= 0 or bitola <= 0:
+        u = (dx/comp, dy/comp)
+        nvec = (-u[1], u[0])
+        ids = []
+        for raw in rota.get("circuitos", []) or []:
+            try:
+                num = int(str(raw).upper().replace("C", ""))
+            except (TypeError, ValueError):
+                continue
+            if num in por_numero and num not in ids:
+                ids.append(num)
+        if not ids:
             continue
-        # Em ambientes com várias luminárias do mesmo circuito, identifica
-        # cada ponto: facilita leitura sem depender da posição do primeiro nó.
-        key = (round(float(xy[0]), 4), round(float(xy[1]), 4), numero)
-        if key in vistos:
-            continue
-        vistos.add(key)
-        bitola_txt = (f"{bitola:.1f}".replace(".", ",") if bitola % 1 else f"{int(bitola)}")
-        texto = f"C{numero:02d}  {bitola_txt} mm²"
-        msp.add_text(
-            texto,
-            dxfattribs={
-                "layer": "PROJ_ELETRICA_TEXTO",
-                "height": 0.10,
-                "insert": (float(xy[0]) + 0.18, float(xy[1]) + 0.18),
-            },
-        )
+        ids.sort()
 
+        # Um grupo por circuito, distribuído ao redor do meio do trecho.
+        passo_grupo = 0.34
+        centro_base = 0.50 - ((len(ids)-1) * passo_grupo / max(comp, 1e-9)) / 2.0
+        for idx, numero in enumerate(ids):
+            frac = centro_base + idx * passo_grupo / comp
+            frac = max(0.18, min(0.82, frac))
+            cx = float(p1[0]) + dx*frac
+            cy = float(p1[1]) + dy*frac
+            chave = (round(cx,3), round(cy,3), numero, str(rota.get("criterio", "")))
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+
+            circ = por_numero[numero]
+            conds = _condutores_circuito_unifilar(circ, rota.get("criterio", ""))
+            espac = 0.085
+            desloc0 = -((len(conds)-1)*espac)/2.0
+            for j, cond in enumerate(conds):
+                du = desloc0 + j*espac
+                centro = (cx + u[0]*du, cy + u[1]*du)
+                _simbolo_condutor_unifilar(msp, centro, u, nvec, cond)
+
+            bitola = _bitola_txt_unifilar(circ.get("bitola", circ.get("bitola_mm2", 0)))
+            # Textos ficam do mesmo lado do conjunto e rotacionados com o trecho.
+            ang = math.degrees(math.atan2(dy, dx))
+            if ang > 90 or ang < -90:
+                ang += 180
+            pos_num = (cx + nvec[0]*0.20, cy + nvec[1]*0.20)
+            pos_bit = (cx - nvec[0]*0.22, cy - nvec[1]*0.22)
+            msp.add_text(
+                str(numero),
+                dxfattribs={"layer":"PROJ_ELETRICA_TEXTO", "height":0.09,
+                            "insert":pos_num, "rotation":ang},
+            )
+            # Conforme a referência, 1,5 mm² pode ser omitido; acima disso indicamos.
+            try:
+                bitola_val = float(circ.get("bitola", circ.get("bitola_mm2", 0)) or 0)
+            except (TypeError, ValueError):
+                bitola_val = 0.0
+            if bitola and abs(bitola_val - 1.5) > 1e-6:
+                msp.add_text(
+                    bitola,
+                    dxfattribs={"layer":"PROJ_ELETRICA_TEXTO", "height":0.08,
+                                "insert":pos_bit, "rotation":ang},
+                )
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -407,7 +501,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.109 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.110 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -585,7 +679,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.109:
+                # Fase 13.6 Rev.110:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1027,10 +1121,10 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.109 — primeira etapa da identificação unifilar:
-        # circuito + seção final junto aos pontos elétricos.
-        _desenhar_identificacao_circuitos_planta(
-            msp, pontos_eletricos, circuitos_dimensionados
+        # Fase 13.6 Rev.110 — simbologia dos condutores diretamente nos
+        # eletrodutos: circuito acima, seção abaixo e F/N/R/PE por convenção.
+        _desenhar_simbologia_condutores_unifilar(
+            msp, rotas_fisicas, circuitos_dimensionados
         )
 
         # Etiquetas de auditoria: Ø do eletroduto e circuitos por trecho.
@@ -1061,7 +1155,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.109 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.110 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1102,7 +1196,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.109: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.110: "
                 + detalhes_bloqueio
             )
 
