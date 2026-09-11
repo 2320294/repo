@@ -603,7 +603,7 @@ def desenhar_interruptores(
     ):
         nome = ambiente["nome"]
 
-        # Fase 13.6 Rev.104: varanda, terraço e garagem têm comando de iluminação
+        # Fase 13.6 Rev.105: varanda, terraço e garagem têm comando de iluminação
         # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
         # mesmo que exista configuração antiga salva no projeto.
         if _ambiente_sem_interruptor_proprio(nome):
@@ -725,9 +725,15 @@ def desenhar_interruptores(
                     RAIO_INTERRUPTOR
                 )
 
-            # Fase 13.6 Rev.104 — mesmo "risquinho" usado nas tomadas.
-            # O ponto de tangência é a face interna da parede.
-            # O traço total mede 10 cm: 5 cm para dentro e 5 cm para fora.
+            # Fase 13.6 Rev.105 — símbolo do interruptor igual ao esquema
+            # geométrico já aprovado nas tomadas:
+            #
+            #   [ponta dentro da parede] ---- [face/tangência] ---- [círculo]
+            #
+            # O traço continua com 10 cm totais. A metade interna (5 cm)
+            # entra na parede e a outra metade termina EXATAMENTE no ponto
+            # de tangência do quadrante do círculo. Assim não há traço
+            # atravessando o interior do símbolo.
             cx_int, cy_int = geo["centro"]
             tx_int, ty_int = geo["tangencia"]
             dx_int = cx_int - tx_int
@@ -736,22 +742,27 @@ def desenhar_interruptores(
             if comp_int > 1e-9:
                 nx_int = dx_int / comp_int
                 ny_int = dy_int / comp_int
-                meio_traco_int = 0.05
-                p_ext_int = (
-                    tx_int - nx_int * meio_traco_int,
-                    ty_int - ny_int * meio_traco_int
+
+                # 5 cm para o lado de dentro da parede, oposto ao círculo.
+                p_parede_int = (
+                    tx_int - nx_int * 0.05,
+                    ty_int - ny_int * 0.05
                 )
-                p_int_int = (
-                    tx_int + nx_int * meio_traco_int,
-                    ty_int + ny_int * meio_traco_int
-                )
+
+                # O outro extremo é a tangência real do círculo.
                 msp.add_line(
-                    p_ext_int,
-                    p_int_int,
+                    p_parede_int,
+                    (tx_int, ty_int),
                     dxfattribs={
                         "layer": "PROJ_ELETRICA_INTERRUPTOR"
                     }
                 )
+
+                # Para o roteamento, o conduíte deve chegar ao ponto que
+                # fica dentro da parede, como já ocorre nas tomadas.
+                ponto_conexao_conduite_int = p_parede_int
+            else:
+                ponto_conexao_conduite_int = geo["tangencia"]
 
             rot = geo["rot"]
 
@@ -768,6 +779,8 @@ def desenhar_interruptores(
                 "ponto":
                     geo["centro"],
                 "ponto_tangencia":
+                    ponto_conexao_conduite_int,
+                "ponto_tangencia_simbolo":
                     geo["tangencia"],
                 "lado_referencia":
                     geo["lado_referencia"],
