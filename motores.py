@@ -280,7 +280,7 @@ def _desenhar_quadro_chamada_unifilar(
     ocupados=None,
     indice_chamada=0,
 ):
-    """Rev.113: balão circular numerado com anti-colisão e leader preso ao eletroduto.
+    """Rev.114: balão circular numerado com anti-colisão e leader preso ao eletroduto.
 
     Regras:
     - o leader SEMPRE nasce no ponto real do eletroduto;
@@ -375,7 +375,7 @@ def _desenhar_quadro_chamada_unifilar(
 
 
 def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
-    """Rev.113: LEGENDA DE FIAÇÃO gráfica, compacta e baseada na referência do usuário.
+    """Rev.114: LEGENDA DE FIAÇÃO gráfica, compacta e baseada na referência do usuário.
 
     Em vez de repetir textos longos, cada linha mostra:
       - balão circular numerado;
@@ -524,7 +524,7 @@ def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
 
 
 def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, ambientes_geom):
-    """Fase 13.6 Rev.113 — balões anti-colisão + legenda gráfica de fiação."""
+    """Fase 13.6 Rev.114 — balões anti-colisão + legenda gráfica de fiação."""
     por_numero = {}
     for c in circuitos or []:
         try:
@@ -867,7 +867,7 @@ def gerar_cad_unifilar(
 
                     comp_total += dst
 
-            # Fase 13.6 Rev.113 — a geometria do ambiente só pode ser
+            # Fase 13.6 Rev.114 — a geometria do ambiente só pode ser
             # registrada depois que segmentos_crus e comp_total forem calculados.
             ambientes_geom.append({
                 "nome": nome_busca,
@@ -1045,7 +1045,7 @@ def gerar_cad_unifilar(
             pontos_tomadas = desenhar_tomadas(
                 msp=msp,
                 row_data=row_data,
-                # Fase 13.6 Rev.113:
+                # Fase 13.6 Rev.114:
                 # usar o identificador único do ambiente (ex.: "WC 2")
                 # também dentro da lógica de tomadas.
                 nome=nome_busca,
@@ -1487,7 +1487,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.113 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
+        # Fase 13.6 Rev.114 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
         _desenhar_identificacao_condutos_unifilar(
             msp, rotas_fisicas, circuitos_dimensionados, ambientes_geom
@@ -1521,7 +1521,7 @@ def gerar_cad_unifilar(
                 msp.delete_entity(entidade)
 
 
-        # Fase 13.6 Rev.113 — diagrama unifilar retirado do DXF.
+        # Fase 13.6 Rev.114 — diagrama unifilar retirado do DXF.
         # Os cálculos elétricos continuam sendo executados normalmente
         # e alimentam o diagrama de montagem, auditoria e relatórios.
 
@@ -1562,7 +1562,7 @@ def gerar_cad_unifilar(
             )
 
             raise ValueError(
-                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.113: "
+                "QDC bloqueado pela auditoria elétrica da Fase 13.6 Rev.114: "
                 + detalhes_bloqueio
             )
 
