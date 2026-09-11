@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.96:
+    Fase 13.6 Rev.97:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -519,7 +519,7 @@ def _rect(msp, x1, y1, x2, y2, layer):
 
 
 # ============================================================
-# FASE 13.6 REV.96 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
+# FASE 13.6 REV.97 — PASSAGENS "POR TRÁS" DE TODOS OS APARELHOS
 # ============================================================
 _QDC_DJ_RECTS = []
 
@@ -1715,7 +1715,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1808,7 +1808,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1850,7 +1850,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.96:
+        # Fase 13.6 Rev.97:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -2206,7 +2206,7 @@ def desenhar_mapa_fisico_qdc(
     polilinhas_ambientes
 ):
     """
-    Fase 13.6 Rev.96 — QDC executivo no CAD.
+    Fase 13.6 Rev.97 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -2247,7 +2247,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -2275,15 +2275,16 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.96 — padrão modular do QDC.
+    # Fase 13.6 Rev.97 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
     modulo_w = 0.45
     disp_h = 1.60
     margem_x = 1.15
-    painel_circuitos_w = 10.20
-    separacao_painel = 1.60
+    # Fase 13.6 Rev.97 — painel lateral mais compacto.
+    painel_circuitos_w = 8.10
+    separacao_painel = 1.00
     modulos_superiores_previstos = sum(
         max(1, int(d.get("modulos", 1) or 1))
         for d in gerais
@@ -2302,7 +2303,7 @@ def desenhar_mapa_fisico_qdc(
         + 1.00
     )
 
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2342,7 +2343,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.96",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.97",
         x0 + 0.55,
         y0 - 0.92,
         0.11,
@@ -2355,15 +2356,10 @@ def desenhar_mapa_fisico_qdc(
     qy_top = y0 - 1.35
     qy_bottom = ybase + 0.75
 
-    _rect(
-        msp,
-        qx1,
-        qy_bottom,
-        qx2,
-        qy_top,
-        L
-    )
-
+    # Fase 13.6 Rev.97:
+    # a moldura do diagrama será desenhada APÓS toda a geometria,
+    # para envolver entrada da rede, QDC e saídas inferiores com
+    # margem visual uniforme.
     # Barramentos PE e N laterais.
     # Rev.56 — 1 borne entrada + 1 borne DPS + 1 borne por circuito.
     qtd_pe = max(4, len(circuitos) + 2)
@@ -2403,7 +2399,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2440,7 +2436,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.96 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.97 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2538,16 +2534,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.96 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.97 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2648,7 +2644,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ====================================================
-        # FASE 13.6 REV.96 — ENTRADA DA REDE
+        # FASE 13.6 REV.97 — ENTRADA DA REDE
         # ====================================================
         # Convenção visual definida pelo usuário:
         # A | B | C | PE | N
@@ -2714,7 +2710,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.96:
+        # Fase 13.6 Rev.97:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -2798,7 +2794,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
         # ----------------------------------------------------
-        # FASE 13.6 REV.96 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
+        # FASE 13.6 REV.97 — CONVENÇÃO DE NÓS DE DERIVAÇÃO
         # ----------------------------------------------------
         # Primeiro levantamos TODOS os pontos reais ligados a cada fase.
         # Assim o barramento termina exatamente na última ligação:
@@ -3080,7 +3076,7 @@ def desenhar_mapa_fisico_qdc(
             # derivada exclusivamente do 2º borne do barramento N.
 
     # ========================================================
-    # FASE 13.6 REV.96 — NEUTRO DOS IDRs PELO 2º BORNE
+    # FASE 13.6 REV.97 — NEUTRO DOS IDRs PELO 2º BORNE
     # ========================================================
     # Regras:
     # - N de entrada usa o 1º borne do barramento N.
@@ -3223,7 +3219,7 @@ def desenhar_mapa_fisico_qdc(
     y_identificacao_saida_global = y_saida_circuito_global - 0.22
 
     # ========================================================
-    # FASE 13.6 REV.96 — GRADE DA SAÍDA FINAL DO QDC
+    # FASE 13.6 REV.97 — GRADE DA SAÍDA FINAL DO QDC
     # ========================================================
     # Nesta revisão o H fica explicitamente definido.
     #
@@ -3296,7 +3292,7 @@ def desenhar_mapa_fisico_qdc(
         y_saida_circuito_global + 0.20
     )
 
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # por decisão de projeto, a faixa H da saída final passa a ser
     # FIXA em 2,00 m para melhorar a leitura do diagrama.
     h_saida_rev91 = 2.00
@@ -3368,7 +3364,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
     # ========================================================
-    # FASE 13.6 REV.96 — DESTINO FINAL PRÉ-CALCULADO
+    # FASE 13.6 REV.97 — DESTINO FINAL PRÉ-CALCULADO
     # ========================================================
     # Mesma filosofia usada com sucesso entre os níveis de DJs:
     # o cabo horizontal já nasce sabendo onde termina.
@@ -3543,7 +3539,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.96 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.97 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3768,7 +3764,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.96 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.97 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -4327,7 +4323,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.96:
+                    # Fase 13.6 Rev.97:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -5074,7 +5070,7 @@ def desenhar_mapa_fisico_qdc(
         y_rail -= 3.15
 
     # ========================================================
-    # FASE 13.6 REV.96 — NEUTROS PELA DIREITA, POR FONTE
+    # FASE 13.6 REV.97 — NEUTROS PELA DIREITA, POR FONTE
     # ========================================================
     # - SEM DR: 3º borne do barramento N;
     # - COM DR: saída N do respectivo DR;
@@ -5369,7 +5365,7 @@ def desenhar_mapa_fisico_qdc(
                 )
 
     # ========================================================
-    # FASE 13.6 REV.96 — PE INDIVIDUAL POR CIRCUITO
+    # FASE 13.6 REV.97 — PE INDIVIDUAL POR CIRCUITO
     # ========================================================
     # 1 circuito = 1 cabo PE = 1 borne físico exclusivo no barramento PE.
     #
@@ -5439,7 +5435,7 @@ def desenhar_mapa_fisico_qdc(
             )
 
     # ========================================================
-    # FASE 13.6 REV.96 — SEGMENTO FINAL NÃO DESTRUTIVO
+    # FASE 13.6 REV.97 — SEGMENTO FINAL NÃO DESTRUTIVO
     # ========================================================
     # Regra: nunca apagar/recortar cabos existentes depois do desenho.
     # O segmento final é criado somente entre a origem real e o X final.
@@ -5467,7 +5463,7 @@ def desenhar_mapa_fisico_qdc(
             layer_rev95
         )
 
-    # FASE 13.6 REV.96 — SAÍDA FINAL PELA MESMA LÓGICA DOS NÍVEIS
+    # FASE 13.6 REV.97 — SAÍDA FINAL PELA MESMA LÓGICA DOS NÍVEIS
     # ========================================================
     # O horizontal já foi desenhado anteriormente, terminando
     # EXATAMENTE no X final do respectivo condutor.
@@ -5544,6 +5540,45 @@ def desenhar_mapa_fisico_qdc(
                 LT
             )
 
+    # ========================================================
+    # FASE 13.6 REV.97 — MOLDURA REAL DO DIAGRAMA
+    # ========================================================
+    # A moldura acompanha a área efetivamente usada pelo desenho.
+    # A entrada da rede A/B/C/PE/N fica inteiramente dentro dela,
+    # assim como os chicotes e identificações inferiores.
+    #
+    # Folgas:
+    # esquerda/direita = 0,35
+    # superior = 0,22 acima da referência superior do QDC
+    # inferior = 0,35 abaixo das identificações finais
+    margem_moldura_rev97 = 0.35
+
+    x_moldura_esq_rev97 = x0 + 0.30
+    x_moldura_dir_rev97 = (
+        x0
+        + margem_x
+        + area_din_w
+        + separacao_painel * 0.45
+    )
+
+    y_moldura_top_rev97 = y0 - 1.08
+
+    if circuitos_geom:
+        y_moldura_bottom_rev97 = (
+            y_texto_chicotes - margem_moldura_rev97
+        )
+    else:
+        y_moldura_bottom_rev97 = qy_bottom
+
+    _rect(
+        msp,
+        x_moldura_esq_rev97,
+        y_moldura_bottom_rev97,
+        x_moldura_dir_rev97,
+        y_moldura_top_rev97,
+        L
+    )
+
     # -------------------------
     # Painel lateral
     # -------------------------
@@ -5571,7 +5606,7 @@ def desenhar_mapa_fisico_qdc(
     _text(
         msp,
         "LISTA DE CIRCUITOS",
-        px1 + 0.25,
+        px1 + 0.22,
         py_top - 0.38,
         0.16,
         LT
@@ -5580,24 +5615,27 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | DR | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.96:
+    # Fase 13.6 Rev.97:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
-    tabela_x1 = px1 + 0.35
+    # Fase 13.6 Rev.97 — tabela executiva compacta.
+    tabela_x1 = px1 + 0.28
     tabela_largura = min(
-        9.20,
+        7.10,
         max(
-            7.80,
-            px2 - tabela_x1 - 0.35
+            6.55,
+            px2 - tabela_x1 - 0.28
         )
     )
     tabela_x2 = tabela_x1 + tabela_largura
     tabela_y_top = py_top - 0.72
 
-    col_circuito = 1.05
-    col_fase = 0.85
-    col_dr = 0.90
-    col_dj = 1.10
+    # Colunas técnicas ficam somente com a largura necessária.
+    # O restante é destinado a Ambientes.
+    col_circuito = 0.82
+    col_fase = 0.62
+    col_dr = 0.78
+    col_dj = 0.78
     col_ambientes = (
         tabela_largura
         - col_circuito
