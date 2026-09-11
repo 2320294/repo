@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 
 from config import (
     configurar_pagina,
@@ -15,7 +16,7 @@ from auth import (
 from projetos import renderizar_gerenciador_projetos
 from painel import renderizar_painel_principal
 from tema_login import aplicar_fundo_login
-from versao import VERSAO_SISTEMA, BUILD_ID
+from versao import VERSAO_SISTEMA
 
 
 def aplicar_tema_sistema():
@@ -121,7 +122,7 @@ aplicar_tema_sistema()
 
 with st.sidebar:
     st.markdown("## ⚡ AutoElétrica Profissional")
-    st.caption(f"🔖 Sistema: {VERSAO_SISTEMA}  •  Build {BUILD_ID}")
+    st.caption(f"Versão: {VERSAO_SISTEMA}")
     st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown(
@@ -137,5 +138,45 @@ with st.sidebar:
         st.rerun()
 
     renderizar_gerenciador_projetos()
+
+# Rev.84 — quando o usuário troca o projeto no dropdown, o Streamlit
+# rerenderiza a página, mas o navegador pode manter a posição vertical.
+# Executamos o scroll depois da barra lateral já ter processado a troca.
+if st.session_state.pop("rev84_scroll_topo_projeto", False):
+    components.html(
+        """
+        <script>
+        (function () {
+            const doc = window.parent.document;
+
+            const candidatos = [
+                doc.querySelector('[data-testid="stMain"]'),
+                doc.querySelector('[data-testid="stAppViewContainer"]'),
+                doc.querySelector('section.main'),
+                doc.scrollingElement,
+                doc.documentElement,
+                doc.body
+            ];
+
+            candidatos.forEach((el) => {
+                if (!el) return;
+                try {
+                    el.scrollTo({top: 0, left: 0, behavior: 'instant'});
+                } catch (e) {
+                    try { el.scrollTop = 0; } catch (_) {}
+                }
+            });
+
+            try {
+                window.parent.scrollTo({top: 0, left: 0, behavior: 'instant'});
+            } catch (e) {
+                window.parent.scrollTo(0, 0);
+            }
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 renderizar_painel_principal()

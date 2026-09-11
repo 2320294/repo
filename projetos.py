@@ -29,6 +29,15 @@ def _ativar_projeto_selecionado():
 
     st.session_state["projeto_ativo"] = novo_projeto
 
+    # Rev.84 — toda troca efetiva de projeto reinicia a navegação
+    # na Etapa 1 e solicita que a página principal volte ao topo.
+    if novo_projeto != "Selecione um projeto...":
+        st.session_state[
+            f"fase8_16_{novo_projeto}_etapa_ativa"
+        ] = "⚙️ Parâmetros"
+
+    st.session_state["rev84_scroll_topo_projeto"] = True
+
     # Caches/derivados não isolados por nome do projeto.
     chaves_invalidar = (
         "dimensionamento_rotas",
