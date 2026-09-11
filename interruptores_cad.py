@@ -494,24 +494,27 @@ def _geometria_interruptor(
         )
     )
 
-    # Fase 13.6 Rev.107:
-    # desloca o conjunto do interruptor 5 cm para FORA da parede.
-    # A normal aponta para dentro do ambiente; portanto, subtrair 0.05
-    # leva a tangência para o lado externo. O círculo acompanha o traço.
+    # Fase 13.6 Rev.108:
+    # A face da parede é o CENTRO do risquinho de 10 cm.
+    #
+    # A normal aponta PARA DENTRO do ambiente.
+    # Assim:
+    #   - extremidade do conduíte = 5 cm para o lado da parede;
+    #   - tangência do círculo   = 5 cm para dentro do ambiente;
+    #   - círculo do interruptor continua avançando para dentro.
+    #
+    # Geometria:
+    # [conduíte] --- 0,05 --- | FACE DA PAREDE | --- 0,05 --- (círculo)
     ponto_tangencia_parede = ponto_tangencia
+
     ponto_tangencia = (
-        ponto_tangencia_parede[0] - normal[0] * 0.05,
-        ponto_tangencia_parede[1] - normal[1] * 0.05
+        ponto_tangencia_parede[0] + normal[0] * 0.05,
+        ponto_tangencia_parede[1] + normal[1] * 0.05
     )
 
     centro = (
-        ponto_tangencia[0]
-        + normal[0]
-        * RAIO_INTERRUPTOR,
-
-        ponto_tangencia[1]
-        + normal[1]
-        * RAIO_INTERRUPTOR
+        ponto_tangencia[0] + normal[0] * RAIO_INTERRUPTOR,
+        ponto_tangencia[1] + normal[1] * RAIO_INTERRUPTOR
     )
 
     return {
@@ -615,7 +618,7 @@ def desenhar_interruptores(
     ):
         nome = ambiente["nome"]
 
-        # Fase 13.6 Rev.107: varanda, terraço e garagem têm comando de iluminação
+        # Fase 13.6 Rev.108: varanda, terraço e garagem têm comando de iluminação
         # pelo ambiente interno adjacente; nunca desenhar interruptor próprio,
         # mesmo que exista configuração antiga salva no projeto.
         if _ambiente_sem_interruptor_proprio(nome):
@@ -737,7 +740,7 @@ def desenhar_interruptores(
                     RAIO_INTERRUPTOR
                 )
 
-            # Fase 13.6 Rev.107 — símbolo do interruptor igual ao esquema
+            # Fase 13.6 Rev.108 — símbolo do interruptor igual ao esquema
             # geométrico já aprovado nas tomadas:
             #
             #   [ponta dentro da parede] ---- [face/tangência] ---- [círculo]
@@ -755,19 +758,16 @@ def desenhar_interruptores(
                 nx_int = dx_int / comp_int
                 ny_int = dy_int / comp_int
 
-                # Fase 13.6 Rev.107:
-                # A tangência do círculo está 5 cm PARA FORA da face.
-                # O outro extremo do risquinho deve ficar 5 cm PARA DENTRO,
-                # portanto avançamos 10 cm na direção interna.
+                # Fase 13.6 Rev.108:
+                # O extremo junto ao círculo está 5 cm PARA DENTRO do ambiente.
+                # Para atravessar a face e alcançar a extremidade oposta,
+                # onde o conduíte se conecta dentro da parede, recuamos 10 cm.
                 #
-                # Resultado geométrico:
-                #   5 cm dentro | FACE DA PAREDE | 5 cm fora
-                #               ^ centro do risquinho
-                #
-                # Assim o centro exato do traço coincide com a face da parede.
+                # Resultado:
+                # conduíte ---- 5 cm ---- FACE ---- 5 cm ---- tangência/círculo
                 p_parede_int = (
-                    tx_int + nx_int * 0.10,
-                    ty_int + ny_int * 0.10
+                    tx_int - nx_int * 0.10,
+                    ty_int - ny_int * 0.10
                 )
 
                 # O outro extremo é a tangência real do círculo.
