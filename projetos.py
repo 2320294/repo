@@ -259,6 +259,18 @@ def renderizar_gerenciador_projetos():
                 st.session_state[
                     chave_confirmacao
                 ] = None
+
+                # Rev.86 — cancelar a exclusão também retorna o usuário
+                # para a Etapa 1 do projeto ativo e para o topo da página.
+                if projeto_selecionado != "Selecione um projeto...":
+                    st.session_state[
+                        f"fase8_16_{projeto_selecionado}_etapa_ativa"
+                    ] = "⚙️ Parâmetros"
+
+                st.session_state[
+                    "rev84_scroll_topo_projeto"
+                ] = True
+
                 st.rerun()
 
             if confirmar:
