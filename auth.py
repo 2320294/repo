@@ -239,12 +239,57 @@ def _renderizar_cadastro():
             st.rerun()
 
 def _renderizar_sobre_o_sistema():
-    st.markdown('<div class="ae-main-spacer"></div>', unsafe_allow_html=True)
-    esquerda, centro, direita = st.columns([1.0, 1.72, 1.0])
+    # Rev.122: somente a página "Sobre o sistema" deixa de usar a coluna
+    # central estreita. Login/cadastro permanecem exatamente com o layout
+    # aprovado. O card passa a ocupar a largura útil disponível e, em telas
+    # menores, permite rolagem vertical sem comprimir o conteúdo.
+    st.markdown(
+        """
+        <style>
+        [data-testid="stMainBlockContainer"]:has(.ae-about-page) {
+            height: auto !important;
+            min-height: calc(100vh - 2px) !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
 
-    with centro:
-        st.markdown(
-            """
+        [data-testid="stMainBlockContainer"] > div:first-child:has(.ae-about-page) {
+            height: auto !important;
+            min-height: calc(100vh - 2px) !important;
+            justify-content: center !important;
+            padding-top: 1.5rem !important;
+            padding-bottom: 1.5rem !important;
+            box-sizing: border-box !important;
+        }
+
+        .ae-about-page {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .ae-about-page .ae-info-card {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            [data-testid="stMainBlockContainer"] > div:first-child:has(.ae-about-page) {
+                justify-content: flex-start !important;
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
+            }
+
+            .ae-about-page .ae-info-card {
+                padding: 24px 22px;
+                border-radius: 16px;
+            }
+        }
+        </style>
+        <div class="ae-about-page">
             <div class="ae-info-card">
                 <div class="ae-info-icon">i</div>
                 <h2>Sobre o AutoElétrica</h2>
@@ -274,9 +319,10 @@ def _renderizar_sobre_o_sistema():
                     suas credenciais de acesso.
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _renderizar_formulario_login():

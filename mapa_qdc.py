@@ -174,7 +174,7 @@ def _dispositivos_base(
     resultado_demanda
 ):
     """
-    Fase 13.6 Rev.121:
+    Fase 13.6 Rev.122:
     organiza os dispositivos para uma vista frontal convencional:
     proteção geral/IDRs/DPS na fileira superior e disjuntores dos
     circuitos nas fileiras seguintes.
@@ -1715,7 +1715,7 @@ def _desenhar_dispositivo(
         layer
     )
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # cada módulo/polo fica visualmente separado dentro do aparelho.
     # Assim 1P, 2P, 3P e 4P têm dimensões e leitura física distintas.
     if modulos > 1:
@@ -1808,7 +1808,7 @@ def _desenhar_dispositivo(
     ident = str(disp.get("identificador", "") or "")
     corrente = disp.get("corrente_a")
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # identificação principal dos dispositivos superiores:
     # DG, DPS e DR/IDR com height fixo 0.105.
     # Disjuntores terminais mantêm o tamanho anterior.
@@ -1850,7 +1850,7 @@ def _desenhar_dispositivo(
     )
 
     if tipo == "IDR" and disp.get("sensibilidade_ma"):
-        # Fase 13.6 Rev.121:
+        # Fase 13.6 Rev.122:
         # a sensibilidade do DR fica abaixo do símbolo de teste,
         # evitando sobreposição entre "30mA" e o círculo central.
         _texto_central(
@@ -2208,7 +2208,7 @@ def desenhar_mapa_fisico_qdc(
     resumo_balanceamento=None
 ):
     """
-    Fase 13.6 Rev.121 — QDC executivo no CAD.
+    Fase 13.6 Rev.122 — QDC executivo no CAD.
 
     O desenho passa a se aproximar de um diagrama de montagem real:
     trilhos DIN, dispositivos frontais, barramento pente, barramentos
@@ -2234,7 +2234,7 @@ def desenhar_mapa_fisico_qdc(
     max_x = max((p[0] for p in pontos), default=0.0)
     max_y = max((p[1] for p in pontos), default=10.0)
 
-    # Fase 13.6 Rev.121 — o unifilar foi retirado do DXF.
+    # Fase 13.6 Rev.122 — o unifilar foi retirado do DXF.
     # A vista frontal passa a ocupar diretamente a área técnica à direita da planta.
     x0 = max_x + 2.50
     y0 = max_y
@@ -2252,7 +2252,7 @@ def desenhar_mapa_fisico_qdc(
     gerais = [d for d in dispositivos if d.get("tipo") in {"DG", "DPS", "IDR"}]
     circuitos = [d for d in dispositivos if d.get("tipo") == "DJ"]
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # a vista frontal mantém a ordem lógica SEM DR, DR1, DR2, DR3...
     # aproveitando continuamente os módulos disponíveis do mesmo trilho.
     def _ordem_grupo_qdc(d):
@@ -2280,14 +2280,14 @@ def desenhar_mapa_fisico_qdc(
     colunas = int(mapa.get("colunas", 0) or 0)
     linhas = int(mapa.get("linhas", 0) or 0)
 
-    # Fase 13.6 Rev.121 — padrão modular do QDC.
+    # Fase 13.6 Rev.122 — padrão modular do QDC.
     # Cada polo ocupa exatamente 0,45 unidade CAD:
     # 1P=0,45 | 2P=0,90 | 3P=1,35 | 4P=1,80.
     # A mesma regra vale para DJ/DG, IDR/DR e DPS.
     modulo_w = 0.45
     disp_h = 1.60
     margem_x = 1.15
-    # Fase 13.6 Rev.121 — painel lateral e tabela com largura automática.
+    # Fase 13.6 Rev.122 — painel lateral e tabela com largura automática.
     # A largura de cada coluna nasce do maior conteúdo real (cabeçalho + dados),
     # com pequenas folgas laterais e limites apenas para manter legibilidade.
     def _largura_texto_rev117(texto, altura_texto, fator=0.62):
@@ -2322,7 +2322,7 @@ def desenhar_mapa_fisico_qdc(
     col_dj_auto_rev117 = _col_auto_rev117(
         "Disj.", _djs_rev117, minimo=0.54, maximo=1.05
     )
-    # Rev.121 — a coluna Ambientes usa a largura GRÁFICA efetiva da fonte,
+    # Rev.122 — a coluna Ambientes usa a largura GRÁFICA efetiva da fonte,
     # em vez de estimar somente pela quantidade de caracteres. Isto é
     # importante porque letras como M/W ocupam muito mais espaço do que I/L e
     # a estimativa antiga podia deixar o texto ultrapassar a célula no CAD.
@@ -2357,7 +2357,7 @@ def desenhar_mapa_fisico_qdc(
         )
 
     # 0,38 = folga total de célula (margem esquerda + margem direita).
-    # A margem é propositalmente maior que na Rev.121 para que a última letra
+    # A margem é propositalmente maior que na Rev.122 para que a última letra
     # nunca fique colada à borda vertical da tabela.
     col_ambientes_auto_rev117 = max(
         1.45,
@@ -2380,7 +2380,7 @@ def desenhar_mapa_fisico_qdc(
         + max(0, len(gerais) - 1) * 0.06
         + 2.60
     )
-    # Fase 13.6 Rev.121 — enquadramento compacto conforme referência aprovada.
+    # Fase 13.6 Rev.122 — enquadramento compacto conforme referência aprovada.
     # O painel lateral fica próximo do diagrama, sem o grande corredor vazio.
     folga_painel_real = 0.38
     largura = (
@@ -2390,7 +2390,7 @@ def desenhar_mapa_fisico_qdc(
         + 0.72
     )
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # os circuitos continuam ordenados por grupo elétrico, porém grupos
     # diferentes podem ocupar o mesmo trilho. Só abre um novo trilho quando
     # a capacidade física de módulos do trilho atual terminar.
@@ -2410,7 +2410,7 @@ def desenhar_mapa_fisico_qdc(
     altura = max(11.5, altura_corpo + 2.00)
     ybase = y0 - altura
 
-    # Fase 13.6 Rev.121 — a moldura geral será fechada no final,
+    # Fase 13.6 Rev.122 — a moldura geral será fechada no final,
     # usando os limites reais das duas molduras internas.
     _text(
         msp,
@@ -2435,7 +2435,7 @@ def desenhar_mapa_fisico_qdc(
     qy_top = y0 - 1.35
     qy_bottom = ybase + 0.75
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # a moldura do diagrama será desenhada APÓS toda a geometria,
     # para envolver entrada da rede, QDC e saídas inferiores com
     # margem visual uniforme.
@@ -2478,7 +2478,7 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     top_rail_y = qy_top - 2.25
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # a fileira superior é dimensionada pela quantidade real de módulos
     # DG + DPS + IDRs. Nunca descarta o último aparelho por falta de folga.
     total_modulos_gerais = sum(
@@ -2515,7 +2515,7 @@ def desenhar_mapa_fisico_qdc(
     # sempre 0,45 x quantidade de polos.
     modulo_w_geral = modulo_w
 
-    # Fase 13.6 Rev.121 — eixo geométrico único do "miolo" do QDC.
+    # Fase 13.6 Rev.122 — eixo geométrico único do "miolo" do QDC.
     # Todo o conjunto interno é centralizado entre os barramentos PE e N.
     # A fileira superior e as fileiras inferiores compartilham a mesma
     # lateral esquerda de referência, evitando deslocamento visual.
@@ -2613,16 +2613,16 @@ def desenhar_mapa_fisico_qdc(
 
     # Barramentos de fase separados verticalmente.
     # Todas as derivações "morrem" exatamente na barra da respectiva fase.
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # corredores exclusivos para A/B/C. O afastamento é propositalmente
     # maior para impedir que uma derivação vertical coincida visualmente
     # com o barramento horizontal de outra fase.
     ESPACAMENTO_BARRAMENTOS_FASE = 0.30
-    # Fase 13.6 Rev.121 — grade vertical equidistante das seis linhas
+    # Fase 13.6 Rev.122 — grade vertical equidistante das seis linhas
     # As seis linhas/cabos principais do QDC passam a ocupar níveis paralelos
     # com passo único. Isso evita a sensação de linhas comprimidas em uma
     # região e abertas em outra, mantendo A/B/C alinhadas aos bornes do DG.
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # O espaçamento vertical é calculado conforme a quantidade REAL
     # de cabos presentes na entrada. Assim monofásico, bifásico e
     # trifásico mantêm a mesma proporção visual.
@@ -2789,7 +2789,7 @@ def desenhar_mapa_fisico_qdc(
             )
             _text(msp, "PE", x_pe - 0.05, y_rotulos_entrada, 0.080, LT)
 
-        # Fase 13.6 Rev.121:
+        # Fase 13.6 Rev.122:
         # O N de entrada deve espelhar exatamente a geometria do PE:
         # sai da entrada, atinge o MESMO alinhamento horizontal do PE
         # e segue para a direita até o 1º borne do barramento N.
@@ -3371,7 +3371,7 @@ def desenhar_mapa_fisico_qdc(
         y_saida_circuito_global + 0.20
     )
 
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # por decisão de projeto, a faixa H da saída final passa a ser
     # FIXA em 2,00 m para melhorar a leitura do diagrama.
     h_saida_rev91 = 2.00
@@ -3618,7 +3618,7 @@ def desenhar_mapa_fisico_qdc(
             desta_fileira_geom
         )
 
-        # Fase 13.6 Rev.121 — SAÍDAS DOS CIRCUITOS
+        # Fase 13.6 Rev.122 — SAÍDAS DOS CIRCUITOS
         # ------------------------------------------------------------
         # Cada circuito sai pela parte inferior do respectivo disjuntor
         # com condutores verticais retos e identificação alinhada.
@@ -3843,7 +3843,7 @@ def desenhar_mapa_fisico_qdc(
                     )
 
                 # ====================================================
-                # Fase 13.6 Rev.121 — GRADE VERTICAL DINÂMICA DA FILEIRA
+                # Fase 13.6 Rev.122 — GRADE VERTICAL DINÂMICA DA FILEIRA
                 # ====================================================
                 # O vão entre a BASE dos dispositivos superiores e o TOPO
                 # dos disjuntores desta fileira é dividido em faixas iguais,
@@ -4402,7 +4402,7 @@ def desenhar_mapa_fisico_qdc(
                         if g_item.get("tem_neutro")
                     ]
 
-                    # Fase 13.6 Rev.121:
+                    # Fase 13.6 Rev.122:
                     # barramento pente somente faz sentido quando alimenta
                     # dois ou mais disjuntores do mesmo grupo.
                     usar_pente = (
@@ -5632,11 +5632,11 @@ def desenhar_mapa_fisico_qdc(
     # inferior = 0,35 abaixo das identificações finais
     margem_moldura_rev97 = 0.35
 
-    # Fase 13.6 Rev.121 — centralização geométrica real.
+    # Fase 13.6 Rev.122 — centralização geométrica real.
     # A moldura usa a mesma folga dos dois lados do diagrama.
     # qx1/qx2 são os limites funcionais da vista frontal; portanto
     # não existe mais a grande sobra lateral que deslocava o desenho.
-    # Fase 13.6 Rev.121 — limite esquerdo REAL do diagrama.
+    # Fase 13.6 Rev.122 — limite esquerdo REAL do diagrama.
     # O chicote PE é o elemento mais à esquerda; a moldura deve envolvê-lo.
     if circuitos_geom:
         x_pe_mais_esquerda_rev101 = (
@@ -5650,7 +5650,7 @@ def desenhar_mapa_fisico_qdc(
     else:
         x_moldura_esq_rev97 = qx1 - margem_moldura_rev97
 
-    # Fase 13.6 Rev.121 — limite direito REAL do diagrama.
+    # Fase 13.6 Rev.122 — limite direito REAL do diagrama.
     # Mesma lógica aplicada ao PE na esquerda, agora espelhada para o N:
     # a moldura acompanha o corredor de neutro mais à direita e acrescenta
     # a mesma folga de segurança de 0,35 m.
@@ -5703,12 +5703,12 @@ def desenhar_mapa_fisico_qdc(
     # -------------------------
     # Painel lateral
     # -------------------------
-    # Fase 13.6 Rev.121 — o painel lateral nasce logo após a moldura REAL
+    # Fase 13.6 Rev.122 — o painel lateral nasce logo após a moldura REAL
     # do diagrama. Isso reproduz a segunda imagem: dois quadros próximos,
     # alinhados no topo e sem faixa vazia desnecessária entre eles.
     px1 = x_moldura_dir_rev97 + folga_painel_real
     px2 = px1 + painel_circuitos_w
-    # Fase 13.6 Rev.121 — alinhamento superior exato entre os dois quadros.
+    # Fase 13.6 Rev.122 — alinhamento superior exato entre os dois quadros.
     py_top = y_moldura_top_rev97
 
     # A moldura do painel será desenhada somente depois dos DADOS DO QUADRO,
@@ -5727,10 +5727,10 @@ def desenhar_mapa_fisico_qdc(
     # Tabela executiva:
     # Circuito | Fase | DR | Disj. | Ambientes
     #
-    # Fase 13.6 Rev.121:
+    # Fase 13.6 Rev.122:
     # cada célula é desenhada como um retângulo independente.
     # Evita linhas horizontais longas escapando para dentro do diagrama.
-    # Fase 13.6 Rev.121 — tabela executiva realmente automática.
+    # Fase 13.6 Rev.122 — tabela executiva realmente automática.
     # Não há mais largura total fixa: cada coluna usa o valor calculado acima.
     tabela_x1 = px1 + 0.28
     col_circuito = col_circuito_auto_rev117
@@ -6010,9 +6010,9 @@ def desenhar_mapa_fisico_qdc(
         )
         yleg -= 0.27
 
-    # Fase 13.6 Rev.121 — dados elétricos que antes ficavam no unifilar
+    # Fase 13.6 Rev.122 — dados elétricos que antes ficavam no unifilar
     # passam para o próprio diagrama de montagem.
-    # Fase 13.6 Rev.121 — DADOS DO QUADRO logo abaixo da legenda.
+    # Fase 13.6 Rev.122 — DADOS DO QUADRO logo abaixo da legenda.
     # 'yleg' já é a próxima linha livre após o último item da legenda.
     dados_y = yleg - 0.12
     _text(
@@ -6067,7 +6067,7 @@ def desenhar_mapa_fisico_qdc(
         )
         yy_d -= 0.22
 
-    # Fase 13.6 Rev.121 — fechamento compacto do painel lateral.
+    # Fase 13.6 Rev.122 — fechamento compacto do painel lateral.
     painel_y_bottom_rev99 = yy_d - 0.18
     _rect(
         msp,
@@ -6078,7 +6078,7 @@ def desenhar_mapa_fisico_qdc(
         L
     )
 
-    # Fase 13.6 Rev.121 — moldura geral dinâmica.
+    # Fase 13.6 Rev.122 — moldura geral dinâmica.
     # A esquerda acompanha a moldura do QDC (que já inclui o PE externo);
     # a direita acompanha a Lista de Circuitos; a base acompanha o conteúdo.
     folga_moldura_geral_rev102 = 0.45
