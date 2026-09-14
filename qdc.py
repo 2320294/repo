@@ -145,6 +145,84 @@ def _geometrias_portas_qdc(msp):
     return geometrias
 
 
+
+def _soleiras_qdc(msp):
+    """
+    Fase 13.6 Rev.121 — lê as soleiras diretamente do DXF.
+
+    A divisão das paredes do QDC não pode depender do nome do ambiente
+    atribuído pela rotina de interruptores. Uma soleira é um elemento
+    geométrico e deve cortar qualquer parede de ambiente que ela realmente
+    atravesse/encoste.
+    """
+    soleiras = []
+
+    for ent in msp:
+        if str(getattr(ent.dxf, "layer", "")).upper().strip() != "IA_SOLEIRAS":
+            continue
+
+        pontos = []
+        try:
+            if ent.dxftype() == "LWPOLYLINE":
+                pontos = [
+                    (float(x), float(y))
+                    for x, y in ent.get_points("xy")
+                ]
+            elif ent.dxftype() == "POLYLINE":
+                pontos = [
+                    (float(v.dxf.location.x), float(v.dxf.location.y))
+                    for v in ent.vertices
+                ]
+            elif ent.dxftype() == "LINE":
+                pontos = [
+                    (float(ent.dxf.start.x), float(ent.dxf.start.y)),
+                    (float(ent.dxf.end.x), float(ent.dxf.end.y)),
+                ]
+        except Exception:
+            pontos = []
+
+        if len(pontos) >= 2:
+            soleiras.append({
+                "vertices": pontos,
+                "p1": pontos[0],
+                "p2": pontos[-1],
+            })
+
+    return soleiras
+
+
+def _soleiras_no_ambiente_qdc(poly, soleiras, tolerancia=0.20):
+    """
+    Retorna somente as soleiras que realmente tocam alguma parede do
+    polígono do ambiente.
+
+    Isso resolve ambientes estreitos, como HALL/corredor, onde a associação
+    textual pode pertencer ao cômodo vizinho apesar de a porta estar
+    geometricamente na parede do Hall.
+    """
+    saida = []
+
+    for soleira in soleiras or []:
+        vertices = soleira.get("vertices") or []
+        if len(vertices) < 2:
+            continue
+
+        menor = float("inf")
+        for px, py in vertices:
+            for i in range(len(poly)):
+                d = _distancia_ponto_segmento_qdc(
+                    px,
+                    py,
+                    poly[i],
+                    poly[(i + 1) % len(poly)],
+                )
+                menor = min(menor, d)
+
+        if menor <= tolerancia:
+            saida.append({"soleira": soleira})
+
+    return saida
+
 def _distancia_ponto_segmento_qdc(px,py,a,b):
     ax,ay=float(a[0]),float(a[1]); bx,by=float(b[0]),float(b[1])
     vx,vy=bx-ax,by-ay; den=vx*vx+vy*vy
@@ -195,6 +273,12 @@ def _ambientes_do_dxf(
 
         geometrias_portas = (
             _geometrias_portas_qdc(
+                msp
+            )
+        )
+
+        soleiras_qdc = (
+            _soleiras_qdc(
                 msp
             )
         )
@@ -293,6 +377,11 @@ def _ambientes_do_dxf(
                     _geometrias_portas_no_ambiente(
                         poly,
                         geometrias_portas
+                    ),
+                "portas_qdc":
+                    _soleiras_no_ambiente_qdc(
+                        poly,
+                        soleiras_qdc
                     )
             }
 
@@ -1582,8 +1671,16 @@ def renderizar_qdc(
         "paredes"
     ]
 
+    # Fase 13.6 Rev.121 — a divisão física das paredes do QDC é feita
+    # pelas soleiras realmente encostadas no polígono do ambiente.
+    # Não depende mais do nome de ambiente atribuído pela análise de
+    # interruptores, evitando perder portas em Hall/corredores estreitos.
     portas_ambiente = (
-        item_portas.get(
+        item.get(
+            "portas_qdc",
+            []
+        )
+        or item_portas.get(
             "portas",
             []
         )
@@ -1668,7 +1765,11 @@ def renderizar_qdc(
         portas=
             portas_ambiente,
         geometrias_portas=
-            item_portas.get(
+            item.get(
+                "geometrias_portas",
+                []
+            )
+            or item_portas.get(
                 "geometrias_portas",
                 []
             ),
