@@ -1,7 +1,7 @@
 import ezdxf
 
 from cargas import dimensionar_cargas
-from geometria import bbox_poligono
+from geometria import bbox_poligono, ponto_em_poligono
 
 
 CAMADAS_OBRIGATORIAS = {
@@ -201,26 +201,67 @@ def nome_ambiente_para_polilinha(
     polilinha,
     textos
 ):
-    min_x, max_x, min_y, max_y = (
-        bbox_poligono(polilinha)
-    )
+    """
+    Associa o texto correto ao ambiente.
 
-    return next(
-        (
-            t["nome"]
-            for t in textos
-            if (
-                min_x - 0.5
-                <= t["x"]
-                <= max_x + 0.5
-                and
-                min_y - 0.5
-                <= t["y"]
-                <= max_y + 0.5
-            )
-        ),
-        None
-    )
+    Fase 13.6 Rev.120:
+    1) prioridade absoluta para textos realmente DENTRO do polígono;
+    2) se houver mais de um texto interno, usa o mais próximo do centro
+       geométrico do ambiente;
+    3) a tolerância antiga de +/-0,50 m fica apenas como fallback para
+       plantas em que o texto foi desenhado ligeiramente fora do contorno.
+
+    Isso evita que ambientes estreitos, como HALL/corredor, recebam o nome
+    de um cômodo vizinho apenas porque os bounding boxes ficam próximos.
+    """
+    min_x, max_x, min_y, max_y = bbox_poligono(polilinha)
+    cx = (float(min_x) + float(max_x)) / 2.0
+    cy = (float(min_y) + float(max_y)) / 2.0
+
+    internos = []
+    for t in textos:
+        try:
+            tx = float(t["x"])
+            ty = float(t["y"])
+        except Exception:
+            continue
+
+        if ponto_em_poligono(tx, ty, polilinha):
+            internos.append((
+                (tx - cx) ** 2 + (ty - cy) ** 2,
+                t
+            ))
+
+    if internos:
+        internos.sort(key=lambda item: item[0])
+        return internos[0][1]["nome"]
+
+    # Compatibilidade com desenhos antigos: somente quando nenhum texto
+    # estiver efetivamente dentro do polígono, aceita a tolerância de 0,50 m.
+    candidatos = []
+    for t in textos:
+        try:
+            tx = float(t["x"])
+            ty = float(t["y"])
+        except Exception:
+            continue
+
+        if (
+            min_x - 0.5 <= tx <= max_x + 0.5
+            and min_y - 0.5 <= ty <= max_y + 0.5
+        ):
+            # Entre candidatos do fallback, escolhe o mais próximo do centro
+            # do ambiente em vez de depender da ordem das entidades no DXF.
+            candidatos.append((
+                (tx - cx) ** 2 + (ty - cy) ** 2,
+                t
+            ))
+
+    if candidatos:
+        candidatos.sort(key=lambda item: item[0])
+        return candidatos[0][1]["nome"]
+
+    return None
 
 
 def processar_dxf(caminho_arquivo):
