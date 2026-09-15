@@ -148,7 +148,7 @@ def _geometrias_portas_qdc(msp):
 
 def _soleiras_qdc(msp):
     """
-    Fase 13.6 Rev.123 — lê as soleiras diretamente do DXF.
+    Fase 13.6 Rev.124 — lê as soleiras diretamente do DXF.
 
     A divisão das paredes do QDC não pode depender do nome do ambiente
     atribuído pela rotina de interruptores. Uma soleira é um elemento
@@ -1671,7 +1671,7 @@ def renderizar_qdc(
         "paredes"
     ]
 
-    # Fase 13.6 Rev.123 — a divisão física das paredes do QDC é feita
+    # Fase 13.6 Rev.124 — a divisão física das paredes do QDC é feita
     # pelas soleiras realmente encostadas no polígono do ambiente.
     # Não depende mais do nome de ambiente atribuído pela análise de
     # interruptores, evitando perder portas em Hall/corredores estreitos.

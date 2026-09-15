@@ -239,7 +239,7 @@ def _renderizar_cadastro():
             st.rerun()
 
 def _renderizar_sobre_o_sistema():
-    # Rev.123: somente a página "Sobre o sistema" deixa de usar a coluna
+    # Rev.124: somente a página "Sobre o sistema" deixa de usar a coluna
     # central estreita. Login/cadastro permanecem exatamente com o layout
     # aprovado. O card passa a ocupar a largura útil disponível e, em telas
     # menores, permite rolagem vertical sem comprimir o conteúdo.
@@ -294,29 +294,37 @@ def _renderizar_sobre_o_sistema():
                 <div class="ae-info-icon">i</div>
                 <h2>Sobre o AutoElétrica</h2>
                 <div class="ae-info-lead">
-                    Uma plataforma desenvolvida para apoiar a elaboração de
-                    projetos elétricos residenciais de forma organizada,
-                    prática e automatizada.
+                    O <b>AutoElétrica</b> é uma plataforma desenvolvida para auxiliar na elaboração,
+                    análise e documentação de projetos elétricos residenciais, integrando automação,
+                    critérios técnicos e desenho em CAD em um único ambiente.
                 </div>
                 <p>
-                    O <b>AutoElétrica</b> reúne em um único ambiente ferramentas
-                    para leitura e processamento de desenhos em CAD, identificação
-                    de ambientes, dimensionamento de cargas, tomadas, iluminação e
-                    equipamentos de uso específico.
+                    A partir da importação da planta baixa em <b>DXF</b>, o sistema identifica os
+                    ambientes e utiliza suas características geométricas para auxiliar no
+                    dimensionamento e na distribuição dos principais elementos da instalação elétrica.
                 </p>
                 <p>
-                    A proposta do sistema é reduzir tarefas repetitivas durante o
-                    desenvolvimento do projeto, mantendo o profissional no controle
-                    das informações e permitindo revisar os dados antes da geração
-                    final do desenho elétrico e da documentação do projeto.
+                    O AutoElétrica reúne recursos para <b>dimensionamento de cargas, iluminação,
+                    tomadas de uso geral e específico, circuitos, quadro de distribuição, dispositivos
+                    de proteção e eletrodutos</b>, mantendo as informações do projeto integradas durante
+                    todo o processo.
                 </p>
                 <p>
-                    O sistema também organiza projetos e parâmetros técnicos para
-                    facilitar a continuidade do trabalho e futuras revisões.
+                    A plataforma também auxilia na <b>organização dos circuitos, balanceamento de fases,
+                    cálculo de demanda, definição das proteções, representação do QDC e geração do
+                    diagrama unifilar</b>, além da produção de tabelas, quantitativos e documentação
+                    técnica do projeto.
                 </p>
+                <p>
+                    O objetivo é <b>reduzir tarefas repetitivas e minimizar inconsistências entre cálculo,
+                    desenho e documentação</b>, sem retirar do profissional a responsabilidade pelas
+                    decisões técnicas. O projetista permanece no controle das informações e pode revisar
+                    as definições antes da geração final do projeto.
+                </p>
+                <p><b>AutoElétrica — automação aplicada ao desenvolvimento de projetos elétricos.</b></p>
                 <div class="ae-info-highlight">
-                    Para iniciar, selecione <b>Login</b> no menu lateral e informe
-                    suas credenciais de acesso.
+                    Comece um novo projeto ou continue um projeto salvo. Para acessar a plataforma,
+                    selecione <b>Login</b> no menu lateral.
                 </div>
             </div>
         </div>
@@ -375,7 +383,7 @@ def _renderizar_formulario_login():
             try:
                 st.login()
             except Exception:
-                # Rev.123: não expor ao usuário detalhes internos do Streamlit,
+                # Rev.124: não expor ao usuário detalhes internos do Streamlit,
                 # Secrets, caminhos de arquivos ou mensagens técnicas do provedor.
                 # O fluxo de login Google permanece exatamente o mesmo quando
                 # a autenticação OIDC está corretamente configurada no servidor.

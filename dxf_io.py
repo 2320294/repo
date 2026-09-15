@@ -204,7 +204,7 @@ def nome_ambiente_para_polilinha(
     """
     Associa o texto correto ao ambiente.
 
-    Fase 13.6 Rev.123:
+    Fase 13.6 Rev.124:
     1) prioridade absoluta para textos realmente DENTRO do polígono;
     2) se houver mais de um texto interno, usa o mais próximo do centro
        geométrico do ambiente;
