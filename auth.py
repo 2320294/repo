@@ -375,7 +375,7 @@ def _renderizar_formulario_login():
 
         st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
 
-        # Rev.125: inicia o OIDC no callback do botão. Isso evita misturar a
+        # Rev.126: inicia o OIDC no callback do botão. Isso evita misturar a
         # navegação externa do st.login() com a fase normal de renderização da
         # página e segue o fluxo recomendado pelo Streamlit para widgets.
         def _iniciar_login_google():

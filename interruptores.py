@@ -7,26 +7,20 @@ import math
 import ezdxf
 import streamlit as st
 
-from dxf_io import ler_elementos
+from dxf_io import ler_elementos, nome_ambiente_para_polilinha
 from portas_selecao import portas_do_ambiente
 from soleiras_geometria import rotular_p1_p4, distancia_ponto_segmento
 
 
 def _nome_ambiente_da_poligonal(poly, textos):
-    xs = [p[0] for p in poly]
-    ys = [p[1] for p in poly]
+    """
+    Rev.126 — usa a mesma identificação central de ambientes do DXF.
 
-    return next(
-        (
-            t["nome"]
-            for t in textos
-            if min(xs) - 0.5 <= t["x"] <= max(xs) + 0.5
-            and min(ys) - 0.5 <= t["y"] <= max(ys) + 0.5
-        ),
-        None
-    )
-
-
+    Prioriza IA_TEXTOS realmente dentro do polígono e mantém a tolerância
+    de 0,50 m somente como fallback. Isso impede HALL/corredores estreitos
+    de herdarem o nome de um cômodo vizinho (ex.: QUARTO 2).
+    """
+    return nome_ambiente_para_polilinha(poly, textos)
 def _ambientes_geometricos(polilinhas, textos):
     resultado = {}
     usados = {}

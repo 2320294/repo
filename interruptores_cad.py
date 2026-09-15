@@ -43,22 +43,14 @@ def _porta_mais_proxima_da_soleira(s, portas_raw):
 
 
 def _nome_ambiente_da_poligonal(poly, textos):
-    xs = [pt[0] for pt in poly]
-    ys = [pt[1] for pt in poly]
+    """
+    Rev.126 — usa a mesma identificação central de ambientes do DXF.
 
-    return next(
-        (
-            t["nome"]
-            for t in textos
-            if (
-                min(xs) - 0.5 <= t["x"] <= max(xs) + 0.5
-                and min(ys) - 0.5 <= t["y"] <= max(ys) + 0.5
-            )
-        ),
-        None
-    )
-
-
+    Prioriza IA_TEXTOS realmente dentro do polígono e mantém a tolerância
+    de 0,50 m somente como fallback. Isso impede HALL/corredores estreitos
+    de herdarem o nome de um cômodo vizinho (ex.: QUARTO 2).
+    """
+    return nome_ambiente_para_polilinha(poly, textos)
 def _ambientes_nomeados(polilinhas, textos):
     resultado = []
     usados = {}
