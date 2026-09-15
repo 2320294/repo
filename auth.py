@@ -239,7 +239,7 @@ def _renderizar_cadastro():
             st.rerun()
 
 def _renderizar_sobre_o_sistema():
-    # Rev.122: somente a página "Sobre o sistema" deixa de usar a coluna
+    # Rev.123: somente a página "Sobre o sistema" deixa de usar a coluna
     # central estreita. Login/cadastro permanecem exatamente com o layout
     # aprovado. O card passa a ocupar a largura útil disponível e, em telas
     # menores, permite rolagem vertical sem comprimir o conteúdo.
@@ -374,11 +374,14 @@ def _renderizar_formulario_login():
         ):
             try:
                 st.login()
-            except Exception as e:
+            except Exception:
+                # Rev.123: não expor ao usuário detalhes internos do Streamlit,
+                # Secrets, caminhos de arquivos ou mensagens técnicas do provedor.
+                # O fluxo de login Google permanece exatamente o mesmo quando
+                # a autenticação OIDC está corretamente configurada no servidor.
                 st.error(
-                    "Não foi possível iniciar o login com Google. "
-                    "Confira os Secrets de autenticação do Streamlit. "
-                    f"Detalhes: {e}"
+                    "Login com Google temporariamente indisponível. "
+                    "Utilize seu e-mail e senha para acessar o sistema."
                 )
 
         st.markdown(
