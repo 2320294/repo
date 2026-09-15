@@ -375,22 +375,42 @@ def _renderizar_formulario_login():
 
         st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
 
-        if st.button(
+        # Rev.125: inicia o OIDC no callback do botão. Isso evita misturar a
+        # navegação externa do st.login() com a fase normal de renderização da
+        # página e segue o fluxo recomendado pelo Streamlit para widgets.
+        def _iniciar_login_google():
+            try:
+                # Pré-validação mínima da configuração publicada. Não expõe
+                # valores secretos e impede uma chamada OIDC incompleta.
+                auth_cfg = st.secrets.get("auth", {})
+                obrigatorios = (
+                    "redirect_uri",
+                    "cookie_secret",
+                    "client_id",
+                    "client_secret",
+                    "server_metadata_url",
+                )
+                if not all(str(auth_cfg.get(chave, "") or "").strip() for chave in obrigatorios):
+                    raise RuntimeError("Configuração OIDC incompleta")
+
+                st.session_state.pop("erro_login_google", None)
+                st.login()
+            except Exception:
+                # Nunca mostrar Secrets, stack trace ou mensagem do provedor.
+                st.session_state.erro_login_google = True
+
+        st.button(
             "Entrar com Google",
             key="entrar_google",
             use_container_width=True,
-        ):
-            try:
-                st.login()
-            except Exception:
-                # Rev.124: não expor ao usuário detalhes internos do Streamlit,
-                # Secrets, caminhos de arquivos ou mensagens técnicas do provedor.
-                # O fluxo de login Google permanece exatamente o mesmo quando
-                # a autenticação OIDC está corretamente configurada no servidor.
-                st.error(
-                    "Login com Google temporariamente indisponível. "
-                    "Utilize seu e-mail e senha para acessar o sistema."
-                )
+            on_click=_iniciar_login_google,
+        )
+
+        if st.session_state.pop("erro_login_google", False):
+            st.error(
+                "Login com Google temporariamente indisponível. "
+                "Utilize seu e-mail e senha para acessar o sistema."
+            )
 
         st.markdown(
             '<div class="ae-auth-switch-label">Ainda não possui uma conta?</div>',
