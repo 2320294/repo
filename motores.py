@@ -933,8 +933,8 @@ def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
     return None
 
 
-def _desenhar_identificacao_circuitos_tomadas_rev133(msp, pontos_eletricos, circuitos_dimensionados):
-    """Rev.133 — mantém -N- à frente da tomada e aplica pequeno afastamento lateral gráfico."""
+def _desenhar_identificacao_circuitos_tomadas_rev134(msp, pontos_eletricos, circuitos_dimensionados):
+    """Rev.134 — preserva TUGs da Rev.133 e organiza a identificação das TUEs."""
     for ponto in (pontos_eletricos or []):
         tipo = str(ponto.get("tipo") or "").strip().upper()
         if tipo not in {"TUG", "TUE"}:
@@ -949,7 +949,7 @@ def _desenhar_identificacao_circuitos_tomadas_rev133(msp, pontos_eletricos, circ
             continue
 
         px, py = float(xy[0]), float(xy[1])
-        # Fase 13.6 Rev.133 — mantém o texto À FRENTE e desloca-o levemente para o lado.
+        # Fase 13.6 Rev.134 — TUG mantém a posição aprovada; TUE usa o mesmo eixo gráfico organizado.
         # Usamos a direção já calculada do símbolo para o interior do ambiente;
         # nenhuma geometria, posição ou regra elétrica da tomada é alterada.
         conexao_frente = ponto.get("ponto_conexao_ambiente")
@@ -978,6 +978,60 @@ def _desenhar_identificacao_circuitos_tomadas_rev133(msp, pontos_eletricos, circ
         else:
             # tomada predominantemente horizontal: deslocamento vertical
             ty += desloc_lateral
+        try:
+            ent = msp.add_text(
+                f"-{numero}-",
+                dxfattribs={
+                    "layer": "PROJ_ELETRICA_TEXTO",
+                    "height": 0.085,
+                    "color": 2,
+                },
+            )
+            try:
+                from ezdxf.enums import TextEntityAlignment
+                ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_CENTER)
+            except Exception:
+                ent.dxf.insert = (tx, ty)
+        except Exception:
+            pass
+
+
+def _desenhar_identificacao_circuitos_interruptores_rev134(
+    msp, pontos_interruptores, circuitos_dimensionados
+):
+    """Rev.134 — acrescenta -N- à frente do interruptor sem alterar sua simbologia."""
+    for ponto in (pontos_interruptores or []):
+        if str(ponto.get("tipo") or "").strip().upper() != "INTERRUPTOR":
+            continue
+        ambiente = str(ponto.get("ambiente") or "").strip()
+        centro = ponto.get("ponto")
+        tangencia = ponto.get("ponto_tangencia_simbolo") or ponto.get("ponto_tangencia")
+        if not ambiente or not centro or not tangencia:
+            continue
+        numero = _circuito_iluminacao_ambiente_rev130(ambiente, circuitos_dimensionados)
+        if numero in (None, ""):
+            continue
+
+        cx, cy = float(centro[0]), float(centro[1])
+        ox = cx - float(tangencia[0])
+        oy = cy - float(tangencia[1])
+        comp = math.hypot(ox, oy)
+        if comp <= 1e-9:
+            ox, oy = 1.0, 0.0
+        else:
+            ox /= comp
+            oy /= comp
+
+        # Mesmo princípio gráfico aprovado nas TUGs: identificação à frente
+        # do símbolo e com pequeno deslocamento lateral, sem tocar na bolinha,
+        # hachura, letras ou geometria do interruptor.
+        tx = cx + ox * 0.18
+        ty = cy + oy * 0.18
+        if abs(oy) >= abs(ox):
+            tx += 0.10
+        else:
+            ty += 0.10
+
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1838,8 +1892,8 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.133 — circuito à frente, com pequeno deslocamento lateral.
-        _desenhar_identificacao_circuitos_tomadas_rev133(
+        # Fase 13.6 Rev.134 — TUG preservada e TUE organizada em bloco circuito + potência.
+        _desenhar_identificacao_circuitos_tomadas_rev134(
             msp, pontos_eletricos, circuitos_dimensionados
         )
 
@@ -1852,6 +1906,11 @@ def gerar_cad_unifilar(
         _desenhar_identificacao_iluminacao_interruptores_rev129(
             doc, msp, pontos_eletricos, pontos_interruptores,
             ambientes_geom, rotas_fisicas
+        )
+
+        # Fase 13.6 Rev.134 — circuito de iluminação à frente dos interruptores.
+        _desenhar_identificacao_circuitos_interruptores_rev134(
+            msp, pontos_interruptores, circuitos_dimensionados
         )
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos

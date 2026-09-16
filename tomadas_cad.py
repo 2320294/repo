@@ -1277,8 +1277,15 @@ def desenhar_tomadas(
                         2,
                     "insert":
                         (
-                            px + nx * 0.35,
-                            py + ny * 0.35
+                            # Rev.134: potência da TUE forma um bloco horizontal
+                            # com o -N- desenhado em motores.py. Mantém a mesma
+                            # referência frontal/lateral aprovada na Rev.133.
+                            px + nx * 0.23
+                            + (0.10 if abs(ny) >= abs(nx) else 0.0)
+                            + 0.15,
+                            py + ny * 0.23
+                            + (0.10 if abs(ny) < abs(nx) else 0.0)
+                            - 0.035
                         )
                 }
             )
