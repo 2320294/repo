@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.148 — primeira infraestrutura de prancha PDF.
+Fase 13.6 Rev.149 — correção de fontes para plotagem no Streamlit Cloud.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -30,6 +30,20 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
 
         doc = ezdxf.readfile(tmp_path)
         msp = doc.modelspace()
+
+        # REV.149 — o Streamlit Cloud pode não ter fontes de sistema instaladas.
+        # Registra no gerenciador do ezdxf as fontes DejaVu que acompanham o
+        # próprio Matplotlib. Isso mantém TEXT/MTEXT renderizáveis sem depender
+        # de Arial/SHX existentes no servidor. O DXF original não é alterado.
+        try:
+            from ezdxf.fonts import fonts as ezfonts
+            font_dir = os.path.join(matplotlib.get_data_path(), "fonts", "ttf")
+            if os.path.isdir(font_dir):
+                ezfonts.font_manager.build(folders=[font_dir], support_dirs=False)
+        except Exception:
+            # A renderização ainda pode usar o fallback do backend; não deixa
+            # uma falha de registro impedir a tentativa de gerar a prancha.
+            pass
 
         # Descobre a proporção do desenho por extents, sem modificar entidades.
         try:
