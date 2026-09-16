@@ -1266,31 +1266,27 @@ def desenhar_tomadas(
                     }
                 )
 
-            msp.add_text(
+            # Rev.138: potência da TUE no lado oposto ao circuito, com o
+            # centro do texto alinhado à ponta do triângulo e afastado 0,12 m.
+            # nx/ny apontam para o interior; (-ny, nx) define o lado da potência.
+            pot_x = px - ny * 0.12
+            pot_y = py + nx * 0.12
+            ent_pot_tue = msp.add_text(
                 f"{pot_tue_val}W",
                 dxfattribs={
-                    "layer":
-                        "PROJ_ELETRICA_TEXTO",
-                    "height":
-                        0.085,
-                    "color":
-                        2,
-                    "insert":
-                        (
-                            # Rev.137: TUE voltada para baixo — potência à direita do triângulo,
-                            # no mesmo nível gráfico do circuito à esquerda.
-                            # em relação ao triângulo da TUE. nx/ny apontam para
-                            # o interior; (ny, -nx) é o lado oposto ao usado
-                            # pelo -N- em motores.py.
-                            (px + 0.20)
-                            if (ny < -0.70 and abs(ny) >= abs(nx))
-                            else (px + nx * 0.08 + ny * 0.18),
-                            (py + ny * 0.10)
-                            if (ny < -0.70 and abs(ny) >= abs(nx))
-                            else (py + ny * 0.08 - nx * 0.18)
-                        )
+                    "layer": "PROJ_ELETRICA_TEXTO",
+                    "height": 0.085,
+                    "color": 2,
                 }
             )
+            try:
+                from ezdxf.enums import TextEntityAlignment
+                ent_pot_tue.set_placement(
+                    (pot_x, pot_y),
+                    align=TextEntityAlignment.MIDDLE_CENTER
+                )
+            except Exception:
+                ent_pot_tue.dxf.insert = (pot_x, pot_y)
 
 
             pontos_gerados.append({

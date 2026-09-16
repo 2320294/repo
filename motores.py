@@ -726,11 +726,11 @@ def _preencher_meia_bolinha_esquerda_rev129(msp, centro, raio):
         return None
 
 
-def _desenhar_identificacao_iluminacao_interruptores_rev135(
+def _desenhar_identificacao_iluminacao_interruptores_rev138(
     doc, msp, pontos_eletricos, pontos_interruptores,
     ambientes_geom, rotas_fisicas
 ):
-    """Rev.135: preserva a simbologia Rev.129 e posiciona as letras à frente do interruptor."""
+    """Rev.138: preserva a simbologia e aproxima as letras 0,05 m do interruptor."""
     mapa = _mapa_letras_ambientes_rev129(ambientes_geom)
     if not mapa:
         return
@@ -791,8 +791,8 @@ def _desenhar_identificacao_iluminacao_interruptores_rev135(
             fx, fy = 1.0, 0.0
         # pequeno deslocamento transversal tira a letra do eixo do símbolo
         lx, ly = -fy, fx
-        base_x = cx + fx * 0.17 + lx * 0.055
-        base_y = cy + fy * 0.17 + ly * 0.055
+        base_x = cx + fx * 0.12 + lx * 0.055
+        base_y = cy + fy * 0.12 + ly * 0.055
 
         externos = sorted(compartilhados.get(id(ponto), set()), key=lambda nome: mapa.get(nome, nome))
         if externos:
@@ -929,7 +929,7 @@ def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
     return None
 
 
-def _desenhar_identificacao_circuitos_tomadas_rev135(msp, pontos_eletricos, circuitos_dimensionados):
+def _desenhar_identificacao_circuitos_tomadas_rev138(msp, pontos_eletricos, circuitos_dimensionados):
     """Rev.135 — TUG preservada; nas TUEs circuito fica em um lado do triângulo."""
     for ponto in (pontos_eletricos or []):
         tipo = str(ponto.get("tipo") or "").strip().upper()
@@ -971,21 +971,13 @@ def _desenhar_identificacao_circuitos_tomadas_rev135(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.135 TUE: circuito de um lado do triângulo; potência será
-            # desenhada no lado oposto em tomadas_cad.py.
-            # Vetor perpendicular à orientação da tomada.
+            # Rev.138 TUE: circuito e potência ficam em lados opostos do
+            # triângulo, alinhados pelo meio com a ponta. O circuito usa
+            # um lado do eixo transversal e a potência o lado oposto.
+            # Distância nominal do centro da identificação à ponta: 0,12 m.
             lx, ly = -oy, ox
-            # Rev.136: somente TUE voltada para baixo recebe folga maior
-            # da parede/triângulo. As outras orientações preservam Rev.135.
-            if oy < -0.70 and abs(oy) >= abs(ox):
-                # Rev.137: TUE com ponta para baixo — circuito primeiro,
-                # à esquerda do triângulo, e potência no lado oposto.
-                # Mantém ambos no mesmo nível gráfico e fora do símbolo.
-                tx = px - 0.20
-                ty = py + oy * 0.10
-            else:
-                tx = px + ox * 0.08 + lx * 0.18
-                ty = py + oy * 0.08 + ly * 0.18
+            tx = px - lx * 0.12
+            ty = py - ly * 0.12
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1846,8 +1838,8 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.137 — TUE voltada para baixo: circuito à esquerda e potência à direita.
-        _desenhar_identificacao_circuitos_tomadas_rev135(
+        # Fase 13.6 Rev.138 — TUE: circuito/potência em lados opostos, alinhados à ponta, afastamento 0,12 m.
+        _desenhar_identificacao_circuitos_tomadas_rev138(
             msp, pontos_eletricos, circuitos_dimensionados
         )
 
@@ -1857,12 +1849,12 @@ def gerar_cad_unifilar(
         )
 
         # Fase 13.6 Rev.129 — identificação alfabética dos interruptores preservada.
-        _desenhar_identificacao_iluminacao_interruptores_rev135(
+        _desenhar_identificacao_iluminacao_interruptores_rev138(
             doc, msp, pontos_eletricos, pontos_interruptores,
             ambientes_geom, rotas_fisicas
         )
 
-        # Fase 13.6 Rev.137 — letras dos interruptores em altura 0.085.
+        # Fase 13.6 Rev.138 — letras dos interruptores mantidas em 0.085 e aproximadas 0,05 m.
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
