@@ -15,6 +15,8 @@ from exportacoes import (
     gerar_memorial_pdf
 )
 
+from plotagem_pdf import gerar_pdf_projeto
+
 
 def calcular_rotas_antes_do_dxf(
     dxf_bytes, tabela_editada, local_qdc,
@@ -538,4 +540,36 @@ def renderizar_salvar_e_gerar_cad(
         st.caption(
             f"Arquivo DXF pronto para download: {tamanho / 1024:.1f} KB"
         )
+
+        # ====================================================
+        # FASE 13.6 REV.148 — PLOTAGEM PDF DO PROJETO
+        # ====================================================
+        st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
+        st.caption(
+            "Gera uma prancha A3 com orientação e enquadramento automáticos "
+            "a partir do DXF final, sem alterar o arquivo CAD."
+        )
+
+        try:
+            pdf_projeto = gerar_pdf_projeto(
+                dxf_bytes=bytes(cad_salvo),
+                nome_projeto=nome_seguro,
+                versao=VERSAO_CAD,
+            )
+            st.download_button(
+                label="📄 Gerar / Baixar PDF do Projeto",
+                data=pdf_projeto,
+                file_name=(
+                    f"{nome_seguro}_Projeto_Eletrico_{VERSAO_ARQUIVO}.pdf"
+                ),
+                mime="application/pdf",
+                use_container_width=True,
+                key=f"download_pdf_projeto_{VERSAO_ARQUIVO}",
+                on_click="ignore",
+            )
+        except Exception as exc:
+            st.warning(
+                "Não foi possível preparar a plotagem PDF deste DXF. "
+                f"Detalhe: {exc}"
+            )
 
