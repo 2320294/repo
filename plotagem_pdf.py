@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.152 — PDF multipágina monocromático com separação semântica rigorosa.
+Fase 13.6 Rev.153 — PDF multipágina monocromático com melhor aproveitamento e rodapé protegido.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -63,7 +63,7 @@ def _expandir(b, px=0.08, py=0.08, minimo=0.35):
 
 
 def _regioes_semanticas(msp):
-    """Rev.152: regiões semânticas mais rígidas para as três pranchas.
+    """Rev.153: preserva as regiões semânticas rigorosas da Rev.152.
 
     A planta usa IA_AMBIENTES como âncora. O QDC usa somente camadas próprias.
     A legenda é localizada pelo cabeçalho e pelas entidades da mesma camada,
@@ -157,7 +157,7 @@ def _intersecta(b, r):
 
 
 def _filtro_prancha(msp, regiao, titulo):
-    """Filtro de desenho da Rev.152: impede entidades de outras pranchas."""
+    """Filtro de desenho preservado da Rev.152: impede entidades de outras pranchas."""
     from ezdxf import bbox
     cache={}
     def fb(ent):
@@ -233,17 +233,24 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
                 w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
                 figsize=(16.54,11.69) if w>=h else (11.69,16.54)
                 fig=plt.figure(figsize=figsize)
-                ax=fig.add_axes([0.035,0.075,0.93,0.885])
+                titulo=titulos[idx] if idx<len(titulos) else f"Prancha {idx+1}"
+                # Rev.153: a legenda é muito vertical; usa praticamente toda a altura útil
+                # da A3, mantendo a proporção e sem invadir o rodapé.
+                if "tabelas" in titulo.lower() or "legenda" in titulo.lower():
+                    ax=fig.add_axes([0.025,0.060,0.95,0.925])
+                else:
+                    ax=fig.add_axes([0.035,0.075,0.93,0.885])
                 ax.set_aspect("equal",adjustable="box"); ax.set_axis_off(); ax.set_facecolor("white"); fig.patch.set_facecolor("white")
                 ctx=RenderContext(doc); out=MatplotlibBackend(ax)
                 Frontend(ctx,out).draw_layout(msp,finalize=True, filter_func=_filtro_prancha(msp,(x0,y0,x1,y1),titulos[idx]))
                 _aplicar_monocromatico(ax)
                 ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
                 fig.add_artist(Rectangle((0.02,0.025),0.96,0.95,fill=False,linewidth=0.8,transform=fig.transFigure,clip_on=False))
-                titulo=titulos[idx] if idx<len(titulos) else f"Prancha {idx+1}"
-                fig.text(0.035,0.043,f"Projeto elétrico — {projeto_txt} — {titulo}",fontsize=8,va="center")
-                fig.text(0.50,0.043,f"Prancha {idx+1}/{len(regioes)}",fontsize=7,ha="center",va="center")
-                if versao: fig.text(0.965,0.043,str(versao),fontsize=7,ha="right",va="center")
+                # Rev.153: três zonas fixas do rodapé. O texto da esquerda termina
+                # antes da zona central, eliminando sobreposição com "Prancha X/3".
+                fig.text(0.035,0.043,f"Projeto elétrico — {projeto_txt} — {titulo}",fontsize=7.2,ha="left",va="center")
+                fig.text(0.50,0.043,f"Prancha {idx+1}/{len(regioes)}",fontsize=7.2,ha="center",va="center")
+                if versao: fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
                 pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
         buffer.seek(0); dados=buffer.getvalue()
         if not dados.startswith(b"%PDF"): raise RuntimeError("Falha ao produzir um PDF válido.")
