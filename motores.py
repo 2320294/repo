@@ -971,16 +971,15 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.141 TUE: usar a PONTA REAL do triângulo voltada para
-            # dentro do ambiente como referência. ▲/▼ permanecem com circuito
-            # à esquerda e potência à direita. Para ◄/►, circuito fica acima
-            # e potência abaixo; o conjunto é avançado 0,12 m para a direita
-            # quando ► e 0,22 m para a esquerda quando ◄.
+            # Rev.142 TUE: posicionamento vinculado à PONTA REAL do triângulo.
+            # ▲/▼: circuito à esquerda; a borda direita do texto fica 0,12 m
+            # da ponta. A potência é desenhada por tomadas_cad à direita.
+            # ►/◄: circuito acima e potência abaixo. O eixo do conjunto é
+            # avançado +0,12 m para ► e -0,22 m para ◄.
             ponta = ponto.get("ponta_triangulo")
             if ponta:
                 ref_x, ref_y = float(ponta[0]), float(ponta[1])
             else:
-                # Compatibilidade defensiva com pontos antigos em sessão.
                 ref_x, ref_y = px + ox * 0.20, py + oy * 0.20
             if abs(oy) >= abs(ox):
                 tx = ref_x - 0.12
@@ -1000,7 +999,11 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             )
             try:
                 from ezdxf.enums import TextEntityAlignment
-                ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_CENTER)
+                if tipo == "TUE" and abs(oy) >= abs(ox):
+                    # A coordenada é a borda interna do texto: cresce para a esquerda.
+                    ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_RIGHT)
+                else:
+                    ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_CENTER)
             except Exception:
                 ent.dxf.insert = (tx, ty)
         except Exception:
@@ -1849,7 +1852,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.141 — TUE: laterais com avanço direcional; demais regras preservadas.
+        # Fase 13.6 Rev.142 — TUE: textos ancorados à ponta real; laterais com avanço direcional.
         _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )

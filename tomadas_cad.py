@@ -1266,11 +1266,11 @@ def desenhar_tomadas(
                     }
                 )
 
-            # Rev.141: mantém ▲/▼ como na Rev.140. Nas TUEs laterais,
-            # desloca o CONJUNTO de identificação no sentido da ponta interna:
-            # ► +0,12 m à direita; ◄ -0,22 m à esquerda.
-            # Circuito permanece acima e potência abaixo, separados 0,12 m
-            # verticalmente a partir da nova referência gráfica.
+            # Rev.142: usar a PONTA REAL do triângulo como âncora gráfica.
+            # ▲/▼: potência à direita, com a borda esquerda do texto a 0,12 m
+            # da ponta (o circuito é ancorado simetricamente à esquerda).
+            # ►/◄: potência abaixo; eixo do conjunto avançado +0,12 m para ►
+            # e -0,22 m para ◄, conforme conferência visual no ZWCAD.
             if abs(ny) >= abs(nx):
                 pot_x = ponto_pt[0] + 0.12
                 pot_y = ponto_pt[1]
@@ -1290,7 +1290,11 @@ def desenhar_tomadas(
                 from ezdxf.enums import TextEntityAlignment
                 ent_pot_tue.set_placement(
                     (pot_x, pot_y),
-                    align=TextEntityAlignment.MIDDLE_CENTER
+                    align=(
+                        TextEntityAlignment.MIDDLE_LEFT
+                        if abs(ny) >= abs(nx)
+                        else TextEntityAlignment.MIDDLE_CENTER
+                    )
                 )
             except Exception:
                 ent_pot_tue.dxf.insert = (pot_x, pot_y)
