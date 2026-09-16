@@ -3048,6 +3048,44 @@ def _agrupar_arestas_coincidentes_rev116(arestas):
     return [grupos[ch] for ch in ordem]
 
 
+
+def _ponto_borda_qdc_rev147(origem, destino, pontos_qdc):
+    """Rev.147: recua a origem do eletroduto até a borda do QDC.
+
+    A rota elétrica continua tendo origem lógica no centro do QDC; somente o
+    extremo gráfico é recortado no primeiro encontro do segmento QDC->destino
+    com o contorno retangular do quadro.
+    """
+    if not origem or not destino or not pontos_qdc or len(pontos_qdc) < 3:
+        return tuple(origem)
+    ox, oy = map(float, origem[:2])
+    dx, dy = map(float, destino[:2])
+    vx, vy = dx-ox, dy-oy
+    if math.hypot(vx, vy) < 1e-9:
+        return (ox, oy)
+
+    def cruz(ax, ay, bx, by):
+        return ax*by-ay*bx
+
+    candidatos=[]
+    pts=[tuple(map(float,p[:2])) for p in pontos_qdc]
+    for a,b in zip(pts, pts[1:]+pts[:1]):
+        sx,sy=b[0]-a[0],b[1]-a[1]
+        den=cruz(vx,vy,sx,sy)
+        if abs(den)<1e-12:
+            continue
+        qx,qy=a[0]-ox,a[1]-oy
+        t=cruz(qx,qy,sx,sy)/den
+        u=cruz(qx,qy,vx,vy)/den
+        if -1e-9 <= t <= 1.0+1e-9 and -1e-9 <= u <= 1.0+1e-9:
+            candidatos.append((t,(ox+vx*t,oy+vy*t)))
+    if not candidatos:
+        return (ox,oy)
+    # O centro do QDC está dentro do retângulo: a saída é a interseção mais
+    # distante no sentido do destino (robusto também para centro na borda).
+    candidatos.sort(key=lambda item:item[0])
+    return candidatos[-1][1]
+
 def desenhar_rotas_qdc_iluminacao(
     msp,
     qdc_info,
@@ -3198,6 +3236,7 @@ def desenhar_rotas_qdc_iluminacao(
         for pts in luminarias_por_ambiente.values()
         for pt in pts
     ]
+    pontos_qdc_rev147 = list(qdc_info.get("pontos") or [])
 
     rotas = []
 
@@ -3304,6 +3343,10 @@ def desenhar_rotas_qdc_iluminacao(
                         todas_luminarias,
                     )
                 )
+                if _dist(origem_luz, qdc) < 1e-6:
+                    inicio_grafico = _ponto_borda_qdc_rev147(
+                        qdc, destino, pontos_qdc_rev147
+                    )
                 entidade = _arco_suave(
                     msp,
                     inicio_grafico,
@@ -3349,6 +3392,16 @@ def desenhar_rotas_qdc_iluminacao(
                     todas_luminarias,
                 )
             )
+            # Rev.147: assim como nas luminárias, o eletroduto termina
+            # exatamente na borda do QDC, sem pedaço visível dentro do quadro.
+            if _dist(trecho["inicio"], qdc) < 1e-6:
+                inicio_grafico = _ponto_borda_qdc_rev147(
+                    qdc, trecho["fim"], pontos_qdc_rev147
+                )
+            elif _dist(trecho["fim"], qdc) < 1e-6:
+                fim_grafico = _ponto_borda_qdc_rev147(
+                    qdc, trecho["inicio"], pontos_qdc_rev147
+                )
             entidade = _arco_suave(
                 msp,
                 inicio_grafico,

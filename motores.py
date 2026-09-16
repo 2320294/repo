@@ -336,16 +336,21 @@ def _desenhar_quadro_chamada_unifilar(
 
     # Deslocamentos progressivos ao longo do eletroduto.
     # Primeiro tenta exatamente no ponto de referência; depois abre para os lados.
-    offsets_tang = [0.0, 0.22, -0.22, 0.44, -0.44, 0.66, -0.66, 0.88, -0.88]
+    offsets_tang = [0.0, 0.22, -0.22, 0.44, -0.44, 0.66, -0.66, 0.88, -0.88, 1.10, -1.10]
 
     escolhido = None
-    for tentativa_lado in (lado_preferido, -lado_preferido):
-        for off in offsets_tang:
-            bx = ax + ux*off + nx*distancia_normal*tentativa_lado
-            by = ay + uy*off + ny*distancia_normal*tentativa_lado
-            bb = _bbox_balao_unifilar(bx, by, raio, folga)
-            if not any(_bbox_intersecta_unifilar(bb, existente) for existente in ocupados):
-                escolhido = (bx, by, bb)
+    # Rev.147: se a posição padrão estiver ocupada por outro componente,
+    # procura também em anéis normais progressivos, preservando o leader.
+    for dist_n in (distancia_normal, 0.34, 0.45, 0.56):
+        for tentativa_lado in (lado_preferido, -lado_preferido):
+            for off in offsets_tang:
+                bx = ax + ux*off + nx*dist_n*tentativa_lado
+                by = ay + uy*off + ny*dist_n*tentativa_lado
+                bb = _bbox_balao_unifilar(bx, by, raio, folga)
+                if not any(_bbox_intersecta_unifilar(bb, existente) for existente in ocupados):
+                    escolhido = (bx, by, bb)
+                    break
+            if escolhido:
                 break
         if escolhido:
             break
@@ -573,6 +578,41 @@ def _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom):
                 pass
 
 
+
+def _ocupacoes_componentes_rev147(msp):
+    """Caixas de componentes elétricos existentes para anticolisão dos balões."""
+    try:
+        from ezdxf import bbox as ezbbox
+    except Exception:
+        return []
+    ignorar = {
+        "PROJ_ELETRICA_ROTEAMENTO",
+        "PROJ_ELETRICA_ROTEAMENTO_TEXTO",
+        "PROJ_ELETRICA_DIMENSIONAMENTO",
+        "PROJ_ELETRICA_TEXTO",  # inclui os próprios balões/legenda
+    }
+    caixas=[]
+    for ent in list(msp):
+        try:
+            layer=str(ent.dxf.layer or "").upper().strip()
+        except Exception:
+            continue
+        # Restringe aos componentes do projeto; não usa paredes/arquitetura.
+        if not layer.startswith("PROJ_ELETRICA_") or layer in ignorar:
+            continue
+        try:
+            ext=ezbbox.extents([ent], fast=True)
+            if not ext.has_data:
+                continue
+            folga=0.06
+            caixas.append((
+                float(ext.extmin.x)-folga, float(ext.extmin.y)-folga,
+                float(ext.extmax.x)+folga, float(ext.extmax.y)+folga,
+            ))
+        except Exception:
+            continue
+    return caixas
+
 def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, ambientes_geom):
     """Fase 13.6 Rev.124 — balões anti-colisão + legenda gráfica de fiação."""
     por_numero = {}
@@ -587,7 +627,9 @@ def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, amb
     codigos = {}
     registros = []
     vistos_geom = set()
-    ocupados = []
+    # Rev.147: começa a busca já conhecendo a ocupação dos componentes
+    # elétricos, evitando balões sobre QDC, tomadas, interruptores e luzes.
+    ocupados = _ocupacoes_componentes_rev147(msp)
     indice_chamada = 0
 
     for rota in rotas_fisicas or []:
@@ -1865,7 +1907,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.146 — TUE lateral: bloco aproximado 0,12 m em direção ao triângulo; vão livre vertical de 0,09 m entre as bordas dos textos preservado.
+        # Fase 13.6 Rev.147 — TUE lateral: bloco aproximado 0,12 m em direção ao triângulo; vão livre vertical de 0,09 m entre as bordas dos textos preservado.
         _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )
