@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.153 — PDF multipágina monocromático com melhor aproveitamento e rodapé protegido.
+Fase 13.6 Rev.154 — PDF A3 em 2 pranchas; planta e legenda juntas com escalas independentes.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -203,7 +203,12 @@ def _aplicar_monocromatico(ax):
         except Exception: pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Renderiza o DXF em PDF A3 multipágina monocromático, com pranchas semânticas."""
+    """Rev.154: PDF A3 monocromático em 2 pranchas.
+
+    Prancha 1 reúne planta elétrica e legenda de fiação, cada uma com
+    enquadramento/escala independente. Prancha 2 mantém o Diagrama/QDC.
+    O DXF original não é alterado.
+    """
     if not dxf_bytes:
         raise ValueError("DXF vazio; gere o CAD antes de gerar o PDF.")
     import matplotlib
@@ -222,40 +227,65 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
         try:
             from ezdxf.fonts import fonts as ezfonts
             font_dir=os.path.join(matplotlib.get_data_path(),"fonts","ttf")
-            if os.path.isdir(font_dir): ezfonts.font_manager.build(folders=[font_dir],support_dirs=False)
-        except Exception: pass
+            if os.path.isdir(font_dir):
+                ezfonts.font_manager.build(folders=[font_dir],support_dirs=False)
+        except Exception:
+            pass
 
         regioes,titulos=_regioes_semanticas(msp)
+        mapa={t:b for t,b in zip(titulos,regioes)}
+        planta=mapa.get("Planta elétrica")
+        qdc=mapa.get("Diagrama / QDC")
+        legenda=mapa.get("Tabelas e legendas")
         projeto_txt=str(nome_projeto or "Projeto").strip()
         buffer=BytesIO()
+
+        def desenhar_regiao(fig, pos, regiao, titulo):
+            if not regiao:
+                return
+            x0,y0,x1,y1=regiao
+            ax=fig.add_axes(pos)
+            ax.set_aspect("equal",adjustable="box")
+            ax.set_axis_off(); ax.set_facecolor("white")
+            ctx=RenderContext(doc); out=MatplotlibBackend(ax)
+            Frontend(ctx,out).draw_layout(
+                msp, finalize=True,
+                filter_func=_filtro_prancha(msp,regiao,titulo),
+            )
+            _aplicar_monocromatico(ax)
+            ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
+
+        def rodape(fig, esquerda, pagina, total=2):
+            fig.add_artist(Rectangle((0.02,0.025),0.96,0.95,fill=False,linewidth=0.8,
+                                     transform=fig.transFigure,clip_on=False))
+            fig.text(0.035,0.043,esquerda,fontsize=7.2,ha="left",va="center")
+            fig.text(0.50,0.043,f"Prancha {pagina}/{total}",fontsize=7.2,ha="center",va="center")
+            if versao:
+                fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
+
         with PdfPages(buffer) as pdf:
-            for idx,(x0,y0,x1,y1) in enumerate(regioes):
-                w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
-                figsize=(16.54,11.69) if w>=h else (11.69,16.54)
-                fig=plt.figure(figsize=figsize)
-                titulo=titulos[idx] if idx<len(titulos) else f"Prancha {idx+1}"
-                # Rev.153: a legenda é muito vertical; usa praticamente toda a altura útil
-                # da A3, mantendo a proporção e sem invadir o rodapé.
-                if "tabelas" in titulo.lower() or "legenda" in titulo.lower():
-                    ax=fig.add_axes([0.025,0.060,0.95,0.925])
-                else:
-                    ax=fig.add_axes([0.035,0.075,0.93,0.885])
-                ax.set_aspect("equal",adjustable="box"); ax.set_axis_off(); ax.set_facecolor("white"); fig.patch.set_facecolor("white")
-                ctx=RenderContext(doc); out=MatplotlibBackend(ax)
-                Frontend(ctx,out).draw_layout(msp,finalize=True, filter_func=_filtro_prancha(msp,(x0,y0,x1,y1),titulos[idx]))
-                _aplicar_monocromatico(ax)
-                ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
-                fig.add_artist(Rectangle((0.02,0.025),0.96,0.95,fill=False,linewidth=0.8,transform=fig.transFigure,clip_on=False))
-                # Rev.153: três zonas fixas do rodapé. O texto da esquerda termina
-                # antes da zona central, eliminando sobreposição com "Prancha X/3".
-                fig.text(0.035,0.043,f"Projeto elétrico — {projeto_txt} — {titulo}",fontsize=7.2,ha="left",va="center")
-                fig.text(0.50,0.043,f"Prancha {idx+1}/{len(regioes)}",fontsize=7.2,ha="center",va="center")
-                if versao: fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
+            # PRANCHA 1 — A3 horizontal. Planta e legenda possuem escalas independentes.
+            # A planta recebe a área principal; a legenda permanece vertical em faixa própria.
+            fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+            if planta:
+                desenhar_regiao(fig,[0.035,0.085,0.715,0.865],planta,"Planta elétrica")
+            if legenda:
+                desenhar_regiao(fig,[0.765,0.085,0.200,0.865],legenda,"Tabelas e legendas")
+            rodape(fig,f"Projeto elétrico — {projeto_txt} — Planta elétrica + Legenda de fiação",1)
+            pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
+
+            # PRANCHA 2 — QDC preservado da Rev.153, com enquadramento próprio.
+            if qdc:
+                fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+                desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
+                rodape(fig,f"Projeto elétrico — {projeto_txt} — Diagrama / QDC",2)
                 pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
+
         buffer.seek(0); dados=buffer.getvalue()
-        if not dados.startswith(b"%PDF"): raise RuntimeError("Falha ao produzir um PDF válido.")
+        if not dados.startswith(b"%PDF"):
+            raise RuntimeError("Falha ao produzir um PDF válido.")
         return dados
     finally:
         if tmp_path:
             try: os.remove(tmp_path)
-            except OSError: pass
+            except Exception: pass
