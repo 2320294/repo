@@ -971,10 +971,9 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.144 TUE: ▲/▼ preservadas conforme Rev.143.
-            # Nas laterais (►/◄), o bloco circuito/potência fica a 0,12 m
-            # da ponta do triângulo. Circuito acima e potência abaixo, com
-            # 0,03 m de vão entre os textos (altura 0,085 => centros ±0,0575).
+            # Rev.145 TUE: ▲/▼ preservadas conforme Rev.143.
+            # Nas laterais (►/◄), preserva o vão vertical de 0,03 m da Rev.144,
+            # mas aproxima TODO o bloco 0,12 m em direção ao triângulo.
             # ► alinha pela ESQUERDA; ◄ alinha pela DIREITA.
             ponta = ponto.get("ponta_triangulo")
             if ponta:
@@ -986,9 +985,11 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
                 tx = ref_x - afast_tug
                 ty = ref_y
             else:
-                afast_lateral = 0.12
+                # Rev.145: na Rev.144 o bloco foi afastado 0,12 m para fora.
+                # Agora ele avança exatamente 0,12 m de volta, em direção à
+                # ponta do triângulo, sem alterar a geometria da tomada.
                 meia_separacao = (0.085 + 0.03) / 2.0
-                tx = ref_x + (afast_lateral if ox > 0 else -afast_lateral)
+                tx = ref_x
                 ty = ref_y + meia_separacao
         try:
             ent = msp.add_text(
@@ -1864,7 +1865,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.144 — TUE lateral: bloco a 0,12 m da ponta e vão vertical de 0,03 m.
+        # Fase 13.6 Rev.145 — TUE lateral: bloco aproximado 0,12 m em direção ao triângulo; vão vertical de 0,03 m preservado.
         _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )
