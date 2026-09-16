@@ -1,6 +1,5 @@
 import os
 import streamlit as st
-from supabase import create_client, Client
 
 
 def configurar_pagina():
@@ -63,7 +62,21 @@ def obter_credenciais_supabase():
 
 
 @st.cache_resource
-def obter_supabase() -> Client:
+def obter_supabase():
+    # Rev.90 — importação tardia do Supabase.
+    #
+    # Evita que uma incompatibilidade momentânea do pacote derrube
+    # a aplicação inteira ainda no "from config import ...".
+    # A importação passa a ocorrer dentro da função, protegida pelo
+    # tratamento de erro já existente no app.py.
+    try:
+        from supabase import create_client
+    except Exception as exc:
+        raise RuntimeError(
+            "Falha ao carregar o cliente Supabase. "
+            "Verifique a instalação das dependências."
+        ) from exc
+
     url, key = obter_credenciais_supabase()
 
     if not url or not key:

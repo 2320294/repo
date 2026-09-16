@@ -1,5 +1,7 @@
 import streamlit as st
 
+from versao import VERSAO_SISTEMA
+
 from database import (
     buscar_projeto,
     salvar_dados_projeto,
@@ -19,6 +21,11 @@ from interruptores import (
     renderizar_interruptores
 )
 
+from tomadas_altas import (
+    renderizar_tomadas_altas,
+    CHAVE_CONFIG as CHAVE_TOMADAS_ALTAS
+)
+
 from materiais import (
     renderizar_materiais
 )
@@ -27,16 +34,292 @@ from parametros_projeto import (
     renderizar_parametros_projeto
 )
 
+from concessionarias import (
+    CHAVE_PARAMETROS_REDE,
+    normalizar_parametros_rede
+)
+
+from demanda_qdc import (
+    calcular_demanda_qdc
+)
+
 from upload_cad import (
     renderizar_upload_dxf,
-    renderizar_salvar_e_gerar_cad
+    renderizar_salvar_e_gerar_cad,
+    calcular_rotas_antes_do_dxf
 )
+
+
+from exportacoes import (
+    gerar_excel_projeto
+)
+
+
+from guia_importacao import renderizar_guia_preparacao_planta
+
+def _chave_projeto(
+    sufixo
+):
+    """
+    Estado temporário isolado por projeto.
+    Permite navegar entre as etapas sem perder alterações ainda não salvas.
+    """
+    projeto = str(
+        st.session_state.get(
+            "projeto_ativo",
+            "SEM_PROJETO"
+        )
+    )
+
+    return (
+        "fase8_16_"
+        f"{projeto}_"
+        f"{sufixo}"
+    )
+
+
+def _inicializar_cache_etapas(
+    dados_ambientes,
+    config_salva,
+    local_qdc_salvo,
+    tensao_projeto_salva,
+    pe_direito_salvo
+):
+    chave_tabela = _chave_projeto(
+        "tabela_editada"
+    )
+    chave_config = _chave_projeto(
+        "config_eletrica"
+    )
+    chave_qdc = _chave_projeto(
+        "local_qdc"
+    )
+    chave_parametros = _chave_projeto(
+        "parametros"
+    )
+
+    if chave_tabela not in st.session_state:
+        st.session_state[
+            chave_tabela
+        ] = list(
+            dados_ambientes
+            or []
+        )
+
+    if chave_config not in st.session_state:
+        st.session_state[
+            chave_config
+        ] = dict(
+            config_salva
+            or {}
+        )
+
+    if chave_qdc not in st.session_state:
+        st.session_state[
+            chave_qdc
+        ] = local_qdc_salvo
+
+    if chave_parametros not in st.session_state:
+        try:
+            tensao = int(
+                tensao_projeto_salva
+                if tensao_projeto_salva is not None
+                else 110
+            )
+        except Exception:
+            tensao = 110
+
+        try:
+            pe = float(
+                pe_direito_salvo
+                if pe_direito_salvo is not None
+                else 2.80
+            )
+        except Exception:
+            pe = 2.80
+
+        st.session_state[
+            chave_parametros
+        ] = {
+            "tensao_projeto":
+                tensao,
+            "pe_direito":
+                pe,
+            "parametros_rede":
+                normalizar_parametros_rede(
+                    (
+                        config_salva
+                        or {}
+                    ).get(
+                        CHAVE_PARAMETROS_REDE,
+                        {}
+                    )
+                )
+        }
+
+    return (
+        chave_tabela,
+        chave_config,
+        chave_qdc,
+        chave_parametros
+    )
+
+
+def _navegacao_etapas():
+    etapas = [
+        "⚙️ Parâmetros",
+        "📊 Cargas",
+        "⚡ QDC",
+        "💡 Interruptores",
+        "🔌 Tomadas Altas",
+        "⚙️ Dimensionamento",
+        "🧵 Eletrodutos",
+        "📦 Materiais",
+        "📐 Gerar Projeto"
+    ]
+
+    chave = _chave_projeto(
+        "etapa_ativa"
+    )
+
+    if chave not in st.session_state:
+        st.session_state[
+            chave
+        ] = etapas[0]
+
+    etapa = st.radio(
+        "Etapas do projeto",
+        etapas,
+        horizontal=True,
+        key=chave,
+        label_visibility="collapsed"
+    )
+
+    indice = (
+        etapas.index(
+            etapa
+        )
+        + 1
+    )
+
+    st.caption(
+        f"Etapa {indice} de {len(etapas)}"
+    )
+
+    return etapa
+
+
+def _garantir_dimensionamento_fisico(
+    dxf_bytes,
+    tabela_editada,
+    local_qdc,
+    config_atual,
+    parametros_projeto
+):
+    """
+    Fase 13.6 Rev.124:
+    cálculo compartilhado pelas páginas Dimensionamento, Eletrodutos
+    e Materiais. O cache também considera método B1/B2 e temperatura.
+    """
+    if not dxf_bytes or not local_qdc:
+        return None
+
+    rotulo_metodo = str(
+        st.session_state.get(
+            "fase12_1_metodo_instalacao_rotulo",
+            "B1 — Condutores isolados em eletroduto embutido na parede"
+        )
+        or "B1"
+    )
+
+    metodo = (
+        "B2"
+        if rotulo_metodo.upper().startswith("B2")
+        else "B1"
+    )
+
+    temperatura = int(
+        st.session_state.get(
+            "fase12_1_temperatura_ambiente",
+            30
+        )
+        or 30
+    )
+
+    resumo_cache = st.session_state.get(
+        "dimensionamento_rotas"
+    )
+
+    cache_compativel = False
+
+    if (
+        st.session_state.get("dimensionamento_rotas_projeto")
+        == st.session_state.get("projeto_ativo")
+        and st.session_state.get("dimensionamento_rotas_versao")
+        == VERSAO_SISTEMA
+        and isinstance(resumo_cache, dict)
+    ):
+        iterativo_cache = (
+            resumo_cache.get(
+                "dimensionamento_iterativo",
+                {}
+            )
+            or {}
+        )
+
+        metodo_cache = str(
+            iterativo_cache.get(
+                "metodo_instalacao",
+                ""
+            )
+            or ""
+        ).upper()
+
+        temperatura_cache = int(
+            iterativo_cache.get(
+                "temperatura_ambiente_c",
+                0
+            )
+            or 0
+        )
+
+        cache_compativel = (
+            metodo_cache == metodo
+            and temperatura_cache == temperatura
+        )
+
+    if cache_compativel:
+        return resumo_cache
+
+    resumo = calcular_rotas_antes_do_dxf(
+        dxf_bytes=dxf_bytes,
+        tabela_editada=tabela_editada,
+        local_qdc=local_qdc,
+        config_interruptores_usuario=config_atual,
+        tensao_projeto=parametros_projeto["tensao_projeto"],
+        pe_direito=parametros_projeto["pe_direito"],
+        metodo_instalacao=metodo,
+        temperatura_ambiente_c=temperatura,
+    )
+
+    if isinstance(resumo, dict):
+        st.session_state["dimensionamento_rotas"] = resumo
+        st.session_state["dimensionamento_rotas_projeto"] = (
+            st.session_state.get("projeto_ativo")
+        )
+        st.session_state["dimensionamento_rotas_versao"] = (
+            VERSAO_SISTEMA
+        )
+
+    return resumo
+
 
 
 def renderizar_painel_principal():
 
-    st.title("⚡ Painel de Projetos Elétricos")
-    st.subheader(f"Olá, {st.session_state.user_name}!")
+    st.title(
+        "⚡ Painel de Projetos Elétricos"
+    )
 
     if (
         st.session_state.projeto_ativo
@@ -46,6 +329,7 @@ def renderizar_painel_principal():
             "👈 Selecione um projeto na barra lateral "
             "ou cadastre um novo."
         )
+        renderizar_guia_preparacao_planta()
         st.stop()
 
     st.info(
@@ -95,7 +379,9 @@ def renderizar_painel_principal():
             st.stop()
 
     dxf_bytes = converter_dxf_do_supabase(
-        dados_obj.get("dxf_bytes")
+        dados_obj.get(
+            "dxf_bytes"
+        )
     )
 
     dados_ambientes = (
@@ -130,71 +416,589 @@ def renderizar_painel_principal():
         )
     )
 
-    # ========================================================
-    # PARÂMETROS GERAIS DO PROJETO
-    # ========================================================
-    # Esta seção aparece SEMPRE que um projeto estiver ativo,
-    # mesmo antes de existir uma planta DXF processada.
-    parametros_projeto = (
-        renderizar_parametros_projeto(
-            tensao_projeto_salva,
-            pe_direito_salvo
+    (
+        chave_tabela,
+        chave_config,
+        chave_qdc,
+        chave_parametros
+    ) = _inicializar_cache_etapas(
+        dados_ambientes,
+        config_salva,
+        local_qdc_salvo,
+        tensao_projeto_salva,
+        pe_direito_salvo
+    )
+
+    etapa = _navegacao_etapas()
+
+    # --------------------------------------------------------
+    # ETAPA 1 — PARÂMETROS E PLANTA
+    # --------------------------------------------------------
+    if etapa == "⚙️ Parâmetros":
+        st.subheader(
+            "⚙️ Parâmetros e Planta do Projeto"
         )
-    )
 
-    # ========================================================
-    # UPLOAD / REENVIO DO DXF
-    # ========================================================
-    renderizar_upload_dxf(
-        dxf_bytes=dxf_bytes,
-        dados_ambientes=dados_ambientes,
-        config_salva=config_salva
-    )
+        parametros = (
+            renderizar_parametros_projeto(
+                st.session_state[
+                    chave_parametros
+                ].get(
+                    "tensao_projeto"
+                ),
+                st.session_state[
+                    chave_parametros
+                ].get(
+                    "pe_direito"
+                ),
+                st.session_state[
+                    chave_parametros
+                ].get(
+                    "parametros_rede",
+                    {}
+                )
+            )
+        )
 
+        st.session_state[
+            chave_parametros
+        ] = parametros
+
+        config_parametros = dict(
+            st.session_state[
+                chave_config
+            ]
+            or {}
+        )
+
+        config_parametros[
+            CHAVE_PARAMETROS_REDE
+        ] = parametros.get(
+            "parametros_rede",
+            {}
+        )
+
+        st.session_state[
+            chave_config
+        ] = config_parametros
+
+        renderizar_upload_dxf(
+            dxf_bytes=dxf_bytes,
+            dados_ambientes=dados_ambientes,
+            config_salva=(
+                st.session_state[
+                    chave_config
+                ]
+            )
+        )
+
+        if not dxf_bytes:
+            st.info(
+                "Envie uma planta DXF para liberar "
+                "as próximas etapas."
+            )
+
+        return
+
+    # Da etapa 2 em diante é necessária uma planta processada.
     if not dados_ambientes:
-        st.info(
-            "Envie/processse uma planta DXF para liberar "
-            "o quadro de cargas, QDC, interruptores e materiais."
+        st.warning(
+            "⚠️ Primeiro envie e processe uma planta DXF "
+            "na etapa **Parâmetros**."
         )
         return
 
+    # --------------------------------------------------------
+    # ETAPA 2 — PREVISÃO DE CARGAS
+    # --------------------------------------------------------
+    if etapa == "📊 Cargas":
+        st.subheader(
+            "📊 Quadro de Previsão de Cargas"
+        )
+
+        tabela_editada = (
+            renderizar_edicao_cargas(
+                st.session_state[
+                    chave_tabela
+                ]
+            )
+        )
+
+        st.session_state[
+            chave_tabela
+        ] = tabela_editada
+
+        renderizar_tabela_consolidada(
+            tabela_editada
+        )
+
+        st.markdown(
+            "#### 📥 Exportação do Quadro de Cargas"
+        )
+
+        try:
+            excel_bytes = gerar_excel_projeto(
+                tabela_editada=tabela_editada,
+                config_interruptores_usuario=(
+                    st.session_state[
+                        chave_config
+                    ]
+                ),
+                local_qdc=(
+                    st.session_state[
+                        chave_qdc
+                    ]
+                ),
+                tensao_projeto=(
+                    st.session_state[
+                        chave_parametros
+                    ][
+                        "tensao_projeto"
+                    ]
+                ),
+                pe_direito=(
+                    st.session_state[
+                        chave_parametros
+                    ][
+                        "pe_direito"
+                    ]
+                )
+            )
+
+            st.download_button(
+                label="📊 Exportar Cargas para Excel",
+                data=excel_bytes,
+                file_name=(
+                    f"{st.session_state.projeto_ativo}"
+                    "_Quadro_Cargas.xlsx"
+                ),
+                mime=(
+                    "application/vnd.openxmlformats-officedocument."
+                    "spreadsheetml.sheet"
+                ),
+                use_container_width=True
+            )
+
+        except Exception as e:
+            st.error(
+                f"❌ Erro ao preparar Excel: {e}"
+            )
+
+        return
+
+    # Valores correntes compartilhados pelas demais etapas.
     tabela_editada = (
-        renderizar_edicao_cargas(
-            dados_ambientes
+        st.session_state[
+            chave_tabela
+        ]
+        or dados_ambientes
+    )
+
+    config_atual = dict(
+        st.session_state[
+            chave_config
+        ]
+        or {}
+    )
+
+    local_qdc = (
+        st.session_state[
+            chave_qdc
+        ]
+    )
+
+    parametros_projeto = (
+        st.session_state[
+            chave_parametros
+        ]
+    )
+
+    # --------------------------------------------------------
+    # ETAPA 3 — QDC
+    # --------------------------------------------------------
+    if etapa == "⚡ QDC":
+        st.subheader(
+            "⚡ Posicionamento do QDC"
         )
-    )
 
-    renderizar_tabela_consolidada(
-        tabela_editada
-    )
-
-    local_qdc = renderizar_qdc(
-        dados_ambientes,
-        local_qdc_salvo
-    )
-
-    config_interruptores_usuario = (
-        renderizar_interruptores(
+        local_qdc = renderizar_qdc(
             dados_ambientes,
-            config_salva
+            local_qdc,
+            dxf_bytes=dxf_bytes
         )
-    )
 
-    renderizar_materiais(
-        tabela_editada,
-        config_interruptores_usuario,
-        local_qdc,
-        tensao_projeto=parametros_projeto["tensao_projeto"],
-        pe_direito=parametros_projeto["pe_direito"]
-    )
+        st.session_state[
+            chave_qdc
+        ] = local_qdc
 
-    renderizar_salvar_e_gerar_cad(
-        dxf_bytes=dxf_bytes,
-        tabela_editada=tabela_editada,
-        local_qdc=local_qdc,
-        config_interruptores_usuario=(
-            config_interruptores_usuario
-        ),
-        tensao_projeto=parametros_projeto["tensao_projeto"],
-        pe_direito=parametros_projeto["pe_direito"]
-    )
+        st.markdown("#### ⚙️ Demanda e proteção geral")
+
+        resultado_demanda = calcular_demanda_qdc(
+            tabela_editada,
+            parametros_projeto.get(
+                "parametros_rede",
+                {}
+            )
+        )
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(
+            "Potência instalada",
+            f"{resultado_demanda['total_w']/1000:.2f} kW"
+        )
+
+        pd = resultado_demanda.get("potencia_demanda_w")
+        idm = resultado_demanda.get("corrente_demanda_a")
+        dg = resultado_demanda.get("disjuntor_geral_a")
+
+        c2.metric(
+            "Potência demandada",
+            f"{pd/1000:.2f} kW" if pd is not None else "Aguardando perfil"
+        )
+        c3.metric(
+            "Corrente de demanda",
+            f"{idm:.1f} A" if idm is not None else "—"
+        )
+        c4.metric(
+            "DG pré-selecionado",
+            f"{dg} A" if dg is not None else "—"
+        )
+
+        status = resultado_demanda.get("status")
+        if status == "aguardando_perfil":
+            st.info(
+                "ℹ️ O método automático está selecionado, mas o perfil "
+                "normativo desta concessionária ainda não foi ativado. "
+                "Nenhum fator de demanda foi inventado pelo sistema."
+            )
+        elif status == "fornecimento_incompleto":
+            st.warning(
+                "⚠️ Informe tipo e tensão de fornecimento em Parâmetros "
+                "para calcular corrente de demanda e DG."
+            )
+        elif status == "acima_da_faixa":
+            st.warning(
+                "⚠️ A corrente calculada ultrapassa a faixa preliminar "
+                "de disjuntores cadastrada. Reavalie o fornecimento."
+            )
+        else:
+            st.caption(
+                "Pré-dimensionamento da Fase 13.6 Rev.124. O DG depende da validação "
+                "do alimentador e do perfil da concessionária."
+            )
+
+        st.divider()
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="qdc"
+        )
+
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 4 — INTERRUPTORES
+    # --------------------------------------------------------
+    if etapa == "💡 Interruptores":
+        st.subheader(
+            "💡 Posicionamento dos Interruptores"
+        )
+
+        config_interruptores = (
+            renderizar_interruptores(
+                dados_ambientes,
+                config_atual,
+                dxf_bytes=dxf_bytes
+            )
+        )
+
+        # Preserva configurações reservadas enquanto
+        # a etapa de interruptores é editada.
+        if (
+            CHAVE_TOMADAS_ALTAS
+            in config_atual
+        ):
+            config_interruptores[
+                CHAVE_TOMADAS_ALTAS
+            ] = config_atual[
+                CHAVE_TOMADAS_ALTAS
+            ]
+
+        if (
+            CHAVE_PARAMETROS_REDE
+            in config_atual
+        ):
+            config_interruptores[
+                CHAVE_PARAMETROS_REDE
+            ] = config_atual[
+                CHAVE_PARAMETROS_REDE
+            ]
+
+        st.session_state[
+            chave_config
+        ] = config_interruptores
+
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 5 — TOMADAS ALTAS
+    # --------------------------------------------------------
+    if etapa == "🔌 Tomadas Altas":
+        st.subheader(
+            "🔌 Posicionamento das Tomadas Altas"
+        )
+
+        config_tomadas_altas = (
+            renderizar_tomadas_altas(
+                tabela_editada,
+                config_atual,
+                dxf_bytes=dxf_bytes
+            )
+        )
+
+        config_atual[
+            CHAVE_TOMADAS_ALTAS
+        ] = config_tomadas_altas
+
+        st.session_state[
+            chave_config
+        ] = config_atual
+
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 6 — DIMENSIONAMENTO DOS CIRCUITOS
+    # --------------------------------------------------------
+    if etapa == "⚙️ Dimensionamento":
+        st.subheader(
+            "⚙️ Dimensionamento dos Circuitos"
+        )
+
+        st.markdown(
+            "#### 🧱 Método de instalação e temperatura"
+        )
+
+        metodo_opcoes = [
+            "B1 — Condutores isolados em eletroduto embutido na parede",
+            "B2 — Cabo multipolar em eletroduto embutido na parede",
+        ]
+
+        metodo_atual = str(
+            st.session_state.get(
+                "fase12_1_metodo_instalacao_rotulo",
+                metodo_opcoes[0]
+            )
+            or metodo_opcoes[0]
+        )
+
+        if metodo_atual not in metodo_opcoes:
+            metodo_atual = (
+                metodo_opcoes[1]
+                if metodo_atual.upper().startswith("B2")
+                else metodo_opcoes[0]
+            )
+
+        metodo_selecionado = st.selectbox(
+            "Método de instalação",
+            metodo_opcoes,
+            index=metodo_opcoes.index(
+                metodo_atual
+            ),
+            key="fase13_3_metodo_instalacao_ui"
+        )
+
+        temperatura_selecionada = st.selectbox(
+            "Temperatura ambiente de referência",
+            [30, 35, 40, 45, 50, 55, 60],
+            index=(
+                [30, 35, 40, 45, 50, 55, 60].index(
+                    int(
+                        st.session_state.get(
+                            "fase12_1_temperatura_ambiente",
+                            30
+                        )
+                        or 30
+                    )
+                )
+                if int(
+                    st.session_state.get(
+                        "fase12_1_temperatura_ambiente",
+                        30
+                    )
+                    or 30
+                )
+                in [30, 35, 40, 45, 50, 55, 60]
+                else 0
+            ),
+            format_func=lambda valor: f"{valor} °C",
+            key="fase13_3_temperatura_ui"
+        )
+
+        st.session_state[
+            "fase12_1_metodo_instalacao_rotulo"
+        ] = metodo_selecionado
+
+        st.session_state[
+            "fase12_1_temperatura_ambiente"
+        ] = temperatura_selecionada
+
+        with st.expander(
+            "ℹ️ Como escolher entre B1 e B2?",
+            expanded=False
+        ):
+            st.markdown(
+                "**B1:** condutores isolados individualmente dentro de "
+                "eletroduto embutido na parede.\n\n"
+                "**B2:** cabo multipolar dentro de eletroduto embutido "
+                "na parede.\n\n"
+                "A escolha altera a capacidade de condução usada no "
+                "pré-dimensionamento. O sistema não deve assumir B1 "
+                "silenciosamente quando o usuário pode definir o método."
+            )
+
+        if not local_qdc:
+            st.warning(
+                "Defina primeiro a posição do QDC."
+            )
+            return
+
+        try:
+            with st.spinner(
+                "Calculando roteamento e dimensionamento elétrico..."
+            ):
+                _garantir_dimensionamento_fisico(
+                    dxf_bytes,
+                    tabela_editada,
+                    local_qdc,
+                    config_atual,
+                    parametros_projeto
+                )
+        except Exception as exc:
+            st.warning(
+                "Não foi possível concluir o dimensionamento: "
+                f"{exc}"
+            )
+
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="dimensionamento"
+        )
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 7 — ELETRODUTOS
+    # --------------------------------------------------------
+    if etapa == "🧵 Eletrodutos":
+        st.subheader(
+            "🧵 Eletrodutos e Rotas Físicas"
+        )
+
+        if not local_qdc:
+            st.warning(
+                "Defina primeiro a posição do QDC."
+            )
+            return
+
+        try:
+            with st.spinner(
+                "Conferindo rotas, ocupação e agrupamento..."
+            ):
+                _garantir_dimensionamento_fisico(
+                    dxf_bytes,
+                    tabela_editada,
+                    local_qdc,
+                    config_atual,
+                    parametros_projeto
+                )
+        except Exception as exc:
+            st.warning(
+                "Não foi possível concluir a análise dos eletrodutos: "
+                f"{exc}"
+            )
+
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="eletrodutos"
+        )
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 8 — MATERIAIS
+    # --------------------------------------------------------
+    if etapa == "📦 Materiais":
+        st.subheader(
+            "📦 Quantitativo de Materiais"
+        )
+
+        if dxf_bytes and local_qdc:
+            try:
+                with st.spinner(
+                    "Atualizando quantitativo com as rotas físicas..."
+                ):
+                    _garantir_dimensionamento_fisico(
+                        dxf_bytes,
+                        tabela_editada,
+                        local_qdc,
+                        config_atual,
+                        parametros_projeto
+                    )
+            except Exception as exc:
+                st.warning(
+                    "O quantitativo será exibido com os dados disponíveis. "
+                    f"Detalhe: {exc}"
+                )
+
+        renderizar_materiais(
+            tabela_editada,
+            config_atual,
+            local_qdc,
+            tensao_projeto=parametros_projeto["tensao_projeto"],
+            pe_direito=parametros_projeto["pe_direito"],
+            pagina="materiais"
+        )
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 9 — SALVAR / EXPORTAR / GERAR CAD
+    # --------------------------------------------------------
+    if etapa == "📐 Gerar Projeto":
+        st.subheader(
+            "📐 Salvar e Gerar Projeto"
+        )
+
+        st.markdown(
+            "Revise as etapas anteriores e, quando estiver tudo "
+            "correto, salve as configurações e gere os arquivos."
+        )
+
+        renderizar_salvar_e_gerar_cad(
+            dxf_bytes=dxf_bytes,
+            tabela_editada=tabela_editada,
+            local_qdc=local_qdc,
+            config_interruptores_usuario=(
+                config_atual
+            ),
+            tensao_projeto=(
+                parametros_projeto[
+                    "tensao_projeto"
+                ]
+            ),
+            pe_direito=(
+                parametros_projeto[
+                    "pe_direito"
+                ]
+            )
+        )
+
+        return

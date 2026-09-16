@@ -18,6 +18,31 @@ from reportlab.platypus import (
 from materiais import calcular_quantitativo_materiais
 
 
+from qdc_config import descricao_qdc
+
+from concessionarias import (
+    CHAVE_PARAMETROS_REDE,
+    normalizar_parametros_rede,
+    nome_concessionaria,
+    descricao_localidade
+)
+
+from demanda_qdc import (
+    calcular_demanda_qdc
+)
+
+from balanceamento_fases import (
+    balancear_circuitos
+)
+
+from agrupamento_dr import (
+    agrupar_circuitos_dr
+)
+
+from protecao_alimentador import (
+    avaliar_protecoes_alimentador
+)
+
 def _valor_w(row, campo_w, campo_va, padrao=0):
     if campo_w in row:
         return float(row.get(campo_w, padrao) or 0)
@@ -215,8 +240,17 @@ def gerar_excel_projeto(
 
     df_parametros = pd.DataFrame([
         {
-            "Parâmetro": "Tensão do quadro",
-            "Valor": f"{int(tensao_projeto)} V"
+            "Parâmetro": "Tensão base dos cálculos",
+            "Valor": (
+                str(
+                    parametros_rede.get(
+                        "tensao_fornecimento",
+                        ""
+                    )
+                )
+                if 'parametros_rede' in locals()
+                else f"{int(tensao_projeto)} V"
+            )
         },
         {
             "Parâmetro": "Pé-direito do pavimento",
@@ -224,9 +258,164 @@ def gerar_excel_projeto(
         },
         {
             "Parâmetro": "Local do QDC",
-            "Valor": local_qdc
+            "Valor": descricao_qdc(local_qdc)
         }
     ])
+
+    parametros_rede = normalizar_parametros_rede(
+        (
+            config_interruptores_usuario
+            or {}
+        ).get(
+            CHAVE_PARAMETROS_REDE,
+            {}
+        )
+    )
+
+    circuitos_balanceados, resumo_balanceamento = balancear_circuitos(
+        circuitos,
+        parametros_rede
+    )
+    df_circuitos = pd.DataFrame(circuitos_balanceados)
+    if not df_circuitos.empty and "numero" in df_circuitos.columns:
+        df_circuitos["numero"] = df_circuitos["numero"].apply(
+            lambda valor: f"C{int(valor):02d}"
+        )
+
+    df_parametros = pd.concat(
+        [
+            df_parametros,
+            pd.DataFrame([
+                {
+                    "Parâmetro": "Localidade",
+                    "Valor": descricao_localidade(
+                        parametros_rede
+                    )
+                },
+                {
+                    "Parâmetro": "Concessionária",
+                    "Valor": nome_concessionaria(
+                        parametros_rede
+                    )
+                },
+                {
+                    "Parâmetro": "Tipo de fornecimento",
+                    "Valor": parametros_rede.get(
+                        "tipo_fornecimento",
+                        "A definir"
+                    )
+                },
+                {
+                    "Parâmetro": "Tensão de fornecimento",
+                    "Valor": parametros_rede.get(
+                        "tensao_fornecimento",
+                        "A definir"
+                    )
+                },
+                {
+                    "Parâmetro": "Método de demanda",
+                    "Valor": parametros_rede.get(
+                        "metodo_demanda",
+                        ""
+                    )
+                }
+            ])
+        ],
+        ignore_index=True
+    )
+
+    resultado_demanda = calcular_demanda_qdc(
+        tabela_editada,
+        parametros_rede
+    )
+
+    circuitos_dr_export, resumo_drs_export = agrupar_circuitos_dr(
+        circuitos_balanceados,
+        resultado_demanda.get("disjuntor_geral_a")
+    )
+    resumo_protecao_export = avaliar_protecoes_alimentador(
+        resultado_demanda,
+        parametros_rede,
+        circuitos_dr_export,
+        resumo_drs_export
+    )
+    df_circuitos = pd.DataFrame(circuitos_dr_export)
+    if not df_circuitos.empty and "numero" in df_circuitos.columns:
+        df_circuitos["numero"] = df_circuitos["numero"].apply(
+            lambda valor: f"C{int(valor):02d}"
+        )
+
+    linhas_demanda = [{
+        "Parâmetro": "Potência instalada",
+        "Valor": f"{resultado_demanda['total_w']/1000:.2f} kW"
+    }]
+
+    if resultado_demanda.get("fator_demanda_pct") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Fator global de demanda",
+            "Valor": f"{resultado_demanda['fator_demanda_pct']:.1f} %"
+        })
+
+    if resultado_demanda.get("potencia_demanda_w") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Potência demandada",
+            "Valor": f"{resultado_demanda['potencia_demanda_w']/1000:.2f} kW"
+        })
+
+    if resultado_demanda.get("corrente_demanda_a") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Corrente equivalente de demanda",
+            "Valor": f"{resultado_demanda['corrente_demanda_a']:.1f} A"
+        })
+
+    if resultado_demanda.get("disjuntor_geral_a") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "DG pré-selecionado",
+            "Valor": f"{resultado_demanda['disjuntor_geral_a']} A"
+        })
+
+    df_parametros = pd.concat(
+        [df_parametros, pd.DataFrame(linhas_demanda)],
+        ignore_index=True
+    )
+
+    linhas_balanceamento = []
+    for fase, potencia_fase in resumo_balanceamento.get("fases", {}).items():
+        linhas_balanceamento.append({
+            "Parâmetro": f"Potência instalada - Fase {fase}",
+            "Valor": f"{potencia_fase/1000:.2f} kW"
+        })
+    if resumo_balanceamento.get("desequilibrio_pct") is not None:
+        linhas_balanceamento.append({
+            "Parâmetro": "Desequilíbrio preliminar entre fases",
+            "Valor": f"{resumo_balanceamento['desequilibrio_pct']:.1f} %"
+        })
+    if linhas_balanceamento:
+        df_parametros = pd.concat(
+            [df_parametros, pd.DataFrame(linhas_balanceamento)],
+            ignore_index=True
+        )
+
+    linhas_protecao = []
+    rp = resumo_protecao_export
+    if rp.get("dg_a") is not None:
+        linhas_protecao.append({
+            "Parâmetro": "Disjuntor geral consolidado preliminar",
+            "Valor": f"{rp['dg_a']} A {rp.get('dg_polos','')}".strip()
+        })
+    if rp.get("alimentador_fase_mm2") is not None:
+        linhas_protecao.extend([
+            {"Parâmetro":"Alimentador - fase","Valor":f"{rp['alimentador_fase_mm2']:g} mm²"},
+            {"Parâmetro":"Alimentador - neutro","Valor":f"{rp['alimentador_neutro_mm2']:g} mm²"},
+            {"Parâmetro":"Alimentador - PE","Valor":f"{rp['alimentador_pe_mm2']:g} mm²"},
+            {"Parâmetro":"Capacidade de interrupção","Valor":rp["capacidade_interrupcao"]},
+            {"Parâmetro":"Seletividade","Valor":rp["seletividade"]},
+        ])
+    if linhas_protecao:
+        df_parametros = pd.concat(
+            [df_parametros, pd.DataFrame(linhas_protecao)],
+            ignore_index=True
+        )
 
     linhas_interruptores = []
 
@@ -234,6 +423,11 @@ def gerar_excel_projeto(
         config_interruptores_usuario,
         key=str.casefold
     ):
+        if str(
+            ambiente
+        ).startswith("__"):
+            continue
+
         cfg = (
             config_interruptores_usuario.get(
                 ambiente,
@@ -489,7 +683,7 @@ def gerar_memorial_pdf(
 
     story.append(
         Paragraph(
-            f"<b>Tensão do quadro:</b> {int(tensao_projeto)} V",
+            f"<b>Tensão base de cálculo:</b> {int(tensao_projeto)} V",
             styles["Texto"]
         )
     )
@@ -503,7 +697,7 @@ def gerar_memorial_pdf(
 
     story.append(
         Paragraph(
-            f"<b>Local previsto para o QDC:</b> {local_qdc}",
+            f"<b>Local previsto para o QDC:</b> {descricao_qdc(local_qdc)}",
             styles["Texto"]
         )
     )
@@ -574,6 +768,13 @@ def gerar_memorial_pdf(
         cabecalho
     ]
 
+    total_qtd_ilum = 0
+    total_pot_ilum = 0
+    total_qtd_tug = 0
+    total_pot_tug = 0
+    total_qtd_tue = 0
+    total_pot_tue = 0
+
     for row in sorted(
         tabela_editada,
         key=lambda x: str(
@@ -583,6 +784,60 @@ def gerar_memorial_pdf(
             )
         ).casefold()
     ):
+        qtd_ilum = int(
+            row.get(
+                "Qtd Ilum.",
+                0
+            )
+            or 0
+        )
+
+        pot_ilum_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. Ilum (W)",
+                "Pot. Unit. Ilum (VA)",
+                0
+            )
+        )
+
+        qtd_tug = int(
+            row.get(
+                "Qtd TUG",
+                row.get(
+                    "TUGs (Qtd)",
+                    0
+                )
+            )
+            or 0
+        )
+
+        pot_tug_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. TUG (W)",
+                "Pot. Unit. TUG (VA)",
+                0
+            )
+        )
+
+        qtd_tue = int(
+            row.get(
+                "Qtd TUE",
+                0
+            )
+            or 0
+        )
+
+        pot_tue_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. TUE (W)",
+                "Pot. Unit. TUE (VA)",
+                0
+            )
+        )
+
         dados_tabela.append([
             str(
                 row.get(
@@ -590,64 +845,44 @@ def gerar_memorial_pdf(
                     ""
                 )
             ),
-            str(
-                int(
-                    row.get(
-                        "Qtd Ilum.",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    _valor_w(
-                        row,
-                        "Pot. Unit. Ilum (W)",
-                        "Pot. Unit. Ilum (VA)",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    row.get(
-                        "Qtd TUG",
-                        row.get(
-                            "TUGs (Qtd)",
-                            0
-                        )
-                    )
-                )
-            ),
-            str(
-                int(
-                    _valor_w(
-                        row,
-                        "Pot. Unit. TUG (W)",
-                        "Pot. Unit. TUG (VA)",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    row.get(
-                        "Qtd TUE",
-                        0
-                    )
-                )
-            ),
-            str(
-                int(
-                    _valor_w(
-                        row,
-                        "Pot. Unit. TUE (W)",
-                        "Pot. Unit. TUE (VA)",
-                        0
-                    )
-                )
-            )
+            str(qtd_ilum),
+            str(pot_ilum_unit),
+            str(qtd_tug),
+            str(pot_tug_unit),
+            str(qtd_tue),
+            str(pot_tue_unit)
         ])
+
+        total_qtd_ilum += qtd_ilum
+        total_pot_ilum += (
+            qtd_ilum
+            * pot_ilum_unit
+        )
+
+        total_qtd_tug += qtd_tug
+        total_pot_tug += (
+            qtd_tug
+            * pot_tug_unit
+        )
+
+        total_qtd_tue += qtd_tue
+        total_pot_tue += (
+            qtd_tue
+            * pot_tue_unit
+        )
+
+    # Linha de totais do Quadro de Cargas.
+    # As potências totais seguem a mesma lógica já usada no quadro
+    # consolidado e no Excel: quantidade x potência unitária.
+    dados_tabela.append([
+        "TOTAL GERAL",
+        str(total_qtd_ilum),
+        str(total_pot_ilum),
+        str(total_qtd_tug),
+        str(total_pot_tug),
+        str(total_qtd_tue),
+        str(total_pot_tue)
+    ])
 
     tabela = Table(
         dados_tabela,
@@ -697,6 +932,29 @@ def gerar_memorial_pdf(
                 (0, 0),
                 (-1, -1),
                 "MIDDLE"
+            ),
+            (
+                "BACKGROUND",
+                (0, -1),
+                (-1, -1),
+                colors.HexColor(
+                    "#E8EEF8"
+                )
+            ),
+            (
+                "FONTNAME",
+                (0, -1),
+                (-1, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "LINEABOVE",
+                (0, -1),
+                (-1, -1),
+                0.8,
+                colors.HexColor(
+                    "#4A5568"
+                )
             )
         ])
     )

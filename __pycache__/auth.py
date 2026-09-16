@@ -239,44 +239,98 @@ def _renderizar_cadastro():
             st.rerun()
 
 def _renderizar_sobre_o_sistema():
-    st.markdown('<div class="ae-main-spacer"></div>', unsafe_allow_html=True)
-    esquerda, centro, direita = st.columns([1.0, 1.72, 1.0])
+    # Rev.124: somente a página "Sobre o sistema" deixa de usar a coluna
+    # central estreita. Login/cadastro permanecem exatamente com o layout
+    # aprovado. O card passa a ocupar a largura útil disponível e, em telas
+    # menores, permite rolagem vertical sem comprimir o conteúdo.
+    st.markdown(
+        """
+        <style>
+        [data-testid="stMainBlockContainer"]:has(.ae-about-page) {
+            height: auto !important;
+            min-height: calc(100vh - 2px) !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+        }
 
-    with centro:
-        st.markdown(
-            """
+        [data-testid="stMainBlockContainer"] > div:first-child:has(.ae-about-page) {
+            height: auto !important;
+            min-height: calc(100vh - 2px) !important;
+            justify-content: center !important;
+            padding-top: 1.5rem !important;
+            padding-bottom: 1.5rem !important;
+            box-sizing: border-box !important;
+        }
+
+        .ae-about-page {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .ae-about-page .ae-info-card {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            box-sizing: border-box;
+        }
+
+        @media (max-width: 900px) {
+            [data-testid="stMainBlockContainer"] > div:first-child:has(.ae-about-page) {
+                justify-content: flex-start !important;
+                padding-top: 1rem !important;
+                padding-bottom: 1rem !important;
+            }
+
+            .ae-about-page .ae-info-card {
+                padding: 24px 22px;
+                border-radius: 16px;
+            }
+        }
+        </style>
+        <div class="ae-about-page">
             <div class="ae-info-card">
                 <div class="ae-info-icon">i</div>
                 <h2>Sobre o AutoElétrica</h2>
                 <div class="ae-info-lead">
-                    Uma plataforma desenvolvida para apoiar a elaboração de
-                    projetos elétricos residenciais de forma organizada,
-                    prática e automatizada.
+                    O <b>AutoElétrica</b> é uma plataforma desenvolvida para auxiliar na elaboração,
+                    análise e documentação de projetos elétricos residenciais, integrando automação,
+                    critérios técnicos e desenho em CAD em um único ambiente.
                 </div>
                 <p>
-                    O <b>AutoElétrica</b> reúne em um único ambiente ferramentas
-                    para leitura e processamento de desenhos em CAD, identificação
-                    de ambientes, dimensionamento de cargas, tomadas, iluminação e
-                    equipamentos de uso específico.
+                    A partir da importação da planta baixa em <b>DXF</b>, o sistema identifica os
+                    ambientes e utiliza suas características geométricas para auxiliar no
+                    dimensionamento e na distribuição dos principais elementos da instalação elétrica.
                 </p>
                 <p>
-                    A proposta do sistema é reduzir tarefas repetitivas durante o
-                    desenvolvimento do projeto, mantendo o profissional no controle
-                    das informações e permitindo revisar os dados antes da geração
-                    final do desenho elétrico e da documentação do projeto.
+                    O AutoElétrica reúne recursos para <b>dimensionamento de cargas, iluminação,
+                    tomadas de uso geral e específico, circuitos, quadro de distribuição, dispositivos
+                    de proteção e eletrodutos</b>, mantendo as informações do projeto integradas durante
+                    todo o processo.
                 </p>
                 <p>
-                    O sistema também organiza projetos e parâmetros técnicos para
-                    facilitar a continuidade do trabalho e futuras revisões.
+                    A plataforma também auxilia na <b>organização dos circuitos, balanceamento de fases,
+                    cálculo de demanda, definição das proteções, representação do QDC e geração do
+                    diagrama unifilar</b>, além da produção de tabelas, quantitativos e documentação
+                    técnica do projeto.
                 </p>
+                <p>
+                    O objetivo é <b>reduzir tarefas repetitivas e minimizar inconsistências entre cálculo,
+                    desenho e documentação</b>, sem retirar do profissional a responsabilidade pelas
+                    decisões técnicas. O projetista permanece no controle das informações e pode revisar
+                    as definições antes da geração final do projeto.
+                </p>
+                <p><b>AutoElétrica — automação aplicada ao desenvolvimento de projetos elétricos.</b></p>
                 <div class="ae-info-highlight">
-                    Para iniciar, selecione <b>Login</b> no menu lateral e informe
-                    suas credenciais de acesso.
+                    Comece um novo projeto ou continue um projeto salvo. Para acessar a plataforma,
+                    selecione <b>Login</b> no menu lateral.
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _renderizar_formulario_login():
@@ -321,19 +375,42 @@ def _renderizar_formulario_login():
 
         st.markdown('<div class="ae-ou">ou</div>', unsafe_allow_html=True)
 
-        if st.button(
+        # Rev.129: inicia o OIDC no callback do botão. Isso evita misturar a
+        # navegação externa do st.login() com a fase normal de renderização da
+        # página e segue o fluxo recomendado pelo Streamlit para widgets.
+        def _iniciar_login_google():
+            try:
+                # Pré-validação mínima da configuração publicada. Não expõe
+                # valores secretos e impede uma chamada OIDC incompleta.
+                auth_cfg = st.secrets.get("auth", {})
+                obrigatorios = (
+                    "redirect_uri",
+                    "cookie_secret",
+                    "client_id",
+                    "client_secret",
+                    "server_metadata_url",
+                )
+                if not all(str(auth_cfg.get(chave, "") or "").strip() for chave in obrigatorios):
+                    raise RuntimeError("Configuração OIDC incompleta")
+
+                st.session_state.pop("erro_login_google", None)
+                st.login()
+            except Exception:
+                # Nunca mostrar Secrets, stack trace ou mensagem do provedor.
+                st.session_state.erro_login_google = True
+
+        st.button(
             "Entrar com Google",
             key="entrar_google",
             use_container_width=True,
-        ):
-            try:
-                st.login()
-            except Exception as e:
-                st.error(
-                    "Não foi possível iniciar o login com Google. "
-                    "Confira os Secrets de autenticação do Streamlit. "
-                    f"Detalhes: {e}"
-                )
+            on_click=_iniciar_login_google,
+        )
+
+        if st.session_state.pop("erro_login_google", False):
+            st.error(
+                "Login com Google temporariamente indisponível. "
+                "Utilize seu e-mail e senha para acessar o sistema."
+            )
 
         st.markdown(
             '<div class="ae-auth-switch-label">Ainda não possui uma conta?</div>',
