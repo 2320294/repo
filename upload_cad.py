@@ -542,11 +542,11 @@ def renderizar_salvar_e_gerar_cad(
         )
 
         # ====================================================
-        # FASE 13.6 REV.150 — PLOTAGEM PDF MULTIPÁGINA DO PROJETO
+        # FASE 13.6 REV.151 — PLOTAGEM PDF EM PRANCHAS SEMÂNTICAS
         # ====================================================
         st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
         st.caption(
-            "Gera pranchas A3 separadas, com orientação e enquadramento automáticos "
+            "Gera pranchas A3 separadas por conteúdo (planta, QDC e legendas), com enquadramento independente "
             "a partir do DXF final, sem alterar o arquivo CAD."
         )
 

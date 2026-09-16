@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.150 — PDF multipágina com enquadramento automático por regiões.
+Fase 13.6 Rev.151 — PDF multipágina com separação semântica por pranchas.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -25,73 +25,120 @@ def _bbox_entidade(ent, bbox_mod):
         return None
 
 
-def _regioes_automaticas(msp):
-    """Separa visualmente o modelspace em até 3 regiões sem alterar entidades.
+def _texto_entidade(ent):
+    try:
+        if ent.dxftype() == "TEXT":
+            return str(ent.dxf.text or "")
+        if ent.dxftype() == "MTEXT":
+            return str(ent.text or "")
+    except Exception:
+        pass
+    return ""
 
-    Usa centros das caixas das entidades e k-means leve. Entidades muito longas
-    (eletrodutos/linhas de ligação) têm peso reduzido para não unir planta,
-    diagrama e tabelas em uma única prancha.
+
+def _bbox_camadas(msp, predicado):
+    from ezdxf import bbox
+    caixas=[]
+    for ent in msp:
+        try:
+            layer=str(ent.dxf.layer or "")
+        except Exception:
+            layer=""
+        if not predicado(layer, ent):
+            continue
+        b=_bbox_entidade(ent,bbox)
+        if b: caixas.append(b)
+    if not caixas:
+        return None
+    return (min(b[0] for b in caixas), min(b[1] for b in caixas),
+            max(b[2] for b in caixas), max(b[3] for b in caixas))
+
+
+def _expandir(b, px=0.08, py=0.08, minimo=0.35):
+    if not b: return None
+    x0,y0,x1,y1=b
+    w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
+    mx=max(w*px,minimo); my=max(h*py,minimo)
+    return (x0-mx,y0-my,x1+mx,y1+my)
+
+
+def _regioes_semanticas(msp):
+    """Rev.151: separa as pranchas por significado, não por proximidade.
+
+    1) Planta: usa IA_AMBIENTES como âncora arquitetônica e inclui uma margem
+       suficiente para símbolos/eletrodutos/balões pertencentes à planta.
+    2) Diagrama/QDC: usa exclusivamente as camadas geradas para QDC/unifilar/mapa.
+    3) Legenda de fiação: usa o texto 'LEGENDA DE FIAÇÃO' como âncora e captura
+       a tabela abaixo dele. Linhas longas entre regiões deixam de unir páginas.
     """
     from ezdxf import bbox
-    itens=[]
     geral=bbox.extents(msp, fast=True)
     if not geral.has_data:
         return []
     gx0,gy0,gx1,gy1=map(float,(geral.extmin.x,geral.extmin.y,geral.extmax.x,geral.extmax.y))
     gw=max(gx1-gx0,1e-6); gh=max(gy1-gy0,1e-6)
-    for ent in msp:
-        b=_bbox_entidade(ent,bbox)
-        if not b: continue
-        x0,y0,x1,y1=b
-        w=x1-x0; h=y1-y0
-        # ignora, para fins de agrupamento, entidades que atravessam quase todo
-        # o desenho; elas continuam aparecendo normalmente na renderização.
-        if w > 0.72*gw or h > 0.72*gh:
-            continue
-        cx=(x0+x1)/2; cy=(y0+y1)/2
-        itens.append((cx,cy,b))
-    if len(itens)<8:
-        return [(gx0,gy0,gx1,gy1)]
 
-    # k=3 quando há conteúdo suficiente; isso tende a separar planta, QDC e
-    # tabelas/legendas. Se um grupo ficar insignificante, ele é descartado.
-    k=3 if len(itens)>=24 else 2
-    pts=[(a,b) for a,b,_ in itens]
-    # sementes espaciais determinísticas: esquerda-superior, direita-superior,
-    # esquerda/inferior, adequadas ao arranjo usual do gerador AutoElétrica.
-    seeds=[(gx0+0.25*gw, gy0+0.75*gh),(gx0+0.75*gw,gy0+0.75*gh),(gx0+0.25*gw,gy0+0.25*gh)][:k]
-    centers=list(seeds)
-    labels=[0]*len(pts)
-    for _ in range(20):
-        new=[]
-        for x,y in pts:
-            # normaliza eixos para a proporção global não distorcer o agrupamento
-            ds=[((x-cx)/gw)**2+((y-cy)/gh)**2 for cx,cy in centers]
-            new.append(min(range(k), key=lambda j: ds[j]))
-        ncent=[]
-        for j in range(k):
-            group=[pts[i] for i,v in enumerate(new) if v==j]
-            if group:
-                ncent.append((sum(p[0] for p in group)/len(group),sum(p[1] for p in group)/len(group)))
-            else: ncent.append(centers[j])
-        if new==labels: break
-        labels=new; centers=ncent
+    # Planta arquitetônica: a camada obrigatória IA_AMBIENTES é a âncora mais
+    # estável do sistema e independe da disposição posterior do QDC/tabelas.
+    planta=_bbox_camadas(msp, lambda layer, ent: layer.upper()=="IA_AMBIENTES")
+    if planta:
+        # margem generosa para tomadas, textos, balões e eletrodutos próximos
+        planta=_expandir(planta, px=0.16, py=0.16, minimo=0.60)
+
+    # Diagrama / mapa do QDC: todas as camadas explicitamente dedicadas ao QDC.
+    qdc=_bbox_camadas(
+        msp,
+        lambda layer, ent: (
+            "UNIFILAR_QDC" in layer.upper()
+            or "MAPA_QDC" in layer.upper()
+            or layer.upper().startswith("PROJ_ELETRICA_QDC_")
+        ),
+    )
+    if qdc:
+        qdc=_expandir(qdc, px=0.07, py=0.07, minimo=0.45)
+
+    # Legenda de fiação: localiza a própria identificação textual gerada pelo
+    # AutoElétrica e usa sua posição para delimitar a tabela abaixo dela.
+    ancora=None
+    for ent in msp:
+        txt=_texto_entidade(ent).upper().replace("\\P"," ")
+        if "LEGENDA DE FIA" in txt:
+            b=_bbox_entidade(ent,bbox)
+            if b:
+                ancora=b
+                break
+    legenda=None
+    if ancora:
+        ax0,ay0,ax1,ay1=ancora
+        acx=(ax0+ax1)/2
+        # largura da tabela é pequena comparada à planta; captura entidades
+        # próximas ao eixo da legenda e abaixo do cabeçalho.
+        faixa=max(gw*0.18, 6.0)
+        caixas=[]
+        for ent in msp:
+            b=_bbox_entidade(ent,bbox)
+            if not b: continue
+            cx=(b[0]+b[2])/2; cy=(b[1]+b[3])/2
+            if abs(cx-acx) <= faixa and cy <= ay1 + max(gh*0.015,0.5):
+                # evita engolir regiões muito acima/ao lado da legenda
+                if cy >= gy0 - 0.1:
+                    caixas.append(b)
+        if caixas:
+            legenda=(min(b[0] for b in caixas), min(b[1] for b in caixas),
+                     max(b[2] for b in caixas), max(b[3] for b in caixas))
+            legenda=_expandir(legenda, px=0.06, py=0.04, minimo=0.30)
 
     regs=[]
-    for j in range(k):
-        bs=[itens[i][2] for i,v in enumerate(labels) if v==j]
-        if len(bs)<2: continue
-        x0=min(b[0] for b in bs); y0=min(b[1] for b in bs)
-        x1=max(b[2] for b in bs); y1=max(b[3] for b in bs)
-        # margem proporcional ao próprio conteúdo
-        mx=max((x1-x0)*0.055, gw*0.006); my=max((y1-y0)*0.055, gh*0.006)
-        regs.append((x0-mx,y0-my,x1+mx,y1+my,len(bs)))
-    regs.sort(key=lambda r:(-((r[1]+r[3])/2), (r[0]+r[2])/2))
-    return [(r[0],r[1],r[2],r[3]) for r in regs] or [(gx0,gy0,gx1,gy1)]
-
+    tit=[]
+    for titulo,b in (("Planta elétrica",planta),("Diagrama / QDC",qdc),("Tabelas e legendas",legenda)):
+        if b:
+            regs.append(b); tit.append(titulo)
+    if not regs:
+        return [(gx0,gy0,gx1,gy1)], ["Projeto elétrico"]
+    return regs,tit
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Renderiza o DXF em PDF A3 multipágina, com regiões autoenquadradas."""
+    """Renderiza o DXF em PDF A3 multipágina, com pranchas semânticas."""
     if not dxf_bytes:
         raise ValueError("DXF vazio; gere o CAD antes de gerar o PDF.")
     import matplotlib
@@ -113,9 +160,8 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             if os.path.isdir(font_dir): ezfonts.font_manager.build(folders=[font_dir],support_dirs=False)
         except Exception: pass
 
-        regioes=_regioes_automaticas(msp)
+        regioes,titulos=_regioes_semanticas(msp)
         projeto_txt=str(nome_projeto or "Projeto").strip()
-        titulos=["Planta elétrica","Diagrama / QDC","Tabelas e legendas"]
         buffer=BytesIO()
         with PdfPages(buffer) as pdf:
             for idx,(x0,y0,x1,y1) in enumerate(regioes):
