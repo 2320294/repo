@@ -898,7 +898,7 @@ def _desenhar_simbologia_pontos_iluminacao_rev130(
             (x, y), (x, y - raio),
             dxfattribs={"layer": "PROJ_ELETRICA_LUZ", "color": 2},
         )
-        _texto_central_luz_rev130(msp, potencia_txt, x, y + 0.105, 0.105)
+        _texto_central_luz_rev130(msp, potencia_txt, x, y + 0.105, 0.085)
         _texto_central_luz_rev130(msp, letra, x - 0.115, y - 0.105, 0.10)
         _texto_central_luz_rev130(msp, circuito_txt, x + 0.115, y - 0.105, 0.09)
 
@@ -978,8 +978,11 @@ def _desenhar_identificacao_circuitos_tomadas_rev135(msp, pontos_eletricos, circ
             # Rev.136: somente TUE voltada para baixo recebe folga maior
             # da parede/triângulo. As outras orientações preservam Rev.135.
             if oy < -0.70 and abs(oy) >= abs(ox):
-                tx = px + ox * 0.20 + lx * 0.20
-                ty = py + oy * 0.20 + ly * 0.20
+                # Rev.137: TUE com ponta para baixo — circuito primeiro,
+                # à esquerda do triângulo, e potência no lado oposto.
+                # Mantém ambos no mesmo nível gráfico e fora do símbolo.
+                tx = px - 0.20
+                ty = py + oy * 0.10
             else:
                 tx = px + ox * 0.08 + lx * 0.18
                 ty = py + oy * 0.08 + ly * 0.18
@@ -1843,7 +1846,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.136 — ajuste gráfico localizado das TUEs voltadas para baixo.
+        # Fase 13.6 Rev.137 — TUE voltada para baixo: circuito à esquerda e potência à direita.
         _desenhar_identificacao_circuitos_tomadas_rev135(
             msp, pontos_eletricos, circuitos_dimensionados
         )
@@ -1859,7 +1862,7 @@ def gerar_cad_unifilar(
             ambientes_geom, rotas_fisicas
         )
 
-        # Fase 13.6 Rev.136 — letras dos interruptores em altura 0.085.
+        # Fase 13.6 Rev.137 — letras dos interruptores em altura 0.085.
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
