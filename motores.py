@@ -971,23 +971,23 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.142 TUE: posicionamento vinculado à PONTA REAL do triângulo.
-            # ▲/▼: circuito à esquerda; a borda direita do texto fica 0,12 m
-            # da ponta. A potência é desenhada por tomadas_cad à direita.
-            # ►/◄: circuito acima e potência abaixo. O eixo do conjunto é
-            # avançado +0,12 m para ► e -0,22 m para ◄.
+            # Rev.143 TUE: aproxima as identificações do triângulo usando o
+            # mesmo afastamento visual consolidado nas TUGs (0,08 m da ponta).
+            # ▲/▼: circuito à esquerda e potência à direita.
+            # ►: bloco à direita, circuito/potência alinhados pela ESQUERDA.
+            # ◄: bloco à esquerda, circuito/potência alinhados pela DIREITA.
             ponta = ponto.get("ponta_triangulo")
             if ponta:
                 ref_x, ref_y = float(ponta[0]), float(ponta[1])
             else:
                 ref_x, ref_y = px + ox * 0.20, py + oy * 0.20
+            afast_tug = 0.08
             if abs(oy) >= abs(ox):
-                tx = ref_x - 0.12
+                tx = ref_x - afast_tug
                 ty = ref_y
             else:
-                desloc_x = 0.12 if ox > 0 else -0.22
-                tx = ref_x + desloc_x
-                ty = ref_y + 0.12
+                tx = ref_x + (afast_tug if ox > 0 else -afast_tug)
+                ty = ref_y + afast_tug
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1000,8 +1000,18 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             try:
                 from ezdxf.enums import TextEntityAlignment
                 if tipo == "TUE" and abs(oy) >= abs(ox):
-                    # A coordenada é a borda interna do texto: cresce para a esquerda.
+                    # ▲/▼: borda interna do circuito voltada para o triângulo.
                     ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_RIGHT)
+                elif tipo == "TUE":
+                    # Laterais: ► alinha pela esquerda; ◄ alinha pela direita.
+                    ent.set_placement(
+                        (tx, ty),
+                        align=(
+                            TextEntityAlignment.MIDDLE_LEFT
+                            if ox > 0
+                            else TextEntityAlignment.MIDDLE_RIGHT
+                        ),
+                    )
                 else:
                     ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_CENTER)
             except Exception:
@@ -1852,7 +1862,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.142 — TUE: textos ancorados à ponta real; laterais com avanço direcional.
+        # Fase 13.6 Rev.143 — TUE: textos ancorados à ponta real; laterais com avanço direcional.
         _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )

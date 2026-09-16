@@ -1266,18 +1266,17 @@ def desenhar_tomadas(
                     }
                 )
 
-            # Rev.142: usar a PONTA REAL do triângulo como âncora gráfica.
-            # ▲/▼: potência à direita, com a borda esquerda do texto a 0,12 m
-            # da ponta (o circuito é ancorado simetricamente à esquerda).
-            # ►/◄: potência abaixo; eixo do conjunto avançado +0,12 m para ►
-            # e -0,22 m para ◄, conforme conferência visual no ZWCAD.
+            # Rev.143: identificação TUE próxima ao triângulo, com o mesmo
+            # afastamento visual das TUGs (0,08 m da ponta).
+            # ▲/▼: potência à direita. Laterais: potência abaixo; ► alinhada
+            # pela esquerda e ◄ alinhada pela direita, no mesmo eixo do circuito.
+            afast_tug = 0.08
             if abs(ny) >= abs(nx):
-                pot_x = ponto_pt[0] + 0.12
+                pot_x = ponto_pt[0] + afast_tug
                 pot_y = ponto_pt[1]
             else:
-                desloc_x = 0.12 if nx > 0 else -0.22
-                pot_x = ponto_pt[0] + desloc_x
-                pot_y = ponto_pt[1] - 0.12
+                pot_x = ponto_pt[0] + (afast_tug if nx > 0 else -afast_tug)
+                pot_y = ponto_pt[1] - afast_tug
             ent_pot_tue = msp.add_text(
                 f"{pot_tue_val}W",
                 dxfattribs={
@@ -1292,8 +1291,8 @@ def desenhar_tomadas(
                     (pot_x, pot_y),
                     align=(
                         TextEntityAlignment.MIDDLE_LEFT
-                        if abs(ny) >= abs(nx)
-                        else TextEntityAlignment.MIDDLE_CENTER
+                        if abs(ny) >= abs(nx) or nx > 0
+                        else TextEntityAlignment.MIDDLE_RIGHT
                     )
                 )
             except Exception:
