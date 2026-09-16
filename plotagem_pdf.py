@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.154 — PDF A3 em 2 pranchas; planta e legenda juntas com escalas independentes.
+Fase 13.6 Rev.155 — PDF A3 paisagem fixo em 2 pranchas; planta e legenda com escalas independentes.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -203,7 +203,7 @@ def _aplicar_monocromatico(ax):
         except Exception: pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.154: PDF A3 monocromático em 2 pranchas.
+    """Rev.155: PDF A3 monocromático em 2 pranchas.
 
     Prancha 1 reúne planta elétrica e legenda de fiação, cada uma com
     enquadramento/escala independente. Prancha 2 mantém o Diagrama/QDC.
@@ -263,23 +263,38 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             if versao:
                 fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
 
+        # Rev.155: dimensões físicas explícitas da folha A3 em PAISAGEM.
+        # O bbox_inches=None é intencional: em ambientes Streamlit/Matplotlib que
+        # configuram savefig.bbox="tight", o PDF era recortado ao conteúdo e a
+        # folha acabava estreita/vertical. Aqui a MediaBox permanece 420 x 297 mm.
+        A3_LARGURA_POL = 420.0 / 25.4
+        A3_ALTURA_POL = 297.0 / 25.4
+
+        def nova_folha_a3():
+            fig = plt.figure(figsize=(A3_LARGURA_POL, A3_ALTURA_POL), facecolor="white")
+            fig.set_size_inches(A3_LARGURA_POL, A3_ALTURA_POL, forward=True)
+            return fig
+
+        def salvar_a3(pdf, fig):
+            pdf.savefig(fig, dpi=300, facecolor="white", bbox_inches=None, pad_inches=0)
+
         with PdfPages(buffer) as pdf:
             # PRANCHA 1 — A3 horizontal. Planta e legenda possuem escalas independentes.
             # A planta recebe a área principal; a legenda permanece vertical em faixa própria.
-            fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+            fig=nova_folha_a3()
             if planta:
                 desenhar_regiao(fig,[0.035,0.085,0.715,0.865],planta,"Planta elétrica")
             if legenda:
                 desenhar_regiao(fig,[0.765,0.085,0.200,0.865],legenda,"Tabelas e legendas")
             rodape(fig,f"Projeto elétrico — {projeto_txt} — Planta elétrica + Legenda de fiação",1)
-            pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
+            salvar_a3(pdf,fig); plt.close(fig)
 
             # PRANCHA 2 — QDC preservado da Rev.153, com enquadramento próprio.
             if qdc:
-                fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+                fig=nova_folha_a3()
                 desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
                 rodape(fig,f"Projeto elétrico — {projeto_txt} — Diagrama / QDC",2)
-                pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
+                salvar_a3(pdf,fig); plt.close(fig)
 
         buffer.seek(0); dados=buffer.getvalue()
         if not dados.startswith(b"%PDF"):
