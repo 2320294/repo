@@ -971,11 +971,11 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.140 TUE: usar a PONTA REAL do triângulo voltada para
-            # dentro do ambiente como referência. Regras gráficas:
-            # - ▲/▼: circuito à esquerda e potência à direita;
-            # - ◄/►: circuito acima e potência abaixo.
-            # O afastamento nominal das informações em relação à ponta é 0,12 m.
+            # Rev.141 TUE: usar a PONTA REAL do triângulo voltada para
+            # dentro do ambiente como referência. ▲/▼ permanecem com circuito
+            # à esquerda e potência à direita. Para ◄/►, circuito fica acima
+            # e potência abaixo; o conjunto é avançado 0,12 m para a direita
+            # quando ► e 0,22 m para a esquerda quando ◄.
             ponta = ponto.get("ponta_triangulo")
             if ponta:
                 ref_x, ref_y = float(ponta[0]), float(ponta[1])
@@ -986,7 +986,8 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
                 tx = ref_x - 0.12
                 ty = ref_y
             else:
-                tx = ref_x
+                desloc_x = 0.12 if ox > 0 else -0.22
+                tx = ref_x + desloc_x
                 ty = ref_y + 0.12
         try:
             ent = msp.add_text(
@@ -1848,7 +1849,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.140 — TUE: ▲/▼ circuito à esquerda e potência à direita; ◄/► circuito acima e potência abaixo.
+        # Fase 13.6 Rev.141 — TUE: laterais com avanço direcional; demais regras preservadas.
         _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )

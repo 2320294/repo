@@ -1266,15 +1266,17 @@ def desenhar_tomadas(
                     }
                 )
 
-            # Rev.140: a referência gráfica é a PONTA do triângulo voltada
-            # para dentro do ambiente. Para ▲/▼, a potência fica à direita
-            # da ponta; para ◄/►, fica abaixo. O circuito é desenhado no lado
-            # oposto pela rotina de identificação, sempre a 0,12 m da ponta.
+            # Rev.141: mantém ▲/▼ como na Rev.140. Nas TUEs laterais,
+            # desloca o CONJUNTO de identificação no sentido da ponta interna:
+            # ► +0,12 m à direita; ◄ -0,22 m à esquerda.
+            # Circuito permanece acima e potência abaixo, separados 0,12 m
+            # verticalmente a partir da nova referência gráfica.
             if abs(ny) >= abs(nx):
                 pot_x = ponto_pt[0] + 0.12
                 pot_y = ponto_pt[1]
             else:
-                pot_x = ponto_pt[0]
+                desloc_x = 0.12 if nx > 0 else -0.22
+                pot_x = ponto_pt[0] + desloc_x
                 pot_y = ponto_pt[1] - 0.12
             ent_pot_tue = msp.add_text(
                 f"{pot_tue_val}W",
