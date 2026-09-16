@@ -192,6 +192,24 @@ def renderizar_upload_dxf(
                     config_interruptores=config_salva
                 )
 
+                # Fase 13.6 Rev.128 — sincroniza imediatamente o cache
+                # local da tabela com o DXF recém-processado. Antes, o
+                # Supabase recebia HALL corretamente, mas a sessão ativa
+                # continuava exibindo a tabela anterior (ex.: QUARTO 2)
+                # até o cache do projeto ser descartado.
+                projeto_cache = str(
+                    st.session_state.get(
+                        "projeto_ativo",
+                        "SEM_PROJETO"
+                    )
+                )
+                chave_tabela_cache = (
+                    f"fase8_16_{projeto_cache}_tabela_editada"
+                )
+                st.session_state[chave_tabela_cache] = list(
+                    novos_dados or []
+                )
+
                 # PONTO PRINCIPAL DA CORREÇÃO:
                 # cria uma nova chave de uploader no próximo ciclo.
                 # Assim o arquivo recém-enviado não reaparece como

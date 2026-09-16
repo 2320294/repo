@@ -45,7 +45,7 @@ def _porta_mais_proxima_da_soleira(s, portas_raw):
 
 def _nome_ambiente_da_poligonal(poly, textos):
     """
-    Rev.127 — usa a mesma identificação central de ambientes do DXF.
+    Rev.128 — usa a mesma identificação central de ambientes do DXF.
 
     Prioriza IA_TEXTOS realmente dentro do polígono e mantém a tolerância
     de 0,50 m somente como fallback. Isso impede HALL/corredores estreitos
