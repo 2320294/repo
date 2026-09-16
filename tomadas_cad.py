@@ -1266,8 +1266,8 @@ def desenhar_tomadas(
                     }
                 )
 
-            # Rev.145: ▲/▼ preservadas conforme Rev.143. Nas laterais,
-            # circuito/potência mantêm o vão vertical de 0,03 m, mas o bloco
+            # Rev.146: ▲/▼ preservadas conforme Rev.143. Nas laterais,
+            # circuito/potência mantêm o vão livre vertical de 0,09 m entre as bordas dos textos, mas o bloco
             # é aproximado 0,12 m em direção ao triângulo. ► alinha pela
             # esquerda e ◄ pela direita.
             afast_tug = 0.08
@@ -1275,8 +1275,8 @@ def desenhar_tomadas(
                 pot_x = ponto_pt[0] + afast_tug
                 pot_y = ponto_pt[1]
             else:
-                # Rev.145: aproxima 0,12 m em relação à posição da Rev.144.
-                meia_separacao = (0.085 + 0.03) / 2.0
+                # Rev.146: aproxima 0,12 m em relação à posição da Rev.144.
+                meia_separacao = (0.085 + 0.09) / 2.0
                 pot_x = ponto_pt[0]
                 pot_y = ponto_pt[1] - meia_separacao
             ent_pot_tue = msp.add_text(
