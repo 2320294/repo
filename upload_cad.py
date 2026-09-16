@@ -192,7 +192,7 @@ def renderizar_upload_dxf(
                     config_interruptores=config_salva
                 )
 
-                # Fase 13.6 Rev.128 — sincroniza imediatamente o cache
+                # Fase 13.6 Rev.129 — sincroniza imediatamente o cache
                 # local da tabela com o DXF recém-processado. Antes, o
                 # Supabase recebia HALL corretamente, mas a sessão ativa
                 # continuava exibindo a tabela anterior (ex.: QUARTO 2)

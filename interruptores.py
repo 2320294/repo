@@ -14,7 +14,7 @@ from soleiras_geometria import rotular_p1_p4, distancia_ponto_segmento
 
 def _nome_ambiente_da_poligonal(poly, textos):
     """
-    Rev.128 — usa a mesma identificação central de ambientes do DXF.
+    Rev.129 — usa a mesma identificação central de ambientes do DXF.
 
     Prioriza IA_TEXTOS realmente dentro do polígono e mantém a tolerância
     de 0,50 m somente como fallback. Isso impede HALL/corredores estreitos

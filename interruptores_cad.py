@@ -45,7 +45,7 @@ def _porta_mais_proxima_da_soleira(s, portas_raw):
 
 def _nome_ambiente_da_poligonal(poly, textos):
     """
-    Rev.128 — usa a mesma identificação central de ambientes do DXF.
+    Rev.129 — usa a mesma identificação central de ambientes do DXF.
 
     Prioriza IA_TEXTOS realmente dentro do polígono e mantém a tolerância
     de 0,50 m somente como fallback. Isso impede HALL/corredores estreitos
@@ -726,8 +726,9 @@ def desenhar_interruptores(
                 }
             )
 
+            hatch_interruptor = None
             if interruptor_paralelo:
-                _preencher_circulo_interruptor(
+                hatch_interruptor = _preencher_circulo_interruptor(
                     msp,
                     geo["centro"],
                     RAIO_INTERRUPTOR
@@ -806,6 +807,11 @@ def desenhar_interruptores(
                         "10CM_APOS_REFERENCIA"
                     ),
                 "diametro_m": 0.10,
+                "hatch_handle": (
+                    hatch_interruptor.dxf.handle
+                    if hatch_interruptor is not None
+                    else None
+                ),
                 "p1": rot["p1"],
                 "p2": rot["p2"],
                 "p3": rot["p3"],

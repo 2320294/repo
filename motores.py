@@ -674,6 +674,164 @@ def _desenhar_identificacao_condutos_unifilar(msp, rotas_fisicas, circuitos, amb
 
     _desenhar_tabela_legenda_condutos_unifilar(msp, registros, ambientes_geom)
 
+
+def _letra_ambiente_rev129(indice):
+    """Converte 0,1,... em a,b,...,z,aa,ab... sem limitar a planta."""
+    n = int(indice) + 1
+    partes = []
+    while n > 0:
+        n, resto = divmod(n - 1, 26)
+        partes.append(chr(ord("a") + resto))
+    return "".join(reversed(partes))
+
+
+def _mapa_letras_ambientes_rev129(ambientes_geom):
+    mapa = {}
+    for item in (ambientes_geom or []):
+        nome = str(item.get("nome") or "").strip()
+        if nome and nome not in mapa:
+            mapa[nome] = _letra_ambiente_rev129(len(mapa))
+    return mapa
+
+
+def _apagar_hatch_interruptor_rev129(doc, ponto_interruptor):
+    handle = ponto_interruptor.get("hatch_handle")
+    if not handle:
+        return
+    try:
+        ent = doc.entitydb.get(handle)
+        if ent is not None:
+            ent.destroy()
+    except Exception:
+        pass
+
+
+def _preencher_meia_bolinha_esquerda_rev129(msp, centro, raio):
+    """Metade esquerda SOLID, usada só no símbolo interno+adjacente paralelo."""
+    try:
+        hatch = msp.add_hatch(
+            color=256,
+            dxfattribs={"layer": "PROJ_ELETRICA_INTERRUPTOR"}
+        )
+        hatch.set_solid_fill(color=256)
+        caminho = hatch.paths.add_edge_path()
+        cx, cy = centro
+        caminho.add_arc(
+            center=(cx, cy), radius=raio,
+            start_angle=90, end_angle=270, ccw=True
+        )
+        caminho.add_line((cx, cy - raio), (cx, cy + raio))
+        return hatch
+    except Exception:
+        return None
+
+
+def _desenhar_identificacao_iluminacao_interruptores_rev129(
+    doc, msp, pontos_eletricos, pontos_interruptores,
+    ambientes_geom, rotas_fisicas
+):
+    """Rev.129: acrescenta apenas a simbologia alfabética no DXF."""
+    mapa = _mapa_letras_ambientes_rev129(ambientes_geom)
+    if not mapa:
+        return
+
+    # Todos os pontos de iluminação do mesmo ambiente repetem a mesma letra.
+    for ponto in (pontos_eletricos or []):
+        if str(ponto.get("tipo") or "").upper() != "ILUMINACAO":
+            continue
+        amb = str(ponto.get("ambiente") or "").strip()
+        letra = mapa.get(amb)
+        xy = ponto.get("ponto")
+        if not letra or not xy:
+            continue
+        x, y = xy
+        msp.add_text(
+            letra,
+            dxfattribs={
+                "layer": "PROJ_ELETRICA_TEXTO",
+                "height": 0.15,
+                "color": 2,
+                "insert": (x + 0.30, y + 0.15),
+            },
+        )
+
+    # Usa as rotas já aprovadas para saber qual interruptor interno também
+    # comanda varanda/terraço/garagem, sem alterar a lógica de roteamento.
+    compartilhados = {}
+    for rota in (rotas_fisicas or []):
+        if str(rota.get("criterio") or "") != "INTERRUPTOR_CONTROLADOR_PARA_ILUMINACAO_EXTERNA":
+            continue
+        amb_int = str(rota.get("origem_ambiente") or "").strip()
+        amb_ext = str(rota.get("destino_ambiente") or "").strip()
+        inicio = rota.get("inicio")
+        if not amb_int or not amb_ext or not inicio:
+            continue
+        candidatos = [
+            p for p in (pontos_interruptores or [])
+            if str(p.get("ambiente") or "").strip() == amb_int
+            and (p.get("ponto_tangencia") or p.get("ponto"))
+        ]
+        if not candidatos:
+            continue
+        alvo = min(
+            candidatos,
+            key=lambda p: math.hypot(
+                (p.get("ponto_tangencia") or p.get("ponto"))[0] - inicio[0],
+                (p.get("ponto_tangencia") or p.get("ponto"))[1] - inicio[1],
+            ),
+        )
+        compartilhados.setdefault(id(alvo), set()).add(amb_ext)
+
+    for ponto in (pontos_interruptores or []):
+        amb_int = str(ponto.get("ambiente") or "").strip()
+        letra_int = mapa.get(amb_int)
+        centro = ponto.get("ponto")
+        if not letra_int or not centro:
+            continue
+        cx, cy = centro
+        externos = sorted(
+            compartilhados.get(id(ponto), set()),
+            key=lambda nome: mapa.get(nome, nome),
+        )
+
+        if externos:
+            amb_ext = externos[0]
+            letra_ext = mapa.get(amb_ext)
+            if letra_ext:
+                # Interno à esquerda, adjacente/externo à direita.
+                msp.add_line(
+                    (cx, cy - 0.05), (cx, cy + 0.05),
+                    dxfattribs={"layer": "PROJ_ELETRICA_INTERRUPTOR"},
+                )
+                # Paralelo compartilhado: só o lado interno fica preenchido.
+                if bool(ponto.get("paralelo")):
+                    _apagar_hatch_interruptor_rev129(doc, ponto)
+                    _preencher_meia_bolinha_esquerda_rev129(msp, centro, 0.05)
+                msp.add_text(
+                    letra_int,
+                    dxfattribs={
+                        "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12,
+                        "color": 2, "insert": (cx - 0.18, cy - 0.04),
+                    },
+                )
+                msp.add_text(
+                    letra_ext,
+                    dxfattribs={
+                        "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12,
+                        "color": 2, "insert": (cx + 0.08, cy - 0.04),
+                    },
+                )
+                continue
+
+        # Comum: paralelo continua totalmente preenchido; simples continua vazio.
+        msp.add_text(
+            letra_int,
+            dxfattribs={
+                "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12,
+                "color": 2, "insert": (cx + 0.08, cy - 0.04),
+            },
+        )
+
 def gerar_cad_unifilar(
     dxf_bytes,
     dados_editados,
@@ -1067,22 +1225,7 @@ def gerar_cad_unifilar(
                             }
                         )
 
-                        msp.add_text(
-                            "a",
-                            dxfattribs={
-                                "layer":
-                                    "PROJ_ELETRICA_TEXTO",
-                                "height":
-                                    0.15,
-                                "color":
-                                    2,
-                                "insert":
-                                    (
-                                        lx + 0.3,
-                                        ly + 0.15
-                                    )
-                            }
-                        )
+
 
             # QDC
             qdc_resultado = desenhar_qdc(
@@ -1544,6 +1687,12 @@ def gerar_cad_unifilar(
             circuitos_dimensionados
         )
 
+
+        # Fase 13.6 Rev.129 — identificação alfabética no DXF.
+        _desenhar_identificacao_iluminacao_interruptores_rev129(
+            doc, msp, pontos_eletricos, pontos_interruptores,
+            ambientes_geom, rotas_fisicas
+        )
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
