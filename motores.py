@@ -971,11 +971,11 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.143 TUE: aproxima as identificações do triângulo usando o
-            # mesmo afastamento visual consolidado nas TUGs (0,08 m da ponta).
-            # ▲/▼: circuito à esquerda e potência à direita.
-            # ►: bloco à direita, circuito/potência alinhados pela ESQUERDA.
-            # ◄: bloco à esquerda, circuito/potência alinhados pela DIREITA.
+            # Rev.144 TUE: ▲/▼ preservadas conforme Rev.143.
+            # Nas laterais (►/◄), o bloco circuito/potência fica a 0,12 m
+            # da ponta do triângulo. Circuito acima e potência abaixo, com
+            # 0,03 m de vão entre os textos (altura 0,085 => centros ±0,0575).
+            # ► alinha pela ESQUERDA; ◄ alinha pela DIREITA.
             ponta = ponto.get("ponta_triangulo")
             if ponta:
                 ref_x, ref_y = float(ponta[0]), float(ponta[1])
@@ -986,8 +986,10 @@ def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circ
                 tx = ref_x - afast_tug
                 ty = ref_y
             else:
-                tx = ref_x + (afast_tug if ox > 0 else -afast_tug)
-                ty = ref_y + afast_tug
+                afast_lateral = 0.12
+                meia_separacao = (0.085 + 0.03) / 2.0
+                tx = ref_x + (afast_lateral if ox > 0 else -afast_lateral)
+                ty = ref_y + meia_separacao
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1862,7 +1864,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.143 — TUE: textos ancorados à ponta real; laterais com avanço direcional.
+        # Fase 13.6 Rev.144 — TUE lateral: bloco a 0,12 m da ponta e vão vertical de 0,03 m.
         _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )

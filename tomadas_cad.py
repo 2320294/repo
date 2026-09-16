@@ -1266,17 +1266,19 @@ def desenhar_tomadas(
                     }
                 )
 
-            # Rev.143: identificação TUE próxima ao triângulo, com o mesmo
-            # afastamento visual das TUGs (0,08 m da ponta).
-            # ▲/▼: potência à direita. Laterais: potência abaixo; ► alinhada
-            # pela esquerda e ◄ alinhada pela direita, no mesmo eixo do circuito.
+            # Rev.144: ▲/▼ preservadas conforme Rev.143. Nas laterais,
+            # circuito/potência ficam a 0,12 m da ponta do triângulo e com
+            # vão vertical de 0,03 m entre os textos. ► alinha pela esquerda
+            # e ◄ pela direita.
             afast_tug = 0.08
             if abs(ny) >= abs(nx):
                 pot_x = ponto_pt[0] + afast_tug
                 pot_y = ponto_pt[1]
             else:
-                pot_x = ponto_pt[0] + (afast_tug if nx > 0 else -afast_tug)
-                pot_y = ponto_pt[1] - afast_tug
+                afast_lateral = 0.12
+                meia_separacao = (0.085 + 0.03) / 2.0
+                pot_x = ponto_pt[0] + (afast_lateral if nx > 0 else -afast_lateral)
+                pot_y = ponto_pt[1] - meia_separacao
             ent_pot_tue = msp.add_text(
                 f"{pot_tue_val}W",
                 dxfattribs={
