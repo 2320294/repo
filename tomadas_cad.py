@@ -1266,13 +1266,16 @@ def desenhar_tomadas(
                     }
                 )
 
-            # Rev.139: a referência gráfica é a PONTA do triângulo voltada
-            # para dentro do ambiente. No eixo transversal, a sequência é
-            # sempre: circuito -> triângulo -> potência. A potência fica
-            # 0,12 m do ponto_pt, no lado oposto ao circuito.
-            lx, ly = -ny, nx
-            pot_x = ponto_pt[0] + lx * 0.12
-            pot_y = ponto_pt[1] + ly * 0.12
+            # Rev.140: a referência gráfica é a PONTA do triângulo voltada
+            # para dentro do ambiente. Para ▲/▼, a potência fica à direita
+            # da ponta; para ◄/►, fica abaixo. O circuito é desenhado no lado
+            # oposto pela rotina de identificação, sempre a 0,12 m da ponta.
+            if abs(ny) >= abs(nx):
+                pot_x = ponto_pt[0] + 0.12
+                pot_y = ponto_pt[1]
+            else:
+                pot_x = ponto_pt[0]
+                pot_y = ponto_pt[1] - 0.12
             ent_pot_tue = msp.add_text(
                 f"{pot_tue_val}W",
                 dxfattribs={
@@ -1301,7 +1304,7 @@ def desenhar_tomadas(
                     ponto_traco_externo,
                 "ponto_conexao_ambiente":
                     ponto_traco_interno,
-                # Rev.139: ponta real do triângulo, usada somente para
+                # Rev.140: ponta real do triângulo, usada somente para
                 # posicionar as identificações gráficas da TUE.
                 "ponta_triangulo": ponto_pt,
                 "potencia": pot_tue_val,

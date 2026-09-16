@@ -929,7 +929,7 @@ def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
     return None
 
 
-def _desenhar_identificacao_circuitos_tomadas_rev139(msp, pontos_eletricos, circuitos_dimensionados):
+def _desenhar_identificacao_circuitos_tomadas_rev140(msp, pontos_eletricos, circuitos_dimensionados):
     """Rev.135 — TUG preservada; nas TUEs circuito fica em um lado do triângulo."""
     for ponto in (pontos_eletricos or []):
         tipo = str(ponto.get("tipo") or "").strip().upper()
@@ -971,19 +971,23 @@ def _desenhar_identificacao_circuitos_tomadas_rev139(msp, pontos_eletricos, circ
             else:
                 ty += 0.10
         else:
-            # Rev.139 TUE: usar a PONTA REAL do triângulo como referência.
-            # A direção ox/oy aponta para dentro do ambiente; o eixo
-            # transversal (-oy, ox) organiza a leitura sempre como:
-            # circuito -> triângulo -> potência.
+            # Rev.140 TUE: usar a PONTA REAL do triângulo voltada para
+            # dentro do ambiente como referência. Regras gráficas:
+            # - ▲/▼: circuito à esquerda e potência à direita;
+            # - ◄/►: circuito acima e potência abaixo.
+            # O afastamento nominal das informações em relação à ponta é 0,12 m.
             ponta = ponto.get("ponta_triangulo")
             if ponta:
                 ref_x, ref_y = float(ponta[0]), float(ponta[1])
             else:
                 # Compatibilidade defensiva com pontos antigos em sessão.
                 ref_x, ref_y = px + ox * 0.20, py + oy * 0.20
-            lx, ly = -oy, ox
-            tx = ref_x - lx * 0.12
-            ty = ref_y - ly * 0.12
+            if abs(oy) >= abs(ox):
+                tx = ref_x - 0.12
+                ty = ref_y
+            else:
+                tx = ref_x
+                ty = ref_y + 0.12
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1844,8 +1848,8 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.139 — TUE: referência na ponta interna; circuito -> triângulo -> potência, afastamento 0,12 m.
-        _desenhar_identificacao_circuitos_tomadas_rev139(
+        # Fase 13.6 Rev.140 — TUE: ▲/▼ circuito à esquerda e potência à direita; ◄/► circuito acima e potência abaixo.
+        _desenhar_identificacao_circuitos_tomadas_rev140(
             msp, pontos_eletricos, circuitos_dimensionados
         )
 
@@ -1860,7 +1864,7 @@ def gerar_cad_unifilar(
             ambientes_geom, rotas_fisicas
         )
 
-        # Fase 13.6 Rev.139 — letras dos interruptores mantidas em 0.085 e aproximadas 0,05 m.
+        # Fase 13.6 Rev.140 — letras dos interruptores preservadas conforme Rev.139.
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
