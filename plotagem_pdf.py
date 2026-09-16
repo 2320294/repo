@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.156 — PDF A3 paisagem normalizado em 2 pranchas; planta e legenda com escalas independentes.
+Fase 13.6 Rev.157 — PDF multipágina monocromático com melhor aproveitamento e rodapé protegido.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -63,7 +63,7 @@ def _expandir(b, px=0.08, py=0.08, minimo=0.35):
 
 
 def _regioes_semanticas(msp):
-    """Rev.153: preserva as regiões semânticas rigorosas da Rev.152.
+    """Rev.157: preserva as regiões semânticas rigorosas da Rev.152.
 
     A planta usa IA_AMBIENTES como âncora. O QDC usa somente camadas próprias.
     A legenda é localizada pelo cabeçalho e pelas entidades da mesma camada,
@@ -203,11 +203,11 @@ def _aplicar_monocromatico(ax):
         except Exception: pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.156: PDF A3 monocromático em 2 pranchas.
+    """Rev.157: PDF A3 em 2 pranchas.
 
-    Prancha 1 reúne planta elétrica e legenda de fiação, cada uma com
-    enquadramento/escala independente. Prancha 2 mantém o Diagrama/QDC.
-    O DXF original não é alterado.
+    Prancha 1: planta elétrica + legenda de fiação, cada qual com viewport/escala própria.
+    Prancha 2: diagrama/QDC preservado no enquadramento funcional da Rev.157.
+    O DXF não é alterado.
     """
     if not dxf_bytes:
         raise ValueError("DXF vazio; gere o CAD antes de gerar o PDF.")
@@ -233,18 +233,19 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             pass
 
         regioes,titulos=_regioes_semanticas(msp)
-        mapa={t:b for t,b in zip(titulos,regioes)}
-        planta=mapa.get("Planta elétrica")
-        qdc=mapa.get("Diagrama / QDC")
-        legenda=mapa.get("Tabelas e legendas")
+        mapa={t.lower(): r for r,t in zip(regioes,titulos)}
+        planta=mapa.get("planta elétrica")
+        qdc=mapa.get("diagrama / qdc")
+        legenda=mapa.get("tabelas e legendas")
+        if not planta:
+            raise RuntimeError("Não foi possível localizar a região da planta elétrica no DXF.")
+
         projeto_txt=str(nome_projeto or "Projeto").strip()
         buffer=BytesIO()
+        total_paginas=2 if qdc else 1
 
-        def desenhar_regiao(fig, pos, regiao, titulo):
-            if not regiao:
-                return
-            x0,y0,x1,y1=regiao
-            ax=fig.add_axes(pos)
+        def desenhar_regiao(fig, rect, regiao, titulo):
+            ax=fig.add_axes(rect)
             ax.set_aspect("equal",adjustable="box")
             ax.set_axis_off(); ax.set_facecolor("white")
             ctx=RenderContext(doc); out=MatplotlibBackend(ax)
@@ -253,86 +254,43 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
                 filter_func=_filtro_prancha(msp,regiao,titulo),
             )
             _aplicar_monocromatico(ax)
+            x0,y0,x1,y1=regiao
             ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
+            return ax
 
-        def rodape(fig, esquerda, pagina, total=2):
+        def rodape(fig, numero, titulo):
             fig.add_artist(Rectangle((0.02,0.025),0.96,0.95,fill=False,linewidth=0.8,
                                      transform=fig.transFigure,clip_on=False))
-            fig.text(0.035,0.043,esquerda,fontsize=7.2,ha="left",va="center")
-            fig.text(0.50,0.043,f"Prancha {pagina}/{total}",fontsize=7.2,ha="center",va="center")
+            fig.text(0.035,0.043,f"Projeto elétrico — {projeto_txt} — {titulo}",
+                     fontsize=7.2,ha="left",va="center")
+            fig.text(0.50,0.043,f"Prancha {numero}/{total_paginas}",
+                     fontsize=7.2,ha="center",va="center")
             if versao:
                 fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
 
-        # Rev.156: dimensões físicas explícitas da folha A3 em PAISAGEM.
-        # O bbox_inches=None é intencional: em ambientes Streamlit/Matplotlib que
-        # configuram savefig.bbox="tight", o PDF era recortado ao conteúdo e a
-        # folha acabava estreita/vertical. Aqui a MediaBox permanece 420 x 297 mm.
-        A3_LARGURA_POL = 420.0 / 25.4
-        A3_ALTURA_POL = 297.0 / 25.4
+        with PdfPages(buffer) as pdf:
+            # PRANCHA 1 — A3 PAISAGEM FIXA.
+            # A planta e a legenda NÃO compartilham escala. A legenda ocupa uma faixa
+            # lateral própria e jamais participa do cálculo da escala da planta.
+            fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+            if legenda:
+                # 73% da largura útil para a planta; 21% para a legenda; 2% de respiro.
+                desenhar_regiao(fig,[0.035,0.075,0.72,0.885],planta,"Planta elétrica")
+                desenhar_regiao(fig,[0.775,0.075,0.19,0.885],legenda,"Tabelas e legendas")
+            else:
+                desenhar_regiao(fig,[0.035,0.075,0.93,0.885],planta,"Planta elétrica")
+            rodape(fig,1,"Planta elétrica + Legenda de fiação" if legenda else "Planta elétrica")
+            pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
 
-        def nova_folha_a3():
-            fig = plt.figure(figsize=(A3_LARGURA_POL, A3_ALTURA_POL), facecolor="white")
-            fig.set_size_inches(A3_LARGURA_POL, A3_ALTURA_POL, forward=True)
-            return fig
-
-        def salvar_a3(pdf, fig):
-            pdf.savefig(fig, dpi=300, facecolor="white", bbox_inches=None, pad_inches=0)
-
-        # Rev.156: cada prancha é primeiro produzida isoladamente e, em seguida,
-        # normalizada para uma MediaBox A3 paisagem real. Isso evita que uma
-        # prancha herde/sofra recorte de tamanho diferente dentro do PdfPages.
-        paginas=[]
-
-        def gerar_pagina(fig):
-            pagina=BytesIO()
-            fig.savefig(pagina, format="pdf", dpi=300, facecolor="white",
-                        bbox_inches=None, pad_inches=0)
-            plt.close(fig)
-            pagina.seek(0)
-            return pagina.getvalue()
-
-        # PRANCHA 1 — planta e legenda em áreas independentes da MESMA A3 horizontal.
-        fig=nova_folha_a3()
-        if planta:
-            desenhar_regiao(fig,[0.035,0.085,0.715,0.865],planta,"Planta elétrica")
-        if legenda:
-            desenhar_regiao(fig,[0.765,0.085,0.200,0.865],legenda,"Tabelas e legendas")
-        rodape(fig,f"Projeto elétrico — {projeto_txt} — Planta elétrica + Legenda de fiação",1)
-        paginas.append(gerar_pagina(fig))
-
-        # PRANCHA 2 — QDC preservado.
-        if qdc:
-            fig=nova_folha_a3()
-            desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
-            rodape(fig,f"Projeto elétrico — {projeto_txt} — Diagrama / QDC",2)
-            paginas.append(gerar_pagina(fig))
-
-        # Une as páginas sem permitir que o tamanho da página seja recalculado
-        # pelo conteúdo. A3 paisagem = 1190.551 x 841.890 pontos PDF.
-        try:
-            from pypdf import PdfReader, PdfWriter
-            from pypdf.generic import RectangleObject
-            largura_pt=420.0/25.4*72.0
-            altura_pt=297.0/25.4*72.0
-            writer=PdfWriter()
-            for raw in paginas:
-                reader=PdfReader(BytesIO(raw))
-                page=reader.pages[0]
-                # Matplotlib já desenha na proporção A3; aqui apenas travamos
-                # fisicamente MediaBox/CropBox/TrimBox na mesma folha horizontal.
-                caixa=RectangleObject([0,0,largura_pt,altura_pt])
-                page.mediabox=caixa
-                page.cropbox=RectangleObject([0,0,largura_pt,altura_pt])
-                page.trimbox=RectangleObject([0,0,largura_pt,altura_pt])
-                writer.add_page(page)
-            writer.write(buffer)
-        except Exception:
-            # Compatibilidade com ambientes sem pypdf: união tradicional.
-            with PdfPages(buffer) as pdf:
-                for raw in paginas:
-                    # Esta contingência só é usada se pypdf não estiver disponível.
-                    pass
-            raise RuntimeError("Dependência pypdf ausente para normalização A3 da Rev.156.")
+            # PRANCHA 2 — mantém o comportamento/enquadramento funcional da Rev.157.
+            if qdc:
+                x0,y0,x1,y1=qdc
+                w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
+                figsize=(16.54,11.69) if w>=h else (11.69,16.54)
+                fig=plt.figure(figsize=figsize,facecolor="white")
+                desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
+                rodape(fig,2,"Diagrama / QDC")
+                pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
 
         buffer.seek(0); dados=buffer.getvalue()
         if not dados.startswith(b"%PDF"):
