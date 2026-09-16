@@ -1277,12 +1277,17 @@ def desenhar_tomadas(
                         2,
                     "insert":
                         (
-                            # Rev.135: potência fica no lado oposto ao circuito
+                            # Rev.136: potência permanece no lado oposto ao circuito; TUE voltada
+                            # para baixo recebe folga adicional da parede e do símbolo.
                             # em relação ao triângulo da TUE. nx/ny apontam para
                             # o interior; (ny, -nx) é o lado oposto ao usado
                             # pelo -N- em motores.py.
-                            px + nx * 0.08 + ny * 0.18,
-                            py + ny * 0.08 - nx * 0.18
+                            (px + nx * 0.20 + ny * 0.20)
+                            if (ny < -0.70 and abs(ny) >= abs(nx))
+                            else (px + nx * 0.08 + ny * 0.18),
+                            (py + ny * 0.20 - nx * 0.20)
+                            if (ny < -0.70 and abs(ny) >= abs(nx))
+                            else (py + ny * 0.08 - nx * 0.18)
                         )
                 }
             )

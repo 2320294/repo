@@ -760,7 +760,7 @@ def _desenhar_identificacao_iluminacao_interruptores_rev135(
     def _texto_letra(txt, x, y):
         try:
             ent = msp.add_text(str(txt), dxfattribs={
-                "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12, "color": 2
+                "layer": "PROJ_ELETRICA_TEXTO", "height": 0.085, "color": 2
             })
             try:
                 from ezdxf.enums import TextEntityAlignment
@@ -975,8 +975,14 @@ def _desenhar_identificacao_circuitos_tomadas_rev135(msp, pontos_eletricos, circ
             # desenhada no lado oposto em tomadas_cad.py.
             # Vetor perpendicular à orientação da tomada.
             lx, ly = -oy, ox
-            tx = px + ox * 0.08 + lx * 0.18
-            ty = py + oy * 0.08 + ly * 0.18
+            # Rev.136: somente TUE voltada para baixo recebe folga maior
+            # da parede/triângulo. As outras orientações preservam Rev.135.
+            if oy < -0.70 and abs(oy) >= abs(ox):
+                tx = px + ox * 0.20 + lx * 0.20
+                ty = py + oy * 0.20 + ly * 0.20
+            else:
+                tx = px + ox * 0.08 + lx * 0.18
+                ty = py + oy * 0.08 + ly * 0.18
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1837,7 +1843,7 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.135 — TUG preservada e TUE organizada em bloco circuito + potência.
+        # Fase 13.6 Rev.136 — ajuste gráfico localizado das TUEs voltadas para baixo.
         _desenhar_identificacao_circuitos_tomadas_rev135(
             msp, pontos_eletricos, circuitos_dimensionados
         )
@@ -1853,7 +1859,7 @@ def gerar_cad_unifilar(
             ambientes_geom, rotas_fisicas
         )
 
-        # Fase 13.6 Rev.135 — interruptores exibem somente as letras dos pontos de iluminação.
+        # Fase 13.6 Rev.136 — letras dos interruptores em altura 0.085.
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.
