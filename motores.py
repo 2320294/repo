@@ -933,8 +933,8 @@ def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
     return None
 
 
-def _desenhar_identificacao_circuitos_tomadas_rev132(msp, pontos_eletricos, circuitos_dimensionados):
-    """Rev.132 — posiciona -N- à frente da ponta das TUG/TUE, sem redesenhar símbolos."""
+def _desenhar_identificacao_circuitos_tomadas_rev133(msp, pontos_eletricos, circuitos_dimensionados):
+    """Rev.133 — mantém -N- à frente da tomada e aplica pequeno afastamento lateral gráfico."""
     for ponto in (pontos_eletricos or []):
         tipo = str(ponto.get("tipo") or "").strip().upper()
         if tipo not in {"TUG", "TUE"}:
@@ -949,7 +949,7 @@ def _desenhar_identificacao_circuitos_tomadas_rev132(msp, pontos_eletricos, circ
             continue
 
         px, py = float(xy[0]), float(xy[1])
-        # Fase 13.6 Rev.132 — o texto deve ficar À FRENTE da ponta da tomada.
+        # Fase 13.6 Rev.133 — mantém o texto À FRENTE e desloca-o levemente para o lado.
         # Usamos a direção já calculada do símbolo para o interior do ambiente;
         # nenhuma geometria, posição ou regra elétrica da tomada é alterada.
         conexao_frente = ponto.get("ponto_conexao_ambiente")
@@ -966,9 +966,18 @@ def _desenhar_identificacao_circuitos_tomadas_rev132(msp, pontos_eletricos, circ
             # fallback estritamente gráfico.
             ox, oy = 1.0, 0.0
 
-        # Centro do texto logo após a ponta do triângulo (base de 0,15 m).
+        # Mantém a distância frontal aprovada na Rev.132 e acrescenta somente
+        # um pequeno deslocamento lateral para o texto não ficar sobre o eixo
+        # da ponta do triângulo. A geometria da tomada permanece intocada.
         tx = px + ox * 0.23
         ty = py + oy * 0.23
+        desloc_lateral = 0.10
+        if abs(oy) >= abs(ox):
+            # tomada predominantemente vertical: deslocamento horizontal
+            tx += desloc_lateral
+        else:
+            # tomada predominantemente horizontal: deslocamento vertical
+            ty += desloc_lateral
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1829,8 +1838,8 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.132 — circuito à frente da ponta das tomadas existentes.
-        _desenhar_identificacao_circuitos_tomadas_rev132(
+        # Fase 13.6 Rev.133 — circuito à frente, com pequeno deslocamento lateral.
+        _desenhar_identificacao_circuitos_tomadas_rev133(
             msp, pontos_eletricos, circuitos_dimensionados
         )
 

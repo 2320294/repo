@@ -1,0 +1,8 @@
+AUTOELÉTRICA — FASE 13.6 REV.133
+
+ALTERAÇÃO LOCALIZADA:
+- Mantida integralmente a Rev.132 como base.
+- Identificação de circuito -N- de TUG/TUE permanece à frente da ponta do símbolo.
+- Aplicado apenas pequeno deslocamento lateral de 0,10 m ao texto para afastá-lo do eixo da ponta, conforme referência do usuário.
+- Fonte das TUEs permanece 0,085.
+- Nenhuma alteração em geometria, posição, circuitos, cargas, QDC, interruptores, iluminação, eletrodutos ou materiais.
