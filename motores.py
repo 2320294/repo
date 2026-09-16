@@ -907,6 +907,83 @@ def _desenhar_simbologia_pontos_iluminacao_rev130(
         _texto_central_luz_rev130(msp, circuito_txt, x + 0.115, y - 0.105, 0.09)
 
 
+
+def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
+    """Retorna o circuito real TUG/TUE que atende o ambiente, sem alterar sua formação."""
+    alvo = str(ambiente or "").strip().casefold()
+    tipo_alvo = str(tipo or "").strip().upper()
+    if not alvo or tipo_alvo not in {"TUG", "TUE"}:
+        return None
+    for circuito in (circuitos or []):
+        if str(circuito.get("tipo") or "").strip().upper() != tipo_alvo:
+            continue
+        nomes = []
+        nomes.extend(circuito.get("ambientes") or [])
+        for origem in (circuito.get("origens") or []):
+            if isinstance(origem, dict):
+                nomes.append(origem.get("ambiente"))
+        nomes.append(circuito.get("ambiente"))
+        for nome in nomes:
+            partes = [p.strip().casefold() for p in str(nome or "").split("+") if p.strip()]
+            if alvo in partes:
+                try:
+                    return int(circuito.get("numero"))
+                except Exception:
+                    return circuito.get("numero")
+    return None
+
+
+def _desenhar_identificacao_circuitos_tomadas_rev131(msp, pontos_eletricos, circuitos_dimensionados):
+    """Rev.131 — acrescenta -N- junto às TUG/TUE existentes, sem redesenhar seus símbolos."""
+    for ponto in (pontos_eletricos or []):
+        tipo = str(ponto.get("tipo") or "").strip().upper()
+        if tipo not in {"TUG", "TUE"}:
+            continue
+        xy = ponto.get("ponto")
+        if not xy:
+            continue
+        numero = _circuito_tomada_ambiente_rev131(
+            ponto.get("ambiente"), tipo, circuitos_dimensionados
+        )
+        if numero in (None, ""):
+            continue
+
+        px, py = float(xy[0]), float(xy[1])
+        # A identificação fica do lado externo da parede, como na simbologia de referência.
+        conexao_ext = ponto.get("ponto_conexao_parede")
+        if conexao_ext:
+            ox = float(conexao_ext[0]) - px
+            oy = float(conexao_ext[1]) - py
+            comp = (ox * ox + oy * oy) ** 0.5
+        else:
+            comp = 0.0
+        if comp > 1e-9:
+            ox /= comp
+            oy /= comp
+        else:
+            # fallback somente gráfico; não interfere na tomada nem no roteamento.
+            ox, oy = -1.0, 0.0
+
+        tx = px + ox * 0.18
+        ty = py + oy * 0.18
+        try:
+            ent = msp.add_text(
+                f"-{numero}-",
+                dxfattribs={
+                    "layer": "PROJ_ELETRICA_TEXTO",
+                    "height": 0.085,
+                    "color": 2,
+                },
+            )
+            try:
+                from ezdxf.enums import TextEntityAlignment
+                ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_CENTER)
+            except Exception:
+                ent.dxf.insert = (tx, ty)
+        except Exception:
+            pass
+
+
 def gerar_cad_unifilar(
     dxf_bytes,
     dados_editados,
@@ -1748,6 +1825,11 @@ def gerar_cad_unifilar(
             circuitos_dimensionados
         )
 
+
+        # Fase 13.6 Rev.131 — identificação do circuito junto às tomadas existentes.
+        _desenhar_identificacao_circuitos_tomadas_rev131(
+            msp, pontos_eletricos, circuitos_dimensionados
+        )
 
         # Fase 13.6 Rev.130 — nova simbologia interna dos pontos de iluminação.
         _desenhar_simbologia_pontos_iluminacao_rev130(

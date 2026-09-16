@@ -1272,7 +1272,7 @@ def desenhar_tomadas(
                     "layer":
                         "PROJ_ELETRICA_TEXTO",
                     "height":
-                        0.12,
+                        0.085,
                     "color":
                         2,
                     "insert":
