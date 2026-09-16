@@ -542,11 +542,11 @@ def renderizar_salvar_e_gerar_cad(
         )
 
         # ====================================================
-        # FASE 13.6 REV.148 — PLOTAGEM PDF DO PROJETO
+        # FASE 13.6 REV.150 — PLOTAGEM PDF MULTIPÁGINA DO PROJETO
         # ====================================================
         st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
         st.caption(
-            "Gera uma prancha A3 com orientação e enquadramento automáticos "
+            "Gera pranchas A3 separadas, com orientação e enquadramento automáticos "
             "a partir do DXF final, sem alterar o arquivo CAD."
         )
 
