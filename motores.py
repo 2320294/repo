@@ -726,20 +726,15 @@ def _preencher_meia_bolinha_esquerda_rev129(msp, centro, raio):
         return None
 
 
-def _desenhar_identificacao_iluminacao_interruptores_rev129(
+def _desenhar_identificacao_iluminacao_interruptores_rev135(
     doc, msp, pontos_eletricos, pontos_interruptores,
     ambientes_geom, rotas_fisicas
 ):
-    """Rev.129: acrescenta apenas a simbologia alfabética no DXF."""
+    """Rev.135: preserva a simbologia Rev.129 e posiciona as letras à frente do interruptor."""
     mapa = _mapa_letras_ambientes_rev129(ambientes_geom)
     if not mapa:
         return
 
-    # Rev.130: a letra da iluminação deixa de ser desenhada externamente.
-    # Ela passa a integrar o novo símbolo interno do ponto de luz.
-
-    # Usa as rotas já aprovadas para saber qual interruptor interno também
-    # comanda varanda/terraço/garagem, sem alterar a lógica de roteamento.
     compartilhados = {}
     for rota in (rotas_fisicas or []):
         if str(rota.get("criterio") or "") != "INTERRUPTOR_CONTROLADOR_PARA_ILUMINACAO_EXTERNA":
@@ -756,64 +751,65 @@ def _desenhar_identificacao_iluminacao_interruptores_rev129(
         ]
         if not candidatos:
             continue
-        alvo = min(
-            candidatos,
-            key=lambda p: math.hypot(
-                (p.get("ponto_tangencia") or p.get("ponto"))[0] - inicio[0],
-                (p.get("ponto_tangencia") or p.get("ponto"))[1] - inicio[1],
-            ),
-        )
+        alvo = min(candidatos, key=lambda p: math.hypot(
+            (p.get("ponto_tangencia") or p.get("ponto"))[0] - inicio[0],
+            (p.get("ponto_tangencia") or p.get("ponto"))[1] - inicio[1],
+        ))
         compartilhados.setdefault(id(alvo), set()).add(amb_ext)
+
+    def _texto_letra(txt, x, y):
+        try:
+            ent = msp.add_text(str(txt), dxfattribs={
+                "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12, "color": 2
+            })
+            try:
+                from ezdxf.enums import TextEntityAlignment
+                ent.set_placement((x, y), align=TextEntityAlignment.MIDDLE_CENTER)
+            except Exception:
+                ent.dxf.insert = (x, y)
+        except Exception:
+            pass
 
     for ponto in (pontos_interruptores or []):
         amb_int = str(ponto.get("ambiente") or "").strip()
         letra_int = mapa.get(amb_int)
         centro = ponto.get("ponto")
+        tangencia = ponto.get("ponto_tangencia_simbolo") or ponto.get("ponto_tangencia")
         if not letra_int or not centro:
             continue
-        cx, cy = centro
-        externos = sorted(
-            compartilhados.get(id(ponto), set()),
-            key=lambda nome: mapa.get(nome, nome),
-        )
+        cx, cy = float(centro[0]), float(centro[1])
 
+        # Frente = do ponto de tangência da parede para o centro e além dele.
+        if tangencia:
+            fx = cx - float(tangencia[0]); fy = cy - float(tangencia[1])
+            comp = math.hypot(fx, fy)
+        else:
+            comp = 0.0
+        if comp > 1e-9:
+            fx /= comp; fy /= comp
+        else:
+            fx, fy = 1.0, 0.0
+        # pequeno deslocamento transversal tira a letra do eixo do símbolo
+        lx, ly = -fy, fx
+        base_x = cx + fx * 0.17 + lx * 0.055
+        base_y = cy + fy * 0.17 + ly * 0.055
+
+        externos = sorted(compartilhados.get(id(ponto), set()), key=lambda nome: mapa.get(nome, nome))
         if externos:
-            amb_ext = externos[0]
-            letra_ext = mapa.get(amb_ext)
+            letra_ext = mapa.get(externos[0])
             if letra_ext:
-                # Interno à esquerda, adjacente/externo à direita.
-                msp.add_line(
-                    (cx, cy - 0.05), (cx, cy + 0.05),
-                    dxfattribs={"layer": "PROJ_ELETRICA_INTERRUPTOR"},
-                )
-                # Paralelo compartilhado: só o lado interno fica preenchido.
+                # Mantém exatamente a divisão/hachura aprovada da Rev.129.
+                msp.add_line((cx, cy - 0.05), (cx, cy + 0.05),
+                             dxfattribs={"layer": "PROJ_ELETRICA_INTERRUPTOR"})
                 if bool(ponto.get("paralelo")):
                     _apagar_hatch_interruptor_rev129(doc, ponto)
                     _preencher_meia_bolinha_esquerda_rev129(msp, centro, 0.05)
-                msp.add_text(
-                    letra_int,
-                    dxfattribs={
-                        "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12,
-                        "color": 2, "insert": (cx - 0.18, cy - 0.04),
-                    },
-                )
-                msp.add_text(
-                    letra_ext,
-                    dxfattribs={
-                        "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12,
-                        "color": 2, "insert": (cx + 0.08, cy - 0.04),
-                    },
-                )
+                # Duas letras continuam distintas, mas ambas ficam à frente.
+                _texto_letra(letra_int, base_x + lx * 0.065, base_y + ly * 0.065)
+                _texto_letra(letra_ext, base_x - lx * 0.065, base_y - ly * 0.065)
                 continue
 
-        # Comum: paralelo continua totalmente preenchido; simples continua vazio.
-        msp.add_text(
-            letra_int,
-            dxfattribs={
-                "layer": "PROJ_ELETRICA_TEXTO", "height": 0.12,
-                "color": 2, "insert": (cx + 0.08, cy - 0.04),
-            },
-        )
+        _texto_letra(letra_int, base_x, base_y)
 
 
 def _circuito_iluminacao_ambiente_rev130(ambiente, circuitos):
@@ -933,8 +929,8 @@ def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
     return None
 
 
-def _desenhar_identificacao_circuitos_tomadas_rev134(msp, pontos_eletricos, circuitos_dimensionados):
-    """Rev.134 — preserva TUGs da Rev.133 e organiza a identificação das TUEs."""
+def _desenhar_identificacao_circuitos_tomadas_rev135(msp, pontos_eletricos, circuitos_dimensionados):
+    """Rev.135 — TUG preservada; nas TUEs circuito fica em um lado do triângulo."""
     for ponto in (pontos_eletricos or []):
         tipo = str(ponto.get("tipo") or "").strip().upper()
         if tipo not in {"TUG", "TUE"}:
@@ -949,7 +945,7 @@ def _desenhar_identificacao_circuitos_tomadas_rev134(msp, pontos_eletricos, circ
             continue
 
         px, py = float(xy[0]), float(xy[1])
-        # Fase 13.6 Rev.134 — TUG mantém a posição aprovada; TUE usa o mesmo eixo gráfico organizado.
+        # Fase 13.6 Rev.135 — TUG mantém a posição aprovada; TUE usa o mesmo eixo gráfico organizado.
         # Usamos a direção já calculada do símbolo para o interior do ambiente;
         # nenhuma geometria, posição ou regra elétrica da tomada é alterada.
         conexao_frente = ponto.get("ponto_conexao_ambiente")
@@ -966,72 +962,21 @@ def _desenhar_identificacao_circuitos_tomadas_rev134(msp, pontos_eletricos, circ
             # fallback estritamente gráfico.
             ox, oy = 1.0, 0.0
 
-        # Mantém a distância frontal aprovada na Rev.132 e acrescenta somente
-        # um pequeno deslocamento lateral para o texto não ficar sobre o eixo
-        # da ponta do triângulo. A geometria da tomada permanece intocada.
-        tx = px + ox * 0.23
-        ty = py + oy * 0.23
-        desloc_lateral = 0.10
-        if abs(oy) >= abs(ox):
-            # tomada predominantemente vertical: deslocamento horizontal
-            tx += desloc_lateral
+        if tipo == "TUG":
+            # Posição aprovada na Rev.133: não alterar.
+            tx = px + ox * 0.23
+            ty = py + oy * 0.23
+            if abs(oy) >= abs(ox):
+                tx += 0.10
+            else:
+                ty += 0.10
         else:
-            # tomada predominantemente horizontal: deslocamento vertical
-            ty += desloc_lateral
-        try:
-            ent = msp.add_text(
-                f"-{numero}-",
-                dxfattribs={
-                    "layer": "PROJ_ELETRICA_TEXTO",
-                    "height": 0.085,
-                    "color": 2,
-                },
-            )
-            try:
-                from ezdxf.enums import TextEntityAlignment
-                ent.set_placement((tx, ty), align=TextEntityAlignment.MIDDLE_CENTER)
-            except Exception:
-                ent.dxf.insert = (tx, ty)
-        except Exception:
-            pass
-
-
-def _desenhar_identificacao_circuitos_interruptores_rev134(
-    msp, pontos_interruptores, circuitos_dimensionados
-):
-    """Rev.134 — acrescenta -N- à frente do interruptor sem alterar sua simbologia."""
-    for ponto in (pontos_interruptores or []):
-        if str(ponto.get("tipo") or "").strip().upper() != "INTERRUPTOR":
-            continue
-        ambiente = str(ponto.get("ambiente") or "").strip()
-        centro = ponto.get("ponto")
-        tangencia = ponto.get("ponto_tangencia_simbolo") or ponto.get("ponto_tangencia")
-        if not ambiente or not centro or not tangencia:
-            continue
-        numero = _circuito_iluminacao_ambiente_rev130(ambiente, circuitos_dimensionados)
-        if numero in (None, ""):
-            continue
-
-        cx, cy = float(centro[0]), float(centro[1])
-        ox = cx - float(tangencia[0])
-        oy = cy - float(tangencia[1])
-        comp = math.hypot(ox, oy)
-        if comp <= 1e-9:
-            ox, oy = 1.0, 0.0
-        else:
-            ox /= comp
-            oy /= comp
-
-        # Mesmo princípio gráfico aprovado nas TUGs: identificação à frente
-        # do símbolo e com pequeno deslocamento lateral, sem tocar na bolinha,
-        # hachura, letras ou geometria do interruptor.
-        tx = cx + ox * 0.18
-        ty = cy + oy * 0.18
-        if abs(oy) >= abs(ox):
-            tx += 0.10
-        else:
-            ty += 0.10
-
+            # Rev.135 TUE: circuito de um lado do triângulo; potência será
+            # desenhada no lado oposto em tomadas_cad.py.
+            # Vetor perpendicular à orientação da tomada.
+            lx, ly = -oy, ox
+            tx = px + ox * 0.08 + lx * 0.18
+            ty = py + oy * 0.08 + ly * 0.18
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1892,8 +1837,8 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.134 — TUG preservada e TUE organizada em bloco circuito + potência.
-        _desenhar_identificacao_circuitos_tomadas_rev134(
+        # Fase 13.6 Rev.135 — TUG preservada e TUE organizada em bloco circuito + potência.
+        _desenhar_identificacao_circuitos_tomadas_rev135(
             msp, pontos_eletricos, circuitos_dimensionados
         )
 
@@ -1903,15 +1848,12 @@ def gerar_cad_unifilar(
         )
 
         # Fase 13.6 Rev.129 — identificação alfabética dos interruptores preservada.
-        _desenhar_identificacao_iluminacao_interruptores_rev129(
+        _desenhar_identificacao_iluminacao_interruptores_rev135(
             doc, msp, pontos_eletricos, pontos_interruptores,
             ambientes_geom, rotas_fisicas
         )
 
-        # Fase 13.6 Rev.134 — circuito de iluminação à frente dos interruptores.
-        _desenhar_identificacao_circuitos_interruptores_rev134(
-            msp, pontos_interruptores, circuitos_dimensionados
-        )
+        # Fase 13.6 Rev.135 — interruptores exibem somente as letras dos pontos de iluminação.
 
         # Fase 13.6 Rev.124 — chamadas numeradas ancoradas na geometria real; detalhes elétricos
         # concentrados em tabela para manter a planta limpa.

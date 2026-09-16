@@ -1277,15 +1277,12 @@ def desenhar_tomadas(
                         2,
                     "insert":
                         (
-                            # Rev.134: potência da TUE forma um bloco horizontal
-                            # com o -N- desenhado em motores.py. Mantém a mesma
-                            # referência frontal/lateral aprovada na Rev.133.
-                            px + nx * 0.23
-                            + (0.10 if abs(ny) >= abs(nx) else 0.0)
-                            + 0.15,
-                            py + ny * 0.23
-                            + (0.10 if abs(ny) < abs(nx) else 0.0)
-                            - 0.035
+                            # Rev.135: potência fica no lado oposto ao circuito
+                            # em relação ao triângulo da TUE. nx/ny apontam para
+                            # o interior; (ny, -nx) é o lado oposto ao usado
+                            # pelo -N- em motores.py.
+                            px + nx * 0.08 + ny * 0.18,
+                            py + ny * 0.08 - nx * 0.18
                         )
                 }
             )
