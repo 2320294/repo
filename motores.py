@@ -735,25 +735,8 @@ def _desenhar_identificacao_iluminacao_interruptores_rev129(
     if not mapa:
         return
 
-    # Todos os pontos de iluminação do mesmo ambiente repetem a mesma letra.
-    for ponto in (pontos_eletricos or []):
-        if str(ponto.get("tipo") or "").upper() != "ILUMINACAO":
-            continue
-        amb = str(ponto.get("ambiente") or "").strip()
-        letra = mapa.get(amb)
-        xy = ponto.get("ponto")
-        if not letra or not xy:
-            continue
-        x, y = xy
-        msp.add_text(
-            letra,
-            dxfattribs={
-                "layer": "PROJ_ELETRICA_TEXTO",
-                "height": 0.15,
-                "color": 2,
-                "insert": (x + 0.30, y + 0.15),
-            },
-        )
+    # Rev.130: a letra da iluminação deixa de ser desenhada externamente.
+    # Ela passa a integrar o novo símbolo interno do ponto de luz.
 
     # Usa as rotas já aprovadas para saber qual interruptor interno também
     # comanda varanda/terraço/garagem, sem alterar a lógica de roteamento.
@@ -831,6 +814,98 @@ def _desenhar_identificacao_iluminacao_interruptores_rev129(
                 "color": 2, "insert": (cx + 0.08, cy - 0.04),
             },
         )
+
+
+def _circuito_iluminacao_ambiente_rev130(ambiente, circuitos):
+    """Localiza o número real do circuito de iluminação que atende o ambiente."""
+    alvo = str(ambiente or "").strip().casefold()
+    if not alvo:
+        return None
+    for circuito in (circuitos or []):
+        if str(circuito.get("tipo") or "").strip().upper() not in {"ILUMINAÇÃO", "ILUMINACAO"}:
+            continue
+        nomes = []
+        nomes.extend(circuito.get("ambientes") or [])
+        for origem in (circuito.get("origens") or []):
+            if isinstance(origem, dict):
+                nomes.append(origem.get("ambiente"))
+        nomes.append(circuito.get("ambiente"))
+        for nome in nomes:
+            # circuitos consolidados podem trazer "SALA + HALL" no campo ambiente
+            partes = [p.strip().casefold() for p in str(nome or "").split("+") if p.strip()]
+            if alvo in partes:
+                try:
+                    return int(circuito.get("numero"))
+                except Exception:
+                    return circuito.get("numero")
+    return None
+
+
+def _texto_central_luz_rev130(msp, texto, x, y, altura):
+    """TEXT centralizado no ponto indicado, sem depender de largura aproximada."""
+    try:
+        ent = msp.add_text(
+            str(texto),
+            dxfattribs={
+                "layer": "PROJ_ELETRICA_TEXTO",
+                "height": float(altura),
+                "color": 2,
+            },
+        )
+        try:
+            from ezdxf.enums import TextEntityAlignment
+            ent.set_placement((float(x), float(y)), align=TextEntityAlignment.MIDDLE_CENTER)
+        except Exception:
+            ent.dxf.insert = (float(x), float(y))
+        return ent
+    except Exception:
+        return None
+
+
+def _desenhar_simbologia_pontos_iluminacao_rev130(
+    msp, pontos_eletricos, ambientes_geom, circuitos_dimensionados
+):
+    """Rev.130 — potência, letra e circuito passam para dentro do círculo existente.
+
+    Preserva posição, raio e roteamento já aprovados. Acrescenta somente:
+    - divisor horizontal em todo o diâmetro;
+    - divisor vertical apenas na metade inferior;
+    - potência na metade superior;
+    - letra do ambiente no quadrante inferior esquerdo;
+    - circuito no quadrante inferior direito, no formato -N-.
+    """
+    mapa = _mapa_letras_ambientes_rev129(ambientes_geom)
+    raio = 0.25
+    for ponto in (pontos_eletricos or []):
+        if str(ponto.get("tipo") or "").upper() != "ILUMINACAO":
+            continue
+        xy = ponto.get("ponto")
+        amb = str(ponto.get("ambiente") or "").strip()
+        if not xy or not amb:
+            continue
+        x, y = float(xy[0]), float(xy[1])
+        letra = mapa.get(amb, "")
+        numero = _circuito_iluminacao_ambiente_rev130(amb, circuitos_dimensionados)
+        try:
+            pot = float(ponto.get("potencia", 0) or 0)
+            potencia_txt = f"{int(round(pot))}W" if abs(pot-round(pot)) < 1e-6 else f"{pot:g}W"
+        except Exception:
+            potencia_txt = str(ponto.get("potencia") or "")
+        circuito_txt = f"-{numero}-" if numero not in (None, "") else "-?-"
+
+        # Apenas geometria interna; o círculo de raio 0,25 já existe e não é recriado.
+        msp.add_line(
+            (x - raio, y), (x + raio, y),
+            dxfattribs={"layer": "PROJ_ELETRICA_LUZ", "color": 2},
+        )
+        msp.add_line(
+            (x, y), (x, y - raio),
+            dxfattribs={"layer": "PROJ_ELETRICA_LUZ", "color": 2},
+        )
+        _texto_central_luz_rev130(msp, potencia_txt, x, y + 0.105, 0.105)
+        _texto_central_luz_rev130(msp, letra, x - 0.115, y - 0.105, 0.10)
+        _texto_central_luz_rev130(msp, circuito_txt, x + 0.115, y - 0.105, 0.09)
+
 
 def gerar_cad_unifilar(
     dxf_bytes,
@@ -1210,20 +1285,6 @@ def gerar_cad_unifilar(
                             }
                         )
 
-                        msp.add_text(
-                            f"{pot_ilum_unit}W",
-                            dxfattribs={
-                                "layer":
-                                    "PROJ_ELETRICA_TEXTO",
-                                "height":
-                                    0.15,
-                                "insert":
-                                    (
-                                        lx + 0.3,
-                                        ly - 0.07
-                                    )
-                            }
-                        )
 
 
 
@@ -1688,7 +1749,12 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.129 — identificação alfabética no DXF.
+        # Fase 13.6 Rev.130 — nova simbologia interna dos pontos de iluminação.
+        _desenhar_simbologia_pontos_iluminacao_rev130(
+            msp, pontos_eletricos, ambientes_geom, circuitos_dimensionados
+        )
+
+        # Fase 13.6 Rev.129 — identificação alfabética dos interruptores preservada.
         _desenhar_identificacao_iluminacao_interruptores_rev129(
             doc, msp, pontos_eletricos, pontos_interruptores,
             ambientes_geom, rotas_fisicas
