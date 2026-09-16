@@ -933,8 +933,8 @@ def _circuito_tomada_ambiente_rev131(ambiente, tipo, circuitos):
     return None
 
 
-def _desenhar_identificacao_circuitos_tomadas_rev131(msp, pontos_eletricos, circuitos_dimensionados):
-    """Rev.131 — acrescenta -N- junto às TUG/TUE existentes, sem redesenhar seus símbolos."""
+def _desenhar_identificacao_circuitos_tomadas_rev132(msp, pontos_eletricos, circuitos_dimensionados):
+    """Rev.132 — posiciona -N- à frente da ponta das TUG/TUE, sem redesenhar símbolos."""
     for ponto in (pontos_eletricos or []):
         tipo = str(ponto.get("tipo") or "").strip().upper()
         if tipo not in {"TUG", "TUE"}:
@@ -949,11 +949,13 @@ def _desenhar_identificacao_circuitos_tomadas_rev131(msp, pontos_eletricos, circ
             continue
 
         px, py = float(xy[0]), float(xy[1])
-        # A identificação fica do lado externo da parede, como na simbologia de referência.
-        conexao_ext = ponto.get("ponto_conexao_parede")
-        if conexao_ext:
-            ox = float(conexao_ext[0]) - px
-            oy = float(conexao_ext[1]) - py
+        # Fase 13.6 Rev.132 — o texto deve ficar À FRENTE da ponta da tomada.
+        # Usamos a direção já calculada do símbolo para o interior do ambiente;
+        # nenhuma geometria, posição ou regra elétrica da tomada é alterada.
+        conexao_frente = ponto.get("ponto_conexao_ambiente")
+        if conexao_frente:
+            ox = float(conexao_frente[0]) - px
+            oy = float(conexao_frente[1]) - py
             comp = (ox * ox + oy * oy) ** 0.5
         else:
             comp = 0.0
@@ -961,11 +963,12 @@ def _desenhar_identificacao_circuitos_tomadas_rev131(msp, pontos_eletricos, circ
             ox /= comp
             oy /= comp
         else:
-            # fallback somente gráfico; não interfere na tomada nem no roteamento.
-            ox, oy = -1.0, 0.0
+            # fallback estritamente gráfico.
+            ox, oy = 1.0, 0.0
 
-        tx = px + ox * 0.18
-        ty = py + oy * 0.18
+        # Centro do texto logo após a ponta do triângulo (base de 0,15 m).
+        tx = px + ox * 0.23
+        ty = py + oy * 0.23
         try:
             ent = msp.add_text(
                 f"-{numero}-",
@@ -1826,8 +1829,8 @@ def gerar_cad_unifilar(
         )
 
 
-        # Fase 13.6 Rev.131 — identificação do circuito junto às tomadas existentes.
-        _desenhar_identificacao_circuitos_tomadas_rev131(
+        # Fase 13.6 Rev.132 — circuito à frente da ponta das tomadas existentes.
+        _desenhar_identificacao_circuitos_tomadas_rev132(
             msp, pontos_eletricos, circuitos_dimensionados
         )
 
