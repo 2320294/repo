@@ -1136,6 +1136,35 @@ def gerar_cad_unifilar(
                     nome_l
                 ).color = cor_l
 
+        # Rev.161 — hierarquia gráfica da planta elétrica no próprio DXF.
+        # A arquitetura-base fica em cinza claro e a instalação gerada pelo
+        # sistema permanece preta, destacando a informação elétrica.
+        camadas_arquitetura = {
+            "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
+            "IA_JANELA", "IA_JANELAS",
+        }
+        for layer_obj in doc.layers:
+            try:
+                nome_arq = str(layer_obj.dxf.name or "").upper().strip()
+                if nome_arq in camadas_arquitetura or "JANEL" in nome_arq:
+                    layer_obj.color = 8  # cinza claro ACI
+                elif nome_arq.startswith("PROJ_ELETRICA_"):
+                    layer_obj.color = 7  # preto/branco conforme fundo CAD
+            except Exception:
+                pass
+
+        # Entidades importadas podem possuir cor explícita; BYLAYER garante que
+        # o cinza definido acima seja efetivamente aplicado também no DXF final.
+        for ent in msp:
+            try:
+                nome_arq = str(ent.dxf.layer or "").upper().strip()
+                if nome_arq in camadas_arquitetura or "JANEL" in nome_arq:
+                    ent.dxf.color = 256
+                    if ent.dxf.hasattr("true_color"):
+                        ent.dxf.discard("true_color")
+            except Exception:
+                pass
+
         elementos = ler_elementos(msp)
 
         polilinhas = elementos["polilinhas"]

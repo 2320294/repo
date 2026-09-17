@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.158 — PDF multipágina monocromático com melhor aproveitamento e rodapé protegido.
+Fase 13.6 Rev.161 — PDF A3 com hierarquia gráfica: arquitetura em cinza e elétrica em preto.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -176,34 +176,37 @@ def _filtro_prancha(msp, regiao, titulo):
     return lambda ent: _intersecta(fb(ent), regiao)
 
 
-def _aplicar_monocromatico(ax):
-    """Converte somente a saída PDF para preto, preservando o DXF colorido."""
-    import matplotlib.colors as mcolors
-    preto="black"
-    for ln in ax.lines:
-        try: ln.set_color(preto)
-        except Exception: pass
-    for txt in ax.texts:
-        try: txt.set_color(preto)
-        except Exception: pass
-    for patch in ax.patches:
-        try: patch.set_edgecolor(preto)
-        except Exception: pass
+def _preparar_hierarquia_grafica_pdf(doc, msp):
+    """Rev.161: arquitetura cinza claro; elementos elétricos pretos na renderização PDF."""
+    camadas_arquitetura = {
+        "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
+        "IA_JANELA", "IA_JANELAS",
+    }
+    for layer_obj in doc.layers:
         try:
-            fc=patch.get_facecolor()
-            if len(fc) >= 4 and fc[3] > 0:
-                patch.set_facecolor(preto)
-        except Exception: pass
-    for col in ax.collections:
-        try: col.set_edgecolor(preto)
-        except Exception: pass
+            nome = str(layer_obj.dxf.name or "").upper().strip()
+            if nome in camadas_arquitetura or "JANEL" in nome:
+                layer_obj.color = 8
+            elif nome.startswith("PROJ_ELETRICA_") or nome.startswith("UNIFILAR_QDC") or nome.startswith("MAPA_QDC"):
+                layer_obj.color = 7
+        except Exception:
+            pass
+    for ent in msp:
         try:
-            fcs=col.get_facecolors()
-            if len(fcs): col.set_facecolor(preto)
-        except Exception: pass
+            nome = str(ent.dxf.layer or "").upper().strip()
+            if nome in camadas_arquitetura or "JANEL" in nome:
+                ent.dxf.color = 256
+                if ent.dxf.hasattr("true_color"):
+                    ent.dxf.discard("true_color")
+            elif nome.startswith("PROJ_ELETRICA_") or nome.startswith("UNIFILAR_QDC") or nome.startswith("MAPA_QDC"):
+                ent.dxf.color = 256
+                if ent.dxf.hasattr("true_color"):
+                    ent.dxf.discard("true_color")
+        except Exception:
+            pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.160: PDF A3 horizontal físico fixo em todas as pranchas.
+    """Rev.161: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
     com viewports independentes e sem altura herdada da geometria da legenda.
@@ -232,6 +235,7 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
         except Exception:
             pass
 
+        _preparar_hierarquia_grafica_pdf(doc, msp)
         regioes,titulos=_regioes_semanticas(msp)
         mapa={t.lower(): r for r,t in zip(regioes,titulos)}
         planta=mapa.get("planta elétrica")
@@ -253,7 +257,6 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
                 msp, finalize=True,
                 filter_func=_filtro_prancha(msp,regiao,titulo),
             )
-            _aplicar_monocromatico(ax)
             x0,y0,x1,y1=regiao
             if margem_escala > 0:
                 # Rev.159: mantém a escala visual reduzida da legenda, ampliando sua
