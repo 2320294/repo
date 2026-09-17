@@ -313,7 +313,7 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             fig.text(0.50,0.043,f"Prancha {numero}/{total_paginas}",
                      fontsize=7.2,ha="center",va="center")
             if versao:
-                fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
+                fig.text(0.965,0.043,f"Versão: {versao}",fontsize=7.2,ha="right",va="center")
 
         # Evita que configurações externas do Streamlit/Matplotlib recortem a folha
         # ao redor do conteúdo. A mídia permanece A3 paisagem integral.

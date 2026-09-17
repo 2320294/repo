@@ -1220,19 +1220,6 @@ def gerar_cad_unifilar(
             except Exception:
                 pass
 
-        # Identificador interno da fase dentro do próprio DXF. A camada
-        # permanece congelada para não poluir a planta, mas permite auditar
-        # qual versão efetivamente gerou o arquivo.
-        try:
-            layer_versao = doc.layers.get("AE_VERSAO")
-            layer_versao.freeze()
-        except Exception:
-            pass
-        msp.add_text(
-            f"AutoEletrica {VERSAO_SISTEMA}",
-            dxfattribs={"layer": "AE_VERSAO", "height": 0.05},
-        ).set_placement((0.0, 0.0))
-
         # Interruptores
         pontos_interruptores = desenhar_interruptores(
             msp=msp,

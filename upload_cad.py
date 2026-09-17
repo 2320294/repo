@@ -5,7 +5,7 @@ import streamlit as st
 
 import motores
 
-from versao import VERSAO_SISTEMA, VERSAO_ARQUIVO, BUILD_ID
+from versao import VERSAO_SISTEMA
 
 from database import (
     salvar_dados_projeto
@@ -317,13 +317,7 @@ def renderizar_salvar_e_gerar_cad(
         "### Projeto Unifilar (DXF)"
     )
 
-    # Marcador visual para confirmar no Streamlit que esta versão
-    # do arquivo upload_cad.py foi realmente publicada/carregada.
     VERSAO_CAD = VERSAO_SISTEMA
-    st.info(
-        f"🔖 Versão atual do gerador CAD: **{VERSAO_CAD}** — Build **{BUILD_ID}**",
-        icon="ℹ️",
-    )
 
     # Nunca reaproveita CAD de uma fase anterior. Ao detectar mudança de
     # versão, descarta o arquivo persistido e exige uma nova geração.
@@ -493,7 +487,7 @@ def renderizar_salvar_e_gerar_cad(
 
     if erro_cad_neste_ciclo:
         st.error(
-            f"❌ Erro ao gerar o arquivo CAD ({VERSAO_CAD}): "
+            f"❌ Erro ao gerar o arquivo CAD: "
             f"{erro_cad_neste_ciclo}"
         )
 
@@ -515,21 +509,21 @@ def renderizar_salvar_e_gerar_cad(
         # em Gerar CAD. O arquivo continua guardado para download.
         if cad_gerado_neste_ciclo:
             st.success(
-                f"✅ Projeto CAD {VERSAO_CAD} gerado com sucesso! "
+                f"✅ Projeto CAD gerado com sucesso! "
                 f"Arquivo preparado ({tamanho / 1024:.1f} KB)."
             )
 
         st.download_button(
-            label=f"📥 Baixar Projeto DXF Atualizado — {VERSAO_CAD}",
+            label="📥 Baixar Projeto DXF Atualizado",
             data=bytes(cad_salvo),
             file_name=(
-                f"{nome_seguro}_Projeto_Eletrico_{VERSAO_ARQUIVO}.dxf"
+                f"{nome_seguro}_Projeto_Eletrico.dxf"
             ),
             # application/octet-stream força o navegador a tratar o DXF
             # como arquivo para download, sem tentar interpretá-lo.
             mime="application/octet-stream",
             use_container_width=True,
-            key=f"download_cad_atualizado_{VERSAO_ARQUIVO}",
+            key="download_cad_atualizado",
             # Fase 13.6 Rev.124:
             # impede o rerun do Streamlit no clique do download.
             # O rerun podia reconstruir a página antes de o navegador
@@ -560,11 +554,11 @@ def renderizar_salvar_e_gerar_cad(
                 label="📄 Gerar / Baixar PDF do Projeto",
                 data=pdf_projeto,
                 file_name=(
-                    f"{nome_seguro}_Projeto_Eletrico_{VERSAO_ARQUIVO}.pdf"
+                    f"{nome_seguro}_Projeto_Eletrico.pdf"
                 ),
                 mime="application/pdf",
                 use_container_width=True,
-                key=f"download_pdf_projeto_{VERSAO_ARQUIVO}",
+                key="download_pdf_projeto",
                 on_click="ignore",
             )
         except Exception as exc:
