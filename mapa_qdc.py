@@ -535,6 +535,17 @@ _QDC_LAYERS_CONDUTORES = {
     "PROJ_ELETRICA_QDC_PE",
 }
 
+# Rev.167 — diferenciação monocromática dos condutores do QDC por espessura.
+# Valores DXF em centésimos de milímetro (LINEWEIGHT). A mesma convenção
+# é usada no diagrama e nas amostras da legenda.
+_QDC_LINEWEIGHTS = {
+    "PROJ_ELETRICA_QDC_FASE_A": 50,  # 0,50 mm
+    "PROJ_ELETRICA_QDC_FASE_B": 35,  # 0,35 mm
+    "PROJ_ELETRICA_QDC_FASE_C": 30,  # 0,30 mm
+    "PROJ_ELETRICA_QDC_NEUTRO": 25,  # 0,25 mm
+    "PROJ_ELETRICA_QDC_PE": 18,       # 0,18 mm
+}
+
 
 def _recortar_segmentos_por_retangulos(segmentos, retangulos):
     """
@@ -693,7 +704,10 @@ def _line(msp, p1, p2, layer):
                 msp.add_line(
                     a,
                     b,
-                    dxfattribs={"layer": layer}
+                    dxfattribs={
+                        "layer": layer,
+                        "lineweight": _QDC_LINEWEIGHTS.get(layer, -1),
+                    }
                 )
             )
         return criadas[-1] if criadas else None
@@ -701,7 +715,10 @@ def _line(msp, p1, p2, layer):
     return msp.add_line(
         p1,
         p2,
-        dxfattribs={"layer": layer}
+        dxfattribs={
+            "layer": layer,
+            **({"lineweight": _QDC_LINEWEIGHTS[layer]} if layer in _QDC_LINEWEIGHTS else {}),
+        }
     )
 
 
@@ -2422,7 +2439,7 @@ def desenhar_mapa_fisico_qdc(
     )
     _text(
         msp,
-        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES | FASE 13.6 REV.120",
+        "VISTA FRONTAL - DIAGRAMA DE MONTAGEM E LIGACOES",
         x0 + 0.55,
         y0 - 0.92,
         0.11,

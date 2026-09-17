@@ -1136,6 +1136,22 @@ def gerar_cad_unifilar(
                     nome_l
                 ).color = cor_l
 
+
+        # Rev.167 — as fases/condutores do diagrama QDC são distinguidos por
+        # espessura, não por cor. Isso vale no DXF e é preservado no PDF.
+        pesos_qdc = {
+            "PROJ_ELETRICA_QDC_FASE_A": 50,
+            "PROJ_ELETRICA_QDC_FASE_B": 35,
+            "PROJ_ELETRICA_QDC_FASE_C": 30,
+            "PROJ_ELETRICA_QDC_NEUTRO": 25,
+            "PROJ_ELETRICA_QDC_PE": 18,
+        }
+        for nome_l, peso in pesos_qdc.items():
+            try:
+                doc.layers.get(nome_l).dxf.lineweight = peso
+            except Exception:
+                pass
+
         # Rev.161 — hierarquia gráfica da planta elétrica no próprio DXF.
         # A arquitetura-base fica em cinza claro e a instalação gerada pelo
         # sistema permanece preta, destacando a informação elétrica.
