@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.164 — PDF A3 com arquitetura/layer 0 em cinza claro, elétrica preta e recorte estrito da legenda.
+Fase 13.6 Rev.165 — PDF A3 com arquitetura/layer 0 em cinza claro, elétrica preta e recorte estrito da legenda.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -140,7 +140,7 @@ def _regioes_semanticas(msp):
                          max(b[2] for b in caixas), max(b[3] for b in caixas))
         if not legenda:
             legenda=_expandir(ancora, px=1.8, py=8.0, minimo=0.40)
-        # Rev.164 — NÃO expandir verticalmente a região da legenda.
+        # Rev.165 — NÃO expandir verticalmente a região da legenda.
         # Na Rev.163 a expansão mínima de 0,22 unidade acima da tabela podia
         # capturar o centro de um balão da planta elétrica (ex.: balão 20),
         # fazendo-o aparecer acima da viewport da legenda. Mantemos apenas
@@ -180,7 +180,7 @@ def _filtro_prancha(msp, regiao, titulo):
     if "planta" in t:
         return lambda ent: _intersecta(fb(ent), regiao)
 
-    # Rev.164 — legenda com recorte semântico rigoroso e sem folga vertical. Como a legenda e os
+    # Rev.165 — legenda com recorte semântico rigoroso e sem folga vertical. Como a legenda e os
     # balões da planta compartilham PROJ_ELETRICA_TEXTO, testar apenas
     # interseção permite que um balão tangente ao limite "vaze" para a
     # viewport lateral. Para a legenda, o centro da entidade deve estar
@@ -196,52 +196,53 @@ def _filtro_prancha(msp, regiao, titulo):
 
 
 def _preparar_hierarquia_grafica_pdf(doc, msp):
-    """Rev.164: força cores RGB na cópia usada para o PDF.
+    """Rev.165: arquitetura importada inteira em cinza claro e elétrica em preto.
 
-    Evita o comportamento do ACI 7, que pode ser interpretado como branco pelo
-    backend de renderização em fundo branco. A arquitetura (incluindo layer 0) fica em cinza claro e toda a
-    instalação elétrica/QDC fica preto RGB real.
+    A classificação deixa de depender dos nomes das layers arquitetônicas: tudo o
+    que não é layer gerada pelo AutoElétrica é base arquitetônica. A normalização
+    alcança também entidades dentro de BLOCKs, eliminando cores explícitas residuais.
     """
-    camadas_arquitetura = {
-        "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
-        "IA_JANELA", "IA_JANELAS", "0",
-    }
-
-    def eh_arquitetura(nome):
-        return nome in camadas_arquitetura or "JANEL" in nome
+    CINZA_ARQUITETURA = 0xC8C8C8
 
     def eh_eletrica(nome):
+        nome = str(nome or "").upper().strip()
         return (nome.startswith("PROJ_ELETRICA_") or
                 nome.startswith("UNIFILAR_QDC") or
                 nome.startswith("MAPA_QDC") or
                 nome.startswith("AE_"))
 
-    # Mantém as layers coerentes, mas a garantia para o PDF é feita também
-    # entidade por entidade com true_color RGB abaixo.
     for layer_obj in doc.layers:
         try:
             nome = str(layer_obj.dxf.name or "").upper().strip()
-            if eh_arquitetura(nome):
-                layer_obj.color = 8
-            elif eh_eletrica(nome):
+            if eh_eletrica(nome):
                 layer_obj.color = 7
+            elif nome != "DEFPOINTS":
+                layer_obj.color = 9
         except Exception:
             pass
 
-    for ent in msp:
+    def normalizar(espaco):
+        for ent in espaco:
+            try:
+                nome = str(ent.dxf.layer or "").upper().strip()
+                if eh_eletrica(nome):
+                    ent.dxf.color = 256
+                    ent.dxf.true_color = 0x000000
+                elif nome != "DEFPOINTS":
+                    ent.dxf.color = 256
+                    ent.dxf.true_color = CINZA_ARQUITETURA
+            except Exception:
+                pass
+
+    normalizar(msp)
+    for bloco in doc.blocks:
         try:
-            nome = str(ent.dxf.layer or "").upper().strip()
-            if eh_arquitetura(nome):
-                ent.dxf.color = 256
-                ent.dxf.true_color = 0xB8B8B8  # cinza claro Rev.163
-            elif eh_eletrica(nome):
-                ent.dxf.color = 256
-                ent.dxf.true_color = 0x000000  # preto RGB real; nunca ACI 7 branco
+            normalizar(bloco)
         except Exception:
             pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.164: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
+    """Rev.165: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
     com viewports independentes e sem altura herdada da geometria da legenda.

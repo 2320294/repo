@@ -1139,29 +1139,44 @@ def gerar_cad_unifilar(
         # Rev.161 — hierarquia gráfica da planta elétrica no próprio DXF.
         # A arquitetura-base fica em cinza claro e a instalação gerada pelo
         # sistema permanece preta, destacando a informação elétrica.
-        camadas_arquitetura = {
-            "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
-            "IA_JANELA", "IA_JANELAS", "0",
-        }
+        # Rev.165 — toda a base importada é tratada como arquitetura, independentemente
+        # do nome original da layer. Assim paredes/janelas/detalhes que chegam em layers
+        # azuis, vermelhas, magenta etc. também ficam no mesmo cinza claro. Somente as
+        # layers efetivamente geradas pelo AutoElétrica permanecem destacadas.
+        def _layer_eletrica_rev165(nome):
+            nome = str(nome or "").upper().strip()
+            return (nome.startswith("PROJ_ELETRICA_") or
+                    nome.startswith("UNIFILAR_QDC") or
+                    nome.startswith("MAPA_QDC") or
+                    nome.startswith("AE_"))
+
         for layer_obj in doc.layers:
             try:
                 nome_arq = str(layer_obj.dxf.name or "").upper().strip()
-                if nome_arq in camadas_arquitetura or "JANEL" in nome_arq:
-                    layer_obj.color = 9  # cinza claro ACI Rev.163
-                elif nome_arq.startswith("PROJ_ELETRICA_"):
-                    layer_obj.color = 7  # preto/branco conforme fundo CAD
+                if _layer_eletrica_rev165(nome_arq):
+                    layer_obj.color = 7
+                elif nome_arq != "DEFPOINTS":
+                    layer_obj.color = 9  # cinza claro da arquitetura
             except Exception:
                 pass
 
-        # Entidades importadas podem possuir cor explícita; BYLAYER garante que
-        # o cinza definido acima seja efetivamente aplicado também no DXF final.
-        for ent in msp:
+        # Remove cores explícitas da base importada, inclusive dentro de BLOCKs, para
+        # impedir que elementos arquitetônicos conservem azul/vermelho/magenta no DXF.
+        def _normalizar_entidades_arquitetura_rev165(espaco):
+            for ent in espaco:
+                try:
+                    nome_arq = str(ent.dxf.layer or "").upper().strip()
+                    if not _layer_eletrica_rev165(nome_arq) and nome_arq != "DEFPOINTS":
+                        ent.dxf.color = 256
+                        if ent.dxf.hasattr("true_color"):
+                            ent.dxf.discard("true_color")
+                except Exception:
+                    pass
+
+        _normalizar_entidades_arquitetura_rev165(msp)
+        for bloco in doc.blocks:
             try:
-                nome_arq = str(ent.dxf.layer or "").upper().strip()
-                if nome_arq in camadas_arquitetura or "JANEL" in nome_arq:
-                    ent.dxf.color = 256
-                    if ent.dxf.hasattr("true_color"):
-                        ent.dxf.discard("true_color")
+                _normalizar_entidades_arquitetura_rev165(bloco)
             except Exception:
                 pass
 
