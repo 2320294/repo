@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.161 — PDF A3 com hierarquia gráfica: arquitetura em cinza e elétrica em preto.
+Fase 13.6 Rev.162 — PDF A3 com arquitetura em cinza e elétrica forçada em preto RGB.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -177,36 +177,52 @@ def _filtro_prancha(msp, regiao, titulo):
 
 
 def _preparar_hierarquia_grafica_pdf(doc, msp):
-    """Rev.161: arquitetura cinza claro; elementos elétricos pretos na renderização PDF."""
+    """Rev.162: força cores RGB na cópia usada para o PDF.
+
+    Evita o comportamento do ACI 7, que pode ser interpretado como branco pelo
+    backend de renderização em fundo branco. A arquitetura fica cinza e toda a
+    instalação elétrica/QDC fica preto RGB real.
+    """
     camadas_arquitetura = {
         "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
         "IA_JANELA", "IA_JANELAS",
     }
+
+    def eh_arquitetura(nome):
+        return nome in camadas_arquitetura or "JANEL" in nome
+
+    def eh_eletrica(nome):
+        return (nome.startswith("PROJ_ELETRICA_") or
+                nome.startswith("UNIFILAR_QDC") or
+                nome.startswith("MAPA_QDC") or
+                nome.startswith("AE_"))
+
+    # Mantém as layers coerentes, mas a garantia para o PDF é feita também
+    # entidade por entidade com true_color RGB abaixo.
     for layer_obj in doc.layers:
         try:
             nome = str(layer_obj.dxf.name or "").upper().strip()
-            if nome in camadas_arquitetura or "JANEL" in nome:
+            if eh_arquitetura(nome):
                 layer_obj.color = 8
-            elif nome.startswith("PROJ_ELETRICA_") or nome.startswith("UNIFILAR_QDC") or nome.startswith("MAPA_QDC"):
+            elif eh_eletrica(nome):
                 layer_obj.color = 7
         except Exception:
             pass
+
     for ent in msp:
         try:
             nome = str(ent.dxf.layer or "").upper().strip()
-            if nome in camadas_arquitetura or "JANEL" in nome:
+            if eh_arquitetura(nome):
                 ent.dxf.color = 256
-                if ent.dxf.hasattr("true_color"):
-                    ent.dxf.discard("true_color")
-            elif nome.startswith("PROJ_ELETRICA_") or nome.startswith("UNIFILAR_QDC") or nome.startswith("MAPA_QDC"):
+                ent.dxf.true_color = 0x888888  # cinza médio/claro
+            elif eh_eletrica(nome):
                 ent.dxf.color = 256
-                if ent.dxf.hasattr("true_color"):
-                    ent.dxf.discard("true_color")
+                ent.dxf.true_color = 0x000000  # preto RGB real; nunca ACI 7 branco
         except Exception:
             pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.161: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto.
+    """Rev.162: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
     com viewports independentes e sem altura herdada da geometria da legenda.
