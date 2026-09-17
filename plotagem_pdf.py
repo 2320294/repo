@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.157 — PDF multipágina monocromático com melhor aproveitamento e rodapé protegido.
+Fase 13.6 Rev.158 — PDF multipágina monocromático com melhor aproveitamento e rodapé protegido.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -63,7 +63,7 @@ def _expandir(b, px=0.08, py=0.08, minimo=0.35):
 
 
 def _regioes_semanticas(msp):
-    """Rev.157: preserva as regiões semânticas rigorosas da Rev.152.
+    """Rev.153: preserva as regiões semânticas rigorosas da Rev.152.
 
     A planta usa IA_AMBIENTES como âncora. O QDC usa somente camadas próprias.
     A legenda é localizada pelo cabeçalho e pelas entidades da mesma camada,
@@ -203,10 +203,12 @@ def _aplicar_monocromatico(ax):
         except Exception: pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.157: PDF A3 em 2 pranchas.
+    """Rev.158: PDF A3 em 2 pranchas, preservando o enquadramento-base da Rev.153.
 
-    Prancha 1: planta elétrica + legenda de fiação, cada qual com viewport/escala própria.
-    Prancha 2: diagrama/QDC preservado no enquadramento funcional da Rev.157.
+    Prancha 1: planta elétrica com escala própria + legenda de fiação REDUZIDA em
+    um quadro lateral independente. A legenda não participa do cálculo da escala
+    da planta nem do tamanho físico da folha.
+    Prancha 2: diagrama/QDC com o enquadramento da Rev.153.
     O DXF não é alterado.
     """
     if not dxf_bytes:
@@ -244,7 +246,7 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
         buffer=BytesIO()
         total_paginas=2 if qdc else 1
 
-        def desenhar_regiao(fig, rect, regiao, titulo):
+        def desenhar_regiao(fig, rect, regiao, titulo, margem_escala=0.0):
             ax=fig.add_axes(rect)
             ax.set_aspect("equal",adjustable="box")
             ax.set_axis_off(); ax.set_facecolor("white")
@@ -255,6 +257,14 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             )
             _aplicar_monocromatico(ax)
             x0,y0,x1,y1=regiao
+            if margem_escala > 0:
+                # Rev.158: reduz SOMENTE a escala visual da legenda, ampliando sua
+                # janela de coordenadas ao redor do centro, sem alterar o DXF.
+                cx=(x0+x1)/2.0; cy=(y0+y1)/2.0
+                w=max(x1-x0,1e-6)*(1.0+margem_escala)
+                h=max(y1-y0,1e-6)*(1.0+margem_escala)
+                x0,x1=cx-w/2.0,cx+w/2.0
+                y0,y1=cy-h/2.0,cy+h/2.0
             ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
             return ax
 
@@ -268,29 +278,31 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             if versao:
                 fig.text(0.965,0.043,str(versao),fontsize=7.2,ha="right",va="center")
 
-        with PdfPages(buffer) as pdf:
-            # PRANCHA 1 — A3 PAISAGEM FIXA.
-            # A planta e a legenda NÃO compartilham escala. A legenda ocupa uma faixa
-            # lateral própria e jamais participa do cálculo da escala da planta.
-            fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
-            if legenda:
-                # 73% da largura útil para a planta; 21% para a legenda; 2% de respiro.
-                desenhar_regiao(fig,[0.035,0.075,0.72,0.885],planta,"Planta elétrica")
-                desenhar_regiao(fig,[0.775,0.075,0.19,0.885],legenda,"Tabelas e legendas")
-            else:
-                desenhar_regiao(fig,[0.035,0.075,0.93,0.885],planta,"Planta elétrica")
-            rodape(fig,1,"Planta elétrica + Legenda de fiação" if legenda else "Planta elétrica")
-            pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
+        # Evita que configurações externas do Streamlit/Matplotlib recortem a folha
+        # ao redor do conteúdo. A mídia permanece A3 paisagem integral.
+        with matplotlib.rc_context({"savefig.bbox": None, "savefig.pad_inches": 0.0}):
+            with PdfPages(buffer) as pdf:
+                # PRANCHA 1 — A3 PAISAGEM. Planta em escala própria e legenda menor.
+                fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+                if legenda:
+                    # Planta recebe a maior área. A legenda usa uma faixa lateral e é
+                    # deliberadamente reduzida (45%) para não comandar a composição.
+                    desenhar_regiao(fig,[0.035,0.075,0.735,0.885],planta,"Planta elétrica")
+                    desenhar_regiao(fig,[0.790,0.145,0.165,0.745],legenda,"Tabelas e legendas",margem_escala=0.45)
+                else:
+                    desenhar_regiao(fig,[0.035,0.075,0.93,0.885],planta,"Planta elétrica")
+                rodape(fig,1,"Planta elétrica + Legenda de fiação" if legenda else "Planta elétrica")
+                pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None); plt.close(fig)
 
-            # PRANCHA 2 — mantém o comportamento/enquadramento funcional da Rev.157.
-            if qdc:
-                x0,y0,x1,y1=qdc
-                w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
-                figsize=(16.54,11.69) if w>=h else (11.69,16.54)
-                fig=plt.figure(figsize=figsize,facecolor="white")
-                desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
-                rodape(fig,2,"Diagrama / QDC")
-                pdf.savefig(fig,dpi=300,facecolor="white"); plt.close(fig)
+                # PRANCHA 2 — volta ao enquadramento funcional da Rev.153.
+                if qdc:
+                    x0,y0,x1,y1=qdc
+                    w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
+                    figsize=(16.54,11.69) if w>=h else (11.69,16.54)
+                    fig=plt.figure(figsize=figsize,facecolor="white")
+                    desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
+                    rodape(fig,2,"Diagrama / QDC")
+                    pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None); plt.close(fig)
 
         buffer.seek(0); dados=buffer.getvalue()
         if not dados.startswith(b"%PDF"):
@@ -299,4 +311,4 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
     finally:
         if tmp_path:
             try: os.remove(tmp_path)
-            except Exception: pass
+            except OSError: pass
