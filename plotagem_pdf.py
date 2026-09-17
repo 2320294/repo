@@ -203,11 +203,11 @@ def _aplicar_monocromatico(ax):
         except Exception: pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.159: PDF A3 em 2 pranchas com Prancha 1 horizontal normalizada.
+    """Rev.160: PDF A3 horizontal físico fixo em todas as pranchas.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
     com viewports independentes e sem altura herdada da geometria da legenda.
-    Prancha 2: diagrama/QDC preservado. O DXF não é alterado.
+    Prancha 2: diagrama/QDC enquadrado dentro do mesmo A3 horizontal físico. O DXF não é alterado.
     """
     if not dxf_bytes:
         raise ValueError("DXF vazio; gere o CAD antes de gerar o PDF.")
@@ -296,15 +296,16 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
                 fig.set_size_inches(16.535433,11.692913,forward=True)
                 pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None,pad_inches=0.0); plt.close(fig)
 
-                # PRANCHA 2 — volta ao enquadramento funcional da Rev.153.
+                # PRANCHA 2 — Rev.160: mesma mídia física da Prancha 1.
+                # A geometria do QDC nunca altera orientação nem tamanho da folha;
+                # somente o conteúdo é enquadrado dentro do A3 horizontal fixo.
                 if qdc:
-                    x0,y0,x1,y1=qdc
-                    w=max(x1-x0,1e-6); h=max(y1-y0,1e-6)
-                    figsize=(16.54,11.69) if w>=h else (11.69,16.54)
-                    fig=plt.figure(figsize=figsize,facecolor="white")
+                    fig=plt.figure(figsize=(16.535433,11.692913),facecolor="white", constrained_layout=False)
+                    fig.set_size_inches(16.535433,11.692913,forward=True)
                     desenhar_regiao(fig,[0.035,0.075,0.93,0.885],qdc,"Diagrama / QDC")
                     rodape(fig,2,"Diagrama / QDC")
-                    pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None); plt.close(fig)
+                    fig.set_size_inches(16.535433,11.692913,forward=True)
+                    pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None,pad_inches=0.0); plt.close(fig)
 
         buffer.seek(0); dados=buffer.getvalue()
         if not dados.startswith(b"%PDF"):
