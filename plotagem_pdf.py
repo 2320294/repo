@@ -203,13 +203,11 @@ def _aplicar_monocromatico(ax):
         except Exception: pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.158: PDF A3 em 2 pranchas, preservando o enquadramento-base da Rev.153.
+    """Rev.159: PDF A3 em 2 pranchas com Prancha 1 horizontal normalizada.
 
-    Prancha 1: planta elétrica com escala própria + legenda de fiação REDUZIDA em
-    um quadro lateral independente. A legenda não participa do cálculo da escala
-    da planta nem do tamanho físico da folha.
-    Prancha 2: diagrama/QDC com o enquadramento da Rev.153.
-    O DXF não é alterado.
+    Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
+    com viewports independentes e sem altura herdada da geometria da legenda.
+    Prancha 2: diagrama/QDC preservado. O DXF não é alterado.
     """
     if not dxf_bytes:
         raise ValueError("DXF vazio; gere o CAD antes de gerar o PDF.")
@@ -248,7 +246,7 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
 
         def desenhar_regiao(fig, rect, regiao, titulo, margem_escala=0.0):
             ax=fig.add_axes(rect)
-            ax.set_aspect("equal",adjustable="box")
+            ax.set_aspect("equal",adjustable="datalim")
             ax.set_axis_off(); ax.set_facecolor("white")
             ctx=RenderContext(doc); out=MatplotlibBackend(ax)
             Frontend(ctx,out).draw_layout(
@@ -258,7 +256,7 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
             _aplicar_monocromatico(ax)
             x0,y0,x1,y1=regiao
             if margem_escala > 0:
-                # Rev.158: reduz SOMENTE a escala visual da legenda, ampliando sua
+                # Rev.159: mantém a escala visual reduzida da legenda, ampliando sua
                 # janela de coordenadas ao redor do centro, sem alterar o DXF.
                 cx=(x0+x1)/2.0; cy=(y0+y1)/2.0
                 w=max(x1-x0,1e-6)*(1.0+margem_escala)
@@ -282,17 +280,21 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
         # ao redor do conteúdo. A mídia permanece A3 paisagem integral.
         with matplotlib.rc_context({"savefig.bbox": None, "savefig.pad_inches": 0.0}):
             with PdfPages(buffer) as pdf:
-                # PRANCHA 1 — A3 PAISAGEM. Planta em escala própria e legenda menor.
-                fig=plt.figure(figsize=(16.54,11.69),facecolor="white")
+                # PRANCHA 1 — A3 PAISAGEM REAL.
+                # Rev.159: a folha é criada e travada explicitamente em 420 x 297 mm.
+                # Nenhuma dimensão do DXF/legenda pode alterar a mídia física.
+                fig=plt.figure(figsize=(16.535433,11.692913),facecolor="white", constrained_layout=False)
+                fig.set_size_inches(16.535433,11.692913,forward=True)
                 if legenda:
                     # Planta recebe a maior área. A legenda usa uma faixa lateral e é
                     # deliberadamente reduzida (45%) para não comandar a composição.
-                    desenhar_regiao(fig,[0.035,0.075,0.735,0.885],planta,"Planta elétrica")
-                    desenhar_regiao(fig,[0.790,0.145,0.165,0.745],legenda,"Tabelas e legendas",margem_escala=0.45)
+                    desenhar_regiao(fig,[0.045,0.105,0.705,0.825],planta,"Planta elétrica")
+                    desenhar_regiao(fig,[0.775,0.145,0.180,0.745],legenda,"Tabelas e legendas",margem_escala=0.45)
                 else:
                     desenhar_regiao(fig,[0.035,0.075,0.93,0.885],planta,"Planta elétrica")
                 rodape(fig,1,"Planta elétrica + Legenda de fiação" if legenda else "Planta elétrica")
-                pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None); plt.close(fig)
+                fig.set_size_inches(16.535433,11.692913,forward=True)
+                pdf.savefig(fig,dpi=300,facecolor="white",bbox_inches=None,pad_inches=0.0); plt.close(fig)
 
                 # PRANCHA 2 — volta ao enquadramento funcional da Rev.153.
                 if qdc:
