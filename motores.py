@@ -1141,13 +1141,13 @@ def gerar_cad_unifilar(
         # sistema permanece preta, destacando a informação elétrica.
         camadas_arquitetura = {
             "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
-            "IA_JANELA", "IA_JANELAS",
+            "IA_JANELA", "IA_JANELAS", "0",
         }
         for layer_obj in doc.layers:
             try:
                 nome_arq = str(layer_obj.dxf.name or "").upper().strip()
                 if nome_arq in camadas_arquitetura or "JANEL" in nome_arq:
-                    layer_obj.color = 8  # cinza claro ACI
+                    layer_obj.color = 9  # cinza claro ACI Rev.163
                 elif nome_arq.startswith("PROJ_ELETRICA_"):
                     layer_obj.color = 7  # preto/branco conforme fundo CAD
             except Exception:

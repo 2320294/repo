@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.162 — PDF A3 com arquitetura em cinza e elétrica forçada em preto RGB.
+Fase 13.6 Rev.163 — PDF A3 com arquitetura/layer 0 em cinza claro, elétrica preta e viewport da legenda protegida.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -171,21 +171,35 @@ def _filtro_prancha(msp, regiao, titulo):
             except Exception: layer=""
             return ("UNIFILAR_QDC" in layer or "MAPA_QDC" in layer or layer.startswith("PROJ_ELETRICA_QDC_"))
         return filtro
-    # Planta e legenda: desenhar somente entidades cuja caixa toca a região.
-    # Isso evita que a página 3 volte a desenhar o QDC/planta inteira.
-    return lambda ent: _intersecta(fb(ent), regiao)
+    # Planta: mantém a lógica consolidada de interseção da Rev.160.
+    if "planta" in t:
+        return lambda ent: _intersecta(fb(ent), regiao)
+
+    # Rev.163 — legenda com recorte semântico rigoroso. Como a legenda e os
+    # balões da planta compartilham PROJ_ELETRICA_TEXTO, testar apenas
+    # interseção permite que um balão tangente ao limite "vaze" para a
+    # viewport lateral. Para a legenda, o centro da entidade deve estar
+    # efetivamente dentro da região calculada da tabela.
+    def filtro_legenda(ent):
+        b = fb(ent)
+        if not b:
+            return False
+        cx = (b[0] + b[2]) / 2.0
+        cy = (b[1] + b[3]) / 2.0
+        return (regiao[0] <= cx <= regiao[2] and regiao[1] <= cy <= regiao[3])
+    return filtro_legenda
 
 
 def _preparar_hierarquia_grafica_pdf(doc, msp):
-    """Rev.162: força cores RGB na cópia usada para o PDF.
+    """Rev.163: força cores RGB na cópia usada para o PDF.
 
     Evita o comportamento do ACI 7, que pode ser interpretado como branco pelo
-    backend de renderização em fundo branco. A arquitetura fica cinza e toda a
+    backend de renderização em fundo branco. A arquitetura (incluindo layer 0) fica em cinza claro e toda a
     instalação elétrica/QDC fica preto RGB real.
     """
     camadas_arquitetura = {
         "IA_AMBIENTES", "IA_TEXTOS", "IA_PORTAS", "IA_SOLEIRAS",
-        "IA_JANELA", "IA_JANELAS",
+        "IA_JANELA", "IA_JANELAS", "0",
     }
 
     def eh_arquitetura(nome):
@@ -214,7 +228,7 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
             nome = str(ent.dxf.layer or "").upper().strip()
             if eh_arquitetura(nome):
                 ent.dxf.color = 256
-                ent.dxf.true_color = 0x888888  # cinza médio/claro
+                ent.dxf.true_color = 0xB8B8B8  # cinza claro Rev.163
             elif eh_eletrica(nome):
                 ent.dxf.color = 256
                 ent.dxf.true_color = 0x000000  # preto RGB real; nunca ACI 7 branco
@@ -222,7 +236,7 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
             pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.162: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
+    """Rev.163: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
     com viewports independentes e sem altura herdada da geometria da legenda.
