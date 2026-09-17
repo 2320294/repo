@@ -1,6 +1,6 @@
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
-Fase 13.6 Rev.163 — PDF A3 com arquitetura/layer 0 em cinza claro, elétrica preta e viewport da legenda protegida.
+Fase 13.6 Rev.164 — PDF A3 com arquitetura/layer 0 em cinza claro, elétrica preta e recorte estrito da legenda.
 Não altera o DXF: apenas renderiza uma cópia em memória.
 """
 from io import BytesIO
@@ -140,7 +140,12 @@ def _regioes_semanticas(msp):
                          max(b[2] for b in caixas), max(b[3] for b in caixas))
         if not legenda:
             legenda=_expandir(ancora, px=1.8, py=8.0, minimo=0.40)
-        legenda=_expandir(legenda, px=0.05, py=0.025, minimo=0.22)
+        # Rev.164 — NÃO expandir verticalmente a região da legenda.
+        # Na Rev.163 a expansão mínima de 0,22 unidade acima da tabela podia
+        # capturar o centro de um balão da planta elétrica (ex.: balão 20),
+        # fazendo-o aparecer acima da viewport da legenda. Mantemos apenas
+        # uma folga horizontal mínima para evitar corte visual das bordas.
+        legenda=_expandir(legenda, px=0.01, py=0.0, minimo=0.0)
 
     regs=[]; tit=[]
     for titulo,b in (("Planta elétrica",planta),("Diagrama / QDC",qdc),("Tabelas e legendas",legenda)):
@@ -175,7 +180,7 @@ def _filtro_prancha(msp, regiao, titulo):
     if "planta" in t:
         return lambda ent: _intersecta(fb(ent), regiao)
 
-    # Rev.163 — legenda com recorte semântico rigoroso. Como a legenda e os
+    # Rev.164 — legenda com recorte semântico rigoroso e sem folga vertical. Como a legenda e os
     # balões da planta compartilham PROJ_ELETRICA_TEXTO, testar apenas
     # interseção permite que um balão tangente ao limite "vaze" para a
     # viewport lateral. Para a legenda, o centro da entidade deve estar
@@ -191,7 +196,7 @@ def _filtro_prancha(msp, regiao, titulo):
 
 
 def _preparar_hierarquia_grafica_pdf(doc, msp):
-    """Rev.163: força cores RGB na cópia usada para o PDF.
+    """Rev.164: força cores RGB na cópia usada para o PDF.
 
     Evita o comportamento do ACI 7, que pode ser interpretado como branco pelo
     backend de renderização em fundo branco. A arquitetura (incluindo layer 0) fica em cinza claro e toda a
@@ -236,7 +241,7 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
             pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
-    """Rev.163: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
+    """Rev.164: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
     com viewports independentes e sem altura herdada da geometria da legenda.
