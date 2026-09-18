@@ -266,12 +266,32 @@ def _calcular_automatico(tabela_editada, rede, perfil):
             "observacao": "Demanda total não fechada: existem cargas sem regra normativa automática aplicável."
         }
 
-    corrente = corrente_demanda_equivalente(
-        demanda_total,
-        rede.get("tipo_fornecimento"),
-        rede.get("tensao_fornecimento"),
-    )
+    tipo_fornec = rede.get("tipo_fornecimento")
+    tensao_fornec = rede.get("tensao_fornecimento")
+    corrente = corrente_demanda_equivalente(demanda_total, tipo_fornec, tensao_fornec)
     dg = proximo_disjuntor(corrente)
+
+    memoria_entrada = {
+        "potencia_demanda_w": demanda_total,
+        "tipo_fornecimento": tipo_fornec,
+        "tensao_fornecimento": tensao_fornec,
+        "corrente_demanda_a": corrente,
+        "disjuntor_geral_a": dg,
+        "criterio_dg": "Próximo valor padronizado igual ou superior à corrente calculada",
+        "carater_dg": "Pré-seleção; confirmar com tabela de entrada da concessionária e dimensionamento do alimentador",
+    }
+    if str(tipo_fornec) == "Trifásico" and str(tensao_fornec) == "127/220 V":
+        memoria_entrada.update({
+            "formula": "I = P / (√3 × Vlinha)",
+            "tensao_calculo_v": 220.0,
+            "descricao": "Sistema trifásico 127/220 V: utiliza-se 220 V fase-fase na relação trifásica equilibrada.",
+        })
+    elif str(tipo_fornec) == "Trifásico" and str(tensao_fornec) == "220/380 V":
+        memoria_entrada.update({"formula": "I = P / (√3 × Vlinha)", "tensao_calculo_v": 380.0})
+    elif str(tipo_fornec) == "Bifásico" and str(tensao_fornec) == "127/220 V":
+        memoria_entrada.update({"formula": "I = P / (2 × Vf-n)", "tensao_calculo_v": 127.0})
+    elif str(tipo_fornec) == "Monofásico":
+        memoria_entrada.update({"formula": "I = P / V", "tensao_calculo_v": 127.0 if str(tensao_fornec) == "127 V" else 220.0})
     status_base = "ok" if corrente is not None and dg is not None else ("fornecimento_incompleto" if corrente is None else "acima_da_faixa")
     status = "ok_com_criterio_tecnico" if criterio_tecnico and status_base == "ok" else status_base
     fator_global = (demanda_total / pot["total_w"] * 100.0) if pot["total_w"] > 0 else 0.0
@@ -291,6 +311,7 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         "detalhes_demanda": detalhes,
         "pendencias": [],
         "criterio_tecnico_conservador": criterio_tecnico,
+        "memoria_dimensionamento_entrada": memoria_entrada,
         "observacao": (
             "Demanda calculada com as regras persistidas no perfil normativo ATIVO; "
             "TUEs sem fator específico foram consideradas a 100% como critério técnico conservador, "

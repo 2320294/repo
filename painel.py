@@ -724,6 +724,30 @@ def renderizar_painel_principal():
                     })
                 st.dataframe(linhas_memoria, use_container_width=True, hide_index=True)
 
+        memoria_entrada = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
+        if memoria_entrada and resultado_demanda.get("corrente_demanda_a") is not None:
+            with st.expander("⚡ Memória do dimensionamento de entrada", expanded=True):
+                p_kw = float(memoria_entrada.get("potencia_demanda_w", 0) or 0) / 1000.0
+                st.write(f"**Fornecimento:** {memoria_entrada.get('tipo_fornecimento','')} — {memoria_entrada.get('tensao_fornecimento','')}")
+                if memoria_entrada.get("descricao"):
+                    st.caption(memoria_entrada.get("descricao"))
+                formula = memoria_entrada.get("formula", "")
+                vcalc = memoria_entrada.get("tensao_calculo_v")
+                corrente_calc = memoria_entrada.get("corrente_demanda_a")
+                if formula:
+                    st.write(f"**Fórmula aplicada:** `{formula}`")
+                if str(memoria_entrada.get("tipo_fornecimento")) == "Trifásico" and vcalc:
+                    st.write(f"**Substituição:** I = {p_kw:.2f} kW × 1000 / (√3 × {float(vcalc):.0f} V) = **{float(corrente_calc):.1f} A**")
+                elif corrente_calc is not None:
+                    st.write(f"**Corrente calculada:** **{float(corrente_calc):.1f} A**")
+                dg_mem = memoria_entrada.get("disjuntor_geral_a")
+                if dg_mem is not None:
+                    st.write(f"**DG pré-selecionado:** **{dg_mem} A** — {memoria_entrada.get('criterio_dg','')}")
+                st.info("O DG exibido é uma pré-seleção elétrica. A seleção definitiva deve ser confrontada com a tabela de padrão de entrada do perfil da concessionária e com o dimensionamento do alimentador (capacidade de condução, queda de tensão, curto-circuito e coordenação).")
+                perfil_usado = resultado_demanda.get("perfil_normativo")
+                if perfil_usado:
+                    st.caption(f"Rastreabilidade do cálculo: {perfil_usado}")
+
         st.divider()
         renderizar_materiais(
             tabela_editada,
