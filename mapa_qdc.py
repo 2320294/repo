@@ -2178,16 +2178,29 @@ def _x_desvio_para_nao_invadir_dj(
         ry2 = float(r["y2"])
 
         cruza_y = y_hi > ry1 + tolerancia and y_lo < ry2 - tolerancia
-        # Rev.172 — considerar também coincidência com as bordas do corpo.
-        # O caso C02/C10 cai justamente sobre a faixa lateral do C10; a
-        # verificação estrita da Rev.171 não reconhecia essa passagem.
-        # A prioridade continua sendo do condutor que entra no borne do DJ.
-        dentro_x = (rx1 - tolerancia) <= x_original <= (rx2 + tolerancia)
 
-        if cruza_y and dentro_x:
-            # Mesmo padrão geométrico já aprovado no caso C01/C04:
-            # o cabo passante abandona o eixo do borne e usa o lado externo
-            # mais próximo do disjuntor que seria atravessado.
+        # Rev.176 — o desvio NÃO é acionado apenas porque o cabo passa pela
+        # projeção do corpo de outro DJ. Ele só é necessário quando existe
+        # sobreposição real: o cabo passante está no MESMO eixo X de um cabo
+        # que entra/sai pelo borne desse DJ. O cabo de borne tem prioridade.
+        #
+        # Isso preserva o comportamento aprovado C01 -> C04 e aplica a mesma
+        # regra a C02 -> C10, sem criar desvios em cabos paralelos distintos.
+        modulos_r = max(1, int(r.get("modulos", 1) or 1))
+        largura_r = rx2 - rx1
+        passo_r = largura_r / modulos_r
+        xs_bornes_r = [
+            rx1 + passo_r * (i + 0.5)
+            for i in range(modulos_r)
+        ]
+        sobrepoe_cabo_borne = any(
+            abs(x_original - xb) <= max(float(tolerancia), 1e-6)
+            for xb in xs_bornes_r
+        )
+
+        if cruza_y and sobrepoe_cabo_borne:
+            # Quem apenas passa cede o eixo ao condutor que entra no borne.
+            # O desvio usa o lado externo mais próximo do corpo atravessado.
             dist_esq = abs(x_original - rx1)
             dist_dir = abs(rx2 - x_original)
             if dist_esq <= dist_dir:
@@ -3333,6 +3346,7 @@ def desenhar_mapa_fisico_qdc(
                 "y2": float(_y1_prev_rev175 + disp_h),
                 "tipo": "DJ",
                 "geom_id": None,
+                "modulos": int(_mod_prev_rev175),
                 "previsto_rev175": True,
                 "identificador": str(_d_prev_rev175.get("identificador", "") or ""),
             })
