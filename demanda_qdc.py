@@ -152,6 +152,11 @@ def _calcular_automatico(tabela_editada, rede, perfil):
             categoria = "chuveiros"
         elif any(x in n for x in ("boiler", "aquecedor central", "acumulação", "acumulacao")):
             categoria = "boiler"
+        elif any(x in n for x in ("lava e seca", "lava-e-seca", "lavaseca")):
+            # Equipamento combinado de roupas: enquadrado no grupo da Tabela 6
+            # pela função de SECAGEM. A memória de cálculo identifica o critério
+            # para não afirmar que "lava e seca" é denominação literal do GED-13.
+            categoria = "eletrodomesticos"
         elif any(x in n for x in ("micro", "forno", "lava-louça", "lava louça", "lava-louca", "lava louca", "secadora")):
             categoria = "eletrodomesticos"
         elif any(x in n for x in ("fogão", "fogao", "cooktop")):
@@ -198,13 +203,21 @@ def _calcular_automatico(tabela_editada, rede, perfil):
             continue
         dem = grupo["w"] * fator
         demanda_total += dem
+        tabela_id = regra.get("tabela_id", "")
+        categoria_rotulo = rotulos[chave]
+        if chave == "eletrodomesticos" and any(
+            any(t in (nome or "").casefold() for t in ("lava e seca", "lava-e-seca", "lavaseca"))
+            for nome in grupo.get("nomes", [])
+        ):
+            categoria_rotulo = "Secadora / lava e seca (função secagem) / forno / lava-louças / micro-ondas"
+            tabela_id = "GED13_TABELA_6_CRITERIO_FUNCAO_SECAGEM"
         detalhes.append({
-            "categoria": rotulos[chave],
+            "categoria": categoria_rotulo,
             "carga_instalada_w": grupo["w"],
             "quantidade": grupo["qtd"],
             "fator": fator,
             "demanda_w": dem,
-            "tabela_id": regra.get("tabela_id", ""),
+            "tabela_id": tabela_id,
         })
 
     # TUEs sem fator específico no GED-13 não são encaixadas artificialmente

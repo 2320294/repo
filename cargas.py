@@ -107,7 +107,7 @@ def dimensionar_cargas(nome, area, perimetro):
         )
         or "as" in nome_words
     ):
-        tue_nome = "Máquina de Lavar"
+        tue_nome = "Máquina de Lavar Roupa"
         qtd_tue = 1
         carga_tue = 1000
 
