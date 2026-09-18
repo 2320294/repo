@@ -65,7 +65,7 @@ def _texto_numero(valor):
 def _regras_base(regras=None):
     r = regras if isinstance(regras, dict) else {}
     return {
-        "schema": "autoeletrica.perfil_normativo.v1",
+        "schema": "autoeletrica.perfil_normativo.v2",
         "tipo_instalacao": r.get("tipo_instalacao", "Residencial individual"),
         "fornecimento": dict(r.get("fornecimento") or {}),
         "demanda": dict(r.get("demanda") or {}),
@@ -75,7 +75,7 @@ def _regras_base(regras=None):
 
 
 def _perfil_pronto(regras):
-    if not isinstance(regras, dict) or regras.get("schema") != "autoeletrica.perfil_normativo.v1":
+    if not isinstance(regras, dict) or regras.get("schema") not in ("autoeletrica.perfil_normativo.v1", "autoeletrica.perfil_normativo.v2"):
         return False
     if not regras.get("fonte_conferida"):
         return False
@@ -119,12 +119,46 @@ def _editor_regras(prefixo, regras=None):
                 key=f"{prefixo}_{chave}_metodo",
             )
             fator = st.text_input("Fator de demanda (%)", value=_texto_numero(atual.get("fator_percentual")), key=f"{prefixo}_{chave}_fator", disabled=metodo != "Fator único (%)")
-            tabela = st.text_area("Tabela/faixas ou regra oficial", value=atual.get("regra_texto", ""), height=90, key=f"{prefixo}_{chave}_regra", disabled=metodo not in ("Tabela por faixas", "Regra específica"), help="Transcreva de forma estruturada/resumida a regra confirmada no documento oficial; não é necessário editar JSON.")
-            demanda_saida[chave] = {"metodo": metodo}
-            if metodo == "Fator único (%)":
-                demanda_saida[chave]["fator_percentual"] = _numero(fator)
-            elif metodo in ("Tabela por faixas", "Regra específica"):
-                demanda_saida[chave]["regra_texto"] = tabela.strip()
+            # GED-13 v46.0: tabela residencial oficial de iluminação + TUG.
+            # Mantemos os dados estruturados e auditáveis; não dependemos de texto livre para o cálculo.
+            if chave == "iluminacao_tug" and tipo == "Residencial individual":
+                st.caption("GED-13 v46.0 — Tabela 3: fatores de demanda de tomadas e iluminação residencial.")
+                faixas_ged13 = [
+                    {"min_kw": 0.0, "max_kw": 1.0, "fator": 0.86},
+                    {"min_kw": 1.0, "max_kw": 2.0, "fator": 0.75},
+                    {"min_kw": 2.0, "max_kw": 3.0, "fator": 0.66},
+                    {"min_kw": 3.0, "max_kw": 4.0, "fator": 0.59},
+                    {"min_kw": 4.0, "max_kw": 5.0, "fator": 0.52},
+                    {"min_kw": 5.0, "max_kw": 6.0, "fator": 0.45},
+                    {"min_kw": 6.0, "max_kw": 7.0, "fator": 0.40},
+                    {"min_kw": 7.0, "max_kw": 8.0, "fator": 0.35},
+                    {"min_kw": 8.0, "max_kw": 9.0, "fator": 0.31},
+                    {"min_kw": 9.0, "max_kw": 10.0, "fator": 0.27},
+                    {"min_kw": 10.0, "max_kw": None, "fator": 0.24},
+                ]
+                st.dataframe(
+                    [{"Carga instalada (kW)": (f"{x['min_kw']:g} < C < {x['max_kw']:g}" if x['max_kw'] is not None else "C > 10"), "Fator de demanda": f"{x['fator']:.2f}".replace(".", ",")} for x in faixas_ged13],
+                    use_container_width=True, hide_index=True,
+                )
+                st.info("Origem: GED-13, versão 46.0, publicação 19/03/2026, Tabela 3. Para instalação residencial, FP = 1.")
+                metodo = "Tabela por faixas"
+                demanda_saida[chave] = {
+                    "metodo": metodo,
+                    "tabela_id": "GED13_TABELA_3",
+                    "documento": "GED-13",
+                    "versao_documento": "46.0",
+                    "publicacao": "19/03/2026",
+                    "fator_potencia": 1.0,
+                    "variavel": "carga_instalada_iluminacao_tug_kw",
+                    "faixas": faixas_ged13,
+                }
+            else:
+                tabela = st.text_area("Tabela/faixas ou regra oficial", value=atual.get("regra_texto", ""), height=90, key=f"{prefixo}_{chave}_regra", disabled=metodo not in ("Tabela por faixas", "Regra específica"), help="Transcreva de forma estruturada/resumida a regra confirmada no documento oficial; não é necessário editar JSON.")
+                demanda_saida[chave] = {"metodo": metodo}
+                if metodo == "Fator único (%)":
+                    demanda_saida[chave]["fator_percentual"] = _numero(fator)
+                elif metodo in ("Tabela por faixas", "Regra específica"):
+                    demanda_saida[chave]["regra_texto"] = tabela.strip()
 
     obs = st.text_area("Observações normativas / exceções", value=r.get("observacoes", ""), height=90, key=f"{prefixo}_obs")
     conferida = st.checkbox(
@@ -133,7 +167,7 @@ def _editor_regras(prefixo, regras=None):
         key=f"{prefixo}_conf",
     )
     return {
-        "schema": "autoeletrica.perfil_normativo.v1",
+        "schema": "autoeletrica.perfil_normativo.v2",
         "tipo_instalacao": tipo,
         "fornecimento": {
             "tensao_fase_neutro_v": _numero(vfn),
