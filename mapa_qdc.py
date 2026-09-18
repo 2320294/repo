@@ -3750,45 +3750,38 @@ def desenhar_mapa_fisico_qdc(
                             fase_saida
                         )
 
-                        # Rev.173 — repetir EXATAMENTE a lógica gráfica já aprovada
-                        # no caso C01 -> passagem atrás de C04. A decisão é feita pelas
-                        # geometrias dos DJs, e não pelo registro de máscaras/layers.
-                        # Assim também cobre C02 -> passagem atrás de C10.
+                        # Rev.174 — usar a MESMA regra geométrica do desvio
+                        # aprovado C01 -> C04 também para qualquer cabo passante,
+                        # inclusive C02 -> C10. A verificação usa o cadastro GLOBAL
+                        # dos corpos dos DJs (_QDC_DJ_RECTS), pois circuitos_geom
+                        # contém somente a fileira corrente em alguns arranjos.
                         #
-                        # Regra: se o eixo do cabo de um DJ da fileira superior cair
-                        # dentro do corpo de um DJ de fileira inferior, o cabo sai do
-                        # borne, percorre 0,10 após o terminal, desloca 0,10 à esquerda
-                        # e continua nesse novo eixo. O cabo que ENTRA no borne do DJ
-                        # inferior permanece reto e, portanto, tem prioridade gráfica.
-                        geom_inferior_rev173 = None
-                        for _d_obs_rev173, _g_obs_rev173 in circuitos_geom:
-                            if _g_obs_rev173 is g_saida:
-                                continue
-                            # DJ inferior: topo do aparelho está abaixo da base do DJ atual.
-                            if float(_g_obs_rev173["y2"]) >= float(g_saida["y1"]) - 1e-6:
-                                continue
-                            if (
-                                float(_g_obs_rev173["x1"]) - 1e-9
-                                <= float(x_borne_fase)
-                                <= float(_g_obs_rev173["x2"]) + 1e-9
-                            ):
-                                geom_inferior_rev173 = _g_obs_rev173
-                                break
+                        # O condutor que entra no borne do DJ inferior permanece
+                        # reto. O condutor passante sai do borne superior, percorre
+                        # 0,10 m após o terminal, desloca 0,10 m para fora do corpo
+                        # atravessado e continua no novo eixo.
+                        x_desvio_rev174 = _x_desvio_para_nao_invadir_dj(
+                            x_borne_fase,
+                            g_saida["y1"],
+                            y_nivel_fase_rev91,
+                            dj_destino_geom=g_saida,
+                            margem=0.10,
+                        )
 
-                        if geom_inferior_rev173 is not None:
-                            x_passagem_rev171 = float(x_borne_fase) - 0.10
-                            y_base_terminal_rev173 = float(g_saida["y1"]) - 0.075
-                            y_quebra_rev173 = y_base_terminal_rev173 - 0.10
+                        if abs(float(x_desvio_rev174) - float(x_borne_fase)) > 1e-9:
+                            y_base_terminal_rev174 = float(g_saida["y1"]) - 0.075
+                            y_quebra_rev174 = y_base_terminal_rev174 - 0.10
                             _polyline(
                                 msp,
                                 [
                                     (x_borne_fase, g_saida["y1"]),
-                                    (x_borne_fase, y_quebra_rev173),
-                                    (x_passagem_rev171, y_quebra_rev173),
-                                    (x_passagem_rev171, y_nivel_fase_rev91),
+                                    (x_borne_fase, y_quebra_rev174),
+                                    (x_desvio_rev174, y_quebra_rev174),
+                                    (x_desvio_rev174, y_nivel_fase_rev91),
                                 ],
                                 _layer_por_token(fase_saida)
                             )
+                            x_passagem_rev171 = x_desvio_rev174
                         else:
                             x_passagem_rev171 = x_borne_fase
                             _line(
