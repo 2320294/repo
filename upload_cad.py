@@ -571,7 +571,7 @@ def renderizar_salvar_e_gerar_cad(
             )
 
     # ========================================================
-    # VERSÃO 13.6.181 — ETIQUETAS QDC NA ORDEM FÍSICA DOS DISJUNTORES
+    # VERSÃO 13.6.182 — ETIQUETAS NAS MESMAS FILEIRAS FÍSICAS DO QDC
     # ========================================================
     st.markdown("### 🏷️ Identificação do QDC")
     st.caption(
@@ -596,6 +596,7 @@ def renderizar_salvar_e_gerar_cad(
                 disjuntor_geral_a=demanda.get("disjuntor_geral_a"),
                 polos_geral=polos_dg,
                 versao=VERSAO_SISTEMA,
+                mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
             )
             st.download_button(
                 label="🏷️ Gerar / Baixar Etiquetas do QDC",

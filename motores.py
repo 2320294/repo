@@ -2056,6 +2056,9 @@ def gerar_cad_unifilar(
             resumo_rotas[
                 "auditoria_normativa_qdc"
             ] = auditoria_normativa_qdc
+            # 13.6.182 — guarda a MESMA estrutura física usada para desenhar
+            # o QDC. As etiquetas passam a reproduzir suas fileiras reais.
+            resumo_rotas["mapa_fisico_qdc"] = mapa_fisico_qdc
 
         desenhar_mapa_fisico_qdc(
             msp,

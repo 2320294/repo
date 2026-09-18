@@ -420,8 +420,8 @@ def gerar_excel_projeto(
     linhas_interruptores = []
 
     for ambiente in sorted(
-        config_interruptores_usuario,
-        key=str.casefold
+        (config_interruptores_usuario or {}),
+        key=lambda valor: str(valor).casefold()
     ):
         if str(
             ambiente
@@ -551,7 +551,7 @@ def gerar_excel_projeto(
                     [len(str(coluna))]
                     +
                     [
-                        len(v)
+                        len(str(v))
                         for v in valores[:200]
                     ]
                 )
