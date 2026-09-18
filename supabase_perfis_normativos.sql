@@ -43,3 +43,14 @@ using (status = 'ATIVO');
 -- url = "..."
 -- key = "..."                 # chave pública já usada pelo sistema
 -- service_role_key = "..."    # somente backend; nunca expor no código/GitHub
+
+
+-- Rev.189 — privilégios explícitos para o backend administrativo.
+grant select, insert, update, delete on table public.perfis_normativos to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
+-- Streamlit Cloud (Secrets):
+-- [supabase]
+-- secret_key = "sb_secret_..."       # recomendado (backend somente)
+-- ou service_role_key = "eyJ..."     # legacy service_role
+-- Nunca use sb_publishable_/anon como chave administrativa.
