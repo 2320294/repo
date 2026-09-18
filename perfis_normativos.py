@@ -17,14 +17,37 @@ def listar_perfis(ativos_apenas=False, administrativo=False):
 
 
 def listar_perfis_liberados(uf="", municipio=""):
-    q = _db().table("perfis_normativos").select("*").eq("status", "ATIVO")
-    if uf:
-        q = q.eq("uf", str(uf).upper().strip())
+    """Lista somente perfis ATIVOS aplicáveis à localidade do projeto.
+
+    Rev.203 — a leitura dos perfis publicados é feita no servidor com o cliente
+    administrativo. O cliente público pode estar sujeito ao RLS e retornar uma
+    lista vazia mesmo quando o perfil foi corretamente marcado como ATIVO.
+
+    Abrangência:
+    - perfil com município igual ao projeto: específico da cidade;
+    - perfil com município vazio: válido para toda a UF.
+    Perfis específicos são apresentados antes dos estaduais.
+    """
+    q = obter_supabase_admin().table("perfis_normativos").select("*").eq("status", "ATIVO")
+    uf_norm = str(uf or "").upper().strip()
+    if uf_norm:
+        q = q.eq("uf", uf_norm)
     r = q.order("concessionaria").order("revisao", desc=True).execute()
     itens = r.data or []
+
     mun = str(municipio or "").strip().casefold()
     if mun:
-        itens = [p for p in itens if not str(p.get("municipio") or "").strip() or str(p.get("municipio") or "").strip().casefold() == mun]
+        itens = [
+            p for p in itens
+            if not str(p.get("municipio") or "").strip()
+            or str(p.get("municipio") or "").strip().casefold() == mun
+        ]
+        itens.sort(
+            key=lambda p: (
+                0 if str(p.get("municipio") or "").strip().casefold() == mun else 1,
+                str(p.get("concessionaria") or "").casefold(),
+            )
+        )
     return itens
 
 
