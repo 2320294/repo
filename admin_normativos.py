@@ -316,7 +316,7 @@ def _editor_regras(prefixo, regras=None):
                     demanda_saida[chave]["regra_texto"] = tabela.strip()
 
     obs = st.text_area("Observações normativas / exceções", value=r.get("observacoes", ""), height=90, key=f"{prefixo}_obs")
-    # Rev.198 — a confirmação documental é uma etapa administrativa separada,
+    # Rev.199 — a confirmação documental é uma etapa administrativa separada,
     # liberada somente depois que a validação automática passa 100%.
     # Aqui apenas preservamos o estado já gravado no perfil.
     conferida = bool(r.get("fonte_conferida"))
@@ -541,9 +541,14 @@ def renderizar_admin_normativos(email):
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             regras_atual = p.get("regras") or {}
+            # Rev.199 — normaliza o perfil persistido com os padrões normativos atuais.
+            # Perfis criados antes das revisões 192–198 podem não ter ainda
+            # tipo_instalacao/tabelas gravados no JSON, embora o editor os exiba.
+            # A auditoria deve validar exatamente a mesma estrutura mostrada na tela.
+            regras_validacao = _regras_base(regras_atual)
 
-            # Rev.198 — auditoria visível antes da longa edição do perfil.
-            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_atual) if (regras_atual.get("tipo_instalacao") == "Residencial individual") else (False, [])
+            # Auditoria sempre visível antes da longa edição do perfil.
+            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao) if (regras_validacao.get("tipo_instalacao") == "Residencial individual") else (False, [])
 
             with st.form(f"editar_perfil_{p.get('id')}"):
                 regras_editadas = _editor_regras(f"edit_{p.get('id')}", regras_atual)
@@ -555,10 +560,10 @@ def renderizar_admin_normativos(email):
                     except Exception as e:
                         st.error(f"Não foi possível atualizar: {e}")
 
-            validacao_ok = _renderizar_validador_ged13(regras_atual, f"val_{p.get('id')}") if (regras_atual.get("tipo_instalacao") == "Residencial individual") else False
+            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if (regras_validacao.get("tipo_instalacao") == "Residencial individual") else False
 
             # A confirmação humana é deliberadamente a última etapa.
-            fonte_conferida = bool(regras_atual.get("fonte_conferida"))
+            fonte_conferida = bool(regras_validacao.get("fonte_conferida"))
             st.markdown("#### Conferência documental final")
             if fonte_conferida:
                 st.success("Fonte oficial confirmada pelo administrador.")
@@ -566,7 +571,7 @@ def renderizar_admin_normativos(email):
                 st.info("Todos os testes automáticos passaram. Confira o documento oficial e, somente depois, registre a confirmação abaixo.")
                 if st.button("Confirmo a conferência no documento oficial", key=f"confirmar_fonte_{p.get('id')}", use_container_width=True):
                     try:
-                        regras_confirmadas = dict(regras_atual)
+                        regras_confirmadas = dict(regras_validacao)
                         regras_confirmadas["fonte_conferida"] = True
                         salvar_perfil({"regras": regras_confirmadas}, perfil_id=p.get("id"))
                         st.success("Conferência documental registrada.")
@@ -576,7 +581,7 @@ def renderizar_admin_normativos(email):
             else:
                 st.caption("Confirmação documental bloqueada até 100% dos testes automáticos passarem.")
 
-            pronto = _perfil_pronto(regras_atual) and validacao_ok
+            pronto = _perfil_pronto(regras_validacao) and validacao_ok
             if not pronto:
                 st.info("Perfil ainda incompleto ou com validação pendente: mantenha em RASCUNHO até todos os testes obrigatórios passarem e a fonte oficial estar confirmada.")
             cols = st.columns(4)
