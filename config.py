@@ -92,3 +92,43 @@ def obter_supabase():
         url,
         key
     )
+
+
+def obter_credencial_supabase_admin():
+    """Retorna exclusivamente a Service Role Key para operações administrativas.
+
+    Rev.188: não há fallback para a chave pública/anon. Perfis normativos são
+    gravados apenas pelo backend Streamlit após a checagem de ADMIN.
+    """
+    try:
+        bloco = st.secrets["supabase"]
+        for nome in ("service_role_key", "service_key"):
+            valor = str(bloco.get(nome, "") or "").strip()
+            if valor:
+                return valor
+    except Exception:
+        pass
+
+    return str(os.getenv("SUPABASE_SERVICE_ROLE_KEY", "") or "").strip()
+
+
+@st.cache_resource
+def obter_supabase_admin():
+    """Cliente servidor para a área ADMIN. Nunca expor a chave ao navegador."""
+    try:
+        from supabase import create_client
+    except Exception as exc:
+        raise RuntimeError(
+            "Falha ao carregar o cliente Supabase para a área administrativa."
+        ) from exc
+
+    url, _ = obter_credenciais_supabase()
+    service_key = obter_credencial_supabase_admin()
+    if not url or not service_key:
+        raise RuntimeError(
+            "A área administrativa precisa da Service Role Key do Supabase. "
+            "No Streamlit Cloud, adicione em [supabase] a entrada "
+            "service_role_key = \"SUA_SERVICE_ROLE_KEY\". "
+            "Não substitua a chave pública existente."
+        )
+    return create_client(url, service_key)

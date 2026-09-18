@@ -33,7 +33,7 @@ def renderizar_admin_normativos(email):
     st.title("⚙️ Administração — Perfis Normativos")
     st.caption("Somente perfis ATIVOS são disponibilizados aos usuários. O cadastro não altera automaticamente os cálculos da versão estável.")
     try:
-        perfis = listar_perfis(False)
+        perfis = listar_perfis(False, administrativo=True)
     except Exception as e:
         st.error("Banco de perfis normativos ainda não preparado. Execute o arquivo supabase_perfis_normativos.sql no Supabase.")
         st.code(str(e))

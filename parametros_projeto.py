@@ -542,7 +542,7 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto. Na Versão 13.6.187, somente perfis liberados pelo administrador "
+            "no projeto. Somente perfis liberados pelo administrador "
             "podem ser selecionados. O motor de demanda automática permanece bloqueado "
             "até a validação da implementação matemática da regra oficial."
         )

@@ -1,4 +1,4 @@
--- AutoElétrica 13.6.187 — infraestrutura administrativa de perfis normativos
+-- AutoElétrica 13.6.188 — infraestrutura administrativa de perfis normativos
 alter table if exists public.usuarios add column if not exists role text not null default 'USUARIO';
 
 create table if not exists public.perfis_normativos (
@@ -18,6 +18,28 @@ create table if not exists public.perfis_normativos (
   updated_at timestamptz not null default now()
 );
 create index if not exists idx_perfis_normativos_publicados on public.perfis_normativos(status,uf,municipio,concessionaria);
--- Defina o administrador uma única vez no SQL Editor, substituindo o e-mail abaixo:
+
+-- Mantém RLS ligado. A gravação administrativa da aplicação usa a Service Role
+-- somente no backend Streamlit, após validar que a conta possui role ADMIN.
+alter table public.perfis_normativos enable row level security;
+
+-- Usuários da aplicação podem consultar apenas perfis efetivamente ATIVOS.
+drop policy if exists "leitura_perfis_normativos_ativos" on public.perfis_normativos;
+create policy "leitura_perfis_normativos_ativos"
+on public.perfis_normativos
+for select
+to anon, authenticated
+using (status = 'ATIVO');
+
+-- A policy antiga de INSERT autenticado pode permanecer, mas a Rev.188 não depende
+-- dela para a área ADMIN porque o login Google do Streamlit não é uma sessão Auth
+-- do Supabase. Não liberar INSERT/UPDATE/DELETE para anon.
+
+-- Defina o administrador uma única vez no SQL Editor:
 -- update public.usuarios set role='ADMIN' where lower(email)=lower('SEU_EMAIL_ADMIN@DOMINIO.COM');
--- Alternativamente, configure no secrets.toml: [admin] emails=["email@dominio.com"]
+--
+-- IMPORTANTE no Streamlit Cloud / Secrets:
+-- [supabase]
+-- url = "..."
+-- key = "..."                 # chave pública já usada pelo sistema
+-- service_role_key = "..."    # somente backend; nunca expor no código/GitHub
