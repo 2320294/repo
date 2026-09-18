@@ -1151,10 +1151,23 @@ def gerar_cad_unifilar(
                     nome.startswith("MAPA_QDC") or
                     nome.startswith("AE_"))
 
+        # Rev.170 — preserva as cores funcionais do diagrama de montagem do QDC.
+        # A Rev.165 continua válida para a arquitetura, mas não pode converter as
+        # fases/N/PE do QDC para preto, pois isso elimina a leitura elétrica por cor.
+        _cores_qdc_rev170 = {
+            "PROJ_ELETRICA_QDC_FASE_A": 7,
+            "PROJ_ELETRICA_QDC_FASE_B": 8,
+            "PROJ_ELETRICA_QDC_FASE_C": 1,
+            "PROJ_ELETRICA_QDC_NEUTRO": 5,
+            "PROJ_ELETRICA_QDC_PE": 3,
+            "PROJ_ELETRICA_QDC_PENTE": 30,
+        }
         for layer_obj in doc.layers:
             try:
                 nome_arq = str(layer_obj.dxf.name or "").upper().strip()
-                if _layer_eletrica_rev165(nome_arq):
+                if nome_arq in _cores_qdc_rev170:
+                    layer_obj.color = _cores_qdc_rev170[nome_arq]
+                elif _layer_eletrica_rev165(nome_arq):
                     layer_obj.color = 7
                 elif nome_arq != "DEFPOINTS":
                     layer_obj.color = 9  # cinza claro da arquitetura

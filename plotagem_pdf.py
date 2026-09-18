@@ -211,10 +211,23 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
                 nome.startswith("MAPA_QDC") or
                 nome.startswith("AE_"))
 
+    # Rev.170 — cores elétricas do QDC também precisam sobreviver à cópia
+    # temporária usada exclusivamente para renderizar o PDF.
+    cores_qdc_rev170 = {
+        "PROJ_ELETRICA_QDC_FASE_A": 7,
+        "PROJ_ELETRICA_QDC_FASE_B": 8,
+        "PROJ_ELETRICA_QDC_FASE_C": 1,
+        "PROJ_ELETRICA_QDC_NEUTRO": 5,
+        "PROJ_ELETRICA_QDC_PE": 3,
+        "PROJ_ELETRICA_QDC_PENTE": 30,
+    }
+
     for layer_obj in doc.layers:
         try:
             nome = str(layer_obj.dxf.name or "").upper().strip()
-            if eh_eletrica(nome):
+            if nome in cores_qdc_rev170:
+                layer_obj.color = cores_qdc_rev170[nome]
+            elif eh_eletrica(nome):
                 layer_obj.color = 7
             elif nome != "DEFPOINTS":
                 layer_obj.color = 9
@@ -225,7 +238,13 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
         for ent in espaco:
             try:
                 nome = str(ent.dxf.layer or "").upper().strip()
-                if eh_eletrica(nome):
+                if nome in cores_qdc_rev170:
+                    # ByLayer, sem true-color preto: permite que A/B/C/N/PE
+                    # sejam renderizados com a cor definida na própria layer.
+                    ent.dxf.color = 256
+                    if ent.dxf.hasattr("true_color"):
+                        ent.dxf.discard("true_color")
+                elif eh_eletrica(nome):
                     ent.dxf.color = 256
                     ent.dxf.true_color = 0x000000
                 elif nome != "DEFPOINTS":
