@@ -228,6 +228,20 @@ def renderizar_parametros_projeto(
             "A definir"
         )
 
+        # Rev.202 — ao selecionar um perfil ATIVO, usa os valores de
+        # fornecimento persistidos no próprio perfil apenas como padrão inicial.
+        # O usuário continua escolhendo a modalidade de fornecimento do projeto.
+        if tensao_rede_salva == "A definir" and perfil_selecionado:
+            try:
+                _forn = (perfil_selecionado.get("regras") or {}).get("fornecimento") or {}
+                _vfn = int(float(_forn.get("tensao_fase_neutro_v") or 0))
+                _vff = int(float(_forn.get("tensao_fase_fase_v") or 0))
+                _combinada = f"{_vfn}/{_vff} V" if _vfn and _vff else ""
+                if _combinada in tensoes_rede:
+                    tensao_rede_salva = _combinada
+            except Exception:
+                pass
+
         if (
             tensao_rede_salva
             not in tensoes_rede
@@ -493,6 +507,20 @@ def renderizar_parametros_projeto(
         "concessionaria_manual":
             concessionaria_manual,
         "perfil_normativo_id": perfil_normativo_id,
+        # Rev.202 — snapshot textual para rastreabilidade do projeto.
+        # O ID continua sendo a fonte de verdade para carregar as regras.
+        "perfil_normativo_concessionaria": (
+            perfil_selecionado.get("concessionaria", "") if perfil_selecionado else ""
+        ),
+        "perfil_normativo_documento": (
+            perfil_selecionado.get("documento", "") if perfil_selecionado else ""
+        ),
+        "perfil_normativo_revisao": (
+            perfil_selecionado.get("revisao", "") if perfil_selecionado else ""
+        ),
+        "perfil_normativo_status": (
+            perfil_selecionado.get("status", "") if perfil_selecionado else ""
+        ),
         "tipo_fornecimento":
             tipo_fornecimento,
         "tensao_fornecimento":

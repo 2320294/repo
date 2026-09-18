@@ -667,10 +667,21 @@ def renderizar_painel_principal():
         status = resultado_demanda.get("status")
         if status == "aguardando_perfil":
             st.info(
-                "ℹ️ O método automático está selecionado, mas o perfil "
-                "normativo desta concessionária ainda não foi ativado. "
-                "Nenhum fator de demanda foi inventado pelo sistema."
+                "ℹ️ O método automático está selecionado. Selecione em Parâmetros "
+                "um perfil normativo ATIVO liberado pelo administrador. "
+                "Nenhum fator de demanda é inventado pelo sistema."
             )
+        elif status == "cargas_sem_regra":
+            parcial = resultado_demanda.get("potencia_demanda_parcial_w")
+            st.warning(
+                "⚠️ O perfil normativo ATIVO foi aplicado às cargas reconhecidas, "
+                "mas existem TUEs sem categoria/regra automática. Por segurança, "
+                "o AutoElétrica não fecha a demanda total enquanto houver pendências."
+            )
+            if parcial is not None:
+                st.caption(f"Demanda normativa parcial das cargas classificadas: {parcial/1000:.2f} kW")
+            for pendencia in resultado_demanda.get("pendencias", []):
+                st.caption(f"• {pendencia}")
         elif status == "fornecimento_incompleto":
             st.warning(
                 "⚠️ Informe tipo e tensão de fornecimento em Parâmetros "
@@ -686,6 +697,24 @@ def renderizar_painel_principal():
                 "Pré-dimensionamento da Fase 13.6 Rev.124. O DG depende da validação "
                 "do alimentador e do perfil da concessionária."
             )
+
+        detalhes_demanda = resultado_demanda.get("detalhes_demanda") or []
+        if detalhes_demanda:
+            with st.expander("📋 Memória do cálculo de demanda", expanded=False):
+                perfil_usado = resultado_demanda.get("perfil_normativo")
+                if perfil_usado:
+                    st.caption(f"Perfil aplicado: {perfil_usado}")
+                linhas_memoria = []
+                for item in detalhes_demanda:
+                    linhas_memoria.append({
+                        "Categoria": item.get("categoria", ""),
+                        "Carga instalada (kW)": round(float(item.get("carga_instalada_w", 0) or 0) / 1000.0, 3),
+                        "Quantidade": item.get("quantidade"),
+                        "Fator": item.get("fator"),
+                        "Demanda (kW)": round(float(item.get("demanda_w", 0) or 0) / 1000.0, 3),
+                        "Regra": item.get("tabela_id", ""),
+                    })
+                st.dataframe(linhas_memoria, use_container_width=True, hide_index=True)
 
         st.divider()
         renderizar_materiais(
