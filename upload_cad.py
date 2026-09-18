@@ -571,7 +571,7 @@ def renderizar_salvar_e_gerar_cad(
             )
 
     # ========================================================
-    # VERSÃO 13.6.180 — ETIQUETAS QDC COM EQUIPAMENTO TUE E AJUSTE AUTOMÁTICO
+    # VERSÃO 13.6.181 — ETIQUETAS QDC NA ORDEM FÍSICA DOS DISJUNTORES
     # ========================================================
     st.markdown("### 🏷️ Identificação do QDC")
     st.caption(

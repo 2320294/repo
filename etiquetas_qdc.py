@@ -102,8 +102,41 @@ def _descricao(circ, tipo):
     amb = _txt(circ.get('ambiente')) or '-'
     return f'{nome} — {amb}'
 
+def _fases_ordem(c):
+    fase = _txt(c.get('fase')).upper().replace('/', '-').replace(' ', '')
+    tokens = tuple(x for x in ('A','B','C') if x in fase)
+    return {
+        ('A',): 0, ('B',): 1, ('C',): 2,
+        ('A','B'): 3, ('A','C'): 4, ('B','C'): 5,
+        ('A','B','C'): 6,
+    }.get(tokens, 99)
+
+def _ordem_fisica_qdc(c):
+    """Mesma chave usada no diagrama de montagem do QDC (mapa_qdc).
+
+    A faixa de etiquetas deve sair na sequência física em que os DJs aparecem:
+    SEM DR, DR1, DR2...; dentro do grupo, fase; depois número do circuito.
+    """
+    grupo = _txt(c.get('dr') or c.get('grupo') or 'SEM DR').upper() or 'SEM DR'
+    if grupo == 'SEM DR':
+        ordem_grupo = 0
+    else:
+        import re
+        m = re.search(r'(\d+)', grupo)
+        ordem_grupo = int(m.group(1)) if m else 999
+    try:
+        numero = int(c.get('numero', 0) or 0)
+    except Exception:
+        numero = 9999
+    return (ordem_grupo, grupo, _fases_ordem(c), numero)
+
 def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, polos_geral=2, versao=''):
-    circuitos = sorted([dict(x) for x in (circuitos or []) if int(x.get('numero',0) or 0)>0], key=lambda x:int(x.get('numero',0) or 0))
+    # Rev.181: a ordem das etiquetas replica a ordem física dos disjuntores
+    # no diagrama de montagem, em vez da antiga ordenação C01, C02, C03...
+    circuitos = sorted(
+        [dict(x) for x in (circuitos or []) if int(x.get('numero',0) or 0)>0],
+        key=_ordem_fisica_qdc,
+    )
     buf=BytesIO(); c=canvas.Canvas(buf,pagesize=A4); W,H=A4
     margem=14*mm; util=W-2*margem
     c.setTitle(f'{nome_projeto} - Etiquetas QDC')
