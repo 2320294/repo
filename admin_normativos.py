@@ -86,6 +86,23 @@ def _sincronizar_regras_ged13_residencial(regras=None):
     if r.get("tipo_instalacao") != "Residencial individual":
         return r
 
+    # Rev.201 — materializa também os parâmetros de fornecimento no mesmo
+    # schema canônico consumido pelo validador. Nas revisões anteriores esses
+    # valores podiam aparecer nos widgets do editor, mas não existir no JSON
+    # persistido de perfis antigos, resultando em ``None`` nos quatro testes.
+    f = dict(r.get("fornecimento") or {})
+    if f.get("tensao_fase_neutro_v") in (None, ""):
+        f["tensao_fase_neutro_v"] = 127.0
+    if f.get("tensao_fase_fase_v") in (None, ""):
+        f["tensao_fase_fase_v"] = 220.0
+    if f.get("limite_potencia_instalada_kw") in (None, ""):
+        legado = f.get("limite_fornecimento_kva")
+        f["limite_potencia_instalada_kw"] = float(legado) if legado not in (None, "") else 75.0
+    modalidades = f.get("modalidades")
+    if not isinstance(modalidades, list) or not modalidades:
+        f["modalidades"] = ["Monofásico", "Bifásico", "Trifásico"]
+    r["fornecimento"] = f
+
     d = dict(r.get("demanda") or {})
     d["iluminacao_tug"] = {
         "metodo":"Tabela por faixas","tabela_id":"GED13_TABELA_3","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"variavel":"carga_instalada_iluminacao_tug_kw",
@@ -573,7 +590,7 @@ def renderizar_admin_normativos(email):
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             regras_atual = p.get("regras") or {}
-            # Rev.200 — migração/sincronização do perfil GED-13 já existente.
+            # Rev.201 — migração/sincronização do perfil GED-13 já existente, incluindo fornecimento.
             # O editor das revisões 192–196 exibia as tabelas canônicas, mas perfis
             # antigos podiam continuar com demanda vazia no Supabase. Aqui a mesma
             # estrutura oficial usada pela interface é materializada e persistida.
