@@ -241,7 +241,7 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     # Régua de conferência imediatamente abaixo das etiquetas físicas.
     # Ela valida a impressão 1:1 das etiquetas (17,5 mm por módulo x 12 mm),
     # portanto não deve ficar visualmente associada à tabela da porta.
-    # Rev.185: cria uma separação visual clara entre a última fileira de
+    # Rev.186: cria uma separação visual clara entre a última fileira de
     # etiquetas, a régua de aferição e o quadro de identificação.
     y_regua = y + 2*mm
     x0 = margem
@@ -270,17 +270,39 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     # Primeiro tenta o tamanho normal no espaço restante. Se não couber, começa
     # em nova página. Em projetos maiores, compacta apenas tabela/fontes; a faixa
     # de etiquetas acima continua SEMPRE em escala física 1:1 (17,5 x 12 mm).
-    col1=25*mm; tablew=util
-    rowh_padrao=8.2*mm; rowh_min=5.2*mm
-    altura_fixa=12*mm  # somente título/campos; régua pertence às etiquetas acima
+    # Rev.186: a tabela da porta não ocupa mais toda a largura da folha.
+    # Cada coluna acompanha o conteúdo real, com limite para descrições longas;
+    # nesses casos o texto quebra em linhas em vez de "esticar" a tabela.
+    fonte_tabela = 8.0
+    pad_x = 3.0*mm
+    col1 = max(18*mm, c.stringWidth('GERAL','Helvetica-Bold',fonte_tabela)+2*pad_x)
+    maior_desc = max([c.stringWidth(desc,'Helvetica-Bold',fonte_tabela) for _,desc in rows] +
+                     [c.stringWidth('CIRCUITO','Helvetica-Bold',fonte_tabela)])
+    col2 = min(max(58*mm, maior_desc+2*pad_x), 175*mm)
+    tablew = col1 + col2
+
+    # Calcula previamente a quebra de cada descrição e a altura real de cada
+    # linha. Assim a tabela termina exatamente no conteúdo e continua inteira.
+    linhas_rows=[]
+    for meta,desc in rows:
+        linhas,fs = _quebrar_linhas(c,desc,col2-2*pad_x,'Helvetica-Bold',fonte_tabela,3,5.0)
+        rh=max(7.0*mm,(len(linhas)*3.2+3.0)*mm)
+        linhas_rows.append((meta,desc,linhas,fs,rh))
+
+    rowh_cab=8.2*mm
+    altura_fixa=12*mm
     margem_inferior=16*mm
-    necessario=altura_fixa + rowh_padrao*(len(rows)+1) + margem_inferior
+    altura_tabela=rowh_cab+sum(x[4] for x in linhas_rows)
+    necessario=altura_fixa+altura_tabela+margem_inferior
     if y < necessario:
         c.showPage(); y=H-20*mm
-    disponivel=max(1*mm, y-altura_fixa-margem_inferior)
-    rowh=min(rowh_padrao, disponivel/max(1,len(rows)+1))
-    rowh=max(rowh_min,rowh)
-    escala_texto=min(1.0,rowh/rowh_padrao)
+
+    # Se um projeto excepcional ainda exceder uma página, compacta apenas a
+    # tabela da porta. As etiquetas e a régua de 100 mm permanecem 1:1.
+    disponivel=max(1*mm,y-altura_fixa-margem_inferior)
+    escala_texto=min(1.0, disponivel/max(1*mm,altura_tabela))
+    escala_altura=min(1.0, disponivel/max(1*mm,altura_tabela))
+    rowh=rowh_cab*escala_altura
 
     c.setFillColor(colors.black); c.setFont('Helvetica-Bold',11*escala_texto); c.drawString(margem,y,'Quadro de distribuição — Identificação dos circuitos'); y-=5*mm
     c.setFont('Helvetica',7*escala_texto); c.drawString(margem,y,'Local: ____________________   Responsável: ____________________   Data: ____/____/______'); y-=7*mm
@@ -288,14 +310,20 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     c.setFillColor(colors.HexColor('#182231')); c.rect(margem,y-rowh,tablew,rowh,stroke=0,fill=1)
     c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8*escala_texto)
     c.drawCentredString(margem+col1/2,y-rowh*0.64,'Nº')
-    c.drawString(margem+col1+4*mm,y-rowh*0.64,'CIRCUITO'); y-=rowh
+    c.drawString(margem+col1+pad_x,y-rowh*0.64,'CIRCUITO'); y-=rowh
 
-    for meta,desc in rows:
-        c.setStrokeColor(colors.HexColor('#D0D3D8')); c.setLineWidth(0.3); c.rect(margem,y-rowh,tablew,rowh,stroke=1,fill=0)
-        c.setFillColor(CORES[meta['tipo']]); c.rect(margem,y-rowh,col1,rowh,stroke=0,fill=1)
-        c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8*escala_texto); c.drawCentredString(margem+col1/2,y-rowh*0.64,meta['id'])
-        c.setFillColor(colors.black)
-        f,s=_fit(c,desc,tablew-col1-8*mm,8*escala_texto,4.6,True); c.setFont(f,s); c.drawString(margem+col1+4*mm,y-rowh*0.64,desc); y-=rowh
+    for meta,desc,linhas,fs,rh_base in linhas_rows:
+        rh=rh_base*escala_altura
+        c.setStrokeColor(colors.HexColor('#D0D3D8')); c.setLineWidth(0.3); c.rect(margem,y-rh,tablew,rh,stroke=1,fill=0)
+        c.setFillColor(CORES[meta['tipo']]); c.rect(margem,y-rh,col1,rh,stroke=0,fill=1)
+        c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8*escala_texto); c.drawCentredString(margem+col1/2,y-rh*0.58,meta['id'])
+        c.setFillColor(colors.black); c.setFont('Helvetica-Bold',fs*escala_texto)
+        line_h=3.2*mm*escala_altura
+        bloco_h=len(linhas)*line_h
+        yy=y-(rh-bloco_h)/2-line_h*0.78
+        for linha in linhas:
+            c.drawString(margem+col1+pad_x,yy,linha); yy-=line_h
+        y-=rh
 
     c.setFillColor(colors.black); c.setFont('Helvetica',6.5)
     c.drawRightString(W-margem,8*mm,f'Versão: {versao}')
