@@ -141,13 +141,38 @@ def dimensionar_alimentador_geral(corrente_a, dg_a, tipo_fornecimento, tensao_li
         return dv, 100.0*dv/v
     dv,dp=queda(secao)
     secao_amp=secao
+
+    # REV.210 — fecha os dois critérios separadamente e adota a maior seção.
+    # A seção por queda representa a menor seção padronizada da tabela interna
+    # que atende ao limite informado, independentemente do critério de ampacidade.
+    secao_queda=None
     if comprimento>0:
         for s in sorted(tabela):
-            if s < secao_amp: continue
-            dv_t,dp_t=queda(float(s))
-            if dp_t <= limite+1e-9:
-                secao=float(s); dv=float(dv_t); dp=float(dp_t); break
+            dv_q, dp_q = queda(float(s))
+            if dp_q <= limite+1e-9:
+                secao_queda=float(s)
+                break
 
+    if comprimento>0 and secao_queda is not None:
+        secao=max(float(secao_amp), float(secao_queda))
+        dv,dp=queda(secao)
+    else:
+        secao=float(secao_amp)
+        dv,dp=queda(secao)
+
+    if comprimento <= 0:
+        criterio_determinante = "Capacidade de condução (queda de tensão aguardando comprimento)"
+    elif secao_queda is None:
+        criterio_determinante = "Queda de tensão fora da faixa da tabela interna"
+    elif secao_queda > secao_amp:
+        criterio_determinante = "Queda de tensão"
+    elif secao_amp > secao_queda:
+        criterio_determinante = "Capacidade de condução"
+    else:
+        criterio_determinante = "Capacidade de condução e queda de tensão (mesma seção)"
+
+    # Iz da seção FINAL adotada, já corrigida pelos fatores.
+    iz=float(tabela[secao]*ft*fg) if secao in tabela else iz
     sn=secao
     spe=_pe_por_fase(secao)
     tipo_txt=str(tipo_fornecimento or "")
@@ -160,7 +185,8 @@ def dimensionar_alimentador_geral(corrente_a, dg_a, tipo_fornecimento, tensao_li
         "material":"Cobre", "isolacao":"PVC 70 °C", "condutores_carregados":n_carregados,
         "fator_temperatura":ft, "fator_agrupamento":fg, "corrente_projeto_a":i, "ib_a":ib, "in_a":inn, "dg_a":dg_a,
         "atende_ib_in_iz":atende_ib_in_iz,
-        "secao_por_capacidade_mm2":secao_amp, "iz_corrigida_a":iz,
+        "secao_por_capacidade_mm2":secao_amp, "secao_por_queda_mm2":secao_queda,
+        "secao_final_mm2":secao, "criterio_determinante":criterio_determinante, "iz_corrigida_a":iz,
         "comprimento_m":comprimento, "limite_queda_pct":limite,
         "queda_tensao_v":dv if comprimento>0 else None,
         "queda_tensao_pct":dp if comprimento>0 else None,

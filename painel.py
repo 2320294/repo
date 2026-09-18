@@ -775,6 +775,10 @@ def renderizar_painel_principal():
                 a3.metric("PE", f"{alim['pe_mm2']:g} mm²")
                 a4.metric("Iz corrigida", f"{alim['iz_corrigida_a']:.1f} A")
                 st.write(f"**Capacidade de condução:** método {alim['metodo']}, {alim['temperatura_referencia_c']} °C → seção mínima por capacidade **{alim['secao_por_capacidade_mm2']:g} mm²** para DG **{alim['dg_a']} A**.")
+                qsec = alim.get("secao_por_queda_mm2")
+                qsec_txt = f"{qsec:g} mm²" if qsec is not None else "Aguardando comprimento"
+                st.write(f"**Fechamento do alimentador:** seção por capacidade **{alim['secao_por_capacidade_mm2']:g} mm²** · seção por queda de tensão **{qsec_txt}** · seção final adotada **{alim['secao_final_mm2']:g} mm²**.")
+                st.write(f"**Critério determinante:** **{alim['criterio_determinante']}**.")
                 st.write(f"**Premissas:** {alim['material']} · {alim['isolacao']} · **{alim['condutores_carregados']} condutores carregados** · fator de temperatura **{alim['fator_temperatura']:.2f}** · fator de agrupamento **{alim['fator_agrupamento']:.2f}**.")
                 st.write(f"**Verificação Ib ≤ In ≤ Iz:** {alim['ib_a']:.1f} A ≤ {alim['in_a']:.1f} A ≤ {alim['iz_corrigida_a']:.1f} A")
                 if alim['atende_ib_in_iz']:
