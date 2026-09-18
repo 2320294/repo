@@ -325,10 +325,12 @@ def gerar_excel_projeto(
         ignore_index=True
     )
 
-    resultado_demanda = calcular_demanda_qdc(
-        tabela_editada,
-        parametros_rede
-    )
+    resultado_demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
+    if not resultado_demanda:
+        resultado_demanda = calcular_demanda_qdc(
+            tabela_editada,
+            parametros_rede
+        )
 
     circuitos_dr_export, resumo_drs_export = agrupar_circuitos_dr(
         circuitos_balanceados,
@@ -755,9 +757,12 @@ def gerar_memorial_pdf(
         )
     )
 
-    # REV.211 — mesma fonte de dados do QDC/unifilar para demanda, DG e alimentador.
+    # REV.212 — o memorial consome exatamente a demanda fechada no QDC.
+    # Só há recálculo como fallback para projetos antigos sem snapshot persistido.
     rede_memorial = dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
-    demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)
+    demanda_memorial = dict(rede_memorial.get("demanda_fechada", {}) or {})
+    if not demanda_memorial:
+        demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)
     alim_memorial = dict(rede_memorial.get("alimentador_geral", {}) or {})
     story.append(Paragraph("2A. DEMANDA, PROTEÇÃO GERAL E ALIMENTADOR", styles["Secao"]))
     if demanda_memorial.get("potencia_demanda_w") is not None:

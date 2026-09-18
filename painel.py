@@ -797,6 +797,21 @@ def renderizar_painel_principal():
                 # O bloco fica dentro dos parâmetros de rede já persistidos pelo projeto,
                 # sem criar nova tabela/estrutura de banco e sem alterar o desenho aprovado.
                 rede_integrada = dict(config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {})
+                # REV.212 — congela também o resultado de demanda que originou
+                # Ib/In e o fechamento do alimentador. Relatórios e unifilar devem
+                # consumir este mesmo resultado, sem recalcular a demanda.
+                rede_integrada["demanda_fechada"] = {
+                    "total_w": resultado_demanda.get("total_w"),
+                    "potencia_demanda_w": resultado_demanda.get("potencia_demanda_w"),
+                    "potencia_demanda_parcial_w": resultado_demanda.get("potencia_demanda_parcial_w"),
+                    "corrente_demanda_a": resultado_demanda.get("corrente_demanda_a"),
+                    "disjuntor_geral_a": resultado_demanda.get("disjuntor_geral_a"),
+                    "status": resultado_demanda.get("status"),
+                    "perfil_normativo": resultado_demanda.get("perfil_normativo"),
+                    "memoria_dimensionamento_entrada": resultado_demanda.get("memoria_dimensionamento_entrada"),
+                    "detalhes_demanda": resultado_demanda.get("detalhes_demanda"),
+                    "origem": "QDC_DEMANDA_FECHADA_REV212",
+                }
                 rede_integrada["alimentador_geral"] = {
                     "metodo": alim.get("metodo"),
                     "temperatura_c": alim.get("temperatura_referencia_c"),

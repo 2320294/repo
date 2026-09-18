@@ -587,7 +587,9 @@ def renderizar_salvar_e_gerar_cad(
         )
         if circuitos_etiquetas:
             parametros_rede = (config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {}
-            demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
+            demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
+            if not demanda:
+                demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
             tipo_rede = str(parametros_rede.get("tipo_fornecimento", "") or "")
             polos_dg = 3 if "Trif" in tipo_rede else (2 if "Bif" in tipo_rede else 1)
             pdf_etiquetas = gerar_pdf_etiquetas_qdc(

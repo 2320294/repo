@@ -1564,10 +1564,14 @@ def gerar_cad_unifilar(
             )
         )
 
-        resultado_demanda_unifilar = calcular_demanda_qdc(
-            dados_editados,
-            parametros_rede_unifilar
-        )
+        # REV.212 — mesma demanda fechada exibida no QDC; não recalcular
+        # independentemente durante a geração do unifilar.
+        resultado_demanda_unifilar = dict(parametros_rede_unifilar.get("demanda_fechada", {}) or {})
+        if not resultado_demanda_unifilar:
+            resultado_demanda_unifilar = calcular_demanda_qdc(
+                dados_editados,
+                parametros_rede_unifilar
+            )
 
         circuitos_unifilar, resumo_balanceamento_unifilar = (
             balancear_circuitos(

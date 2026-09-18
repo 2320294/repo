@@ -3117,10 +3117,13 @@ def renderizar_materiais(
                     "criterio_bitola"
                 ] = criterio_final
 
-    resultado_demanda_materiais = calcular_demanda_qdc(
-        tabela_editada,
-        parametros_rede
-    )
+    # REV.212 — materiais/proteções usam a mesma demanda fechada no QDC.
+    resultado_demanda_materiais = dict(parametros_rede.get("demanda_fechada", {}) or {})
+    if not resultado_demanda_materiais:
+        resultado_demanda_materiais = calcular_demanda_qdc(
+            tabela_editada,
+            parametros_rede
+        )
     circuitos, resumo_drs = agrupar_circuitos_dr(
         circuitos,
         resultado_demanda_materiais.get("disjuntor_geral_a")
