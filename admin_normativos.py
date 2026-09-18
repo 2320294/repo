@@ -6,9 +6,14 @@ from concessionarias import UFS
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
+    ("boiler", "Boiler / aquecedor central elétrico"),
+    ("eletrodomesticos", "Secadora, forno, lava-louças e micro-ondas"),
+    ("fogoes", "Fogões / cooktops elétricos"),
     ("ar_condicionado", "Ar-condicionado"),
     ("motores", "Motores"),
-    ("demais_tues", "Demais TUEs"),
+    ("equipamentos_especiais", "Equipamentos especiais"),
+    ("hidromassagem", "Hidromassagem / banheira elétrica"),
+    ("demais_tues", "Demais TUEs / outras cargas"),
 ]
 
 
@@ -93,7 +98,7 @@ def _editor_regras(prefixo, regras=None):
     c1, c2, c3 = st.columns(3)
     vfn = c1.text_input("Tensão fase-neutro (V)", value=_texto_numero(f.get("tensao_fase_neutro_v")), key=f"{prefixo}_vfn")
     vff = c2.text_input("Tensão fase-fase (V)", value=_texto_numero(f.get("tensao_fase_fase_v")), key=f"{prefixo}_vff")
-    limite = c3.text_input("Limite de fornecimento (kVA)", value=_texto_numero(f.get("limite_fornecimento_kva")), key=f"{prefixo}_lim")
+    limite = c3.text_input("Limite de potência instalada (kW)", value=_texto_numero(f.get("limite_potencia_instalada_kw", f.get("limite_fornecimento_kva"))), key=f"{prefixo}_lim", help="Cadastre o limite em kW conforme o documento oficial da concessionária. Este campo não representa demanda em kVA.")
     fases = st.multiselect(
         "Modalidades permitidas",
         ["Monofásico", "Bifásico", "Trifásico"],
@@ -133,7 +138,7 @@ def _editor_regras(prefixo, regras=None):
         "fornecimento": {
             "tensao_fase_neutro_v": _numero(vfn),
             "tensao_fase_fase_v": _numero(vff),
-            "limite_fornecimento_kva": _numero(limite),
+            "limite_potencia_instalada_kw": _numero(limite),
             "modalidades": fases,
         },
         "demanda": demanda_saida,
