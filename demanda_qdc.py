@@ -112,6 +112,13 @@ def _calcular_automatico(tabela_editada, rede, perfil):
     demanda_total = 0.0
 
     # Iluminação + TUG: Tabela/faixa cadastrada no perfil ATIVO.
+    # A quantidade é informativa na memória de cálculo: soma os pontos reais
+    # de iluminação e TUG do projeto, sem interferir na seleção do fator da Tabela 3.
+    qtd_it = 0
+    for row in tabela_editada or []:
+        qtd_it += int(_float(row.get("Qtd Ilum.", 0)))
+        qtd_it += int(_float(row.get("Qtd TUG", row.get("TUGs (Qtd)", 0))))
+
     carga_it_w = pot["iluminacao_w"] + pot["tug_w"]
     regra_it = demanda_cfg.get("iluminacao_tug") or {}
     fator_it = _fator_faixa_kw(regra_it, carga_it_w / 1000.0)
@@ -123,7 +130,7 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         detalhes.append({
             "categoria": "Iluminação + TUG",
             "carga_instalada_w": carga_it_w,
-            "quantidade": None,
+            "quantidade": qtd_it,
             "fator": fator_it,
             "demanda_w": demanda_it,
             "tabela_id": regra_it.get("tabela_id", ""),
