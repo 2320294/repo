@@ -112,17 +112,17 @@ def _editor_regras(prefixo, regras=None):
     for chave, rotulo in CATEGORIAS_DEMANDA:
         atual = demanda.get(chave) or {}
         with st.expander(rotulo, expanded=False):
-            metodo = st.selectbox(
-                "Método",
-                ["Não cadastrado", "Fator único (%)", "Tabela por faixas", "Regra específica"],
-                index=["Não cadastrado", "Fator único (%)", "Tabela por faixas", "Regra específica"].index(atual.get("metodo", "Não cadastrado")) if atual.get("metodo", "Não cadastrado") in ["Não cadastrado", "Fator único (%)", "Tabela por faixas", "Regra específica"] else 0,
-                key=f"{prefixo}_{chave}_metodo",
-            )
-            fator = st.text_input("Fator de demanda (%)", value=_texto_numero(atual.get("fator_percentual")), key=f"{prefixo}_{chave}_fator", disabled=metodo != "Fator único (%)")
-            # GED-13 v46.0: tabela residencial oficial de iluminação + TUG.
-            # Mantemos os dados estruturados e auditáveis; não dependemos de texto livre para o cálculo.
+            # GED-13 v46.0: tabelas oficiais residenciais estruturadas.
+            # O método é fixado pela própria norma para evitar contradição entre a tela e os dados gravados.
             if chave == "iluminacao_tug" and tipo == "Residencial individual":
-                st.caption("GED-13 v46.0 — Tabela 3: fatores de demanda de tomadas e iluminação residencial.")
+                metodo = "Tabela por faixas"
+                st.selectbox(
+                    "Método",
+                    ["Tabela por faixas — GED-13 / Tabela 3"],
+                    index=0,
+                    key=f"{prefixo}_{chave}_metodo_ged13",
+                    disabled=True,
+                )
                 faixas_ged13 = [
                     {"min_kw": 0.0, "max_kw": 1.0, "fator": 0.86},
                     {"min_kw": 1.0, "max_kw": 2.0, "fator": 0.75},
@@ -136,12 +136,12 @@ def _editor_regras(prefixo, regras=None):
                     {"min_kw": 9.0, "max_kw": 10.0, "fator": 0.27},
                     {"min_kw": 10.0, "max_kw": None, "fator": 0.24},
                 ]
+                st.caption("GED-13 v46.0 — Tabela 3: fatores de demanda de tomadas e iluminação residencial.")
                 st.dataframe(
                     [{"Carga instalada (kW)": (f"{x['min_kw']:g} < C < {x['max_kw']:g}" if x['max_kw'] is not None else "C > 10"), "Fator de demanda": f"{x['fator']:.2f}".replace(".", ",")} for x in faixas_ged13],
                     use_container_width=True, hide_index=True,
                 )
                 st.info("Origem: GED-13, versão 46.0, publicação 19/03/2026, Tabela 3. Para instalação residencial, FP = 1.")
-                metodo = "Tabela por faixas"
                 demanda_saida[chave] = {
                     "metodo": metodo,
                     "tabela_id": "GED13_TABELA_3",
@@ -152,7 +152,46 @@ def _editor_regras(prefixo, regras=None):
                     "variavel": "carga_instalada_iluminacao_tug_kw",
                     "faixas": faixas_ged13,
                 }
+            elif chave == "chuveiros" and tipo == "Residencial individual":
+                metodo = "Tabela por quantidade"
+                st.selectbox(
+                    "Método",
+                    ["Tabela por quantidade — GED-13 / Tabela 4"],
+                    index=0,
+                    key=f"{prefixo}_{chave}_metodo_ged13",
+                    disabled=True,
+                )
+                fatores = [
+                    (1, 1.00), (2, 1.00), (3, 0.84), (4, 0.76), (5, 0.70),
+                    (6, 0.65), (7, 0.60), (8, 0.57), (9, 0.54), (10, 0.52),
+                    (11, 0.49), (12, 0.48), (13, 0.46), (14, 0.45), (15, 0.44),
+                    (16, 0.43), (17, 0.42), (18, 0.41), (19, 0.40), (20, 0.40),
+                    (21, 0.39), (22, 0.39), (23, 0.39), (24, 0.38), (25, 0.38),
+                ]
+                st.caption("GED-13 v46.0 — Tabela 4: chuveiros, torneiras, aquecedores de água de passagem e ferros elétricos.")
+                st.dataframe(
+                    [{"Nº de aparelhos": str(n), "Fator de demanda": f"{fd:.2f}".replace(".", ",")} for n, fd in fatores] + [{"Nº de aparelhos": "Acima de 25", "Fator de demanda": "0,38"}],
+                    use_container_width=True, hide_index=True,
+                )
+                st.info("Origem: GED-13, versão 46.0, publicação 19/03/2026, Tabela 4. O fator é selecionado pelo número total de aparelhos abrangidos pela tabela.")
+                demanda_saida[chave] = {
+                    "metodo": metodo,
+                    "tabela_id": "GED13_TABELA_4",
+                    "documento": "GED-13",
+                    "versao_documento": "46.0",
+                    "publicacao": "19/03/2026",
+                    "variavel": "numero_aparelhos_chuveiros_torneiras_aquecedores_passagem_ferros",
+                    "fatores_por_quantidade": [{"quantidade": n, "fator": fd} for n, fd in fatores],
+                    "acima_de_25": {"fator": 0.38},
+                }
             else:
+                metodo = st.selectbox(
+                    "Método",
+                    ["Não cadastrado", "Fator único (%)", "Tabela por faixas", "Regra específica"],
+                    index=["Não cadastrado", "Fator único (%)", "Tabela por faixas", "Regra específica"].index(atual.get("metodo", "Não cadastrado")) if atual.get("metodo", "Não cadastrado") in ["Não cadastrado", "Fator único (%)", "Tabela por faixas", "Regra específica"] else 0,
+                    key=f"{prefixo}_{chave}_metodo",
+                )
+                fator = st.text_input("Fator de demanda (%)", value=_texto_numero(atual.get("fator_percentual")), key=f"{prefixo}_{chave}_fator", disabled=metodo != "Fator único (%)")
                 tabela = st.text_area("Tabela/faixas ou regra oficial", value=atual.get("regra_texto", ""), height=90, key=f"{prefixo}_{chave}_regra", disabled=metodo not in ("Tabela por faixas", "Regra específica"), help="Transcreva de forma estruturada/resumida a regra confirmada no documento oficial; não é necessário editar JSON.")
                 demanda_saida[chave] = {"metodo": metodo}
                 if metodo == "Fator único (%)":
