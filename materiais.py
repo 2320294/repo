@@ -1149,6 +1149,10 @@ def calcular_quantitativo_materiais(
             0
         )
 
+        equipamento_tue = str(
+            row.get("Equipamento TUE", "") or ""
+        ).strip()
+
         # ----------------------------------------------------
         # ILUMINAÇÃO
         # ----------------------------------------------------
@@ -1428,6 +1432,7 @@ def calcular_quantitativo_materiais(
                 "tensao": tensao_circ,
                 "corrente": corrente,
                 "bitola": bitola,
+                "equipamento": equipamento_tue,
                 "disjuntor":
                     _disjuntor_por_corrente(
                         corrente

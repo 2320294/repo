@@ -571,12 +571,12 @@ def renderizar_salvar_e_gerar_cad(
             )
 
     # ========================================================
-    # VERSÃO 13.6.179 — ETIQUETAS E TABELA DE IDENTIFICAÇÃO QDC
+    # VERSÃO 13.6.180 — ETIQUETAS QDC COM EQUIPAMENTO TUE E AJUSTE AUTOMÁTICO
     # ========================================================
     st.markdown("### 🏷️ Identificação do QDC")
     st.caption(
         "Gera etiquetas em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
-        "com cores/ícones por tipo de circuito, tabela para a porta do QDC e régua de 100 mm."
+        "com cores por tipo de circuito, nome do equipamento nas TUEs, ajuste automático dos textos, tabela para a porta do QDC e régua de 100 mm."
     )
     try:
         resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}

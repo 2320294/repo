@@ -38,12 +38,12 @@ def _polos(c):
 def _nome_tipo(c, tipo):
     if tipo == 'ILUMINACAO': return 'Iluminação'
     if tipo == 'TUG': return 'Tomadas'
-    if tipo == 'CHUVEIRO': return 'Chuveiro'
-    # TUE: tenta preservar o equipamento real
+    # TUE: usa o equipamento real associado ao circuito.
     for k in ('equipamento','descricao_tue','carga','descricao'):
         v = _txt(c.get(k))
-        if v and not v.upper().startswith('C0'):
-            return v[:18]
+        if v and v not in ('-', '—') and not v.upper().startswith('C0') and v.upper() != 'TUE':
+            return v
+    if tipo == 'CHUVEIRO': return 'Chuveiro'
     return 'TUE'
 
 def _icone(c, cx, cy, tipo, cor=colors.black):
@@ -68,32 +68,34 @@ def _fit(c, text, maxw, size=6.4, minsize=4.3, bold=False):
     while s>minsize and c.stringWidth(text,font,s)>maxw: s-=0.2
     return font,s
 
-def _quebrar_linhas(c, text, maxw, font='Helvetica', size=4.6, max_linhas=2):
-    """Quebra o texto por palavras para ocupar melhor a largura da etiqueta."""
+def _quebrar_linhas(c, text, maxw, font='Helvetica', size=4.6, max_linhas=3, minsize=2.8):
+    """Quebra por palavras e reduz a fonte até NENHUMA linha ultrapassar a etiqueta."""
     text = _txt(text) or '-'
-    # vírgulas continuam visíveis, mas passam a ser bons pontos de quebra
     palavras = text.replace(' + ', ', ').split()
-    linhas=[]; atual=''
-    for palavra in palavras:
-        teste = palavra if not atual else atual + ' ' + palavra
-        if c.stringWidth(teste, font, size) <= maxw or not atual:
+    fs = size
+    while fs >= minsize:
+        linhas=[]; atual=''
+        for palavra in palavras:
+            teste = palavra if not atual else atual + ' ' + palavra
+            if c.stringWidth(teste, font, fs) <= maxw:
+                atual=teste
+            else:
+                if atual: linhas.append(atual)
+                atual=palavra
+        if atual: linhas.append(atual)
+        if len(linhas) <= max_linhas and all(c.stringWidth(l,font,fs) <= maxw for l in linhas):
+            return linhas, fs
+        fs -= 0.15
+    # Último recurso: reparte tokens longos por caracteres, sempre dentro da largura.
+    fs=minsize; linhas=[]; atual=''
+    for ch in text:
+        teste=atual+ch
+        if c.stringWidth(teste,font,fs) <= maxw or not atual:
             atual=teste
         else:
-            linhas.append(atual)
-            atual=palavra
-            if len(linhas) == max_linhas-1:
-                break
-    if len(linhas) < max_linhas and atual:
-        # Se ainda houver conteúdo não processado, reconstrói a última linha com o restante
-        idx=sum(len(x.split()) for x in linhas)
-        resto=' '.join(palavras[idx:])
-        linhas.append(resto if resto else atual)
-    linhas=linhas[:max_linhas]
-    # reduz a fonte só se uma linha isolada ainda exceder a largura
-    fs=size
-    while fs > 3.3 and any(c.stringWidth(l,font,fs)>maxw for l in linhas):
-        fs -= 0.15
-    return linhas, fs
+            linhas.append(atual.rstrip()); atual=ch.lstrip()
+    if atual: linhas.append(atual.rstrip())
+    return linhas[:max_linhas], fs
 
 def _descricao(circ, tipo):
     nome = _nome_tipo(circ,tipo)
@@ -128,16 +130,23 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         c.setStrokeColor(colors.HexColor('#B8B8B8')); c.setLineWidth(0.25); c.rect(x,y-h,w,h,stroke=1,fill=0)
         c.setFillColor(cor); c.rect(x,y-topo,w,topo,stroke=0,fill=1)
         c.setFillColor(colors.white); c.setFont('Helvetica-Bold',6.2); c.drawCentredString(x+w/2,y-2.35*mm,item['id'])
-        # Rev.179: sem ícones na faixa física. O espaço liberado é usado pelos ambientes.
+        # Rev.180: sem ícones; TUE mostra equipamento e textos se ajustam ao módulo.
         c.setFillColor(colors.black)
-        f,s=_fit(c,item['linha1'],w-1.6*mm,5.4,4.0,True); c.setFont(f,s); c.drawCentredString(x+w/2,y-6.25*mm,item['linha1'])
-        linhas,fs=_quebrar_linhas(c,item['linha2'],w-1.8*mm,'Helvetica',4.5,2)
-        c.setFont('Helvetica',fs)
-        if len(linhas)==1:
-            c.drawCentredString(x+w/2,y-9.45*mm,linhas[0])
+        # Rev.180: título e ambientes com ajuste automático real ao espaço físico.
+        linhas1,fs1=_quebrar_linhas(c,item['linha1'],w-1.8*mm,'Helvetica-Bold',5.4,2,3.2)
+        linhas2,fs2=_quebrar_linhas(c,item['linha2'],w-1.8*mm,'Helvetica',4.4,3,2.8)
+        if len(linhas1) == 1:
+            c.setFont('Helvetica-Bold',fs1); c.drawCentredString(x+w/2,y-6.15*mm,linhas1[0])
+            base_y = y-8.45*mm
         else:
-            c.drawCentredString(x+w/2,y-8.65*mm,linhas[0])
-            c.drawCentredString(x+w/2,y-10.65*mm,linhas[1])
+            c.setFont('Helvetica-Bold',fs1)
+            c.drawCentredString(x+w/2,y-5.55*mm,linhas1[0])
+            c.drawCentredString(x+w/2,y-7.15*mm,linhas1[1])
+            base_y = y-8.75*mm
+        c.setFont('Helvetica',fs2)
+        passo = 1.45*mm
+        for j,linha_txt in enumerate(linhas2):
+            c.drawCentredString(x+w/2,base_y-j*passo,linha_txt)
         x+=w; usados+=item['polos']
 
     y-=20*mm
