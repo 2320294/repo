@@ -3750,34 +3750,47 @@ def desenhar_mapa_fisico_qdc(
                             fase_saida
                         )
 
-                        # Rev.171 — prioridade gráfica do cabo que ENTRA no borne.
-                        # Se a saída vertical deste DJ atravessaria o corpo de outro
-                        # disjuntor de uma fileira inferior (ex.: C02 passando atrás
-                        # de C10), ela abandona o eixo do borne logo após o terminal,
-                        # usa um corredor lateral e só então continua para a saída.
-                        # O cabo cujo destino é o próprio DJ permanece reto no borne.
-                        x_passagem_rev171 = _x_desvio_para_nao_invadir_dj(
-                            x_borne_fase,
-                            g_saida["y1"],
-                            y_nivel_fase_rev91,
-                            dj_destino_geom=g_saida,
-                            margem=0.12,
-                        )
+                        # Rev.173 — repetir EXATAMENTE a lógica gráfica já aprovada
+                        # no caso C01 -> passagem atrás de C04. A decisão é feita pelas
+                        # geometrias dos DJs, e não pelo registro de máscaras/layers.
+                        # Assim também cobre C02 -> passagem atrás de C10.
+                        #
+                        # Regra: se o eixo do cabo de um DJ da fileira superior cair
+                        # dentro do corpo de um DJ de fileira inferior, o cabo sai do
+                        # borne, percorre 0,10 após o terminal, desloca 0,10 à esquerda
+                        # e continua nesse novo eixo. O cabo que ENTRA no borne do DJ
+                        # inferior permanece reto e, portanto, tem prioridade gráfica.
+                        geom_inferior_rev173 = None
+                        for _d_obs_rev173, _g_obs_rev173 in circuitos_geom:
+                            if _g_obs_rev173 is g_saida:
+                                continue
+                            # DJ inferior: topo do aparelho está abaixo da base do DJ atual.
+                            if float(_g_obs_rev173["y2"]) >= float(g_saida["y1"]) - 1e-6:
+                                continue
+                            if (
+                                float(_g_obs_rev173["x1"]) - 1e-9
+                                <= float(x_borne_fase)
+                                <= float(_g_obs_rev173["x2"]) + 1e-9
+                            ):
+                                geom_inferior_rev173 = _g_obs_rev173
+                                break
 
-                        if abs(x_passagem_rev171 - x_borne_fase) > 1e-9:
-                            y_base_terminal_rev171 = float(g_saida["y1"]) - 0.075
-                            y_quebra_rev171 = y_base_terminal_rev171 - 0.10
+                        if geom_inferior_rev173 is not None:
+                            x_passagem_rev171 = float(x_borne_fase) - 0.10
+                            y_base_terminal_rev173 = float(g_saida["y1"]) - 0.075
+                            y_quebra_rev173 = y_base_terminal_rev173 - 0.10
                             _polyline(
                                 msp,
                                 [
                                     (x_borne_fase, g_saida["y1"]),
-                                    (x_borne_fase, y_quebra_rev171),
-                                    (x_passagem_rev171, y_quebra_rev171),
+                                    (x_borne_fase, y_quebra_rev173),
+                                    (x_passagem_rev171, y_quebra_rev173),
                                     (x_passagem_rev171, y_nivel_fase_rev91),
                                 ],
                                 _layer_por_token(fase_saida)
                             )
                         else:
+                            x_passagem_rev171 = x_borne_fase
                             _line(
                                 msp,
                                 (x_borne_fase, g_saida["y1"]),
