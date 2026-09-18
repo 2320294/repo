@@ -184,6 +184,39 @@ def _editor_regras(prefixo, regras=None):
                     "fatores_por_quantidade": [{"quantidade": n, "fator": fd} for n, fd in fatores],
                     "acima_de_25": {"fator": 0.38},
                 }
+            elif chave == "boiler" and tipo == "Residencial individual":
+                metodo = "Tabela por quantidade"
+                st.selectbox(
+                    "Método",
+                    ["Tabela por quantidade — GED-13 / Tabela 5"],
+                    index=0,
+                    key=f"{prefixo}_{chave}_metodo_ged13",
+                    disabled=True,
+                )
+                fatores = [
+                    ("1", 1.00),
+                    ("2", 0.72),
+                    ("3", 0.62),
+                    ("Acima de 3", 0.62),
+                ]
+                st.caption("GED-13 — Tabela 5: fatores de demanda de aquecedor central ou de acumulação (boiler).")
+                st.dataframe(
+                    [{"Nº de aparelhos": n, "Fator de demanda": f"{fd:.2f}".replace(".", ",")} for n, fd in fatores],
+                    use_container_width=True, hide_index=True,
+                )
+                st.info("Origem: GED-13, Tabela 5. O fator é selecionado pelo número total de aquecedores centrais ou de acumulação (boilers).")
+                demanda_saida[chave] = {
+                    "metodo": metodo,
+                    "tabela_id": "GED13_TABELA_5",
+                    "documento": "GED-13",
+                    "variavel": "numero_aquecedores_centrais_ou_acumulacao",
+                    "fatores_por_quantidade": [
+                        {"quantidade": 1, "fator": 1.00},
+                        {"quantidade": 2, "fator": 0.72},
+                        {"quantidade": 3, "fator": 0.62},
+                    ],
+                    "acima_de_3": {"fator": 0.62},
+                }
             else:
                 metodo = st.selectbox(
                     "Método",
