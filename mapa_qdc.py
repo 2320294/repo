@@ -3303,6 +3303,43 @@ def desenhar_mapa_fisico_qdc(
     y_saida_circuito_global = y_rail_ultima_fileira - 2.28
     y_identificacao_saida_global = y_saida_circuito_global - 0.22
 
+    # Rev.175 — PRÉ-CADASTRO GLOBAL dos corpos de TODOS os DJs terminais.
+    #
+    # Nas revisões 171-174 a rotina de desvio consultava _QDC_DJ_RECTS,
+    # porém, no momento em que a saída do C02 era desenhada, o C10 (fileira
+    # seguinte) ainda não tinha sido criado e portanto NÃO existia no cadastro.
+    # Por isso a alteração não produzia efeito no caso C02 -> C10.
+    #
+    # Agora a geometria física de todas as fileiras inferiores é prevista
+    # ANTES de desenhar qualquer saída. Assim um cabo de uma fileira superior
+    # já enxerga os DJs das fileiras inferiores e aplica exatamente a mesma
+    # prioridade geométrica usada no caso aprovado C01 -> C04: o cabo que
+    # entra no borne permanece reto; o cabo passante desvia lateralmente.
+    _idx_prev_rev175 = 0
+    for _trilho_prev_rev175 in range(trilhos_circuitos):
+        _x_prev_rev175 = float(x_alinhamento_dispositivos)
+        _usados_prev_rev175 = 0
+        _y1_prev_rev175 = float(y_rail_inicial_circuitos - _trilho_prev_rev175 * 3.15 - 0.85)
+        while _idx_prev_rev175 < len(circuitos):
+            _d_prev_rev175 = circuitos[_idx_prev_rev175]
+            _mod_prev_rev175 = max(1, int(_d_prev_rev175.get("modulos", 1) or 1))
+            if _usados_prev_rev175 + _mod_prev_rev175 > colunas:
+                break
+            _x2_prev_rev175 = _x_prev_rev175 + modulo_w * _mod_prev_rev175
+            _QDC_DJ_RECTS.append({
+                "x1": float(_x_prev_rev175),
+                "x2": float(_x2_prev_rev175),
+                "y1": float(_y1_prev_rev175),
+                "y2": float(_y1_prev_rev175 + disp_h),
+                "tipo": "DJ",
+                "geom_id": None,
+                "previsto_rev175": True,
+                "identificador": str(_d_prev_rev175.get("identificador", "") or ""),
+            })
+            _x_prev_rev175 = _x2_prev_rev175 + 0.10
+            _usados_prev_rev175 += _mod_prev_rev175
+            _idx_prev_rev175 += 1
+
     # ========================================================
     # FASE 13.6 REV.120 — GRADE DA SAÍDA FINAL DO QDC
     # ========================================================
@@ -3750,7 +3787,7 @@ def desenhar_mapa_fisico_qdc(
                             fase_saida
                         )
 
-                        # Rev.174 — usar a MESMA regra geométrica do desvio
+                        # Rev.175 — usar a MESMA regra geométrica do desvio
                         # aprovado C01 -> C04 também para qualquer cabo passante,
                         # inclusive C02 -> C10. A verificação usa o cadastro GLOBAL
                         # dos corpos dos DJs (_QDC_DJ_RECTS), pois circuitos_geom
@@ -3760,7 +3797,7 @@ def desenhar_mapa_fisico_qdc(
                         # reto. O condutor passante sai do borne superior, percorre
                         # 0,10 m após o terminal, desloca 0,10 m para fora do corpo
                         # atravessado e continua no novo eixo.
-                        x_desvio_rev174 = _x_desvio_para_nao_invadir_dj(
+                        x_desvio_rev175 = _x_desvio_para_nao_invadir_dj(
                             x_borne_fase,
                             g_saida["y1"],
                             y_nivel_fase_rev91,
@@ -3768,20 +3805,20 @@ def desenhar_mapa_fisico_qdc(
                             margem=0.10,
                         )
 
-                        if abs(float(x_desvio_rev174) - float(x_borne_fase)) > 1e-9:
-                            y_base_terminal_rev174 = float(g_saida["y1"]) - 0.075
-                            y_quebra_rev174 = y_base_terminal_rev174 - 0.10
+                        if abs(float(x_desvio_rev175) - float(x_borne_fase)) > 1e-9:
+                            y_base_terminal_rev175 = float(g_saida["y1"]) - 0.075
+                            y_quebra_rev175 = y_base_terminal_rev175 - 0.10
                             _polyline(
                                 msp,
                                 [
                                     (x_borne_fase, g_saida["y1"]),
-                                    (x_borne_fase, y_quebra_rev174),
-                                    (x_desvio_rev174, y_quebra_rev174),
-                                    (x_desvio_rev174, y_nivel_fase_rev91),
+                                    (x_borne_fase, y_quebra_rev175),
+                                    (x_desvio_rev175, y_quebra_rev175),
+                                    (x_desvio_rev175, y_nivel_fase_rev91),
                                 ],
                                 _layer_por_token(fase_saida)
                             )
-                            x_passagem_rev171 = x_desvio_rev174
+                            x_passagem_rev171 = x_desvio_rev175
                         else:
                             x_passagem_rev171 = x_borne_fase
                             _line(
