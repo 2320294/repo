@@ -50,6 +50,18 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
     spe=_pe_por_fase(sf)
     sn=sf
 
+    # REV.211 — quando o alimentador foi fechado na tela de QDC, esse resultado
+    # passa a ser a fonte única para unifilar, quantitativo e relatórios.
+    # Na ausência do bloco persistido, preserva integralmente o comportamento anterior.
+    alim_final = dict(parametros_rede.get("alimentador_geral", {}) or {})
+    if alim_final.get("secao_final_mm2") is not None:
+        try:
+            sf = float(alim_final.get("fase_mm2", alim_final.get("secao_final_mm2")))
+            sn = float(alim_final.get("neutro_mm2", sf))
+            spe = float(alim_final.get("pe_mm2", _pe_por_fase(sf)))
+        except Exception:
+            pass
+
     if tipo=="Monofásico":
         composicao="F + N + PE"
     elif tipo=="Bifásico":
@@ -90,6 +102,8 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
         "alimentador_neutro_mm2": sn,
         "alimentador_pe_mm2": spe,
         "alimentador_composicao": composicao,
+        "alimentador_fechado": bool(alim_final.get("secao_final_mm2") is not None),
+        "alimentador_dados": alim_final,
         "maior_disjuntor_circuito_a": maior_dj,
         "hierarquia_dg_circuitos": "OK" if hierarquia_dj else "REVISAR",
         "hierarquia_dr_circuitos": "OK" if dr_ok else "REVISAR",

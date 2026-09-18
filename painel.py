@@ -793,6 +793,41 @@ def renderizar_painel_principal():
                     else: st.warning("⚠️ A seção disponível na tabela interna não atende ao limite de queda adotado. Revisar alimentador.")
                 st.caption(alim['criterio'])
 
+                # REV.211 — integra o fechamento do alimentador às demais saídas.
+                # O bloco fica dentro dos parâmetros de rede já persistidos pelo projeto,
+                # sem criar nova tabela/estrutura de banco e sem alterar o desenho aprovado.
+                rede_integrada = dict(config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {})
+                rede_integrada["alimentador_geral"] = {
+                    "metodo": alim.get("metodo"),
+                    "temperatura_c": alim.get("temperatura_referencia_c"),
+                    "material": alim.get("material"),
+                    "isolacao": alim.get("isolacao"),
+                    "condutores_carregados": alim.get("condutores_carregados"),
+                    "fator_temperatura": alim.get("fator_temperatura"),
+                    "fator_agrupamento": alim.get("fator_agrupamento"),
+                    "comprimento_m": alim.get("comprimento_m"),
+                    "limite_queda_pct": alim.get("limite_queda_pct"),
+                    "queda_tensao_v": alim.get("queda_tensao_v"),
+                    "queda_tensao_pct": alim.get("queda_tensao_pct"),
+                    "secao_por_capacidade_mm2": alim.get("secao_por_capacidade_mm2"),
+                    "secao_por_queda_mm2": alim.get("secao_por_queda_mm2"),
+                    "secao_final_mm2": alim.get("secao_final_mm2"),
+                    "fase_mm2": alim.get("fase_mm2"),
+                    "neutro_mm2": alim.get("neutro_mm2"),
+                    "pe_mm2": alim.get("pe_mm2"),
+                    "iz_corrigida_a": alim.get("iz_corrigida_a"),
+                    "ib_a": alim.get("ib_a"),
+                    "in_a": alim.get("in_a"),
+                    "criterio_determinante": alim.get("criterio_determinante"),
+                    "atende_ib_in_iz": alim.get("atende_ib_in_iz"),
+                    "status_queda": alim.get("status_queda"),
+                }
+                config_atual[CHAVE_PARAMETROS_REDE] = rede_integrada
+                st.session_state[chave_config] = dict(config_atual)
+                parametros_projeto["parametros_rede"] = rede_integrada
+                st.session_state[chave_parametros] = dict(parametros_projeto)
+                st.caption("Integração Rev.211: DG, demanda e seção final do alimentador ficam disponíveis para o unifilar e o memorial do projeto.")
+
         st.divider()
         renderizar_materiais(
             tabela_editada,

@@ -16,6 +16,7 @@ from reportlab.platypus import (
 )
 
 from materiais import calcular_quantitativo_materiais
+from versao import VERSAO_SISTEMA
 
 
 from qdc_config import descricao_qdc
@@ -683,6 +684,13 @@ def gerar_memorial_pdf(
 
     story.append(
         Paragraph(
+            f"<b>Versão:</b> {VERSAO_SISTEMA}",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
             f"<b>Tensão base de cálculo:</b> {int(tensao_projeto)} V",
             styles["Texto"]
         )
@@ -746,6 +754,34 @@ def gerar_memorial_pdf(
             styles["Texto"]
         )
     )
+
+    # REV.211 — mesma fonte de dados do QDC/unifilar para demanda, DG e alimentador.
+    rede_memorial = dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+    demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)
+    alim_memorial = dict(rede_memorial.get("alimentador_geral", {}) or {})
+    story.append(Paragraph("2A. DEMANDA, PROTEÇÃO GERAL E ALIMENTADOR", styles["Secao"]))
+    if demanda_memorial.get("potencia_demanda_w") is not None:
+        story.append(Paragraph(
+            f"Potência instalada: <b>{float(demanda_memorial.get('total_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
+            f"Potência demandada: <b>{float(demanda_memorial.get('potencia_demanda_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
+            f"Corrente de demanda: <b>{float(demanda_memorial.get('corrente_demanda_a',0) or 0):.1f} A</b> &nbsp; | &nbsp; "
+            f"DG: <b>{demanda_memorial.get('disjuntor_geral_a','—')} A</b>.", styles["Texto"]))
+    if alim_memorial.get("secao_final_mm2") is not None:
+        sq = alim_memorial.get("secao_por_queda_mm2")
+        sqtxt = f"{float(sq):g} mm²" if sq is not None else "não concluída"
+        story.append(Paragraph(
+            f"Alimentador final: <b>3F + N + PE</b>; fase <b>{float(alim_memorial.get('fase_mm2')):g} mm²</b>, "
+            f"neutro <b>{float(alim_memorial.get('neutro_mm2')):g} mm²</b> e PE <b>{float(alim_memorial.get('pe_mm2')):g} mm²</b>. "
+            f"Seção por capacidade: {float(alim_memorial.get('secao_por_capacidade_mm2')):g} mm²; "
+            f"seção por queda: {sqtxt}; critério determinante: <b>{alim_memorial.get('criterio_determinante','')}</b>.", styles["Texto"]))
+        if alim_memorial.get("queda_tensao_pct") is not None:
+            story.append(Paragraph(
+                f"Comprimento considerado: {float(alim_memorial.get('comprimento_m',0) or 0):.2f} m; "
+                f"queda de tensão: {float(alim_memorial.get('queda_tensao_v',0) or 0):.2f} V "
+                f"({float(alim_memorial.get('queda_tensao_pct',0) or 0):.2f}%), limite adotado "
+                f"{float(alim_memorial.get('limite_queda_pct',0) or 0):.2f}%.", styles["Texto"]))
+    else:
+        story.append(Paragraph("O alimentador geral ainda não foi fechado na etapa QDC.", styles["Texto"]))
 
     story.append(
         Paragraph(
