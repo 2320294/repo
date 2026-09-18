@@ -571,7 +571,7 @@ def renderizar_salvar_e_gerar_cad(
             )
 
     # ========================================================
-    # VERSÃO 13.6.184 — ETIQUETAS NAS MESMAS FILEIRAS FÍSICAS DO QDC
+    # VERSÃO 13.6.185 — ETIQUETAS NAS MESMAS FILEIRAS FÍSICAS DO QDC
     # ========================================================
     st.markdown("### 🏷️ Identificação do QDC")
     st.caption(

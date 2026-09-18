@@ -241,7 +241,9 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     # Régua de conferência imediatamente abaixo das etiquetas físicas.
     # Ela valida a impressão 1:1 das etiquetas (17,5 mm por módulo x 12 mm),
     # portanto não deve ficar visualmente associada à tabela da porta.
-    y_regua = y + 5*mm
+    # Rev.185: cria uma separação visual clara entre a última fileira de
+    # etiquetas, a régua de aferição e o quadro de identificação.
+    y_regua = y + 2*mm
     x0 = margem
     c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.line(x0,y_regua,x0+100*mm,y_regua)
     for i in range(0,101,10):
@@ -249,7 +251,8 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         c.line(x0+i*mm,y_regua,x0+i*mm,y_regua+hh)
     c.setFillColor(colors.black); c.setFont('Helvetica',6.5)
     c.drawString(x0,y_regua-4*mm,'Confira: esta linha deve medir exatamente 100 mm com uma régua.')
-    y = y_regua - 10*mm
+    # Folga após a régua/legenda antes do quadro de identificação.
+    y = y_regua - 14*mm
 
     # Tabela da porta: somente GERAL + circuitos finais. DPS e IDR/DR ficam
     # exclusivamente na faixa física de etiquetas da Linha 1.
