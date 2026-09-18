@@ -17,6 +17,7 @@ from projetos import renderizar_gerenciador_projetos
 from painel import renderizar_painel_principal
 from tema_login import aplicar_fundo_login
 from versao import VERSAO_SISTEMA
+from admin_normativos import usuario_e_admin, renderizar_admin_normativos
 
 
 def aplicar_tema_sistema():
@@ -139,6 +140,14 @@ with st.sidebar:
 
     renderizar_gerenciador_projetos()
 
+    if usuario_e_admin(st.session_state.user_email):
+        st.markdown("---")
+        st.session_state["admin_normativos_aberto"] = st.toggle(
+            "⚙️ Administração",
+            value=bool(st.session_state.get("admin_normativos_aberto", False)),
+            help="Cadastro e liberação de perfis normativos.",
+        )
+
 # Rev.84 — quando o usuário troca o projeto no dropdown, o Streamlit
 # rerenderiza a página, mas o navegador pode manter a posição vertical.
 # Executamos o scroll depois da barra lateral já ter processado a troca.
@@ -179,4 +188,7 @@ if st.session_state.pop("rev84_scroll_topo_projeto", False):
         width=0,
     )
 
-renderizar_painel_principal()
+if usuario_e_admin(st.session_state.user_email) and st.session_state.get("admin_normativos_aberto", False):
+    renderizar_admin_normativos(st.session_state.user_email)
+else:
+    renderizar_painel_principal()

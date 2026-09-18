@@ -2,6 +2,7 @@
 import streamlit as st
 
 from tensoes_circuitos import tensao_base_fornecimento
+from perfis_normativos import listar_perfis_liberados
 
 from concessionarias import (
     UFS,
@@ -133,59 +134,50 @@ def renderizar_parametros_projeto(
             key=_widget_key("rede_municipio")
         ).strip()
 
-    opcoes_concessionaria = (
-        concessionarias_da_uf(
-            uf
-        )
+    # Rev.187 — usuário comum somente seleciona perfis liberados pelo administrador.
+    try:
+        perfis_liberados = listar_perfis_liberados(uf, municipio) if uf else []
+    except Exception:
+        perfis_liberados = []
+
+    rotulos_perfis = ["Nenhum perfil normativo liberado"]
+    mapa_perfis = {}
+    for p in perfis_liberados:
+        rotulo = f"{p.get('concessionaria','')} — {p.get('documento') or 'Norma'} {p.get('revisao') or ''}".strip()
+        if p.get("municipio"):
+            rotulo += f" — {p.get('municipio')}/{p.get('uf')}"
+        rotulos_perfis.append(rotulo)
+        mapa_perfis[rotulo] = p
+
+    perfil_salvo_id = rede.get("perfil_normativo_id")
+    indice_perfil = 0
+    for i, rotulo in enumerate(rotulos_perfis):
+        p = mapa_perfis.get(rotulo)
+        if p and str(p.get("id")) == str(perfil_salvo_id):
+            indice_perfil = i
+            break
+
+    perfil_rotulo = st.selectbox(
+        "Perfil normativo liberado pelo AutoElétrica:",
+        rotulos_perfis,
+        index=indice_perfil,
+        key=_widget_key("rede_perfil_normativo")
     )
-
-    concessionaria_salva = rede.get(
-        "concessionaria",
-        OUTRA_CONCESSIONARIA
-    )
-
-    if (
-        concessionaria_salva
-        not in opcoes_concessionaria
-    ):
-        concessionaria_salva = (
-            OUTRA_CONCESSIONARIA
-        )
-
-    concessionaria = st.selectbox(
-        "Concessionária de distribuição:",
-        options=opcoes_concessionaria,
-        index=opcoes_concessionaria.index(
-            concessionaria_salva
-        ),
-        key=_widget_key("rede_concessionaria")
-    )
-
+    perfil_selecionado = mapa_perfis.get(perfil_rotulo)
+    perfil_normativo_id = perfil_selecionado.get("id") if perfil_selecionado else None
+    concessionaria = perfil_selecionado.get("concessionaria") if perfil_selecionado else OUTRA_CONCESSIONARIA
     concessionaria_manual = ""
 
-    if (
-        concessionaria
-        == OUTRA_CONCESSIONARIA
-    ):
-        concessionaria_manual = (
-            st.text_input(
-                "Nome da concessionária:",
-                value=rede.get(
-                    "concessionaria_manual",
-                    ""
-                ),
-                placeholder=(
-                    "Informe a distribuidora local"
-                ),
-                key=_widget_key("rede_concessionaria_manual")
-            ).strip()
+    if perfil_selecionado:
+        st.success(
+            f"✅ Perfil liberado: **{perfil_selecionado.get('concessionaria')}** — "
+            f"{perfil_selecionado.get('documento') or 'Norma'} {perfil_selecionado.get('revisao') or ''}"
         )
-
-    st.caption(
-        "O cadastro de concessionárias é progressivo. "
-        "A opção 'Outra / Não cadastrada' mantém o projeto "
-        "utilizável em qualquer localidade."
-    )
+    else:
+        st.info(
+            "Nenhum perfil normativo foi liberado pelo administrador para esta localidade. "
+            "O usuário não pode cadastrar ou alterar regras normativas."
+        )
 
     st.markdown(
         "#### ⚡ Perfil de fornecimento"
@@ -500,6 +492,7 @@ def renderizar_parametros_projeto(
         "concessionaria": concessionaria,
         "concessionaria_manual":
             concessionaria_manual,
+        "perfil_normativo_id": perfil_normativo_id,
         "tipo_fornecimento":
             tipo_fornecimento,
         "tensao_fornecimento":
@@ -509,7 +502,8 @@ def renderizar_parametros_projeto(
         "fator_demanda_manual":
             float(fator_demanda_manual),
         "norma_concessionaria": (
-            "Perfil normativo ainda não cadastrado"
+            (f"{perfil_selecionado.get('documento','')} {perfil_selecionado.get('revisao','')}".strip())
+            if perfil_selecionado else "Perfil normativo ainda não liberado"
         ),
         "esquema_aterramento": esquema_aterramento,
         "icc_conhecida": bool(icc_conhecida),
@@ -548,11 +542,9 @@ def renderizar_parametros_projeto(
     ):
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto, mas nesta Fase 13.6 Rev.124 o cálculo de demanda "
-            "ainda não é aplicado automaticamente. "
-            "O perfil normativo será ativado somente quando "
-            "a regra oficial dessa concessionária estiver "
-            "cadastrada e validada."
+            "no projeto. Na Versão 13.6.187, somente perfis liberados pelo administrador "
+            "podem ser selecionados. O motor de demanda automática permanece bloqueado "
+            "até a validação da implementação matemática da regra oficial."
         )
 
     if uf and municipio:

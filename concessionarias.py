@@ -58,6 +58,7 @@ def parametros_rede_padrao():
         "municipio": "",
         "concessionaria": OUTRA_CONCESSIONARIA,
         "concessionaria_manual": "",
+        "perfil_normativo_id": None,
         "tipo_fornecimento": "A definir",
         "tensao_fornecimento": "A definir",
         "metodo_demanda": (
@@ -157,9 +158,11 @@ def descricao_localidade(parametros):
 
 
 def perfil_normativo_disponivel(parametros):
-    """
-    Na Fase 13.6 Rev.124 a estrutura de perfis está pronta, mas os métodos
-    de demanda ainda não são executados. Retorna False para impedir
-    que o sistema trate um critério não implementado como definitivo.
-    """
-    return False
+    """Indica perfil administrativo ATIVO, sem ativar ainda o motor de demanda."""
+    try:
+        from perfis_normativos import perfil_por_id
+        pid = (parametros or {}).get("perfil_normativo_id")
+        p = perfil_por_id(pid)
+        return bool(p and p.get("status") == "ATIVO")
+    except Exception:
+        return False
