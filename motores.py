@@ -1137,7 +1137,7 @@ def gerar_cad_unifilar(
                 ).color = cor_l
 
 
-        # Rev.167 — as fases/condutores do diagrama QDC são distinguidos por
+        # Rev.168 — as fases/condutores do diagrama QDC são distinguidos por
         # espessura, não por cor. Isso vale no DXF e é preservado no PDF.
         pesos_qdc = {
             "PROJ_ELETRICA_QDC_FASE_A": 50,

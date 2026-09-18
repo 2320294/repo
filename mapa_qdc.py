@@ -546,6 +546,18 @@ _QDC_LINEWEIGHTS = {
     "PROJ_ELETRICA_QDC_PE": 18,       # 0,18 mm
 }
 
+# Rev.168 — largura geométrica real no modelspace.
+# Não depende do botão LWT/LWDISPLAY do CAD e é preservada pelo renderizador PDF.
+# A legenda usa a mesma função _line(), portanto reproduz exatamente a hierarquia
+# gráfica do diagrama. Valores em unidades do desenho do QDC.
+_QDC_VISUAL_WIDTHS = {
+    "PROJ_ELETRICA_QDC_FASE_A": 0.040,
+    "PROJ_ELETRICA_QDC_FASE_B": 0.032,
+    "PROJ_ELETRICA_QDC_FASE_C": 0.026,
+    "PROJ_ELETRICA_QDC_NEUTRO": 0.019,
+    "PROJ_ELETRICA_QDC_PE": 0.012,
+}
+
 
 def _recortar_segmentos_por_retangulos(segmentos, retangulos):
     """
@@ -700,16 +712,20 @@ def _line(msp, p1, p2, layer):
                 and abs(float(a[1]) - float(b[1])) <= 1e-9
             ):
                 continue
-            criadas.append(
-                msp.add_line(
-                    a,
-                    b,
-                    dxfattribs={
-                        "layer": layer,
-                        "lineweight": _QDC_LINEWEIGHTS.get(layer, -1),
-                    }
-                )
+            # Rev.168 — usa LWPOLYLINE com largura geométrica real para que a
+            # diferença entre Fase A/B/C, N e PE seja visível no ZWCAD e no PDF
+            # mesmo quando a exibição de lineweight do CAD estiver desligada.
+            largura = float(_QDC_VISUAL_WIDTHS.get(layer, 0.0) or 0.0)
+            ent = msp.add_lwpolyline(
+                [a, b],
+                dxfattribs={
+                    "layer": layer,
+                    "lineweight": _QDC_LINEWEIGHTS.get(layer, -1),
+                }
             )
+            if largura > 0:
+                ent.dxf.const_width = largura
+            criadas.append(ent)
         return criadas[-1] if criadas else None
 
     return msp.add_line(
