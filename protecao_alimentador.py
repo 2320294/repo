@@ -111,21 +111,22 @@ FATOR_TEMP_ALIMENTADOR = {25:1.03,30:1.00,35:0.94,40:0.87,45:0.79,50:0.71,55:0.6
 
 def dimensionar_alimentador_geral(corrente_a, dg_a, tipo_fornecimento, tensao_linha_v,
                                   metodo="B1", temperatura_c=30, comprimento_m=0.0,
-                                  limite_queda_pct=2.0):
+                                  limite_queda_pct=2.0, fator_agrupamento=1.0):
     metodo=str(metodo or "B1").upper().strip()
     if metodo not in AMPACIDADE_ALIMENTADOR: metodo="B1"
     temp=int(temperatura_c or 30)
     temp_ref=min(FATOR_TEMP_ALIMENTADOR, key=lambda x: abs(x-temp))
     ft=FATOR_TEMP_ALIMENTADOR[temp_ref]
+    fg=max(0.10, min(1.00, _f(fator_agrupamento, 1.0)))
     alvo=max(_f(corrente_a), _f(dg_a))
     tabela=AMPACIDADE_ALIMENTADOR[metodo]
     secao=None; iz=None
     for s in sorted(tabela):
-        izc=tabela[s]*ft
+        izc=tabela[s]*ft*fg
         if izc+1e-9 >= alvo:
             secao=float(s); iz=float(izc); break
     if secao is None:
-        secao=float(max(tabela)); iz=float(tabela[secao]*ft)
+        secao=float(max(tabela)); iz=float(tabela[secao]*ft*fg)
 
     # Queda de tensão resistiva preliminar para cobre (rho=0,0175 ohm.mm²/m).
     # Só interfere na seção quando o usuário informa comprimento > 0.
@@ -149,9 +150,16 @@ def dimensionar_alimentador_geral(corrente_a, dg_a, tipo_fornecimento, tensao_li
 
     sn=secao
     spe=_pe_por_fase(secao)
+    tipo_txt=str(tipo_fornecimento or "")
+    n_carregados = 3 if tipo_txt == "Trifásico" else (2 if tipo_txt == "Bifásico" else 2)
+    ib=i
+    inn=_f(dg_a)
+    atende_ib_in_iz = (ib <= inn + 1e-9) and (inn <= iz + 1e-9)
     return {
         "metodo":metodo, "temperatura_c":temp, "temperatura_referencia_c":temp_ref,
-        "fator_temperatura":ft, "corrente_projeto_a":i, "dg_a":dg_a,
+        "material":"Cobre", "isolacao":"PVC 70 °C", "condutores_carregados":n_carregados,
+        "fator_temperatura":ft, "fator_agrupamento":fg, "corrente_projeto_a":i, "ib_a":ib, "in_a":inn, "dg_a":dg_a,
+        "atende_ib_in_iz":atende_ib_in_iz,
         "secao_por_capacidade_mm2":secao_amp, "iz_corrigida_a":iz,
         "comprimento_m":comprimento, "limite_queda_pct":limite,
         "queda_tensao_v":dv if comprimento>0 else None,
