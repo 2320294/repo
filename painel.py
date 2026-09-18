@@ -43,6 +43,8 @@ from demanda_qdc import (
     calcular_demanda_qdc
 )
 
+from protecao_alimentador import dimensionar_alimentador_geral
+
 from upload_cad import (
     renderizar_upload_dxf,
     renderizar_salvar_e_gerar_cad,
@@ -747,6 +749,35 @@ def renderizar_painel_principal():
                 perfil_usado = resultado_demanda.get("perfil_normativo")
                 if perfil_usado:
                     st.caption(f"Rastreabilidade do cálculo: {perfil_usado}")
+
+        if resultado_demanda.get("corrente_demanda_a") is not None and resultado_demanda.get("disjuntor_geral_a") is not None:
+            with st.expander("🔌 Dimensionamento automático do alimentador geral", expanded=True):
+                ca, cb, cc = st.columns(3)
+                metodo_alim = ca.selectbox("Método de instalação", ["B1", "B2"], key="rev208_metodo_alimentador")
+                temp_alim = cb.selectbox("Temperatura ambiente", [25,30,35,40,45,50,55,60], index=1, format_func=lambda x: f"{x} °C", key="rev208_temp_alimentador")
+                comp_alim = cc.number_input("Comprimento do alimentador (m)", min_value=0.0, value=0.0, step=1.0, key="rev208_comprimento_alimentador")
+                limite_q = st.number_input("Limite adotado para queda de tensão do alimentador (%)", min_value=0.1, max_value=10.0, value=2.0, step=0.1, key="rev208_limite_queda_alimentador")
+                mem = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
+                alim = dimensionar_alimentador_geral(
+                    resultado_demanda.get("corrente_demanda_a"),
+                    resultado_demanda.get("disjuntor_geral_a"),
+                    mem.get("tipo_fornecimento", ""),
+                    mem.get("tensao_calculo_v", 220),
+                    metodo_alim, temp_alim, comp_alim, limite_q
+                )
+                a1,a2,a3,a4=st.columns(4)
+                a1.metric("Fase", f"{alim['fase_mm2']:g} mm²")
+                a2.metric("Neutro", f"{alim['neutro_mm2']:g} mm²")
+                a3.metric("PE", f"{alim['pe_mm2']:g} mm²")
+                a4.metric("Iz corrigida", f"{alim['iz_corrigida_a']:.1f} A")
+                st.write(f"**Capacidade de condução:** método {alim['metodo']}, {alim['temperatura_referencia_c']} °C → seção mínima por capacidade **{alim['secao_por_capacidade_mm2']:g} mm²** para DG **{alim['dg_a']} A**.")
+                if alim['queda_tensao_pct'] is None:
+                    st.info("Informe o comprimento do alimentador para completar a verificação automática de queda de tensão. Enquanto o comprimento estiver em 0 m, a seção exibida é definida somente pela capacidade de condução preliminar.")
+                else:
+                    st.write(f"**Queda de tensão preliminar:** {alim['queda_tensao_v']:.2f} V = **{alim['queda_tensao_pct']:.2f}%** (limite adotado: {alim['limite_queda_pct']:.1f}%).")
+                    if alim['status_queda']=="OK": st.success("✅ Seção atende ao limite de queda de tensão adotado no pré-dimensionamento.")
+                    else: st.warning("⚠️ A seção disponível na tabela interna não atende ao limite de queda adotado. Revisar alimentador.")
+                st.caption(alim['criterio'])
 
         st.divider()
         renderizar_materiais(

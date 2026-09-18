@@ -98,3 +98,65 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
         "status": "pre_dimensionado" if dg is not None and sf is not None else "incompleto",
         "pendencias": pendencias,
     }
+
+
+# FASE 13.6 REV.208 — DIMENSIONAMENTO AUTOMÁTICO DO ALIMENTADOR GERAL
+# Critério técnico preliminar do AutoElétrica. As ampacidades são referências
+# internas já usadas pelo sistema; a validação executiva permanece do RT.
+AMPACIDADE_ALIMENTADOR = {
+    "B1": {1.5:17.5,2.5:24.0,4.0:32.0,6.0:41.0,10.0:57.0,16.0:76.0,25.0:101.0,35.0:125.0,50.0:151.0,70.0:192.0,95.0:232.0},
+    "B2": {1.5:16.5,2.5:23.0,4.0:30.0,6.0:38.0,10.0:52.0,16.0:69.0,25.0:90.0,35.0:111.0,50.0:133.0,70.0:168.0,95.0:201.0},
+}
+FATOR_TEMP_ALIMENTADOR = {25:1.03,30:1.00,35:0.94,40:0.87,45:0.79,50:0.71,55:0.61,60:0.50}
+
+def dimensionar_alimentador_geral(corrente_a, dg_a, tipo_fornecimento, tensao_linha_v,
+                                  metodo="B1", temperatura_c=30, comprimento_m=0.0,
+                                  limite_queda_pct=2.0):
+    metodo=str(metodo or "B1").upper().strip()
+    if metodo not in AMPACIDADE_ALIMENTADOR: metodo="B1"
+    temp=int(temperatura_c or 30)
+    temp_ref=min(FATOR_TEMP_ALIMENTADOR, key=lambda x: abs(x-temp))
+    ft=FATOR_TEMP_ALIMENTADOR[temp_ref]
+    alvo=max(_f(corrente_a), _f(dg_a))
+    tabela=AMPACIDADE_ALIMENTADOR[metodo]
+    secao=None; iz=None
+    for s in sorted(tabela):
+        izc=tabela[s]*ft
+        if izc+1e-9 >= alvo:
+            secao=float(s); iz=float(izc); break
+    if secao is None:
+        secao=float(max(tabela)); iz=float(tabela[secao]*ft)
+
+    # Queda de tensão resistiva preliminar para cobre (rho=0,0175 ohm.mm²/m).
+    # Só interfere na seção quando o usuário informa comprimento > 0.
+    comprimento=max(0.0,_f(comprimento_m))
+    limite=max(0.1,_f(limite_queda_pct,2.0))
+    i=max(0.0,_f(corrente_a))
+    v=max(1.0,_f(tensao_linha_v,220.0))
+    trif=str(tipo_fornecimento)=="Trifásico"
+    def queda(s):
+        k=(3.0**0.5) if trif else 2.0
+        dv=k*i*0.0175*comprimento/s
+        return dv, 100.0*dv/v
+    dv,dp=queda(secao)
+    secao_amp=secao
+    if comprimento>0:
+        for s in sorted(tabela):
+            if s < secao_amp: continue
+            dv_t,dp_t=queda(float(s))
+            if dp_t <= limite+1e-9:
+                secao=float(s); dv=float(dv_t); dp=float(dp_t); break
+
+    sn=secao
+    spe=_pe_por_fase(secao)
+    return {
+        "metodo":metodo, "temperatura_c":temp, "temperatura_referencia_c":temp_ref,
+        "fator_temperatura":ft, "corrente_projeto_a":i, "dg_a":dg_a,
+        "secao_por_capacidade_mm2":secao_amp, "iz_corrigida_a":iz,
+        "comprimento_m":comprimento, "limite_queda_pct":limite,
+        "queda_tensao_v":dv if comprimento>0 else None,
+        "queda_tensao_pct":dp if comprimento>0 else None,
+        "fase_mm2":secao, "neutro_mm2":sn, "pe_mm2":spe,
+        "status_queda":"OK" if comprimento>0 and dp<=limite else ("REVISAR" if comprimento>0 else "AGUARDANDO_COMPRIMENTO"),
+        "criterio":"Pré-dimensionamento técnico AutoElétrica; validar condições reais da instalação e requisitos aplicáveis antes da execução."
+    }
