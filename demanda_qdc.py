@@ -207,11 +207,25 @@ def _calcular_automatico(tabela_editada, rede, perfil):
             "tabela_id": regra.get("tabela_id", ""),
         })
 
+    # TUEs sem fator específico no GED-13 não são encaixadas artificialmente
+    # em outra tabela. Para não subdimensionar a instalação, entram na soma
+    # com 100% da potência instalada como CRITÉRIO TÉCNICO CONSERVADOR do
+    # AutoElétrica. Isto NÃO é apresentado como fator normativo da CPFL.
+    criterio_tecnico = []
     if nao_classificados:
         for nome, qtd, carga in nao_classificados:
-            pendencias.append(
-                f"{nome} ({qtd} un.; {carga/1000:.2f} kW) não possui categoria normativa automática cadastrada."
+            demanda_total += carga
+            criterio_tecnico.append(
+                f"{nome} ({qtd} un.; {carga/1000:.2f} kW): 100% da carga instalada"
             )
+            detalhes.append({
+                "categoria": f"TUE sem fator específico — {nome}",
+                "carga_instalada_w": carga,
+                "quantidade": qtd,
+                "fator": 1.0,
+                "demanda_w": carga,
+                "tabela_id": "CRITERIO_TECNICO_CONSERVADOR_100%",
+            })
 
     if pendencias:
         return {
@@ -238,7 +252,8 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         rede.get("tensao_fornecimento"),
     )
     dg = proximo_disjuntor(corrente)
-    status = "ok" if corrente is not None and dg is not None else ("fornecimento_incompleto" if corrente is None else "acima_da_faixa")
+    status_base = "ok" if corrente is not None and dg is not None else ("fornecimento_incompleto" if corrente is None else "acima_da_faixa")
+    status = "ok_com_criterio_tecnico" if criterio_tecnico and status_base == "ok" else status_base
     fator_global = (demanda_total / pot["total_w"] * 100.0) if pot["total_w"] > 0 else 0.0
     return {
         **pot,
@@ -255,7 +270,13 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         "perfil_normativo": f"{perfil.get('concessionaria','')} — {perfil.get('documento','')} {perfil.get('revisao','')}".strip(),
         "detalhes_demanda": detalhes,
         "pendencias": [],
-        "observacao": "Demanda calculada exclusivamente com as regras persistidas no perfil normativo ATIVO."
+        "criterio_tecnico_conservador": criterio_tecnico,
+        "observacao": (
+            "Demanda calculada com as regras persistidas no perfil normativo ATIVO; "
+            "TUEs sem fator específico foram consideradas a 100% como critério técnico conservador, "
+            "sem atribuir esse fator ao GED-13." if criterio_tecnico else
+            "Demanda calculada exclusivamente com as regras persistidas no perfil normativo ATIVO."
+        )
     }
 
 

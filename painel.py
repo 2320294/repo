@@ -682,6 +682,14 @@ def renderizar_painel_principal():
                 st.caption(f"Demanda normativa parcial das cargas classificadas: {parcial/1000:.2f} kW")
             for pendencia in resultado_demanda.get("pendencias", []):
                 st.caption(f"• {pendencia}")
+        elif status == "ok_com_criterio_tecnico":
+            st.success(
+                "✅ Demanda total fechada. As cargas com regra GED-13 usam o fator normativo; "
+                "TUEs sem fator específico entram com 100% da potência como critério técnico "
+                "conservador do AutoElétrica, sem atribuir esse fator à concessionária."
+            )
+            for item in resultado_demanda.get("criterio_tecnico_conservador", []):
+                st.caption(f"• {item}")
         elif status == "fornecimento_incompleto":
             st.warning(
                 "⚠️ Informe tipo e tensão de fornecimento em Parâmetros "
