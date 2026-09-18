@@ -16,6 +16,9 @@ from exportacoes import (
 )
 
 from plotagem_pdf import gerar_pdf_projeto
+from etiquetas_qdc import gerar_pdf_etiquetas_qdc
+from demanda_qdc import calcular_demanda_qdc
+from concessionarias import CHAVE_PARAMETROS_REDE
 
 
 def calcular_rotas_antes_do_dxf(
@@ -312,6 +315,51 @@ def renderizar_salvar_e_gerar_cad(
         st.error(
             f"❌ Erro ao preparar memorial PDF: {e}"
         )
+
+    # ========================================================
+    # VERSÃO 13.6.177 — ETIQUETAS E TABELA DE IDENTIFICAÇÃO QDC
+    # ========================================================
+    st.markdown("### 🏷️ Identificação do QDC")
+    st.caption(
+        "Gera etiquetas em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
+        "com cores/ícones por tipo de circuito, tabela para a porta do QDC e régua de 100 mm."
+    )
+    try:
+        resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
+        circuitos_etiquetas = (
+            resumo_dim.get("circuitos_dimensionados_finais")
+            or resumo_dim.get("circuitos_corrigidos")
+            or []
+        )
+        if circuitos_etiquetas:
+            parametros_rede = (config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {}
+            demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
+            tipo_rede = str(parametros_rede.get("tipo_fornecimento", "") or "")
+            polos_dg = 3 if "Trif" in tipo_rede else (2 if "Bif" in tipo_rede else 1)
+            pdf_etiquetas = gerar_pdf_etiquetas_qdc(
+                nome_projeto=st.session_state.projeto_ativo,
+                circuitos=circuitos_etiquetas,
+                disjuntor_geral_a=demanda.get("disjuntor_geral_a"),
+                polos_geral=polos_dg,
+                versao=VERSAO_SISTEMA,
+            )
+            st.download_button(
+                label="🏷️ Gerar / Baixar Etiquetas do QDC",
+                data=pdf_etiquetas,
+                file_name=f"{st.session_state.projeto_ativo}_Etiquetas_QDC.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_etiquetas_qdc",
+                on_click="ignore",
+            )
+            st.caption("Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’.")
+        else:
+            st.info(
+                "As etiquetas ficarão disponíveis após o dimensionamento físico dos circuitos. "
+                "Gere o projeto CAD uma vez para consolidar os circuitos definitivos."
+            )
+    except Exception as exc:
+        st.warning(f"Não foi possível preparar as etiquetas do QDC. Detalhe: {exc}")
 
     st.markdown(
         "### Projeto Unifilar (DXF)"
