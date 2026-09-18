@@ -336,6 +336,142 @@ def _editor_regras(prefixo, regras=None):
     }
 
 
+
+def _quase_igual(a, b, tol=1e-9):
+    try:
+        return abs(float(a) - float(b)) <= tol
+    except Exception:
+        return False
+
+
+def _validar_perfil_ged13(regras):
+    """Valida estrutura e casos matemáticos do perfil GED-13 residencial.
+
+    Não altera cálculo de projeto. Serve como trava administrativa antes de
+    permitir VALIDADO/ATIVO.
+    """
+    resultados = []
+
+    def teste(grupo, caso, esperado, obtido, ok=None):
+        passou = _quase_igual(obtido, esperado, 1e-8) if ok is None else bool(ok)
+        resultados.append({
+            "Grupo": grupo,
+            "Caso de teste": caso,
+            "Esperado": esperado,
+            "Obtido": obtido,
+            "Status": "PASSOU" if passou else "FALHOU",
+        })
+        return passou
+
+    if not isinstance(regras, dict):
+        teste("Perfil", "Estrutura de regras", "dicionário válido", type(regras).__name__, False)
+        return False, resultados
+
+    f = regras.get("fornecimento") or {}
+    teste("Fornecimento", "Tensão fase-neutro", 127.0, f.get("tensao_fase_neutro_v"))
+    teste("Fornecimento", "Tensão fase-fase", 220.0, f.get("tensao_fase_fase_v"))
+    teste("Fornecimento", "Limite de potência instalada", 75.0, f.get("limite_potencia_instalada_kw"))
+    mods = set(f.get("modalidades") or [])
+    teste("Fornecimento", "Modalidades M/B/T", "Monofásico, Bifásico, Trifásico", ", ".join(sorted(mods)), mods == {"Monofásico", "Bifásico", "Trifásico"})
+
+    d = regras.get("demanda") or {}
+
+    # Tabela 3 — caso documental já usado no cadastro: 4,2 kW x 0,52 = 2,184 kVA (FP=1).
+    t3 = d.get("iluminacao_tug") or {}
+    faixas = t3.get("faixas") or []
+    fator_42 = next((x.get("fator") for x in faixas if _quase_igual(x.get("min_kw"), 4.0) and _quase_igual(x.get("max_kw"), 5.0)), None)
+    teste("Tabela 3", "Fator para 4,2 kW", 0.52, fator_42)
+    teste("Tabela 3", "Demanda para 4,2 kW", 2.184, 4.2 * float(fator_42 or 0))
+    teste("Tabela 3", "Faixa acima de 10 kW", 0.24, next((x.get("fator") for x in faixas if _quase_igual(x.get("min_kw"), 10.0) and x.get("max_kw") is None), None))
+
+    # Tabela 4
+    t4 = d.get("chuveiros") or {}
+    q4 = {int(x.get("quantidade")): x.get("fator") for x in (t4.get("fatores_por_quantidade") or []) if x.get("quantidade") is not None}
+    teste("Tabela 4", "3 aparelhos", 0.84, q4.get(3))
+    teste("Tabela 4", "25 aparelhos", 0.38, q4.get(25))
+    teste("Tabela 4", "Acima de 25", 0.38, (t4.get("acima_de_25") or {}).get("fator"))
+
+    # Tabela 5
+    t5 = d.get("boiler") or {}
+    q5 = {int(x.get("quantidade")): x.get("fator") for x in (t5.get("fatores_por_quantidade") or []) if x.get("quantidade") is not None}
+    teste("Tabela 5", "2 boilers", 0.72, q5.get(2))
+    teste("Tabela 5", "Acima de 3", 0.62, (t5.get("acima_de_3") or {}).get("fator"))
+
+    # Tabela 6
+    t6 = d.get("eletrodomesticos") or {}
+    fq6 = t6.get("faixas_quantidade") or []
+    def fator_faixas(lista, n):
+        for x in lista:
+            mn, mx = x.get("min"), x.get("max")
+            if mn is not None and n >= mn and (mx is None or n <= mx):
+                return x.get("fator")
+        return None
+    teste("Tabela 6", "4 aparelhos", 0.70, fator_faixas(fq6, 4))
+    teste("Tabela 6", "6 aparelhos", 0.60, fator_faixas(fq6, 6))
+    teste("Tabela 6", "9 aparelhos", 0.50, fator_faixas(fq6, 9))
+
+    # Tabela 7
+    t7 = d.get("fogoes") or {}
+    fq7 = t7.get("faixas_quantidade") or []
+    teste("Tabela 7", "3 fogões", 0.48, fator_faixas(fq7, 3))
+    teste("Tabela 7", "10 fogões", 0.30, fator_faixas(fq7, 10))
+    teste("Tabela 7", "26 fogões", 0.26, fator_faixas(fq7, 26))
+
+    # Tabelas 8/9 — no perfil residencial a demanda dos aparelhos é integral.
+    t89 = d.get("ar_condicionado") or {}
+    teste("Tabelas 8/9", "FD residencial", 1.00, t89.get("uso_residencial_fator_demanda"))
+    teste("Tabelas 8/9", "Unidade central", 1.00, t89.get("unidade_central_fator_demanda"))
+    pot = {int(x.get("btu_h")): x for x in (t89.get("tabela_potencias") or []) if x.get("btu_h") is not None}
+    teste("Tabela 8", "12.000 BTU/h — potência VA", 1900.0, (pot.get(12000) or {}).get("potencia_va"))
+
+    # Tabela 10 — valida fatores e um caso matemático de ordenação.
+    t10 = d.get("motores") or {}
+    fo = t10.get("fatores_ordem") or {}
+    teste("Tabela 10", "1º maior motor", 1.00, fo.get("primeiro"))
+    teste("Tabela 10", "2º maior motor", 0.90, fo.get("segundo"))
+    teste("Tabela 10", "3º ao 5º", 0.80, fo.get("terceiro_quarto_quinto"))
+    teste("Tabela 10", "Demais", 0.70, fo.get("demais"))
+    motores = [5.0, 3.0, 2.0, 1.0, 0.5, 0.25]
+    demanda_motores = motores[0]*float(fo.get("primeiro") or 0) + motores[1]*float(fo.get("segundo") or 0) + sum(motores[2:5])*float(fo.get("terceiro_quarto_quinto") or 0) + sum(motores[5:])*float(fo.get("demais") or 0)
+    teste("Tabela 10", "Caso 6 motores [5;3;2;1;0,5;0,25]", 10.675, demanda_motores)
+
+    # Tabela 11
+    t11 = d.get("equipamentos_especiais") or {}
+    re = t11.get("regras") or {}
+    solda = re.get("solda_arco_galvanizacao") or {}
+    teste("Tabela 11", "Solda a arco — 1º maior", 1.00, solda.get("primeiro"))
+    teste("Tabela 11", "Solda a arco — 2º maior", 0.70, solda.get("segundo"))
+    teste("Tabela 11", "FP equipamentos especiais", 0.75, t11.get("fator_potencia"))
+
+    # Hidromassagem e TUEs sem regra genérica.
+    hid = d.get("hidromassagem") or {}
+    teste("Hidromassagem", "Reutiliza Tabela 10", True, hid.get("usar_regra_motores_tabela_10"), hid.get("usar_regra_motores_tabela_10") is True)
+    outros = d.get("demais_tues") or {}
+    teste("Demais TUEs", "Sem fator genérico inventado", None, outros.get("fator_generico"), "fator_generico" in outros and outros.get("fator_generico") is None)
+
+    # Metadados mínimos de rastreabilidade para todas as categorias normativas automáticas.
+    for chave in ["iluminacao_tug", "chuveiros", "boiler", "eletrodomesticos", "fogoes", "ar_condicionado", "motores", "equipamentos_especiais", "hidromassagem"]:
+        regra = d.get(chave) or {}
+        ok_meta = regra.get("documento") == "GED-13" and regra.get("versao_documento") == "46.0" and regra.get("publicacao") == "19/03/2026"
+        teste("Rastreabilidade", chave, "GED-13 v46.0 · 19/03/2026", f"{regra.get('documento')} v{regra.get('versao_documento')} · {regra.get('publicacao')}", ok_meta)
+
+    passou = bool(resultados) and all(x["Status"] == "PASSOU" for x in resultados)
+    return passou, resultados
+
+
+def _renderizar_validador_ged13(regras, prefixo):
+    passou, resultados = _validar_perfil_ged13(regras)
+    with st.expander("🧪 Validador do Perfil Normativo", expanded=True):
+        st.caption("Verificação administrativa independente do cálculo dos projetos. Nenhuma demanda de projeto é alterada nesta etapa.")
+        total = len(resultados)
+        aprovados = sum(1 for x in resultados if x["Status"] == "PASSOU")
+        if passou:
+            st.success(f"Validação matemática concluída: {aprovados}/{total} verificações passaram.")
+        else:
+            st.error(f"Perfil ainda não pode ser validado: {aprovados}/{total} verificações passaram.")
+        st.dataframe(resultados, use_container_width=True, hide_index=True)
+    return passou
+
 def renderizar_admin_normativos(email):
     st.title("⚙️ Administração — Perfis Normativos")
     st.caption("Somente perfis ATIVOS são disponibilizados aos usuários. O cadastro não altera automaticamente os cálculos da versão estável.")
@@ -386,9 +522,10 @@ def renderizar_admin_normativos(email):
                     except Exception as e:
                         st.error(f"Não foi possível atualizar: {e}")
 
-            pronto = _perfil_pronto(regras_atual)
+            validacao_ok = _renderizar_validador_ged13(regras_atual, f"val_{p.get('id')}") if (regras_atual.get("tipo_instalacao") == "Residencial individual") else False
+            pronto = _perfil_pronto(regras_atual) and validacao_ok
             if not pronto:
-                st.info("Perfil ainda incompleto: mantenha em RASCUNHO até preencher e conferir os dados oficiais mínimos.")
+                st.info("Perfil ainda incompleto ou com validação pendente: mantenha em RASCUNHO até todos os testes obrigatórios passarem e a fonte oficial estar confirmada.")
             cols = st.columns(4)
             for col, status in zip(cols, ["RASCUNHO", "VALIDADO", "ATIVO", "INATIVO"]):
                 bloquear = status in ("VALIDADO", "ATIVO") and not pronto
