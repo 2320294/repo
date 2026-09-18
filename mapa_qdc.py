@@ -3744,17 +3744,45 @@ def desenhar_mapa_fisico_qdc(
                             fase_saida
                         )
 
-                        _line(
-                            msp,
-                            (x_borne_fase, g_saida["y1"]),
-                            (x_borne_fase, y_nivel_fase_rev91),
-                            _layer_por_token(fase_saida)
+                        # Rev.171 — prioridade gráfica do cabo que ENTRA no borne.
+                        # Se a saída vertical deste DJ atravessaria o corpo de outro
+                        # disjuntor de uma fileira inferior (ex.: C02 passando atrás
+                        # de C10), ela abandona o eixo do borne logo após o terminal,
+                        # usa um corredor lateral e só então continua para a saída.
+                        # O cabo cujo destino é o próprio DJ permanece reto no borne.
+                        x_passagem_rev171 = _x_desvio_para_nao_invadir_dj(
+                            x_borne_fase,
+                            g_saida["y1"],
+                            y_nivel_fase_rev91,
+                            dj_destino_geom=g_saida,
+                            margem=0.12,
                         )
+
+                        if abs(x_passagem_rev171 - x_borne_fase) > 1e-9:
+                            y_base_terminal_rev171 = float(g_saida["y1"]) - 0.075
+                            y_quebra_rev171 = y_base_terminal_rev171 - 0.10
+                            _polyline(
+                                msp,
+                                [
+                                    (x_borne_fase, g_saida["y1"]),
+                                    (x_borne_fase, y_quebra_rev171),
+                                    (x_passagem_rev171, y_quebra_rev171),
+                                    (x_passagem_rev171, y_nivel_fase_rev91),
+                                ],
+                                _layer_por_token(fase_saida)
+                            )
+                        else:
+                            _line(
+                                msp,
+                                (x_borne_fase, g_saida["y1"]),
+                                (x_borne_fase, y_nivel_fase_rev91),
+                                _layer_por_token(fase_saida)
+                            )
 
                         x_final_fase_rev96 = _x_final_rev96(
                             d_saida,
                             fase_saida,
-                            x_borne_fase
+                            x_passagem_rev171
                         )
 
                         if abs(
@@ -3762,7 +3790,7 @@ def desenhar_mapa_fisico_qdc(
                         ) > 1e-9:
                             _line(
                                 msp,
-                                (x_borne_fase, y_nivel_fase_rev91),
+                                (x_passagem_rev171, y_nivel_fase_rev91),
                                 (x_final_fase_rev96, y_nivel_fase_rev91),
                                 _layer_por_token(fase_saida)
                             )

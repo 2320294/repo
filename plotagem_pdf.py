@@ -239,10 +239,14 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
             try:
                 nome = str(ent.dxf.layer or "").upper().strip()
                 if nome in cores_qdc_rev170:
-                    # ByLayer, sem true-color preto: permite que A/B/C/N/PE
-                    # sejam renderizados com a cor definida na própria layer.
+                    # Rev.171 — no DXF a Fase A continua ACI 7 (branca no fundo
+                    # escuro do CAD). Na impressão/PDF, porém, branco sobre papel
+                    # fica ilegível: somente a Fase A é forçada para preto. As
+                    # demais cores funcionais do QDC permanecem ByLayer.
                     ent.dxf.color = 256
-                    if ent.dxf.hasattr("true_color"):
+                    if nome == "PROJ_ELETRICA_QDC_FASE_A":
+                        ent.dxf.true_color = 0x000000
+                    elif ent.dxf.hasattr("true_color"):
                         ent.dxf.discard("true_color")
                 elif eh_eletrica(nome):
                     ent.dxf.color = 256
