@@ -2178,10 +2178,16 @@ def _x_desvio_para_nao_invadir_dj(
         ry2 = float(r["y2"])
 
         cruza_y = y_hi > ry1 + tolerancia and y_lo < ry2 - tolerancia
-        dentro_x = rx1 + tolerancia < x_original < rx2 - tolerancia
+        # Rev.172 — considerar também coincidência com as bordas do corpo.
+        # O caso C02/C10 cai justamente sobre a faixa lateral do C10; a
+        # verificação estrita da Rev.171 não reconhecia essa passagem.
+        # A prioridade continua sendo do condutor que entra no borne do DJ.
+        dentro_x = (rx1 - tolerancia) <= x_original <= (rx2 + tolerancia)
 
         if cruza_y and dentro_x:
-            # Escolhe o lado mais próximo para o desvio.
+            # Mesmo padrão geométrico já aprovado no caso C01/C04:
+            # o cabo passante abandona o eixo do borne e usa o lado externo
+            # mais próximo do disjuntor que seria atravessado.
             dist_esq = abs(x_original - rx1)
             dist_dir = abs(rx2 - x_original)
             if dist_esq <= dist_dir:

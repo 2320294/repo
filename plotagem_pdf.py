@@ -239,7 +239,7 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
             try:
                 nome = str(ent.dxf.layer or "").upper().strip()
                 if nome in cores_qdc_rev170:
-                    # Rev.171 — no DXF a Fase A continua ACI 7 (branca no fundo
+                    # Rev.172 — no DXF a Fase A continua ACI 7 (branca no fundo
                     # escuro do CAD). Na impressão/PDF, porém, branco sobre papel
                     # fica ilegível: somente a Fase A é forçada para preto. As
                     # demais cores funcionais do QDC permanecem ByLayer.
