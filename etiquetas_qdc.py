@@ -238,28 +238,62 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             x+=w
         y-=18*mm
 
-    if y<85*mm: c.showPage(); y=H-20*mm
-    c.setFillColor(colors.black); c.setFont('Helvetica-Bold',11); c.drawString(margem,y,'Quadro de distribuição — Identificação dos circuitos'); y-=5*mm
-    c.setFont('Helvetica',7); c.drawString(margem,y,'Local: ____________________   Responsável: ____________________   Data: ____/____/______'); y-=7*mm
-    rowh=8.2*mm; col1=25*mm; tablew=util
-    c.setFillColor(colors.HexColor('#182231')); c.rect(margem,y-rowh,tablew,rowh,stroke=0,fill=1)
-    c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8); c.drawCentredString(margem+col1/2,y-5.2*mm,'Nº'); c.drawString(margem+col1+4*mm,y-5.2*mm,'CIRCUITO'); y-=rowh
+    # Régua de conferência imediatamente abaixo das etiquetas físicas.
+    # Ela valida a impressão 1:1 das etiquetas (17,5 mm por módulo x 12 mm),
+    # portanto não deve ficar visualmente associada à tabela da porta.
+    y_regua = y + 5*mm
+    x0 = margem
+    c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.line(x0,y_regua,x0+100*mm,y_regua)
+    for i in range(0,101,10):
+        hh=3*mm if i in (0,50,100) else 2*mm
+        c.line(x0+i*mm,y_regua,x0+i*mm,y_regua+hh)
+    c.setFillColor(colors.black); c.setFont('Helvetica',6.5)
+    c.drawString(x0,y_regua-4*mm,'Confira: esta linha deve medir exatamente 100 mm com uma régua.')
+    y = y_regua - 10*mm
+
+    # Tabela da porta: somente GERAL + circuitos finais. DPS e IDR/DR ficam
+    # exclusivamente na faixa física de etiquetas da Linha 1.
     rows=[]
     for item in itens_tabela:
-        if item['id']=='GERAL': desc=item['linha1']+(f" — {item['linha2']}" if item['linha2'] else '')
-        elif item['id'].startswith(('DPS','DR','IDR')): desc=item['linha1']+(f" — {item['linha2']}" if item['linha2'] else '')
-        else:
+        ident=item['id'].upper()
+        if ident=='GERAL':
+            desc=item['linha1']+(f" — {item['linha2']}" if item['linha2'] else '')
+            rows.append((item,desc))
+        elif ident.startswith('C') and ident[1:].isdigit():
             circ=por_id.get(item['id'],{}); desc=_descricao(circ,_tipo(circ))
-        rows.append((item,desc))
+            rows.append((item,desc))
+
+    # Mantém TODO o bloco "Identificação dos circuitos" na mesma página.
+    # Primeiro tenta o tamanho normal no espaço restante. Se não couber, começa
+    # em nova página. Em projetos maiores, compacta apenas tabela/fontes; a faixa
+    # de etiquetas acima continua SEMPRE em escala física 1:1 (17,5 x 12 mm).
+    col1=25*mm; tablew=util
+    rowh_padrao=8.2*mm; rowh_min=5.2*mm
+    altura_fixa=12*mm  # somente título/campos; régua pertence às etiquetas acima
+    margem_inferior=16*mm
+    necessario=altura_fixa + rowh_padrao*(len(rows)+1) + margem_inferior
+    if y < necessario:
+        c.showPage(); y=H-20*mm
+    disponivel=max(1*mm, y-altura_fixa-margem_inferior)
+    rowh=min(rowh_padrao, disponivel/max(1,len(rows)+1))
+    rowh=max(rowh_min,rowh)
+    escala_texto=min(1.0,rowh/rowh_padrao)
+
+    c.setFillColor(colors.black); c.setFont('Helvetica-Bold',11*escala_texto); c.drawString(margem,y,'Quadro de distribuição — Identificação dos circuitos'); y-=5*mm
+    c.setFont('Helvetica',7*escala_texto); c.drawString(margem,y,'Local: ____________________   Responsável: ____________________   Data: ____/____/______'); y-=7*mm
+
+    c.setFillColor(colors.HexColor('#182231')); c.rect(margem,y-rowh,tablew,rowh,stroke=0,fill=1)
+    c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8*escala_texto)
+    c.drawCentredString(margem+col1/2,y-rowh*0.64,'Nº')
+    c.drawString(margem+col1+4*mm,y-rowh*0.64,'CIRCUITO'); y-=rowh
+
     for meta,desc in rows:
-        if y-rowh<18*mm: c.showPage(); y=H-20*mm
         c.setStrokeColor(colors.HexColor('#D0D3D8')); c.setLineWidth(0.3); c.rect(margem,y-rowh,tablew,rowh,stroke=1,fill=0)
         c.setFillColor(CORES[meta['tipo']]); c.rect(margem,y-rowh,col1,rowh,stroke=0,fill=1)
-        c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8); c.drawCentredString(margem+col1/2,y-5.2*mm,meta['id'])
-        c.setFillColor(colors.black); f,s=_fit(c,desc,tablew-col1-8*mm,8,5.5,True); c.setFont(f,s); c.drawString(margem+col1+4*mm,y-5.2*mm,desc); y-=rowh
-    y-=8*mm; x0=margem; c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.line(x0,y,x0+100*mm,y)
-    for i in range(0,101,10):
-        hh=3*mm if i in (0,50,100) else 2*mm; c.line(x0+i*mm,y,x0+i*mm,y+hh)
-    c.setFont('Helvetica',6.5); c.drawString(x0,y-4*mm,'Confira: esta linha deve medir exatamente 100 mm com uma régua.')
+        c.setFillColor(colors.white); c.setFont('Helvetica-Bold',8*escala_texto); c.drawCentredString(margem+col1/2,y-rowh*0.64,meta['id'])
+        c.setFillColor(colors.black)
+        f,s=_fit(c,desc,tablew-col1-8*mm,8*escala_texto,4.6,True); c.setFont(f,s); c.drawString(margem+col1+4*mm,y-rowh*0.64,desc); y-=rowh
+
+    c.setFillColor(colors.black); c.setFont('Helvetica',6.5)
     c.drawRightString(W-margem,8*mm,f'Versão: {versao}')
     c.save(); return buf.getvalue()
