@@ -68,7 +68,20 @@ def atualizar_status(perfil_id, status, validado_por=""):
 
 
 def perfil_por_id(perfil_id):
+    """Carrega um perfil pelo ID para uso interno do motor normativo.
+
+    Rev.204 — leitura server-side para evitar que RLS do cliente público faça o
+    perfil ATIVO selecionado desaparecer no momento do cálculo. A função apenas
+    lê o registro; alterações continuam restritas às rotinas administrativas.
+    """
     if not perfil_id:
         return None
-    r = _db().table("perfis_normativos").select("*").eq("id", perfil_id).limit(1).execute()
+    r = (
+        obter_supabase_admin()
+        .table("perfis_normativos")
+        .select("*")
+        .eq("id", perfil_id)
+        .limit(1)
+        .execute()
+    )
     return r.data[0] if r.data else None

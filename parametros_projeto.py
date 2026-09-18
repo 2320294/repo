@@ -277,6 +277,20 @@ def renderizar_parametros_projeto(
     if metodo_salvo not in metodos:
         metodo_salvo = metodos[0]
 
+    # Rev.204 — quando o projeto passa a usar um perfil normativo ATIVO pela
+    # primeira vez (ou troca para outro perfil), o método normativo passa a ser
+    # o padrão do projeto. Depois de persistido, uma escolha manual explícita do
+    # responsável técnico continua sendo respeitada.
+    perfil_trocado = bool(
+        perfil_selecionado
+        and str(perfil_selecionado.get("id")) != str(perfil_salvo_id or "")
+    )
+    if perfil_trocado:
+        metodo_salvo = metodos[0]
+        chave_metodo = _widget_key("rede_metodo_demanda")
+        if chave_metodo in st.session_state:
+            st.session_state[chave_metodo] = metodos[0]
+
     metodo_demanda = st.selectbox(
         "Método de cálculo de demanda:",
         metodos,
@@ -293,6 +307,12 @@ def renderizar_parametros_projeto(
         )
         or 100.0
     )
+
+    if metodo_demanda.startswith("Automático") and perfil_selecionado:
+        st.success(
+            "⚡ Demanda automática habilitada pelo perfil normativo ATIVO. "
+            "O cálculo utiliza somente as regras persistidas e validadas do perfil selecionado."
+        )
 
     if metodo_demanda == "Manual pelo responsável técnico":
         fator_demanda_manual = st.number_input(
@@ -571,8 +591,8 @@ def renderizar_parametros_projeto(
         st.info(
             "ℹ️ A localização e a concessionária serão salvas "
             "no projeto. Somente perfis liberados pelo administrador "
-            "podem ser selecionados. O motor de demanda automática permanece bloqueado "
-            "até a validação da implementação matemática da regra oficial."
+            "podem ser selecionados. O cálculo automático fica indisponível enquanto "
+            "não houver um perfil normativo ATIVO associado ao projeto."
         )
 
     if uf and municipio:
