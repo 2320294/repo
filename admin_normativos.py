@@ -74,6 +74,38 @@ def _regras_base(regras=None):
     }
 
 
+
+def _sincronizar_regras_ged13_residencial(regras=None):
+    """Materializa no JSON persistido as regras oficiais GED-13 usadas pelo editor.
+
+    Rev.200: perfis criados antes das revisões 192–196 podiam exibir as tabelas
+    pela interface sem tê-las gravadas em ``regras.demanda``. Esta função cria
+    a representação canônica que também é consumida pelo validador.
+    """
+    r = _regras_base(regras)
+    if r.get("tipo_instalacao") != "Residencial individual":
+        return r
+
+    d = dict(r.get("demanda") or {})
+    d["iluminacao_tug"] = {
+        "metodo":"Tabela por faixas","tabela_id":"GED13_TABELA_3","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"variavel":"carga_instalada_iluminacao_tug_kw",
+        "faixas":[
+            {"min_kw":0.0,"max_kw":1.0,"fator":0.86},{"min_kw":1.0,"max_kw":2.0,"fator":0.75},{"min_kw":2.0,"max_kw":3.0,"fator":0.66},{"min_kw":3.0,"max_kw":4.0,"fator":0.59},{"min_kw":4.0,"max_kw":5.0,"fator":0.52},{"min_kw":5.0,"max_kw":6.0,"fator":0.45},{"min_kw":6.0,"max_kw":7.0,"fator":0.40},{"min_kw":7.0,"max_kw":8.0,"fator":0.35},{"min_kw":8.0,"max_kw":9.0,"fator":0.31},{"min_kw":9.0,"max_kw":10.0,"fator":0.27},{"min_kw":10.0,"max_kw":None,"fator":0.24}
+        ]}
+    fatores4=[(1,1.00),(2,1.00),(3,0.84),(4,0.76),(5,0.70),(6,0.65),(7,0.60),(8,0.57),(9,0.54),(10,0.52),(11,0.49),(12,0.48),(13,0.46),(14,0.45),(15,0.44),(16,0.43),(17,0.42),(18,0.41),(19,0.40),(20,0.40),(21,0.39),(22,0.39),(23,0.39),(24,0.38),(25,0.38)]
+    d["chuveiros"]={"metodo":"Tabela por quantidade","tabela_id":"GED13_TABELA_4","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","variavel":"numero_aparelhos_chuveiros_torneiras_aquecedores_passagem_ferros","fatores_por_quantidade":[{"quantidade":n,"fator":fd} for n,fd in fatores4],"acima_de_25":{"fator":0.38}}
+    d["boiler"]={"metodo":"Tabela por quantidade","tabela_id":"GED13_TABELA_5","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"variavel":"numero_aquecedores_centrais_ou_acumulacao","fatores_por_quantidade":[{"quantidade":1,"fator":1.00},{"quantidade":2,"fator":0.72},{"quantidade":3,"fator":0.62}],"acima_de_3":{"fator":0.62}}
+    d["eletrodomesticos"]={"metodo":"Tabela por quantidade","tabela_id":"GED13_TABELA_6","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"variavel":"numero_secadoras_fornos_lava_loucas_microondas","faixas_quantidade":[{"min":1,"max":1,"fator":1.00},{"min":2,"max":4,"fator":0.70},{"min":5,"max":6,"fator":0.60},{"min":7,"max":8,"fator":0.50},{"min":9,"max":None,"fator":0.50}]}
+    d["fogoes"]={"metodo":"Tabela por quantidade","tabela_id":"GED13_TABELA_7","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"variavel":"numero_fogoes_eletricos","faixas_quantidade":[{"min":1,"max":1,"fator":1.00},{"min":2,"max":2,"fator":0.60},{"min":3,"max":3,"fator":0.48},{"min":4,"max":4,"fator":0.40},{"min":5,"max":5,"fator":0.37},{"min":6,"max":6,"fator":0.35},{"min":7,"max":7,"fator":0.33},{"min":8,"max":8,"fator":0.32},{"min":9,"max":9,"fator":0.31},{"min":10,"max":11,"fator":0.30},{"min":12,"max":15,"fator":0.28},{"min":16,"max":20,"fator":0.26},{"min":21,"max":25,"fator":0.26},{"min":26,"max":None,"fator":0.26}]}
+    aparelhos=[(7100,1100,900),(8500,1550,1300),(10000,1650,1400),(12000,1900,1600),(14000,2100,1900),(18000,2860,2600),(21000,3080,2800),(30000,4000,3600)]
+    d["ar_condicionado"]={"metodo":"Regra específica","tabela_id":"GED13_TABELAS_8_9","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","uso_residencial_fator_demanda":1.0,"unidade_central_fator_demanda":1.0,"tabela_potencias":[{"btu_h":b,"potencia_va":va,"potencia_w":w} for b,va,w in aparelhos],"tabela_9_comercial":[{"min":1,"max":10,"fator":1.00},{"min":11,"max":20,"fator":0.90},{"min":21,"max":30,"fator":0.82},{"min":31,"max":40,"fator":0.80},{"min":41,"max":50,"fator":0.77},{"min":51,"max":75,"fator":0.75},{"min":76,"max":100,"fator":0.75},{"min":101,"max":None,"fator":0.75}]}
+    d["motores"]={"metodo":"Regra por ordem de potência","tabela_id":"GED13_TABELA_10","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fatores_ordem":{"primeiro":1.0,"segundo":0.9,"terceiro_quarto_quinto":0.8,"demais":0.7},"regra_motores_iguais":True,"regra_simultaneos_agrupar":True}
+    d["equipamentos_especiais"]={"metodo":"Regra por tipo e ordem de potência","tabela_id":"GED13_TABELA_11","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":0.75,"regras":{"solda_arco_galvanizacao":{"primeiro":1.0,"segundo":0.7,"terceiro":0.4,"demais":0.3},"solda_resistencia":{"maior":1.0,"demais":0.6},"raios_x":{"maior":1.0,"demais":0.7}}}
+    d["hidromassagem"]={"metodo":"GED-13 / Tabela 10 (motores)","tabela_id":"GED13_TABELA_10_HIDROMASSAGEM","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"usar_regra_motores_tabela_10":True}
+    d["demais_tues"]={"metodo":"Sem regra genérica","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","regra":"classificar_por_categoria_normativa","fator_generico":None}
+    r["demanda"] = d
+    return r
+
 def _perfil_pronto(regras):
     if not isinstance(regras, dict) or regras.get("schema") not in ("autoeletrica.perfil_normativo.v1", "autoeletrica.perfil_normativo.v2"):
         return False
@@ -541,11 +573,30 @@ def renderizar_admin_normativos(email):
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             regras_atual = p.get("regras") or {}
-            # Rev.199 — normaliza o perfil persistido com os padrões normativos atuais.
-            # Perfis criados antes das revisões 192–198 podem não ter ainda
-            # tipo_instalacao/tabelas gravados no JSON, embora o editor os exiba.
-            # A auditoria deve validar exatamente a mesma estrutura mostrada na tela.
+            # Rev.200 — migração/sincronização do perfil GED-13 já existente.
+            # O editor das revisões 192–196 exibia as tabelas canônicas, mas perfis
+            # antigos podiam continuar com demanda vazia no Supabase. Aqui a mesma
+            # estrutura oficial usada pela interface é materializada e persistida.
             regras_validacao = _regras_base(regras_atual)
+            eh_ged13_cpfl = (
+                str(p.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
+                and "ged-13" in str(p.get("documento") or "").casefold()
+                and regras_validacao.get("tipo_instalacao") == "Residencial individual"
+            )
+            if eh_ged13_cpfl:
+                regras_sincronizadas = _sincronizar_regras_ged13_residencial(regras_validacao)
+                if regras_sincronizadas != regras_validacao or str(p.get("revisao") or "").strip() != "46.0" or str(p.get("vigencia") or "").strip() != "19/03/2026":
+                    try:
+                        salvar_perfil({"regras": regras_sincronizadas, "revisao": "46.0", "vigencia": "19/03/2026"}, perfil_id=p.get("id"))
+                        regras_validacao = regras_sincronizadas
+                        p["regras"] = regras_sincronizadas
+                        p["revisao"] = "46.0"
+                        p["vigencia"] = "19/03/2026"
+                        st.success("Perfil GED-13 sincronizado com a estrutura normativa v46.0. A auditoria abaixo já usa os dados persistidos.")
+                    except Exception as e:
+                        st.error(f"Não foi possível sincronizar o perfil GED-13 no banco: {e}")
+                else:
+                    regras_validacao = regras_sincronizadas
 
             # Auditoria sempre visível antes da longa edição do perfil.
             validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao) if (regras_validacao.get("tipo_instalacao") == "Residencial individual") else (False, [])
