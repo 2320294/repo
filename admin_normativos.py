@@ -316,11 +316,10 @@ def _editor_regras(prefixo, regras=None):
                     demanda_saida[chave]["regra_texto"] = tabela.strip()
 
     obs = st.text_area("Observações normativas / exceções", value=r.get("observacoes", ""), height=90, key=f"{prefixo}_obs")
-    conferida = st.checkbox(
-        "Confirmo que os dados acima foram conferidos no documento oficial indicado neste perfil.",
-        value=bool(r.get("fonte_conferida")),
-        key=f"{prefixo}_conf",
-    )
+    # Rev.198 — a confirmação documental é uma etapa administrativa separada,
+    # liberada somente depois que a validação automática passa 100%.
+    # Aqui apenas preservamos o estado já gravado no perfil.
+    conferida = bool(r.get("fonte_conferida"))
     return {
         "schema": "autoeletrica.perfil_normativo.v2",
         "tipo_instalacao": tipo,
@@ -472,6 +471,36 @@ def _renderizar_validador_ged13(regras, prefixo):
         st.dataframe(resultados, use_container_width=True, hide_index=True)
     return passou
 
+def _resumo_auditoria_ged13(regras):
+    passou, resultados = _validar_perfil_ged13(regras)
+    demanda = (regras or {}).get("demanda") or {}
+    categorias = ["iluminacao_tug", "chuveiros", "boiler", "eletrodomesticos", "fogoes", "ar_condicionado", "motores", "equipamentos_especiais", "hidromassagem"]
+    tabelas_ok = 0
+    for chave in categorias:
+        reg = demanda.get(chave) or {}
+        if reg.get("documento") == "GED-13" and reg.get("versao_documento") == "46.0" and reg.get("publicacao") == "19/03/2026":
+            tabelas_ok += 1
+    total = len(resultados)
+    aprovados = sum(1 for x in resultados if x.get("Status") == "PASSOU")
+    pendencias = total - aprovados
+    return passou, resultados, tabelas_ok, len(categorias), aprovados, total, pendencias
+
+
+def _renderizar_resumo_auditoria(regras):
+    passou, resultados, tabelas_ok, tabelas_total, aprovados, total, pendencias = _resumo_auditoria_ged13(regras)
+    st.markdown("### 📋 Resumo da validação")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Tabelas verificadas", f"{tabelas_ok}/{tabelas_total}")
+    c2.metric("Testes matemáticos", f"{aprovados}/{total}")
+    c3.metric("Pendências", str(pendencias))
+    c4.metric("Documento", "GED-13 v46.0")
+    if passou:
+        st.success("Validação automática: 100% APROVADA. A conferência documental humana pode ser realizada como última etapa.")
+    else:
+        st.warning("Validação automática ainda possui pendências. A confirmação documental permanece bloqueada.")
+    return passou, resultados
+
+
 def renderizar_admin_normativos(email):
     st.title("⚙️ Administração — Perfis Normativos")
     st.caption("Somente perfis ATIVOS são disponibilizados aos usuários. O cadastro não altera automaticamente os cálculos da versão estável.")
@@ -512,6 +541,10 @@ def renderizar_admin_normativos(email):
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             regras_atual = p.get("regras") or {}
+
+            # Rev.198 — auditoria visível antes da longa edição do perfil.
+            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_atual) if (regras_atual.get("tipo_instalacao") == "Residencial individual") else (False, [])
+
             with st.form(f"editar_perfil_{p.get('id')}"):
                 regras_editadas = _editor_regras(f"edit_{p.get('id')}", regras_atual)
                 if st.form_submit_button("Salvar regras deste perfil", use_container_width=True):
@@ -523,6 +556,26 @@ def renderizar_admin_normativos(email):
                         st.error(f"Não foi possível atualizar: {e}")
 
             validacao_ok = _renderizar_validador_ged13(regras_atual, f"val_{p.get('id')}") if (regras_atual.get("tipo_instalacao") == "Residencial individual") else False
+
+            # A confirmação humana é deliberadamente a última etapa.
+            fonte_conferida = bool(regras_atual.get("fonte_conferida"))
+            st.markdown("#### Conferência documental final")
+            if fonte_conferida:
+                st.success("Fonte oficial confirmada pelo administrador.")
+            elif validacao_ok:
+                st.info("Todos os testes automáticos passaram. Confira o documento oficial e, somente depois, registre a confirmação abaixo.")
+                if st.button("Confirmo a conferência no documento oficial", key=f"confirmar_fonte_{p.get('id')}", use_container_width=True):
+                    try:
+                        regras_confirmadas = dict(regras_atual)
+                        regras_confirmadas["fonte_conferida"] = True
+                        salvar_perfil({"regras": regras_confirmadas}, perfil_id=p.get("id"))
+                        st.success("Conferência documental registrada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Não foi possível registrar a conferência: {e}")
+            else:
+                st.caption("Confirmação documental bloqueada até 100% dos testes automáticos passarem.")
+
             pronto = _perfil_pronto(regras_atual) and validacao_ok
             if not pronto:
                 st.info("Perfil ainda incompleto ou com validação pendente: mantenha em RASCUNHO até todos os testes obrigatórios passarem e a fonte oficial estar confirmada.")
