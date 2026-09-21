@@ -841,7 +841,35 @@ def renderizar_painel_principal():
                 st.session_state[chave_config] = dict(config_atual)
                 parametros_projeto["parametros_rede"] = rede_integrada
                 st.session_state[chave_parametros] = dict(parametros_projeto)
-                st.caption("Integração Rev.211: DG, demanda e seção final do alimentador ficam disponíveis para o unifilar e o memorial do projeto.")
+
+                # REV.213 — persistência imediata do snapshot fechado no QDC.
+                # Na Rev.212 os dados existiam apenas no session_state; ao gerar o
+                # Memorial por outro fluxo, o relatório podia reler do Supabase a
+                # configuração anterior e concluir incorretamente que o alimentador
+                # ainda não estava fechado. Persistimos somente quando o snapshot
+                # mudou, evitando escrita desnecessária a cada rerun do Streamlit.
+                config_persistida = dict((dados_obj or {}).get("config_interruptores", {}) or {})
+                rede_persistida = dict(config_persistida.get(CHAVE_PARAMETROS_REDE, {}) or {})
+                precisa_persistir_213 = (
+                    rede_persistida.get("demanda_fechada") != rede_integrada.get("demanda_fechada")
+                    or rede_persistida.get("alimentador_geral") != rede_integrada.get("alimentador_geral")
+                )
+                if precisa_persistir_213:
+                    try:
+                        salvar_dados_projeto(
+                            st.session_state.user_email,
+                            st.session_state.projeto_ativo,
+                            config_interruptores=dict(config_atual),
+                        )
+                        # Mantém o objeto carregado coerente durante o mesmo rerun.
+                        dados_obj["config_interruptores"] = dict(config_atual)
+                    except Exception as e:
+                        st.warning(
+                            "⚠️ O cálculo foi concluído, mas não foi possível persistir "
+                            f"o fechamento do alimentador no projeto: {e}"
+                        )
+
+                st.caption("Integração Rev.213: demanda, DG e alimentador fechado são persistidos no projeto e reutilizados pelo unifilar e pelo memorial.")
 
         st.divider()
         renderizar_materiais(
