@@ -609,7 +609,7 @@ def renderizar_salvar_e_gerar_cad(
                 key="download_etiquetas_qdc",
                 on_click="ignore",
             )
-            st.caption("Folha A4. Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’. Confira a régua de 100 mm após imprimir.")
+            st.caption("Folha A4. Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’. Recomendado imprimir em papel adesivo. Confira a régua de 100 mm após imprimir.")
         else:
             st.info(
                 "As etiquetas ficarão disponíveis após o dimensionamento físico dos circuitos. "

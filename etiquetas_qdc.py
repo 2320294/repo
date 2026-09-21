@@ -181,7 +181,7 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         fileiras=[[{'tipo':'DG','identificador':'DG','modulos':max(1,min(3,int(polos_geral or 1))),'corrente_a':int(disjuntor_geral_a or 0)}]]
         fileiras.append([{'tipo':'DJ','identificador':f"C{int(x.get('numero',0)):02d}",'modulos':_polos(x)} for x in circuitos])
 
-    # Rev.214 — saída padronizada em A4 paisagem, SEM qualquer redução de escala.
+    # Rev.215 — A4 paisagem em escala física 1:1, com tipografia ampliada até o limite útil de cada módulo.
     # Como uma fileira física do QDC pode ter até 18 módulos (315 mm) e a folha
     # A4 paisagem mede 297 mm, fileiras largas são continuadas em uma segunda
     # faixa, sempre entre dispositivos (nunca cortando um DJ/DR/DPS). Cada
@@ -195,6 +195,8 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         c.drawString(margem,H-17*mm,'Etiquetas do quadro de distribuição — A4')
         c.setFont('Helvetica-Bold',7.5)
         c.drawString(margem,H-22*mm,'IMPRIMIR EM TAMANHO REAL — ESCALA 100% — NÃO USAR AJUSTAR À PÁGINA')
+        c.setFont('Helvetica-Bold',7.2)
+        c.drawString(margem,H-26*mm,'RECOMENDADO IMPRIMIR EM PAPEL ADESIVO')
         c.setFont('Helvetica',7.2)
         c.drawRightString(W-margem,H-22*mm,f'Módulo: {MODULO_MM:.1f} mm  |  Etiqueta: {ALTURA_ETIQUETA_MM:.0f} mm')
 
@@ -242,13 +244,13 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             rotulo=f'Linha {idx}' if len(partes)==1 else f'Linha {idx} — parte {ip}/{len(partes)}'
             faixas.append((rotulo,parte))
 
-    y=H-31*mm
+    y=H-35*mm
     itens_tabela=[]
     for rotulo,fileira in faixas:
         # Reserva a faixa completa; se não couber verticalmente, continua em
         # nova folha A4 sem alterar as dimensões físicas das etiquetas.
         if y-16*mm < 18*mm:
-            c.showPage(); cabecalho_pagina(); y=H-31*mm
+            c.showPage(); cabecalho_pagina(); y=H-35*mm
         x=margem
         c.setFont('Helvetica',6.5); c.setFillColor(colors.grey); c.drawString(margem,y+3*mm,rotulo)
         y-=1*mm
@@ -258,10 +260,12 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             cor=CORES[item['tipo']]
             c.setStrokeColor(colors.HexColor('#B8B8B8')); c.setLineWidth(0.25); c.rect(x,y-h,w,h,stroke=1,fill=0)
             c.setFillColor(cor); c.rect(x,y-topo,w,topo,stroke=0,fill=1)
-            c.setFillColor(colors.white); c.setFont('Helvetica-Bold',6.2); c.drawCentredString(x+w/2,y-2.35*mm,item['id'])
+            c.setFillColor(colors.white); c.setFont('Helvetica-Bold',7.0); c.drawCentredString(x+w/2,y-2.35*mm,item['id'])
             c.setFillColor(colors.black)
-            linhas1,fs1=_quebrar_linhas(c,item['linha1'],w-1.8*mm,'Helvetica-Bold',5.4,2,3.0)
-            linhas2,fs2=_quebrar_linhas(c,item['linha2'],w-1.8*mm,'Helvetica',4.4,3,2.6)
+            # Rev.215: usa a maior fonte possível dentro dos 17,5 mm por módulo,
+            # reduzindo automaticamente somente quando o texto realmente exigir.
+            linhas1,fs1=_quebrar_linhas(c,item['linha1'],w-1.8*mm,'Helvetica-Bold',6.3,2,3.2)
+            linhas2,fs2=_quebrar_linhas(c,item['linha2'],w-1.8*mm,'Helvetica',5.2,3,2.8)
             if len(linhas1)==1:
                 c.setFont('Helvetica-Bold',fs1); c.drawCentredString(x+w/2,y-6.15*mm,linhas1[0]); base_y=y-8.45*mm
             else:
@@ -277,8 +281,9 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     # Rev.186: cria uma separação visual clara entre a última fileira de
     # etiquetas, a régua de aferição e o quadro de identificação.
     if y < 26*mm:
-        c.showPage(); cabecalho_pagina(); y=H-31*mm
-    y_regua = y + 2*mm
+        c.showPage(); cabecalho_pagina(); y=H-35*mm
+    # Rev.215: aumenta a folga visual entre a última faixa de etiquetas e a régua.
+    y_regua = y - 2*mm
     x0 = margem
     c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.line(x0,y_regua,x0+100*mm,y_regua)
     for i in range(0,101,10):
@@ -330,7 +335,7 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     altura_tabela=rowh_cab+sum(x[4] for x in linhas_rows)
     necessario=altura_fixa+altura_tabela+margem_inferior
     if y < necessario:
-        c.showPage(); cabecalho_pagina(); y=H-31*mm
+        c.showPage(); cabecalho_pagina(); y=H-35*mm
 
     # Se um projeto excepcional ainda exceder uma página, compacta apenas a
     # tabela da porta. As etiquetas e a régua de 100 mm permanecem 1:1.
