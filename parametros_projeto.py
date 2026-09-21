@@ -140,7 +140,7 @@ def renderizar_parametros_projeto(
     except Exception:
         perfis_liberados = []
 
-    rotulos_perfis = ["Nenhum perfil normativo liberado"]
+    rotulos_perfis = ["Selecione um Perfil Normativo..."]
     mapa_perfis = {}
     for p in perfis_liberados:
         rotulo = f"{p.get('concessionaria','')} — {p.get('documento') or 'Norma'} {p.get('revisao') or ''}".strip()
@@ -167,17 +167,6 @@ def renderizar_parametros_projeto(
     perfil_normativo_id = perfil_selecionado.get("id") if perfil_selecionado else None
     concessionaria = perfil_selecionado.get("concessionaria") if perfil_selecionado else OUTRA_CONCESSIONARIA
     concessionaria_manual = ""
-
-    if perfil_selecionado:
-        st.success(
-            f"✅ Perfil liberado: **{perfil_selecionado.get('concessionaria')}** — "
-            f"{perfil_selecionado.get('documento') or 'Norma'} {perfil_selecionado.get('revisao') or ''}"
-        )
-    else:
-        st.info(
-            "Nenhum perfil normativo foi liberado pelo administrador para esta localidade. "
-            "O usuário não pode cadastrar ou alterar regras normativas."
-        )
 
     st.markdown(
         "#### ⚡ Perfil de fornecimento"
@@ -307,12 +296,6 @@ def renderizar_parametros_projeto(
         )
         or 100.0
     )
-
-    if metodo_demanda.startswith("Automático") and perfil_selecionado:
-        st.success(
-            "⚡ Demanda automática habilitada pelo perfil normativo ATIVO. "
-            "O cálculo utiliza somente as regras persistidas e validadas do perfil selecionado."
-        )
 
     if metodo_demanda == "Manual pelo responsável técnico":
         fator_demanda_manual = st.number_input(

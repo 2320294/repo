@@ -440,6 +440,10 @@ def renderizar_painel_principal():
         st.subheader(
             "⚙️ Parâmetros e Planta do Projeto"
         )
+        st.caption(
+            "Configure os dados básicos do projeto, a localização, o perfil normativo de fornecimento "
+            "e os parâmetros da planta que serão utilizados nas próximas etapas."
+        )
 
         parametros = (
             renderizar_parametros_projeto(
