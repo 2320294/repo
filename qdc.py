@@ -1528,8 +1528,7 @@ def renderizar_qdc(
     local_qdc_salvo=None,
     dxf_bytes=None
 ):
-    st.divider()
-
+    # REV.218 — separador visual removido da Etapa 3.
     validos = []
     recomendados = []
 

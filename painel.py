@@ -630,6 +630,11 @@ def renderizar_painel_principal():
         st.subheader(
             "⚡ Posicionamento do QDC"
         )
+        st.caption(
+            "Defina a posição do quadro de distribuição na planta. O AutoElétrica mantém "
+            "internamente os cálculos de demanda, proteção e alimentador necessários para "
+            "a geração do projeto."
+        )
 
         local_qdc = renderizar_qdc(
             dados_ambientes,
@@ -693,13 +698,9 @@ def renderizar_painel_principal():
             for pendencia in resultado_demanda.get("pendencias", []):
                 st.caption(f"• {pendencia}")
         elif status == "ok_com_criterio_tecnico":
-            st.success(
-                "✅ Demanda total fechada. As cargas com regra GED-13 usam o fator normativo; "
-                "TUEs sem fator específico entram com 100% da potência como critério técnico "
-                "conservador do AutoElétrica, sem atribuir esse fator à concessionária."
-            )
-            for item in resultado_demanda.get("criterio_tecnico_conservador", []):
-                st.caption(f"• {item}")
+            # REV.218 — mensagem verde removida da interface da Etapa 3.
+            # O critério continua registrado no resultado e nos relatórios técnicos.
+            pass
         elif status == "fornecimento_incompleto":
             st.warning(
                 "⚠️ Informe tipo e tensão de fornecimento em Parâmetros "
@@ -717,7 +718,8 @@ def renderizar_painel_principal():
             )
 
         detalhes_demanda = resultado_demanda.get("detalhes_demanda") or []
-        if detalhes_demanda:
+        # REV.218 — memória técnica mantida no motor, ocultada da interface.
+        if False and detalhes_demanda:
             with st.expander("📋 Memória do cálculo de demanda", expanded=False):
                 perfil_usado = resultado_demanda.get("perfil_normativo")
                 if perfil_usado:
@@ -735,7 +737,8 @@ def renderizar_painel_principal():
                 st.dataframe(linhas_memoria, use_container_width=True, hide_index=True)
 
         memoria_entrada = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
-        if memoria_entrada and resultado_demanda.get("corrente_demanda_a") is not None:
+        # REV.218 — memória de entrada mantida no motor, ocultada da interface.
+        if False and memoria_entrada and resultado_demanda.get("corrente_demanda_a") is not None:
             with st.expander("⚡ Memória do dimensionamento de entrada", expanded=True):
                 p_kw = float(memoria_entrada.get("potencia_demanda_w", 0) or 0) / 1000.0
                 st.write(f"**Fornecimento:** {memoria_entrada.get('tipo_fornecimento','')} — {memoria_entrada.get('tensao_fornecimento','')}")
@@ -758,128 +761,99 @@ def renderizar_painel_principal():
                 if perfil_usado:
                     st.caption(f"Rastreabilidade do cálculo: {perfil_usado}")
 
+        # REV.218 — dimensionamento do alimentador continua automático e persistido,
+        # porém seus controles/memória deixam de ser exibidos na Etapa 3.
         if resultado_demanda.get("corrente_demanda_a") is not None and resultado_demanda.get("disjuntor_geral_a") is not None:
-            with st.expander("🔌 Dimensionamento automático do alimentador geral", expanded=True):
-                ca, cb, cc = st.columns(3)
-                metodo_alim = ca.selectbox("Método de instalação", ["B1", "B2"], key="rev209_metodo_alimentador")
-                temp_alim = cb.selectbox("Temperatura ambiente", [25,30,35,40,45,50,55,60], index=1, format_func=lambda x: f"{x} °C", key="rev209_temp_alimentador")
-                comp_alim = cc.number_input("Comprimento do alimentador (m)", min_value=0.0, value=0.0, step=1.0, key="rev209_comprimento_alimentador")
-                cd, ce, cf = st.columns(3)
-                cd.text_input("Material do condutor", value="Cobre", disabled=True, key="rev209_material_alimentador")
-                ce.text_input("Isolação de referência", value="PVC 70 °C", disabled=True, key="rev209_isolacao_alimentador")
-                fator_ag = cf.number_input("Fator de agrupamento", min_value=0.10, max_value=1.00, value=1.00, step=0.05, key="rev209_fator_agrupamento")
-                limite_q = st.number_input("Limite adotado para queda de tensão do alimentador (%)", min_value=0.1, max_value=10.0, value=2.0, step=0.1, key="rev209_limite_queda_alimentador")
-                mem = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
-                alim = dimensionar_alimentador_geral(
-                    resultado_demanda.get("corrente_demanda_a"),
-                    resultado_demanda.get("disjuntor_geral_a"),
-                    mem.get("tipo_fornecimento", ""),
-                    mem.get("tensao_calculo_v", 220),
-                    metodo_alim, temp_alim, comp_alim, limite_q, fator_ag
-                )
-                a1,a2,a3,a4=st.columns(4)
-                a1.metric("Fase", f"{alim['fase_mm2']:g} mm²")
-                a2.metric("Neutro", f"{alim['neutro_mm2']:g} mm²")
-                a3.metric("PE", f"{alim['pe_mm2']:g} mm²")
-                a4.metric("Iz corrigida", f"{alim['iz_corrigida_a']:.1f} A")
-                st.write(f"**Capacidade de condução:** método {alim['metodo']}, {alim['temperatura_referencia_c']} °C → seção mínima por capacidade **{alim['secao_por_capacidade_mm2']:g} mm²** para DG **{alim['dg_a']} A**.")
-                qsec = alim.get("secao_por_queda_mm2")
-                qsec_txt = f"{qsec:g} mm²" if qsec is not None else "Aguardando comprimento"
-                st.write(f"**Fechamento do alimentador:** seção por capacidade **{alim['secao_por_capacidade_mm2']:g} mm²** · seção por queda de tensão **{qsec_txt}** · seção final adotada **{alim['secao_final_mm2']:g} mm²**.")
-                st.write(f"**Critério determinante:** **{alim['criterio_determinante']}**.")
-                st.write(f"**Premissas:** {alim['material']} · {alim['isolacao']} · **{alim['condutores_carregados']} condutores carregados** · fator de temperatura **{alim['fator_temperatura']:.2f}** · fator de agrupamento **{alim['fator_agrupamento']:.2f}**.")
-                st.write(f"**Verificação Ib ≤ In ≤ Iz:** {alim['ib_a']:.1f} A ≤ {alim['in_a']:.1f} A ≤ {alim['iz_corrigida_a']:.1f} A")
-                if alim['atende_ib_in_iz']:
-                    st.success("✅ Coordenação preliminar atendida: Ib ≤ In ≤ Iz.")
-                else:
-                    st.error("❌ Coordenação preliminar não atendida: revisar DG, seção ou fatores de correção.")
-                if alim['queda_tensao_pct'] is None:
-                    st.info("Informe o comprimento do alimentador para completar a verificação automática de queda de tensão. Enquanto o comprimento estiver em 0 m, a seção exibida é definida somente pela capacidade de condução preliminar.")
-                else:
-                    st.write(f"**Queda de tensão preliminar:** {alim['queda_tensao_v']:.2f} V = **{alim['queda_tensao_pct']:.2f}%** (limite adotado: {alim['limite_queda_pct']:.1f}%).")
-                    if alim['status_queda']=="OK": st.success("✅ Seção atende ao limite de queda de tensão adotado no pré-dimensionamento.")
-                    else: st.warning("⚠️ A seção disponível na tabela interna não atende ao limite de queda adotado. Revisar alimentador.")
-                st.caption(alim['criterio'])
+            metodo_alim = st.session_state.get("rev209_metodo_alimentador", "B1")
+            temp_alim = st.session_state.get("rev209_temp_alimentador", 30)
+            comp_alim = float(st.session_state.get("rev209_comprimento_alimentador", 0.0) or 0.0)
+            fator_ag = float(st.session_state.get("rev209_fator_agrupamento", 1.0) or 1.0)
+            limite_q = float(st.session_state.get("rev209_limite_queda_alimentador", 2.0) or 2.0)
+            mem = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
+            alim = dimensionar_alimentador_geral(
+                resultado_demanda.get("corrente_demanda_a"),
+                resultado_demanda.get("disjuntor_geral_a"),
+                mem.get("tipo_fornecimento", ""),
+                mem.get("tensao_calculo_v", 220),
+                metodo_alim, temp_alim, comp_alim, limite_q, fator_ag
+            )
+            # REV.211 — integra o fechamento do alimentador às demais saídas.
+            # O bloco fica dentro dos parâmetros de rede já persistidos pelo projeto,
+            # sem criar nova tabela/estrutura de banco e sem alterar o desenho aprovado.
+            rede_integrada = dict(config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {})
+            # REV.212 — congela também o resultado de demanda que originou
+            # Ib/In e o fechamento do alimentador. Relatórios e unifilar devem
+            # consumir este mesmo resultado, sem recalcular a demanda.
+            rede_integrada["demanda_fechada"] = {
+                "total_w": resultado_demanda.get("total_w"),
+                "potencia_demanda_w": resultado_demanda.get("potencia_demanda_w"),
+                "potencia_demanda_parcial_w": resultado_demanda.get("potencia_demanda_parcial_w"),
+                "corrente_demanda_a": resultado_demanda.get("corrente_demanda_a"),
+                "disjuntor_geral_a": resultado_demanda.get("disjuntor_geral_a"),
+                "status": resultado_demanda.get("status"),
+                "perfil_normativo": resultado_demanda.get("perfil_normativo"),
+                "memoria_dimensionamento_entrada": resultado_demanda.get("memoria_dimensionamento_entrada"),
+                "detalhes_demanda": resultado_demanda.get("detalhes_demanda"),
+                "origem": "QDC_DEMANDA_FECHADA_REV212",
+            }
+            rede_integrada["alimentador_geral"] = {
+                "metodo": alim.get("metodo"),
+                "temperatura_c": alim.get("temperatura_referencia_c"),
+                "material": alim.get("material"),
+                "isolacao": alim.get("isolacao"),
+                "condutores_carregados": alim.get("condutores_carregados"),
+                "fator_temperatura": alim.get("fator_temperatura"),
+                "fator_agrupamento": alim.get("fator_agrupamento"),
+                "comprimento_m": alim.get("comprimento_m"),
+                "limite_queda_pct": alim.get("limite_queda_pct"),
+                "queda_tensao_v": alim.get("queda_tensao_v"),
+                "queda_tensao_pct": alim.get("queda_tensao_pct"),
+                "secao_por_capacidade_mm2": alim.get("secao_por_capacidade_mm2"),
+                "secao_por_queda_mm2": alim.get("secao_por_queda_mm2"),
+                "secao_final_mm2": alim.get("secao_final_mm2"),
+                "fase_mm2": alim.get("fase_mm2"),
+                "neutro_mm2": alim.get("neutro_mm2"),
+                "pe_mm2": alim.get("pe_mm2"),
+                "iz_corrigida_a": alim.get("iz_corrigida_a"),
+                "ib_a": alim.get("ib_a"),
+                "in_a": alim.get("in_a"),
+                "criterio_determinante": alim.get("criterio_determinante"),
+                "atende_ib_in_iz": alim.get("atende_ib_in_iz"),
+                "status_queda": alim.get("status_queda"),
+            }
+            config_atual[CHAVE_PARAMETROS_REDE] = rede_integrada
+            st.session_state[chave_config] = dict(config_atual)
+            parametros_projeto["parametros_rede"] = rede_integrada
+            st.session_state[chave_parametros] = dict(parametros_projeto)
 
-                # REV.211 — integra o fechamento do alimentador às demais saídas.
-                # O bloco fica dentro dos parâmetros de rede já persistidos pelo projeto,
-                # sem criar nova tabela/estrutura de banco e sem alterar o desenho aprovado.
-                rede_integrada = dict(config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {})
-                # REV.212 — congela também o resultado de demanda que originou
-                # Ib/In e o fechamento do alimentador. Relatórios e unifilar devem
-                # consumir este mesmo resultado, sem recalcular a demanda.
-                rede_integrada["demanda_fechada"] = {
-                    "total_w": resultado_demanda.get("total_w"),
-                    "potencia_demanda_w": resultado_demanda.get("potencia_demanda_w"),
-                    "potencia_demanda_parcial_w": resultado_demanda.get("potencia_demanda_parcial_w"),
-                    "corrente_demanda_a": resultado_demanda.get("corrente_demanda_a"),
-                    "disjuntor_geral_a": resultado_demanda.get("disjuntor_geral_a"),
-                    "status": resultado_demanda.get("status"),
-                    "perfil_normativo": resultado_demanda.get("perfil_normativo"),
-                    "memoria_dimensionamento_entrada": resultado_demanda.get("memoria_dimensionamento_entrada"),
-                    "detalhes_demanda": resultado_demanda.get("detalhes_demanda"),
-                    "origem": "QDC_DEMANDA_FECHADA_REV212",
-                }
-                rede_integrada["alimentador_geral"] = {
-                    "metodo": alim.get("metodo"),
-                    "temperatura_c": alim.get("temperatura_referencia_c"),
-                    "material": alim.get("material"),
-                    "isolacao": alim.get("isolacao"),
-                    "condutores_carregados": alim.get("condutores_carregados"),
-                    "fator_temperatura": alim.get("fator_temperatura"),
-                    "fator_agrupamento": alim.get("fator_agrupamento"),
-                    "comprimento_m": alim.get("comprimento_m"),
-                    "limite_queda_pct": alim.get("limite_queda_pct"),
-                    "queda_tensao_v": alim.get("queda_tensao_v"),
-                    "queda_tensao_pct": alim.get("queda_tensao_pct"),
-                    "secao_por_capacidade_mm2": alim.get("secao_por_capacidade_mm2"),
-                    "secao_por_queda_mm2": alim.get("secao_por_queda_mm2"),
-                    "secao_final_mm2": alim.get("secao_final_mm2"),
-                    "fase_mm2": alim.get("fase_mm2"),
-                    "neutro_mm2": alim.get("neutro_mm2"),
-                    "pe_mm2": alim.get("pe_mm2"),
-                    "iz_corrigida_a": alim.get("iz_corrigida_a"),
-                    "ib_a": alim.get("ib_a"),
-                    "in_a": alim.get("in_a"),
-                    "criterio_determinante": alim.get("criterio_determinante"),
-                    "atende_ib_in_iz": alim.get("atende_ib_in_iz"),
-                    "status_queda": alim.get("status_queda"),
-                }
-                config_atual[CHAVE_PARAMETROS_REDE] = rede_integrada
-                st.session_state[chave_config] = dict(config_atual)
-                parametros_projeto["parametros_rede"] = rede_integrada
-                st.session_state[chave_parametros] = dict(parametros_projeto)
+            # REV.213 — persistência imediata do snapshot fechado no QDC.
+            # Na Rev.212 os dados existiam apenas no session_state; ao gerar o
+            # Memorial por outro fluxo, o relatório podia reler do Supabase a
+            # configuração anterior e concluir incorretamente que o alimentador
+            # ainda não estava fechado. Persistimos somente quando o snapshot
+            # mudou, evitando escrita desnecessária a cada rerun do Streamlit.
+            config_persistida = dict((dados_obj or {}).get("config_interruptores", {}) or {})
+            rede_persistida = dict(config_persistida.get(CHAVE_PARAMETROS_REDE, {}) or {})
+            precisa_persistir_213 = (
+                rede_persistida.get("demanda_fechada") != rede_integrada.get("demanda_fechada")
+                or rede_persistida.get("alimentador_geral") != rede_integrada.get("alimentador_geral")
+            )
+            if precisa_persistir_213:
+                try:
+                    salvar_dados_projeto(
+                        st.session_state.user_email,
+                        st.session_state.projeto_ativo,
+                        config_interruptores=dict(config_atual),
+                    )
+                    # Mantém o objeto carregado coerente durante o mesmo rerun.
+                    dados_obj["config_interruptores"] = dict(config_atual)
+                except Exception as e:
+                    st.warning(
+                        "⚠️ O cálculo foi concluído, mas não foi possível persistir "
+                        f"o fechamento do alimentador no projeto: {e}"
+                    )
 
-                # REV.213 — persistência imediata do snapshot fechado no QDC.
-                # Na Rev.212 os dados existiam apenas no session_state; ao gerar o
-                # Memorial por outro fluxo, o relatório podia reler do Supabase a
-                # configuração anterior e concluir incorretamente que o alimentador
-                # ainda não estava fechado. Persistimos somente quando o snapshot
-                # mudou, evitando escrita desnecessária a cada rerun do Streamlit.
-                config_persistida = dict((dados_obj or {}).get("config_interruptores", {}) or {})
-                rede_persistida = dict(config_persistida.get(CHAVE_PARAMETROS_REDE, {}) or {})
-                precisa_persistir_213 = (
-                    rede_persistida.get("demanda_fechada") != rede_integrada.get("demanda_fechada")
-                    or rede_persistida.get("alimentador_geral") != rede_integrada.get("alimentador_geral")
-                )
-                if precisa_persistir_213:
-                    try:
-                        salvar_dados_projeto(
-                            st.session_state.user_email,
-                            st.session_state.projeto_ativo,
-                            config_interruptores=dict(config_atual),
-                        )
-                        # Mantém o objeto carregado coerente durante o mesmo rerun.
-                        dados_obj["config_interruptores"] = dict(config_atual)
-                    except Exception as e:
-                        st.warning(
-                            "⚠️ O cálculo foi concluído, mas não foi possível persistir "
-                            f"o fechamento do alimentador no projeto: {e}"
-                        )
-
-                st.caption("Integração Rev.213: demanda, DG e alimentador fechado são persistidos no projeto e reutilizados pelo unifilar e pelo memorial.")
-
-        st.divider()
+            st.caption("Integração Rev.213: demanda, DG e alimentador fechado são persistidos no projeto e reutilizados pelo unifilar e pelo memorial.")
         renderizar_materiais(
             tabela_editada,
             config_atual,

@@ -3285,60 +3285,8 @@ def renderizar_materiais(
         else:
             st.info("Nenhum grupo IDR foi formado.")
 
-        st.markdown("#### ✅ Auditoria elétrica do QDC")
+        # REV.218 — auditoria elétrica permanece calculada internamente, mas oculta na Etapa 3.
 
-        if auditoria_normativa_qdc:
-            bloqueios_qdc = int(auditoria_normativa_qdc.get("qtd_bloqueios", 0) or 0)
-            verificacoes_qdc = list(auditoria_normativa_qdc.get("verificacoes", []) or [])
-            verificacoes_auto = [v for v in verificacoes_qdc if str(v.get("Código", "")).startswith("A")]
-            verificacoes_complementares = [
-                v
-                for v in verificacoes_qdc
-                if str(v.get("Código", "")).startswith("C")
-            ]
-            auto_ok = sum(1 for v in verificacoes_auto if v.get("Status") == "OK")
-
-            a1, a2, a3 = st.columns(3)
-            a1.metric("Projeto elétrico", "LIBERADO" if not bloqueios_qdc else "REVISAR")
-            a2.metric("Verificações automáticas", f"{auto_ok}/{len(verificacoes_auto)}")
-            a3.metric("Bloqueios para DXF", bloqueios_qdc)
-
-            if bloqueios_qdc:
-                st.error(
-                    "Há uma inconsistência elétrica estrutural que precisa ser corrigida "
-                    "antes de gerar a vista frontal do QDC."
-                )
-            else:
-                st.success(
-                    "O AutoElétrica verificou a estrutura do QDC e liberou a geração do DXF."
-                )
-
-            st.caption(
-                "O sistema verifica automaticamente a estrutura elétrica do QDC. "
-                "Dados de fabricante, curto-circuito e detalhes executivos só precisam "
-                "ser informados quando estiverem disponíveis."
-            )
-
-            if verificacoes_complementares:
-                with st.expander(
-                    "🧑‍🔧 Verificações complementares",
-                    expanded=False
-                ):
-                    st.dataframe(
-                        pd.DataFrame(verificacoes_complementares),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-
-            with st.expander(
-                "🔎 Auditoria técnica detalhada",
-                expanded=False
-            ):
-                st.dataframe(
-                    pd.DataFrame(verificacoes_auto),
-                    use_container_width=True,
-                    hide_index=True
-                )
         return
 
     if pagina == "eletrodutos":
