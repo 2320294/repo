@@ -872,6 +872,10 @@ def renderizar_painel_principal():
         st.subheader(
             "💡 Posicionamento dos Interruptores"
         )
+        st.caption(
+            "Confira e defina o posicionamento dos interruptores de cada ambiente na planta "
+            "antes de prosseguir para as próximas etapas do projeto elétrico."
+        )
 
         config_interruptores = (
             renderizar_interruptores(
@@ -915,6 +919,10 @@ def renderizar_painel_principal():
     if etapa == "🔌 Tomadas Altas":
         st.subheader(
             "🔌 Posicionamento das Tomadas Altas"
+        )
+        st.caption(
+            "Confira e defina o posicionamento das tomadas altas e dos pontos de uso específico "
+            "na planta antes de prosseguir para o dimensionamento do projeto elétrico."
         )
 
         config_tomadas_altas = (
