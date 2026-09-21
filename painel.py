@@ -521,6 +521,10 @@ def renderizar_painel_principal():
         st.subheader(
             "📊 Quadro de Previsão de Cargas"
         )
+        st.caption(
+            "Confira e, se necessário, ajuste as cargas previstas de cada ambiente "
+            "antes de prosseguir para o dimensionamento do projeto elétrico."
+        )
 
         tabela_editada = (
             renderizar_edicao_cargas(
