@@ -1,6 +1,6 @@
 from io import BytesIO
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A3, landscape
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib import colors
 
@@ -181,15 +181,24 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         fileiras=[[{'tipo':'DG','identificador':'DG','modulos':max(1,min(3,int(polos_geral or 1))),'corrente_a':int(disjuntor_geral_a or 0)}]]
         fileiras.append([{'tipo':'DJ','identificador':f"C{int(x.get('numero',0)):02d}",'modulos':_polos(x)} for x in circuitos])
 
-    # A3 paisagem permite preservar fisicamente fileiras de até 18 módulos
-    # (18 x 17,5 mm = 315 mm), sem reduzir a escala real das etiquetas.
-    pagesize=landscape(A3)
+    # Rev.214 — saída padronizada em A4 paisagem, SEM qualquer redução de escala.
+    # Como uma fileira física do QDC pode ter até 18 módulos (315 mm) e a folha
+    # A4 paisagem mede 297 mm, fileiras largas são continuadas em uma segunda
+    # faixa, sempre entre dispositivos (nunca cortando um DJ/DR/DPS). Cada
+    # etiqueta continua medindo fisicamente 17,5 mm por módulo x 12 mm.
+    pagesize=landscape(A4)
     buf=BytesIO(); c=canvas.Canvas(buf,pagesize=pagesize); W,H=pagesize
     margem=14*mm; util=W-2*margem
     c.setTitle(f'{nome_projeto} - Etiquetas QDC')
-    c.setFillColor(colors.black); c.setFont('Helvetica-Bold',13); c.drawString(margem,H-17*mm,'Etiquetas do quadro de distribuição')
-    c.setFont('Helvetica',7.5); c.drawString(margem,H-22*mm,'Imprima em Tamanho real (100%). Não use “Ajustar à página”.')
-    c.drawRightString(W-margem,H-22*mm,f'Cada módulo: {MODULO_MM:.1f} mm  |  Faixa: {ALTURA_ETIQUETA_MM:.0f} mm')
+    def cabecalho_pagina():
+        c.setFillColor(colors.black); c.setFont('Helvetica-Bold',13)
+        c.drawString(margem,H-17*mm,'Etiquetas do quadro de distribuição — A4')
+        c.setFont('Helvetica-Bold',7.5)
+        c.drawString(margem,H-22*mm,'IMPRIMIR EM TAMANHO REAL — ESCALA 100% — NÃO USAR AJUSTAR À PÁGINA')
+        c.setFont('Helvetica',7.2)
+        c.drawRightString(W-margem,H-22*mm,f'Módulo: {MODULO_MM:.1f} mm  |  Etiqueta: {ALTURA_ETIQUETA_MM:.0f} mm')
+
+    cabecalho_pagina()
 
     def meta_dispositivo(d):
         tipo_d=_txt(d.get('tipo')).upper()
@@ -209,19 +218,43 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         tipo=_tipo(circ); amb=_txt(circ.get('ambiente')) or _txt(d.get('ambiente')) or '-'
         return {'id':ident,'tipo':tipo,'polos':mod,'linha1':_nome_tipo(circ,tipo),'linha2':amb}
 
+    # Divide apenas a APRESENTAÇÃO de uma fileira quando a largura física não
+    # cabe no A4. A ordem elétrica permanece idêntica à do QDC e nenhum
+    # dispositivo é dividido entre duas faixas.
+    largura_util_mm=(W-2*margem)/mm
+    def segmentar_fileira(fileira):
+        partes=[]; atual=[]; usados_mm=0.0
+        for d in fileira:
+            mod=max(1,int(d.get('modulos',1) or 1))
+            wmm=mod*MODULO_MM
+            if atual and usados_mm+wmm > largura_util_mm+1e-9:
+                partes.append(atual); atual=[]; usados_mm=0.0
+            if wmm > largura_util_mm+1e-9:
+                raise ValueError('Um dispositivo isolado excede a largura útil do A4 em tamanho real.')
+            atual.append(d); usados_mm+=wmm
+        if atual: partes.append(atual)
+        return partes
+
+    faixas=[]
+    for idx,fileira in enumerate(fileiras,1):
+        partes=segmentar_fileira(fileira)
+        for ip,parte in enumerate(partes,1):
+            rotulo=f'Linha {idx}' if len(partes)==1 else f'Linha {idx} — parte {ip}/{len(partes)}'
+            faixas.append((rotulo,parte))
+
     y=H-31*mm
     itens_tabela=[]
-    for idx,fileira in enumerate(fileiras,1):
+    for rotulo,fileira in faixas:
+        # Reserva a faixa completa; se não couber verticalmente, continua em
+        # nova folha A4 sem alterar as dimensões físicas das etiquetas.
+        if y-16*mm < 18*mm:
+            c.showPage(); cabecalho_pagina(); y=H-31*mm
         x=margem
-        c.setFont('Helvetica',6.5); c.setFillColor(colors.grey); c.drawString(margem,y+3*mm,f'Linha {idx}')
+        c.setFont('Helvetica',6.5); c.setFillColor(colors.grey); c.drawString(margem,y+3*mm,rotulo)
         y-=1*mm
         for d in fileira:
             item=meta_dispositivo(d); itens_tabela.append(item)
             w=item['polos']*MODULO_MM*mm; h=ALTURA_ETIQUETA_MM*mm; topo=3.2*mm
-            # Segurança: nunca altera escala. Se uma fileira física exceder A3,
-            # continua na mesma página horizontalmente até o limite útil.
-            if x+w>W-margem+0.1:
-                raise ValueError(f'Fileira {idx} do QDC excede a largura A3 em tamanho real.')
             cor=CORES[item['tipo']]
             c.setStrokeColor(colors.HexColor('#B8B8B8')); c.setLineWidth(0.25); c.rect(x,y-h,w,h,stroke=1,fill=0)
             c.setFillColor(cor); c.rect(x,y-topo,w,topo,stroke=0,fill=1)
@@ -243,6 +276,8 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     # portanto não deve ficar visualmente associada à tabela da porta.
     # Rev.186: cria uma separação visual clara entre a última fileira de
     # etiquetas, a régua de aferição e o quadro de identificação.
+    if y < 26*mm:
+        c.showPage(); cabecalho_pagina(); y=H-31*mm
     y_regua = y + 2*mm
     x0 = margem
     c.setStrokeColor(colors.black); c.setLineWidth(0.6); c.line(x0,y_regua,x0+100*mm,y_regua)
@@ -295,7 +330,7 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     altura_tabela=rowh_cab+sum(x[4] for x in linhas_rows)
     necessario=altura_fixa+altura_tabela+margem_inferior
     if y < necessario:
-        c.showPage(); y=H-20*mm
+        c.showPage(); cabecalho_pagina(); y=H-31*mm
 
     # Se um projeto excepcional ainda exceder uma página, compacta apenas a
     # tabela da porta. As etiquetas e a régua de 100 mm permanecem 1:1.

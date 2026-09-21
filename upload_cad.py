@@ -575,7 +575,7 @@ def renderizar_salvar_e_gerar_cad(
     # ========================================================
     st.markdown("### 🏷️ Identificação do QDC")
     st.caption(
-        "Gera etiquetas em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
+        "Gera etiquetas em folha A4, em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
         "com cores por tipo de circuito, nome do equipamento nas TUEs, ajuste automático dos textos, tabela para a porta do QDC e régua de 100 mm."
     )
     try:
@@ -609,7 +609,7 @@ def renderizar_salvar_e_gerar_cad(
                 key="download_etiquetas_qdc",
                 on_click="ignore",
             )
-            st.caption("Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’.")
+            st.caption("Folha A4. Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’. Confira a régua de 100 mm após imprimir.")
         else:
             st.info(
                 "As etiquetas ficarão disponíveis após o dimensionamento físico dos circuitos. "
