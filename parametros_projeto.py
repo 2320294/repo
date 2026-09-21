@@ -578,12 +578,6 @@ def renderizar_parametros_projeto(
             "não houver um perfil normativo ATIVO associado ao projeto."
         )
 
-    if uf and municipio:
-        st.success(
-            f"📍 Perfil do projeto: **{municipio}/{uf}** — "
-            f"**{concessionaria_nome}**"
-        )
-
     return {
         "tensao_projeto":
             int(
