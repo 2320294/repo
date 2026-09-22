@@ -3173,19 +3173,22 @@ def renderizar_materiais(
         mapa_fisico=mapa_fisico_qdc
     )
 
-    if resumo_rotas:
-        st.caption(
-            "O dimensionamento utiliza o roteamento físico calculado para o projeto. "
-            "Os critérios executivos continuam sujeitos aos parâmetros de instalação "
-            "e aos dados reais dos fabricantes."
-        )
-    else:
-        st.caption(
-            f"Parâmetros usados: tensão derivada do perfil de fornecimento | "
-            f"pé-direito {float(pe_direito):.2f} m. "
-            "O roteamento físico ainda não pôde ser calculado. Confira se o DXF "
-            "do projeto e o posicionamento do QDC estão válidos."
-        )
+    # Rev.220: na Etapa 3 (QDC), os avisos técnicos de roteamento ficam ocultos
+    # para manter a interface limpa. A lógica de cálculo permanece inalterada.
+    if str(pagina or "materiais").strip().lower() != "qdc":
+        if resumo_rotas:
+            st.caption(
+                "O dimensionamento utiliza o roteamento físico calculado para o projeto. "
+                "Os critérios executivos continuam sujeitos aos parâmetros de instalação "
+                "e aos dados reais dos fabricantes."
+            )
+        else:
+            st.caption(
+                f"Parâmetros usados: tensão derivada do perfil de fornecimento | "
+                f"pé-direito {float(pe_direito):.2f} m. "
+                "O roteamento físico ainda não pôde ser calculado. Confira se o DXF "
+                "do projeto e o posicionamento do QDC estão válidos."
+            )
 
     materiais_df, df_circuitos = _dataframes_materiais_circuitos(
         materiais,

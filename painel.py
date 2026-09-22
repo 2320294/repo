@@ -631,9 +631,7 @@ def renderizar_painel_principal():
             "⚡ Posicionamento do QDC"
         )
         st.caption(
-            "Defina a posição do quadro de distribuição na planta. O AutoElétrica mantém "
-            "internamente os cálculos de demanda, proteção e alimentador necessários para "
-            "a geração do projeto."
+            "Defina a posição do quadro de distribuição na planta. Esta etapa é importante para o quantitativo."
         )
 
         local_qdc = renderizar_qdc(
@@ -853,7 +851,6 @@ def renderizar_painel_principal():
                         f"o fechamento do alimentador no projeto: {e}"
                     )
 
-            st.caption("Integração Rev.213: demanda, DG e alimentador fechado são persistidos no projeto e reutilizados pelo unifilar e pelo memorial.")
         renderizar_materiais(
             tabela_editada,
             config_atual,
