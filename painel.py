@@ -918,8 +918,9 @@ def renderizar_painel_principal():
             "🔌 Posicionamento das Tomadas Altas"
         )
         st.caption(
-            "Confira e defina o posicionamento das tomadas altas e dos pontos de uso específico "
-            "na planta antes de prosseguir para o dimensionamento do projeto elétrico."
+            "Escolha na mini planta onde cada tomada alta será instalada. "
+            "**Ar-condicionado** permanece centralizado no trecho escolhido. "
+            "Para **chuveiro**, depois escolha também o ponto desejado na parede."
         )
 
         config_tomadas_altas = (

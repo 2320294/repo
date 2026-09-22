@@ -557,12 +557,6 @@ def renderizar_tomadas_altas(
     if not altas:
         return {}
 
-    st.markdown(
-        "Escolha na mini planta onde cada tomada alta será instalada. "
-        "**Ar-condicionado** permanece centralizado no trecho escolhido. "
-        "Para **chuveiro**, depois escolha também o ponto desejado na parede."
-    )
-
     if not dxf_bytes:
         st.info(
             "A mini planta será liberada quando houver um DXF processado."
