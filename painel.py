@@ -174,8 +174,6 @@ def _navegacao_etapas():
         "⚡ QDC",
         "💡 Interruptores",
         "🔌 Tomadas Altas",
-        "⚙️ Dimensionamento",
-        "🧵 Eletrodutos",
         "📦 Materiais",
         "📐 Gerar Projeto"
     ]
@@ -184,10 +182,11 @@ def _navegacao_etapas():
         "etapa_ativa"
     )
 
-    if chave not in st.session_state:
-        st.session_state[
-            chave
-        ] = etapas[0]
+    if (
+        chave not in st.session_state
+        or st.session_state.get(chave) not in etapas
+    ):
+        st.session_state[chave] = etapas[0]
 
     etapa = st.radio(
         "Etapas do projeto",
