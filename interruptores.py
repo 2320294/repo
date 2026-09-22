@@ -1383,12 +1383,6 @@ def renderizar_interruptores(
         )
         return config
 
-    st.markdown(
-        "Nos ambientes abaixo, organizados em **duas colunas**, escolha **diretamente na mini planta** "
-        "quais portas receberão interruptores. "
-        "Clique em uma porta para selecionar ou retirar a seleção."
-    )
-
     col_esquerda, col_direita = st.columns(2, gap="medium")
 
     for indice_amb, amb in enumerate(multiplos):

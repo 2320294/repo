@@ -870,8 +870,8 @@ def renderizar_painel_principal():
             "💡 Posicionamento dos Interruptores"
         )
         st.caption(
-            "Confira e defina o posicionamento dos interruptores de cada ambiente na planta "
-            "antes de prosseguir para as próximas etapas do projeto elétrico."
+            "Nos ambientes abaixo, organizados em **duas colunas**, escolha **diretamente na mini planta** "
+            "quais portas receberão interruptores. Clique em uma porta para selecionar ou retirar a seleção."
         )
 
         config_interruptores = (
