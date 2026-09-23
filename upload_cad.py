@@ -547,43 +547,27 @@ def renderizar_salvar_e_gerar_cad(
             on_click="ignore",
         )
 
-        # Após o DXF estar pronto, Plotagem e Identificação do QDC
-        # são liberadas juntas e exibidas lado a lado.
-        col_plotagem, col_qdc = st.columns(2, gap="large")
+        # Rev.235: prepara os dois produtos ANTES de renderizar qualquer
+        # bloco visual. O Streamlit envia elementos progressivamente; portanto,
+        # se a Plotagem fosse renderizada antes do preparo das etiquetas, ela
+        # apareceria sozinha durante alguns instantes. Agora a interface só é
+        # montada depois que ambos os estados foram consolidados.
+        pdf_projeto = None
+        erro_pdf_projeto = None
+        pdf_etiquetas = None
+        erro_etiquetas = None
+        etiquetas_disponiveis = False
 
-        with col_plotagem:
-            st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
-            st.caption(
-                "Gera pranchas A3 separadas por conteúdo (planta, QDC e legendas), "
-                "com enquadramento independente a partir do DXF final, sem alterar o arquivo CAD."
-            )
+        with st.spinner("Preparando Plotagem do Projeto (PDF) e Etiquetas de Identificação do QDC..."):
             try:
                 pdf_projeto = gerar_pdf_projeto(
                     dxf_bytes=bytes(cad_salvo),
                     nome_projeto=nome_seguro,
                     versao=VERSAO_CAD,
                 )
-                st.download_button(
-                    label="📄 Gerar / Baixar PDF do Projeto",
-                    data=pdf_projeto,
-                    file_name=f"{nome_seguro}_Projeto_Eletrico.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="download_pdf_projeto",
-                    on_click="ignore",
-                )
             except Exception as exc:
-                st.warning(
-                    "Não foi possível preparar a plotagem PDF deste DXF. "
-                    f"Detalhe: {exc}"
-                )
+                erro_pdf_projeto = str(exc)
 
-        with col_qdc:
-            st.markdown("### 🏷️ Etiquetas de Identificação do QDC")
-            st.caption(
-                "Gera etiquetas em folha A4 para facilitar identificação dos disjuntores "
-                "e tabela para a porta do QDC."
-            )
             try:
                 resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
                 circuitos_etiquetas = (
@@ -606,22 +590,58 @@ def renderizar_salvar_e_gerar_cad(
                         versao=VERSAO_SISTEMA,
                         mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
                     )
-                    st.download_button(
-                        label="🏷️ Gerar / Baixar Etiquetas do QDC",
-                        data=pdf_etiquetas,
-                        file_name=f"{st.session_state.projeto_ativo}_Etiquetas_QDC.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key="download_etiquetas_qdc",
-                        on_click="ignore",
-                    )
+                    etiquetas_disponiveis = True
                 else:
-                    st.info(
-                        "⌛ Consolidando os circuitos definitivos para preparar a identificação do QDC."
+                    erro_etiquetas = (
+                        "Consolidando os circuitos definitivos para preparar a identificação do QDC."
                     )
             except Exception as exc:
+                erro_etiquetas = str(exc)
+
+        # Somente agora os dois blocos são inseridos na página, juntos.
+        col_plotagem, col_qdc = st.columns(2, gap="large")
+
+        with col_plotagem:
+            st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
+            st.caption(
+                "Gera pranchas A3 separadas por conteúdo (planta, QDC e legendas), "
+                "com enquadramento independente a partir do DXF final, sem alterar o arquivo CAD."
+            )
+            if pdf_projeto is not None:
+                st.download_button(
+                    label="📄 Gerar / Baixar PDF do Projeto",
+                    data=pdf_projeto,
+                    file_name=f"{nome_seguro}_Projeto_Eletrico.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_pdf_projeto",
+                    on_click="ignore",
+                )
+            else:
                 st.warning(
-                    f"Não foi possível preparar as etiquetas do QDC. Detalhe: {exc}"
+                    "Não foi possível preparar a plotagem PDF deste DXF. "
+                    f"Detalhe: {erro_pdf_projeto or 'erro não identificado'}"
+                )
+
+        with col_qdc:
+            st.markdown("### 🏷️ Etiquetas de Identificação do QDC")
+            st.caption(
+                "Gera etiquetas em folha A4 para facilitar identificação dos disjuntores "
+                "e tabela para a porta do QDC."
+            )
+            if etiquetas_disponiveis and pdf_etiquetas is not None:
+                st.download_button(
+                    label="🏷️ Gerar / Baixar Etiquetas do QDC",
+                    data=pdf_etiquetas,
+                    file_name=f"{st.session_state.projeto_ativo}_Etiquetas_QDC.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_etiquetas_qdc",
+                    on_click="ignore",
+                )
+            else:
+                st.info(
+                    f"⌛ {erro_etiquetas or 'Preparando a identificação do QDC.'}"
                 )
     else:
         st.info(
