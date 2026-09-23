@@ -349,7 +349,9 @@ def renderizar_salvar_e_gerar_cad(
     # Indicadores locais desta execução. Não ficam persistidos entre
     # reruns, portanto a mensagem de sucesso só aparece imediatamente
     # após um clique real em "Gerar CAD".
-    cad_gerado_neste_ciclo = False
+    cad_gerado_neste_ciclo = bool(
+        st.session_state.pop("mostrar_sucesso_cad_proximo_rerun", False)
+    )
     erro_cad_neste_ciclo = None
 
     if st.button(
@@ -491,6 +493,13 @@ def renderizar_salvar_e_gerar_cad(
             finally:
                 # Só libera a solicitação depois que tentou processar.
                 st.session_state["solicitar_geracao_cad"] = False
+
+            # Rev.234: após concluir o CAD com sucesso, força um único rerun
+            # controlado. Assim Plotagem e Etiquetas são montadas no mesmo
+            # ciclo, já com todo o estado do CAD/roteamento consolidado.
+            if cad_gerado_neste_ciclo and not erro_cad_neste_ciclo:
+                st.session_state["mostrar_sucesso_cad_proximo_rerun"] = True
+                st.rerun()
 
     if erro_cad_neste_ciclo:
         st.error(
