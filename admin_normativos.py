@@ -102,6 +102,20 @@ def _sincronizar_regras_ged13_residencial(regras=None):
     modalidades = f.get("modalidades")
     if not isinstance(modalidades, list) or not modalidades:
         f["modalidades"] = ["Monofásico", "Bifásico", "Trifásico"]
+    # GED-13 v46.0, itens 6.4.1–6.4.3 e Tabelas 1A/1B: classe 127/220 V.
+    # Somente completa o perfil CPFL GED-13 sincronizado pelo chamador quando
+    # nenhuma faixa foi gravada; preserva qualquer cadastro parcial ou existente.
+    if (not f.get("faixas_modalidade_kw")
+            and float(f.get("tensao_fase_neutro_v") or 0) == 127
+            and float(f.get("tensao_fase_fase_v") or 0) == 220):
+        f["faixas_modalidade_kw"] = [
+            {"modalidade": "Monofásico", "min_kw": 0.0, "max_kw": 12.0,
+             "inclui_min": True, "inclui_max": True},
+            {"modalidade": "Bifásico", "min_kw": 12.0, "max_kw": 25.0,
+             "inclui_min": False, "inclui_max": True},
+            {"modalidade": "Trifásico", "min_kw": 25.0, "max_kw": 75.0,
+             "inclui_min": False, "inclui_max": True},
+        ]
     r["fornecimento"] = f
 
     d = dict(r.get("demanda") or {})
