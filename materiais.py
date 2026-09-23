@@ -3175,7 +3175,7 @@ def renderizar_materiais(
 
     # Rev.220: na Etapa 3 (QDC), os avisos técnicos de roteamento ficam ocultos
     # para manter a interface limpa. A lógica de cálculo permanece inalterada.
-    if str(pagina or "materiais").strip().lower() != "qdc":
+    if str(pagina or "materiais").strip().lower() not in {"qdc", "materiais"}:
         if resumo_rotas:
             st.caption(
                 "O dimensionamento utiliza o roteamento físico calculado para o projeto. "
