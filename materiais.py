@@ -3564,11 +3564,7 @@ def renderizar_materiais(
     # --------------------------------------------------------
     # MATERIAIS — somente o que pertence ao quantitativo
     # --------------------------------------------------------
-    st.markdown("#### 📦 Lista de materiais")
-    st.caption(
-        "Quantidades derivadas do projeto. Itens sem quantidade física "
-        "determinada não são incluídos."
-    )
+    st.markdown("#### 📋 Lista de materiais")
 
     if not materiais_df.empty:
         st.dataframe(
@@ -3579,20 +3575,8 @@ def renderizar_materiais(
     else:
         st.info("Nenhum material foi calculado.")
 
-    st.markdown("#### ⚡ Circuitos considerados no quantitativo")
-    st.caption(
-        "Os circuitos abaixo usam as bitolas finais calculadas pelo sistema "
-        "e são a base para o quantitativo de cabos, proteções e infraestrutura."
-    )
-
-    if circuitos:
-        st.dataframe(
-            df_circuitos,
-            use_container_width=True,
-            hide_index=True
-        )
-    else:
-        st.info("Nenhum circuito foi identificado.")
+    # A relação de circuitos continua sendo calculada e utilizada internamente
+    # no quantitativo, mas não é exibida ao usuário.
 
     validacao_export_df = None
     correcoes_export_df = None

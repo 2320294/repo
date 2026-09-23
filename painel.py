@@ -1111,6 +1111,10 @@ def renderizar_painel_principal():
         st.subheader(
             "📦 Quantitativo de Materiais"
         )
+        st.caption(
+            "Quantidades obtidas diretamente do projeto, com base no roteamento "
+            "físico calculado automaticamente pelo sistema."
+        )
 
         if dxf_bytes and local_qdc:
             try:
