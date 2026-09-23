@@ -472,8 +472,10 @@ def _validar_perfil_ged13(regras):
     anterior = 0.0
     for modalidade in ("Monofásico", "Bifásico", "Trifásico"):
         faixa = faixas_por_modalidade.get(modalidade) or {}
-        minimo = _numero(faixa.get("min_kw"))
-        maximo = _numero(faixa.get("max_kw"))
+        # _numero(0.0) trata zero como vazio; 0 kW é o início válido
+        # da primeira faixa e deve permanecer numérico na auditoria.
+        minimo = _numero(str(faixa["min_kw"])) if faixa.get("min_kw") is not None else None
+        maximo = _numero(str(faixa["max_kw"])) if faixa.get("max_kw") is not None else None
         valido = (minimo is not None and maximo is not None
                   and abs(minimo - anterior) < 1e-8 and maximo > minimo)
         teste("Fornecimento", f"Faixa {modalidade} (kW)",
