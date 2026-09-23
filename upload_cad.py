@@ -254,6 +254,11 @@ def renderizar_salvar_e_gerar_cad(
         "💾 Finalização do Projeto"
     )
 
+    # Rev.240: confirmação visual persistida por um ciclo após o rerun.
+    # Assim, todo salvamento concluído com sucesso gera retorno claro ao usuário.
+    if st.session_state.pop("mostrar_sucesso_salvar_projeto", False):
+        st.success("✅ Alterações do projeto salvas com sucesso!")
+
     # Memorial é preparado antes da renderização dos dois botões para que
     # Salvar Projeto e Memorial permaneçam alinhados lado a lado.
     pdf_bytes = None
@@ -294,9 +299,9 @@ def renderizar_salvar_e_gerar_cad(
                     tensao_projeto=tensao_projeto,
                     pe_direito=pe_direito
                 )
-                st.success(
-                    "✅ Alterações salvas no Supabase com sucesso!"
-                )
+                # A mensagem é exibida no ciclo seguinte para não desaparecer
+                # imediatamente quando o Streamlit executa o rerun.
+                st.session_state["mostrar_sucesso_salvar_projeto"] = True
                 st.rerun()
             except Exception as e:
                 st.error(
