@@ -778,6 +778,21 @@ def renderizar_painel_principal():
             # O bloco fica dentro dos parâmetros de rede já persistidos pelo projeto,
             # sem criar nova tabela/estrutura de banco e sem alterar o desenho aprovado.
             rede_integrada = dict(config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {})
+            # REV.237 — a modalidade definida pelo perfil normativo passa a ser a
+            # fonte única de verdade do projeto. A Rev.236 usava essa modalidade
+            # para calcular Ib/DG, mas mantinha o tipo antigo no restante do QDC,
+            # causando, por exemplo, DG 80 A 1P e balanceamento somente na Fase A.
+            # Persistimos a modalidade/tensão efetivas antes de materiais,
+            # balanceamento, proteção, unifilar e demais consumidores.
+            tipo_efetivo = resultado_demanda.get("tipo_fornecimento")
+            tensao_efetiva = resultado_demanda.get("tensao_fornecimento")
+            if tipo_efetivo and tipo_efetivo != "A definir":
+                rede_integrada["tipo_fornecimento"] = tipo_efetivo
+            if tensao_efetiva and tensao_efetiva != "A definir":
+                rede_integrada["tensao_fornecimento"] = tensao_efetiva
+            rede_integrada["fornecimento_auto_perfil"] = bool(
+                resultado_demanda.get("fornecimento_auto_perfil")
+            )
             # REV.212 — congela também o resultado de demanda que originou
             # Ib/In e o fechamento do alimentador. Relatórios e unifilar devem
             # consumir este mesmo resultado, sem recalcular a demanda.
@@ -787,6 +802,9 @@ def renderizar_painel_principal():
                 "potencia_demanda_parcial_w": resultado_demanda.get("potencia_demanda_parcial_w"),
                 "corrente_demanda_a": resultado_demanda.get("corrente_demanda_a"),
                 "disjuntor_geral_a": resultado_demanda.get("disjuntor_geral_a"),
+                "tipo_fornecimento": resultado_demanda.get("tipo_fornecimento"),
+                "tensao_fornecimento": resultado_demanda.get("tensao_fornecimento"),
+                "fornecimento_auto_perfil": bool(resultado_demanda.get("fornecimento_auto_perfil")),
                 "status": resultado_demanda.get("status"),
                 "perfil_normativo": resultado_demanda.get("perfil_normativo"),
                 "memoria_dimensionamento_entrada": resultado_demanda.get("memoria_dimensionamento_entrada"),
