@@ -672,9 +672,34 @@ def gerar_memorial_pdf(
         )
     )
 
+    # REV.239 — o cabeçalho do Memorial usa a mesma fonte de verdade do QDC/
+    # unifilar. A tensão legada do projeto permanece apenas como fallback para
+    # projetos antigos sem parâmetros de rede/demanda fechada.
+    rede_memorial = dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+    demanda_memorial = dict(rede_memorial.get("demanda_fechada", {}) or {})
+    if not demanda_memorial:
+        demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)
+
+    tipo_fornecimento_memorial = str(
+        demanda_memorial.get("tipo_fornecimento")
+        or rede_memorial.get("tipo_fornecimento")
+        or "A definir"
+    ).strip()
+    tensao_fornecimento_memorial = str(
+        demanda_memorial.get("tensao_fornecimento")
+        or rede_memorial.get("tensao_fornecimento")
+        or f"{int(tensao_projeto)} V"
+    ).strip()
+
     story.append(
         Paragraph(
-            f"<b>Tensão base de cálculo:</b> {int(tensao_projeto)} V",
+            f"<b>Tipo de fornecimento:</b> {tipo_fornecimento_memorial}",
+            styles["Texto"]
+        )
+    )
+    story.append(
+        Paragraph(
+            f"<b>Tensão de fornecimento:</b> {tensao_fornecimento_memorial}",
             styles["Texto"]
         )
     )
@@ -738,20 +763,22 @@ def gerar_memorial_pdf(
         )
     )
 
-    # REV.212 — o memorial consome exatamente a demanda fechada no QDC.
-    # Só há recálculo como fallback para projetos antigos sem snapshot persistido.
-    rede_memorial = dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
-    demanda_memorial = dict(rede_memorial.get("demanda_fechada", {}) or {})
-    if not demanda_memorial:
-        demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)
+    # REV.212/239 — demanda, modalidade e tensão já foram consolidadas acima
+    # a partir do mesmo snapshot persistido pelo QDC. Só o alimentador é lido aqui.
     alim_memorial = dict(rede_memorial.get("alimentador_geral", {}) or {})
     story.append(Paragraph("2A. DEMANDA, PROTEÇÃO GERAL E ALIMENTADOR", styles["Secao"]))
     if demanda_memorial.get("potencia_demanda_w") is not None:
+        polos_dg_memorial = {"Monofásico": "1P", "Bifásico": "2P", "Trifásico": "3P"}.get(
+            tipo_fornecimento_memorial, ""
+        )
+        dg_valor = demanda_memorial.get('disjuntor_geral_a', '—')
+        dg_txt = f"{dg_valor} A" + (f" {polos_dg_memorial}" if polos_dg_memorial else "")
         story.append(Paragraph(
+            f"Fornecimento: <b>{tipo_fornecimento_memorial} - {tensao_fornecimento_memorial}</b>.<br/>"
             f"Potência instalada: <b>{float(demanda_memorial.get('total_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
             f"Potência demandada: <b>{float(demanda_memorial.get('potencia_demanda_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
             f"Corrente de demanda: <b>{float(demanda_memorial.get('corrente_demanda_a',0) or 0):.1f} A</b> &nbsp; | &nbsp; "
-            f"DG: <b>{demanda_memorial.get('disjuntor_geral_a','—')} A</b>.", styles["Texto"]))
+            f"DG: <b>{dg_txt}</b>.", styles["Texto"]))
     # REV.238 — registra no Memorial a mesma alteração automática comunicada
     # ao usuário na etapa QDC, preservando a rastreabilidade do dimensionamento.
     if demanda_memorial.get("fornecimento_alterado_automaticamente"):
@@ -765,8 +792,13 @@ def gerar_memorial_pdf(
     if alim_memorial.get("secao_final_mm2") is not None:
         sq = alim_memorial.get("secao_por_queda_mm2")
         sqtxt = f"{float(sq):g} mm²" if sq is not None else "não concluída"
+        composicao_alimentador = {
+            "Monofásico": "F + N + PE",
+            "Bifásico": "2F + N + PE",
+            "Trifásico": "3F + N + PE",
+        }.get(tipo_fornecimento_memorial, "A definir")
         story.append(Paragraph(
-            f"Alimentador final: <b>3F + N + PE</b>; fase <b>{float(alim_memorial.get('fase_mm2')):g} mm²</b>, "
+            f"Alimentador final: <b>{composicao_alimentador}</b>; fase <b>{float(alim_memorial.get('fase_mm2')):g} mm²</b>, "
             f"neutro <b>{float(alim_memorial.get('neutro_mm2')):g} mm²</b> e PE <b>{float(alim_memorial.get('pe_mm2')):g} mm²</b>. "
             f"Seção por capacidade: {float(alim_memorial.get('secao_por_capacidade_mm2')):g} mm²; "
             f"seção por queda: {sqtxt}; critério determinante: <b>{alim_memorial.get('criterio_determinante','')}</b>.", styles["Texto"]))
