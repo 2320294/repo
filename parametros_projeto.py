@@ -404,20 +404,21 @@ def renderizar_parametros_projeto(
         )
     )
 
-    if (
-        metodo_demanda.startswith(
-            "Automático"
+    if metodo_demanda.startswith("Automático") and not perfil_normativo_disponivel(parametros_rede):
+        st.warning(
+            "⚠️ Perfil normativo da concessionária não disponível para esta região. "
+            "O AutoElétrica não aplicará regras da CPFL nem de qualquer outra concessionária "
+            "como padrão. Os cálculos que dependem da concessionária permanecerão indisponíveis "
+            "até a seleção de um perfil normativo ATIVO compatível com a UF/município."
         )
-        and not perfil_normativo_disponivel(
-            parametros_rede
-        )
-    ):
-        st.info(
-            "ℹ️ A localização e a concessionária serão salvas "
-            "no projeto. Somente perfis liberados pelo administrador "
-            "podem ser selecionados. O cálculo automático fica indisponível enquanto "
-            "não houver um perfil normativo ATIVO associado ao projeto."
-        )
+    elif metodo_demanda.startswith("Automático") and perfil_selecionado:
+        _forn = (perfil_selecionado.get("regras") or {}).get("fornecimento") or {}
+        if not (_forn.get("faixas_modalidade_kw") or []):
+            st.warning(
+                "⚠️ O perfil selecionado ainda não possui as faixas de modalidade de fornecimento "
+                "cadastradas. O AutoElétrica preservará a modalidade informada e não inventará "
+                "limites de outra concessionária. O administrador deve completar esse perfil."
+            )
 
     return {
         "tensao_projeto":

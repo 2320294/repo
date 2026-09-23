@@ -66,60 +66,86 @@ def proximo_disjuntor(corrente_a):
 
 
 def _selecionar_fornecimento_perfil(potencia_instalada_w, rede, perfil):
-    """Seleciona a modalidade compatível com a carga instalada quando o perfil
-    normativo ATIVO traz as modalidades de fornecimento. Rev.236.
+    """Seleciona a modalidade exclusivamente pelas faixas gravadas no perfil.
 
-    Para o perfil CPFL 127/220 V: até 12 kW monofásico; acima de 12 até
-    25 kW bifásico; acima de 25 até o limite BT do perfil, trifásico.
-    Para classe 220/380 V, o limite monofásico é 15 kW; acima disso a
-    progressão usa as modalidades disponíveis do perfil.
+    Rev.243: nenhum limite de concessionária fica embutido no motor. O perfil
+    ATIVO deve trazer ``fornecimento.faixas_modalidade_kw``. Sem essa estrutura,
+    a modalidade escolhida pelo responsável é preservada e o sistema não aplica
+    automaticamente regras de outra concessionária/região.
     """
     rede = dict(rede or {})
-    # REV.238 — preserva a modalidade escolhida antes do enquadramento
-    # automático para informar claramente ao usuário quando houver mudança.
     tipo_anterior = str(rede.get("tipo_fornecimento") or "").strip()
     tensao_anterior = str(rede.get("tensao_fornecimento") or "").strip()
     regras = (perfil or {}).get("regras") or {}
     forn = regras.get("fornecimento") or {}
     modalidades = [str(x) for x in (forn.get("modalidades") or [])]
-    if not modalidades:
-        return rede
+    faixas = forn.get("faixas_modalidade_kw") or []
     kw = max(0.0, _float(potencia_instalada_w)) / 1000.0
-    vfn = int(_float(forn.get("tensao_fase_neutro_v"), 0))
-    vff = int(_float(forn.get("tensao_fase_fase_v"), 0))
-    limite = _float(forn.get("limite_potencia_instalada_kw"), 75.0)
+
+    limite = _float(forn.get("limite_potencia_instalada_kw"), 0.0)
     if limite > 0 and kw > limite:
+        rede["fornecimento_auto_perfil"] = False
+        rede["fornecimento_fora_limite_perfil"] = True
+        rede["aviso_fornecimento_perfil"] = (
+            f"A potência instalada de {kw:.2f} kW ultrapassa o limite de "
+            f"{limite:.2f} kW cadastrado no perfil normativo selecionado."
+        )
         return rede
-    tensao = f"{vfn}/{vff} V" if vfn and vff else str(rede.get("tensao_fornecimento") or "")
-    limite_mono = 15.0 if (vfn, vff) == (220, 380) else 12.0
-    if kw <= limite_mono and "Monofásico" in modalidades:
-        tipo = "Monofásico"
-        tensao_calc = f"{vfn} V" if vfn else rede.get("tensao_fornecimento")
-    elif kw <= 25.0 and "Bifásico" in modalidades:
-        tipo = "Bifásico"
-        tensao_calc = tensao
-    elif "Trifásico" in modalidades:
-        tipo = "Trifásico"
-        tensao_calc = tensao
-    else:
+
+    if not modalidades or not isinstance(faixas, list) or not faixas:
+        rede["fornecimento_auto_perfil"] = False
+        rede["fornecimento_sem_faixas_perfil"] = True
+        rede["aviso_fornecimento_perfil"] = (
+            "O perfil normativo selecionado não possui faixas de modalidade de "
+            "fornecimento cadastradas. A modalidade informada no projeto foi preservada."
+        )
         return rede
+
+    tipo = None
+    tensao_calc = None
+    for faixa in faixas:
+        if not isinstance(faixa, dict):
+            continue
+        mn = _float(faixa.get("min_kw"), 0.0)
+        mx = faixa.get("max_kw")
+        inclui_min = bool(faixa.get("inclui_min", True))
+        inclui_max = bool(faixa.get("inclui_max", True))
+        ok_min = kw >= mn if inclui_min else kw > mn
+        ok_max = True if mx in (None, "") else (kw <= _float(mx) if inclui_max else kw < _float(mx))
+        modalidade = str(faixa.get("modalidade") or "").strip()
+        if ok_min and ok_max and modalidade in modalidades:
+            tipo = modalidade
+            tensao_calc = str(faixa.get("tensao") or "").strip()
+            break
+
+    if not tipo:
+        rede["fornecimento_auto_perfil"] = False
+        rede["fornecimento_sem_faixa_aplicavel"] = True
+        rede["aviso_fornecimento_perfil"] = (
+            f"Não há faixa de modalidade aplicável a {kw:.2f} kW no perfil normativo selecionado."
+        )
+        return rede
+
+    if not tensao_calc:
+        vfn = int(_float(forn.get("tensao_fase_neutro_v"), 0))
+        vff = int(_float(forn.get("tensao_fase_fase_v"), 0))
+        tensao_calc = f"{vfn} V" if tipo == "Monofásico" and vfn else (f"{vfn}/{vff} V" if vfn and vff else tensao_anterior)
+
     rede["tipo_fornecimento"] = tipo
     rede["tensao_fornecimento"] = tensao_calc
     rede["fornecimento_auto_perfil"] = True
+    rede["fornecimento_sem_faixas_perfil"] = False
+    rede["aviso_fornecimento_perfil"] = ""
     mudou = bool(tipo_anterior and tipo_anterior != "A definir" and tipo_anterior != tipo)
     rede["fornecimento_alterado_automaticamente"] = mudou
     rede["tipo_fornecimento_anterior"] = tipo_anterior if mudou else ""
     rede["tensao_fornecimento_anterior"] = tensao_anterior if mudou else ""
-    if mudou:
-        rede["aviso_alteracao_fornecimento"] = (
-            f"Devido à potência instalada de {kw:.2f} kW ultrapassar o limite "
-            f"aplicável à modalidade {tipo_anterior}, o sistema alterou automaticamente "
-            f"o fornecimento para {tipo} {tensao_calc}, conforme o perfil normativo selecionado."
-        )
-    else:
-        rede["aviso_alteracao_fornecimento"] = ""
+    rede["aviso_alteracao_fornecimento"] = (
+        f"Devido à potência instalada de {kw:.2f} kW, o perfil normativo selecionado "
+        f"enquadrou automaticamente o fornecimento de {tipo_anterior} para {tipo} {tensao_calc}."
+        if mudou else ""
+    )
     return rede
-
 
 def _fator_faixa_kw(regra, carga_kw):
     for faixa in regra.get("faixas", []) or []:
@@ -398,7 +424,14 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
             perfil = perfil_por_id(rede.get("perfil_normativo_id"))
         except Exception:
             perfil = None
-        if not perfil or str(perfil.get("status", "")).upper() != "ATIVO":
+        perfil_aplicavel = bool(perfil and str(perfil.get("status", "")).upper() == "ATIVO")
+        if perfil_aplicavel:
+            uf_rede = str(rede.get("uf") or "").strip().upper()
+            uf_perfil = str(perfil.get("uf") or "").strip().upper()
+            mun_rede = str(rede.get("municipio") or "").strip().casefold()
+            mun_perfil = str(perfil.get("municipio") or "").strip().casefold()
+            perfil_aplicavel = (not uf_perfil or uf_rede == uf_perfil) and (not mun_perfil or mun_rede == mun_perfil)
+        if not perfil_aplicavel:
             return {
                 **pot,
                 "status": "aguardando_perfil",
@@ -411,7 +444,7 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
                 "tensao_fornecimento": rede.get("tensao_fornecimento", "A definir"),
                 "detalhes_demanda": [],
                 "pendencias": [],
-                "observacao": "Selecione um perfil normativo ATIVO nos Parâmetros do projeto."
+                "observacao": "Selecione um perfil normativo ATIVO compatível com a UF/município do projeto. Regras de outra região não são aplicadas automaticamente."
             }
         return _calcular_automatico(tabela_editada, rede, perfil)
 

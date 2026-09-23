@@ -155,15 +155,32 @@ def _editor_regras(prefixo, regras=None):
         key=f"{prefixo}_fases",
     )
 
+    st.markdown("##### Faixas de modalidade de fornecimento")
+    st.caption("Cadastre os limites exatamente como constam na norma da concessionária. Se ficarem vazios, o AutoElétrica não inventa limites nem reutiliza regras de outra região.")
+    faixas_atuais = f.get("faixas_modalidade_kw") or []
+    def _max_faixa(mod):
+        for _fx in faixas_atuais:
+            if str((_fx or {}).get("modalidade") or "") == mod:
+                return _texto_numero((_fx or {}).get("max_kw"))
+        return ""
+    fm1, fm2, fm3 = st.columns(3)
+    max_mono = fm1.text_input("Máximo monofásico (kW)", value=_max_faixa("Monofásico"), key=f"{prefixo}_max_mono")
+    max_bi = fm2.text_input("Máximo bifásico (kW)", value=_max_faixa("Bifásico"), key=f"{prefixo}_max_bi")
+    max_tri = fm3.text_input("Máximo trifásico (kW)", value=_max_faixa("Trifásico") or _texto_numero(f.get("limite_potencia_instalada_kw")), key=f"{prefixo}_max_tri")
+
     st.markdown("#### Regras de demanda")
     st.caption("Cadastre somente fatores/faixas confirmados na norma oficial. Campos vazios permanecem sem regra e não são inventados pelo sistema.")
+    eh_ged13_persistido = any(
+        "GED13_" in str((v or {}).get("tabela_id") or "")
+        for v in demanda.values() if isinstance(v, dict)
+    )
     demanda_saida = {}
     for chave, rotulo in CATEGORIAS_DEMANDA:
         atual = demanda.get(chave) or {}
         with st.expander(rotulo, expanded=False):
             # GED-13 v46.0: tabelas oficiais residenciais estruturadas.
             # O método é fixado pela própria norma para evitar contradição entre a tela e os dados gravados.
-            if chave == "iluminacao_tug" and tipo == "Residencial individual":
+            if chave == "iluminacao_tug" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Tabela por faixas"
                 st.selectbox(
                     "Método",
@@ -201,7 +218,7 @@ def _editor_regras(prefixo, regras=None):
                     "variavel": "carga_instalada_iluminacao_tug_kw",
                     "faixas": faixas_ged13,
                 }
-            elif chave == "chuveiros" and tipo == "Residencial individual":
+            elif chave == "chuveiros" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Tabela por quantidade"
                 st.selectbox(
                     "Método",
@@ -233,7 +250,7 @@ def _editor_regras(prefixo, regras=None):
                     "fatores_por_quantidade": [{"quantidade": n, "fator": fd} for n, fd in fatores],
                     "acima_de_25": {"fator": 0.38},
                 }
-            elif chave == "boiler" and tipo == "Residencial individual":
+            elif chave == "boiler" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Tabela por quantidade"
                 st.selectbox(
                     "Método",
@@ -269,7 +286,7 @@ def _editor_regras(prefixo, regras=None):
                     ],
                     "acima_de_3": {"fator": 0.62},
                 }
-            elif chave == "eletrodomesticos" and tipo == "Residencial individual":
+            elif chave == "eletrodomesticos" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Tabela por quantidade"
                 st.selectbox(
                     "Método",
@@ -307,7 +324,7 @@ def _editor_regras(prefixo, regras=None):
                         {"min": 9, "max": None, "fator": 0.50},
                     ],
                 }
-            elif chave == "fogoes" and tipo == "Residencial individual":
+            elif chave == "fogoes" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Tabela por quantidade"
                 st.selectbox("Método", ["Tabela por quantidade — GED-13 / Tabela 7"], index=0, key=f"{prefixo}_{chave}_metodo_ged13", disabled=True)
                 fatores = [("1",1.00),("2",0.60),("3",0.48),("4",0.40),("5",0.37),("6",0.35),("7",0.33),("8",0.32),("9",0.31),("10 a 11",0.30),("12 a 15",0.28),("16 a 20",0.26),("21 a 25",0.26),("Acima de 25",0.26)]
@@ -315,7 +332,7 @@ def _editor_regras(prefixo, regras=None):
                 st.dataframe([{"Nº de aparelhos": n, "Fator de demanda": f"{fd:.2f}".replace(".", ",")} for n,fd in fatores], use_container_width=True, hide_index=True)
                 st.info("Origem: GED-13, versão 46.0, publicação 19/03/2026, Tabela 7. Carga instalada pela potência de placa; FP = 1.")
                 demanda_saida[chave] = {"metodo":metodo,"tabela_id":"GED13_TABELA_7","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"variavel":"numero_fogoes_eletricos","faixas_quantidade":[{"min":1,"max":1,"fator":1.00},{"min":2,"max":2,"fator":0.60},{"min":3,"max":3,"fator":0.48},{"min":4,"max":4,"fator":0.40},{"min":5,"max":5,"fator":0.37},{"min":6,"max":6,"fator":0.35},{"min":7,"max":7,"fator":0.33},{"min":8,"max":8,"fator":0.32},{"min":9,"max":9,"fator":0.31},{"min":10,"max":11,"fator":0.30},{"min":12,"max":15,"fator":0.28},{"min":16,"max":20,"fator":0.26},{"min":21,"max":25,"fator":0.26},{"min":26,"max":None,"fator":0.26}]}
-            elif chave == "ar_condicionado" and tipo == "Residencial individual":
+            elif chave == "ar_condicionado" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Regra específica"
                 st.selectbox("Método", ["GED-13 / Tabelas 8 e 9 + regra residencial"], index=0, key=f"{prefixo}_{chave}_metodo_ged13", disabled=True)
                 aparelhos = [(7100,1100,900),(8500,1550,1300),(10000,1650,1400),(12000,1900,1600),(14000,2100,1900),(18000,2860,2600),(21000,3080,2800),(30000,4000,3600)]
@@ -323,7 +340,7 @@ def _editor_regras(prefixo, regras=None):
                 st.dataframe([{"BTU/h":b,"Potência (VA)":va,"Potência (W)":w} for b,va,w in aparelhos], use_container_width=True, hide_index=True)
                 st.info("Uso residencial: fator de demanda = 1,00. A Tabela 9 é destinada ao uso comercial. Unidade central de ar-condicionado: FD = 1,00.")
                 demanda_saida[chave] = {"metodo":metodo,"tabela_id":"GED13_TABELAS_8_9","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","uso_residencial_fator_demanda":1.0,"unidade_central_fator_demanda":1.0,"tabela_potencias":[{"btu_h":b,"potencia_va":va,"potencia_w":w} for b,va,w in aparelhos],"tabela_9_comercial":[{"min":1,"max":10,"fator":1.00},{"min":11,"max":20,"fator":0.90},{"min":21,"max":30,"fator":0.82},{"min":31,"max":40,"fator":0.80},{"min":41,"max":50,"fator":0.77},{"min":51,"max":75,"fator":0.75},{"min":76,"max":100,"fator":0.75},{"min":101,"max":None,"fator":0.75}]}
-            elif chave == "motores" and tipo == "Residencial individual":
+            elif chave == "motores" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Regra por ordem de potência"
                 st.selectbox("Método", ["GED-13 / Tabela 10"], index=0, key=f"{prefixo}_{chave}_metodo_ged13", disabled=True)
                 fatores=[("1º maior",1.00),("2º maior",0.90),("3º, 4º e 5º maiores",0.80),("Soma dos demais",0.70)]
@@ -331,7 +348,7 @@ def _editor_regras(prefixo, regras=None):
                 st.dataframe([{"Ordem de potência":n,"Fator de demanda":f"{fd:.2f}".replace(".",",")} for n,fd in fatores], use_container_width=True, hide_index=True)
                 st.info("Motores iguais: apenas um é tratado como maior; os demais seguem a ordem. Motores obrigatoriamente simultâneos têm suas potências somadas e são considerados como um só motor.")
                 demanda_saida[chave]={"metodo":metodo,"tabela_id":"GED13_TABELA_10","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fatores_ordem":{"primeiro":1.0,"segundo":0.9,"terceiro_quarto_quinto":0.8,"demais":0.7},"regra_motores_iguais":True,"regra_simultaneos_agrupar":True}
-            elif chave == "equipamentos_especiais" and tipo == "Residencial individual":
+            elif chave == "equipamentos_especiais" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Regra por tipo e ordem de potência"
                 st.selectbox("Método", ["GED-13 / Tabela 11"], index=0, key=f"{prefixo}_{chave}_metodo_ged13", disabled=True)
                 linhas=[("Solda a arco / galvanização","1º maior",1.00),("Solda a arco / galvanização","2º maior",0.70),("Solda a arco / galvanização","3º maior",0.40),("Solda a arco / galvanização","Soma dos demais",0.30),("Solda a resistência","Maior",1.00),("Solda a resistência","Soma dos demais",0.60),("Raios-X","Maior",1.00),("Raios-X","Soma dos demais",0.70)]
@@ -339,12 +356,12 @@ def _editor_regras(prefixo, regras=None):
                 st.dataframe([{"Equipamento":e,"Ordem":o,"Fator":f"{fd:.2f}".replace(".",",")} for e,o,fd in linhas], use_container_width=True, hide_index=True)
                 st.info("Aplicação por tipo de aparelho; FP = 0,75. Se os maiores aparelhos forem iguais, somente um é considerado o maior.")
                 demanda_saida[chave]={"metodo":metodo,"tabela_id":"GED13_TABELA_11","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":0.75,"regras":{"solda_arco_galvanizacao":{"primeiro":1.0,"segundo":0.7,"terceiro":0.4,"demais":0.3},"solda_resistencia":{"maior":1.0,"demais":0.6},"raios_x":{"maior":1.0,"demais":0.7}}}
-            elif chave == "hidromassagem" and tipo == "Residencial individual":
+            elif chave == "hidromassagem" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "GED-13 / Tabela 10 (motores)"
                 st.selectbox("Método", ["GED-13 / Tabela 10 — motores"], index=0, key=f"{prefixo}_{chave}_metodo_ged13", disabled=True)
                 st.info("GED-13 v46.0: hidromassagem usa potência de placa, fator de demanda da Tabela 10 (motores) e FP = 1. A antiga tabela específica de hidromassagem foi eliminada na revisão normativa.")
                 demanda_saida[chave]={"metodo":metodo,"tabela_id":"GED13_TABELA_10_HIDROMASSAGEM","documento":"GED-13","versao_documento":"46.0","publicacao":"19/03/2026","fator_potencia":1.0,"usar_regra_motores_tabela_10":True}
-            elif chave == "demais_tues" and tipo == "Residencial individual":
+            elif chave == "demais_tues" and tipo == "Residencial individual" and eh_ged13_persistido:
                 metodo = "Sem regra genérica"
                 st.selectbox("Método", ["Sem regra genérica — classificar pela categoria GED-13 aplicável"], index=0, key=f"{prefixo}_{chave}_metodo_ged13", disabled=True)
                 st.info("O GED-13 não estabelece um único fator genérico para toda TUE. Cada carga deve ser enquadrada na categoria normativa correspondente; cargas não enquadradas permanecem pendentes de regra específica, sem fator inventado pelo AutoElétrica.")
@@ -369,6 +386,16 @@ def _editor_regras(prefixo, regras=None):
     # liberada somente depois que a validação automática passa 100%.
     # Aqui apenas preservamos o estado já gravado no perfil.
     conferida = bool(r.get("fonte_conferida"))
+    faixas_modalidade = []
+    anterior = 0.0
+    for modalidade, texto_max in (("Monofásico", max_mono), ("Bifásico", max_bi), ("Trifásico", max_tri)):
+        maximo = _numero(texto_max)
+        if modalidade in fases and maximo not in (None, ""):
+            faixas_modalidade.append({
+                "modalidade": modalidade, "min_kw": anterior, "max_kw": float(maximo),
+                "inclui_min": modalidade == "Monofásico", "inclui_max": True
+            })
+            anterior = float(maximo)
     return {
         "schema": "autoeletrica.perfil_normativo.v2",
         "tipo_instalacao": tipo,
@@ -377,6 +404,7 @@ def _editor_regras(prefixo, regras=None):
             "tensao_fase_fase_v": _numero(vff),
             "limite_potencia_instalada_kw": _numero(limite),
             "modalidades": fases,
+            "faixas_modalidade_kw": faixas_modalidade,
         },
         "demanda": demanda_saida,
         "observacoes": obs.strip(),
