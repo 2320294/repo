@@ -2,7 +2,7 @@ import math
 
 from perfis_normativos import perfil_por_id
 
-DISJUNTORES_PADRAO = [10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125]
+DISJUNTORES_PADRAO = [10, 16, 20, 25, 32, 40, 50, 63, 80, 100, 125, 150, 160, 175, 200]
 
 
 def _float(valor, padrao=0.0):
@@ -63,6 +63,46 @@ def proximo_disjuntor(corrente_a):
         if valor >= corrente:
             return valor
     return None
+
+
+def _selecionar_fornecimento_perfil(potencia_instalada_w, rede, perfil):
+    """Seleciona a modalidade compatível com a carga instalada quando o perfil
+    normativo ATIVO traz as modalidades de fornecimento. Rev.236.
+
+    Para o perfil CPFL 127/220 V: até 12 kW monofásico; acima de 12 até
+    25 kW bifásico; acima de 25 até o limite BT do perfil, trifásico.
+    Para classe 220/380 V, o limite monofásico é 15 kW; acima disso a
+    progressão usa as modalidades disponíveis do perfil.
+    """
+    rede = dict(rede or {})
+    regras = (perfil or {}).get("regras") or {}
+    forn = regras.get("fornecimento") or {}
+    modalidades = [str(x) for x in (forn.get("modalidades") or [])]
+    if not modalidades:
+        return rede
+    kw = max(0.0, _float(potencia_instalada_w)) / 1000.0
+    vfn = int(_float(forn.get("tensao_fase_neutro_v"), 0))
+    vff = int(_float(forn.get("tensao_fase_fase_v"), 0))
+    limite = _float(forn.get("limite_potencia_instalada_kw"), 75.0)
+    if limite > 0 and kw > limite:
+        return rede
+    tensao = f"{vfn}/{vff} V" if vfn and vff else str(rede.get("tensao_fornecimento") or "")
+    limite_mono = 15.0 if (vfn, vff) == (220, 380) else 12.0
+    if kw <= limite_mono and "Monofásico" in modalidades:
+        tipo = "Monofásico"
+        tensao_calc = f"{vfn} V" if vfn else rede.get("tensao_fornecimento")
+    elif kw <= 25.0 and "Bifásico" in modalidades:
+        tipo = "Bifásico"
+        tensao_calc = tensao
+    elif "Trifásico" in modalidades:
+        tipo = "Trifásico"
+        tensao_calc = tensao
+    else:
+        return rede
+    rede["tipo_fornecimento"] = tipo
+    rede["tensao_fornecimento"] = tensao_calc
+    rede["fornecimento_auto_perfil"] = True
+    return rede
 
 
 def _fator_faixa_kw(regra, carga_kw):
@@ -266,8 +306,13 @@ def _calcular_automatico(tabela_editada, rede, perfil):
             "observacao": "Demanda total não fechada: existem cargas sem regra normativa automática aplicável."
         }
 
-    tipo_fornec = rede.get("tipo_fornecimento")
-    tensao_fornec = rede.get("tensao_fornecimento")
+    # REV.236 — no método automático, a modalidade de fornecimento é derivada
+    # primeiro do perfil normativo e da carga instalada. Só depois calculamos
+    # corrente, DG e alimentador. Isso evita manter um projeto de 19 kW, por
+    # exemplo, artificialmente monofásico e estourar a faixa do DG.
+    rede_efetiva = _selecionar_fornecimento_perfil(pot["total_w"], rede, perfil)
+    tipo_fornec = rede_efetiva.get("tipo_fornecimento")
+    tensao_fornec = rede_efetiva.get("tensao_fornecimento")
     corrente = corrente_demanda_equivalente(demanda_total, tipo_fornec, tensao_fornec)
     dg = proximo_disjuntor(corrente)
 
@@ -304,8 +349,9 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         "potencia_demanda_parcial_w": demanda_total,
         "corrente_demanda_a": corrente,
         "disjuntor_geral_a": dg,
-        "tipo_fornecimento": rede.get("tipo_fornecimento", "A definir"),
-        "tensao_fornecimento": rede.get("tensao_fornecimento", "A definir"),
+        "tipo_fornecimento": tipo_fornec or "A definir",
+        "tensao_fornecimento": tensao_fornec or "A definir",
+        "fornecimento_auto_perfil": bool(rede_efetiva.get("fornecimento_auto_perfil")),
         "perfil_normativo_id": perfil.get("id"),
         "perfil_normativo": f"{perfil.get('concessionaria','')} — {perfil.get('documento','')} {perfil.get('revisao','')}".strip(),
         "detalhes_demanda": detalhes,

@@ -43,7 +43,7 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
 
     ib=resultado_demanda.get("corrente_demanda_a")
     dg=resultado_demanda.get("disjuntor_geral_a")
-    tipo=str(parametros_rede.get("tipo_fornecimento",""))
+    tipo=str(resultado_demanda.get("tipo_fornecimento") or parametros_rede.get("tipo_fornecimento", ""))
     polos=_polos_dg(tipo)
 
     sf=_bitola_por_corrente(dg if dg is not None else ib)
