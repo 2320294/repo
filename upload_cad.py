@@ -254,10 +254,36 @@ def renderizar_salvar_e_gerar_cad(
         "💾 Finalização do Projeto"
     )
 
-    # Rev.240: confirmação visual persistida por um ciclo após o rerun.
-    # Assim, todo salvamento concluído com sucesso gera retorno claro ao usuário.
+    # Rev.241: confirmação visual temporária após o salvamento.
+    # A tarjeta é renderizada no ciclo seguinte ao rerun e some visualmente
+    # após 2 segundos, sem bloquear a execução do Streamlit com time.sleep().
     if st.session_state.pop("mostrar_sucesso_salvar_projeto", False):
-        st.success("✅ Alterações do projeto salvas com sucesso!")
+        st.markdown(
+            """
+            <style>
+            @keyframes autoeletricaSalvarFadeOut {
+                0%, 82% { opacity: 1; max-height: 90px; margin-bottom: 1rem; }
+                100% { opacity: 0; max-height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+            }
+            .autoeletrica-salvar-sucesso {
+                box-sizing: border-box;
+                width: 100%;
+                padding: 0.95rem 1rem;
+                margin: 0 0 1rem 0;
+                border: 1px solid rgba(33, 195, 84, 0.22);
+                border-radius: 0.5rem;
+                background: #dff6e7;
+                color: #0f7a34;
+                overflow: hidden;
+                animation: autoeletricaSalvarFadeOut 2s ease forwards;
+            }
+            </style>
+            <div class="autoeletrica-salvar-sucesso">
+                ✅ Alterações do projeto salvas com sucesso!
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     # Memorial é preparado antes da renderização dos dois botões para que
     # Salvar Projeto e Memorial permaneçam alinhados lado a lado.
