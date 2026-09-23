@@ -253,68 +253,64 @@ def renderizar_salvar_e_gerar_cad(
         "💾 Finalização do Projeto"
     )
 
-    if st.button(
-        "💾 Salvar Alterações do Projeto",
-        use_container_width=True
-    ):
-        try:
-            salvar_dados_projeto(
-                st.session_state.user_email,
-                st.session_state.projeto_ativo,
-                tabela_editada=tabela_editada,
-                local_qdc=local_qdc,
-                config_interruptores=(
-                    config_interruptores_usuario
-                ),
-                tensao_projeto=tensao_projeto,
-                pe_direito=pe_direito
-            )
-
-            st.success(
-                "✅ Alterações salvas no "
-                "Supabase com sucesso!"
-            )
-
-            st.rerun()
-
-        except Exception as e:
-            st.error(
-                f"❌ Erro ao salvar alterações: {e}"
-            )
-
-    # ========================================================
-    # MEMORIAL DESCRITIVO
-    # ========================================================
-
+    # Memorial é preparado antes da renderização dos dois botões para que
+    # Salvar Projeto e Memorial permaneçam alinhados lado a lado.
+    pdf_bytes = None
+    erro_memorial = None
     try:
         pdf_bytes = gerar_memorial_pdf(
-            nome_projeto=(
-                st.session_state.projeto_ativo
-            ),
+            nome_projeto=st.session_state.projeto_ativo,
             tabela_editada=tabela_editada,
-            config_interruptores_usuario=(
-                config_interruptores_usuario
-            ),
+            config_interruptores_usuario=config_interruptores_usuario,
             local_qdc=local_qdc,
             tensao_projeto=tensao_projeto,
             pe_direito=pe_direito
         )
-
-        st.download_button(
-            label="📄 Baixar Memorial Descritivo (PDF)",
-            data=pdf_bytes,
-            file_name=(
-                f"{st.session_state.projeto_ativo}"
-                "_Memorial_Descritivo.pdf"
-            ),
-            mime="application/pdf",
-            use_container_width=True
-        )
-
     except Exception as e:
-        st.error(
-            f"❌ Erro ao preparar memorial PDF: {e}"
-        )
+        erro_memorial = str(e)
+
+    col_salvar, col_memorial = st.columns(2, gap="large")
+
+    with col_salvar:
+        if st.button(
+            "💾 Salvar Alterações do Projeto",
+            use_container_width=True
+        ):
+            try:
+                salvar_dados_projeto(
+                    st.session_state.user_email,
+                    st.session_state.projeto_ativo,
+                    tabela_editada=tabela_editada,
+                    local_qdc=local_qdc,
+                    config_interruptores=config_interruptores_usuario,
+                    tensao_projeto=tensao_projeto,
+                    pe_direito=pe_direito
+                )
+                st.success(
+                    "✅ Alterações salvas no Supabase com sucesso!"
+                )
+                st.rerun()
+            except Exception as e:
+                st.error(
+                    f"❌ Erro ao salvar alterações: {e}"
+                )
+
+    with col_memorial:
+        if pdf_bytes is not None:
+            st.download_button(
+                label="📄 Baixar Memorial Descritivo (PDF)",
+                data=pdf_bytes,
+                file_name=(
+                    f"{st.session_state.projeto_ativo}"
+                    "_Memorial_Descritivo.pdf"
+                ),
+                mime="application/pdf",
+                use_container_width=True
+            )
+        elif erro_memorial:
+            st.error(
+                f"❌ Erro ao preparar memorial PDF: {erro_memorial}"
+            )
 
     st.markdown(
         "### Projeto Unifilar (DXF)"
@@ -538,84 +534,89 @@ def renderizar_salvar_e_gerar_cad(
             f"Arquivo DXF pronto para download: {tamanho / 1024:.1f} KB"
         )
 
-        # ====================================================
-        # FASE 13.6 REV.151 — PLOTAGEM PDF EM PRANCHAS SEMÂNTICAS
-        # ====================================================
-        st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
-        st.caption(
-            "Gera pranchas A3 separadas por conteúdo (planta, QDC e legendas), com enquadramento independente "
-            "a partir do DXF final, sem alterar o arquivo CAD."
+        # Após o DXF estar pronto, Plotagem e Identificação do QDC
+        # são liberadas juntas e exibidas lado a lado.
+        col_plotagem, col_qdc = st.columns(2, gap="large")
+
+        with col_plotagem:
+            st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
+            st.caption(
+                "Gera pranchas A3 separadas por conteúdo (planta, QDC e legendas), "
+                "com enquadramento independente a partir do DXF final, sem alterar o arquivo CAD."
+            )
+            try:
+                pdf_projeto = gerar_pdf_projeto(
+                    dxf_bytes=bytes(cad_salvo),
+                    nome_projeto=nome_seguro,
+                    versao=VERSAO_CAD,
+                )
+                st.download_button(
+                    label="📄 Gerar / Baixar PDF do Projeto",
+                    data=pdf_projeto,
+                    file_name=f"{nome_seguro}_Projeto_Eletrico.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="download_pdf_projeto",
+                    on_click="ignore",
+                )
+            except Exception as exc:
+                st.warning(
+                    "Não foi possível preparar a plotagem PDF deste DXF. "
+                    f"Detalhe: {exc}"
+                )
+
+        with col_qdc:
+            st.markdown("### 🏷️ Identificação do QDC")
+            st.caption(
+                "Gera etiquetas em folha A4, em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
+                "com cores por tipo de circuito, nome do equipamento nas TUEs, ajuste automático dos textos, "
+                "tabela para a porta do QDC e régua de 100 mm."
+            )
+            try:
+                resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
+                circuitos_etiquetas = (
+                    resumo_dim.get("circuitos_dimensionados_finais")
+                    or resumo_dim.get("circuitos_corrigidos")
+                    or []
+                )
+                if circuitos_etiquetas:
+                    parametros_rede = (config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {}
+                    demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
+                    if not demanda:
+                        demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
+                    tipo_rede = str(parametros_rede.get("tipo_fornecimento", "") or "")
+                    polos_dg = 3 if "Trif" in tipo_rede else (2 if "Bif" in tipo_rede else 1)
+                    pdf_etiquetas = gerar_pdf_etiquetas_qdc(
+                        nome_projeto=st.session_state.projeto_ativo,
+                        circuitos=circuitos_etiquetas,
+                        disjuntor_geral_a=demanda.get("disjuntor_geral_a"),
+                        polos_geral=polos_dg,
+                        versao=VERSAO_SISTEMA,
+                        mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
+                    )
+                    st.download_button(
+                        label="🏷️ Gerar / Baixar Etiquetas do QDC",
+                        data=pdf_etiquetas,
+                        file_name=f"{st.session_state.projeto_ativo}_Etiquetas_QDC.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="download_etiquetas_qdc",
+                        on_click="ignore",
+                    )
+                    st.caption(
+                        "Folha A4. Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’. "
+                        "Recomendado imprimir em papel adesivo. Confira a régua de 100 mm após imprimir."
+                    )
+                else:
+                    st.info(
+                        "⌛ Consolidando os circuitos definitivos para preparar a identificação do QDC."
+                    )
+            except Exception as exc:
+                st.warning(
+                    f"Não foi possível preparar as etiquetas do QDC. Detalhe: {exc}"
+                )
+    else:
+        st.info(
+            "⌛ Aguardando a geração do projeto DXF para liberar a Identificação do QDC "
+            "e a Plotagem do Projeto (PDF)."
         )
-
-        try:
-            pdf_projeto = gerar_pdf_projeto(
-                dxf_bytes=bytes(cad_salvo),
-                nome_projeto=nome_seguro,
-                versao=VERSAO_CAD,
-            )
-            st.download_button(
-                label="📄 Gerar / Baixar PDF do Projeto",
-                data=pdf_projeto,
-                file_name=(
-                    f"{nome_seguro}_Projeto_Eletrico.pdf"
-                ),
-                mime="application/pdf",
-                use_container_width=True,
-                key="download_pdf_projeto",
-                on_click="ignore",
-            )
-        except Exception as exc:
-            st.warning(
-                "Não foi possível preparar a plotagem PDF deste DXF. "
-                f"Detalhe: {exc}"
-            )
-
-    # ========================================================
-    # VERSÃO 13.6.186 — ETIQUETAS NAS MESMAS FILEIRAS FÍSICAS DO QDC
-    # ========================================================
-    st.markdown("### 🏷️ Identificação do QDC")
-    st.caption(
-        "Gera etiquetas em folha A4, em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
-        "com cores por tipo de circuito, nome do equipamento nas TUEs, ajuste automático dos textos, tabela para a porta do QDC e régua de 100 mm."
-    )
-    try:
-        resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
-        circuitos_etiquetas = (
-            resumo_dim.get("circuitos_dimensionados_finais")
-            or resumo_dim.get("circuitos_corrigidos")
-            or []
-        )
-        if circuitos_etiquetas:
-            parametros_rede = (config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {}
-            demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
-            if not demanda:
-                demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
-            tipo_rede = str(parametros_rede.get("tipo_fornecimento", "") or "")
-            polos_dg = 3 if "Trif" in tipo_rede else (2 if "Bif" in tipo_rede else 1)
-            pdf_etiquetas = gerar_pdf_etiquetas_qdc(
-                nome_projeto=st.session_state.projeto_ativo,
-                circuitos=circuitos_etiquetas,
-                disjuntor_geral_a=demanda.get("disjuntor_geral_a"),
-                polos_geral=polos_dg,
-                versao=VERSAO_SISTEMA,
-                mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
-            )
-            st.download_button(
-                label="🏷️ Gerar / Baixar Etiquetas do QDC",
-                data=pdf_etiquetas,
-                file_name=f"{st.session_state.projeto_ativo}_Etiquetas_QDC.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key="download_etiquetas_qdc",
-                on_click="ignore",
-            )
-            st.caption("Folha A4. Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’. Recomendado imprimir em papel adesivo. Confira a régua de 100 mm após imprimir.")
-        else:
-            st.info(
-                "As etiquetas ficarão disponíveis após o dimensionamento físico dos circuitos. "
-                "Gere o projeto CAD uma vez para consolidar os circuitos definitivos."
-            )
-    except Exception as exc:
-        st.warning(f"Não foi possível preparar as etiquetas do QDC. Detalhe: {exc}")
-
-

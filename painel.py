@@ -1152,7 +1152,7 @@ def renderizar_painel_principal():
             "📐 Salvar e Gerar Projeto"
         )
 
-        st.markdown(
+        st.caption(
             "Revise as etapas anteriores e, quando estiver tudo "
             "correto, salve as configurações e gere os arquivos."
         )
