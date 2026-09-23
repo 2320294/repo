@@ -2097,7 +2097,7 @@ def _pdf_paragrafo_celula(valor, estilo):
     return Paragraph(texto, estilo)
 
 
-def _pdf_tabela(df, larguras, cabecalhos=None, fonte=6.2):
+def _pdf_tabela(df, larguras, cabecalhos=None, fonte=6.2, centralizar_colunas=None):
     styles = getSampleStyleSheet()
     estilo_header = ParagraphStyle(
         "TabelaHeader",
@@ -2137,6 +2137,12 @@ def _pdf_tabela(df, larguras, cabecalhos=None, fonte=6.2):
         ("TOPPADDING", (0,0), (-1,-1), 3.2),
         ("BOTTOMPADDING", (0,0), (-1,-1), 3.2),
     ]))
+    for coluna in (centralizar_colunas or []):
+        if coluna in nomes:
+            idx = nomes.index(coluna)
+            tabela.setStyle(TableStyle([
+                ("ALIGN", (idx, 1), (idx, -1), "CENTER"),
+            ]))
     return tabela
 
 
@@ -2210,46 +2216,26 @@ def _gerar_pdf_materiais_circuitos(
     if materiais_df.empty:
         story.append(Paragraph("Nenhum material foi identificado.", texto))
     else:
+        materiais_pdf = materiais_df.copy()
+        if "Quantidade" in materiais_pdf.columns:
+            def _formatar_quantidade_pdf(valor):
+                try:
+                    numero = float(valor)
+                    if numero.is_integer():
+                        return str(int(numero))
+                except (TypeError, ValueError):
+                    pass
+                return str(valor)
+            materiais_pdf["Quantidade"] = materiais_pdf["Quantidade"].map(_formatar_quantidade_pdf)
         story.append(_pdf_tabela(
-            materiais_df,
+            materiais_pdf,
             [2.3*cm, 4.0*cm, 6.5*cm, 1.4*cm, 1.8*cm, 10.4*cm],
-            fonte=6.2
+            fonte=6.2,
+            centralizar_colunas=["Quantidade"]
         ))
 
-    story += [Spacer(1,8), Paragraph("2. CIRCUITOS CONSIDERADOS NO QUANTITATIVO", secao)]
-    if circuitos_df.empty:
-        story.append(Paragraph("Nenhum circuito foi identificado.", texto))
-    else:
-        cabecalhos = {
-            "Circuito": "Tipo",
-            "Ambiente": "Ambiente",
-            "Potência (W)": "Potência<br/>(W)",
-            "Tensão (V)": "Tensão<br/>(V)",
-            "Corrente estimada (A)": "Corrente<br/>estimada (A)",
-            "Bitola final (mm²)": "Bitola<br/>final (mm²)",
-            "Disjuntor preliminar (A)": "Disjuntor<br/>prelim. (A)",
-            "Nº": "Nº",
-            "Fase(s)": "Fase(s)",
-            "Polos": "Polos",
-            "DR": "DR",
-        }
-        larguras_por_coluna = {
-            "Circuito": 1.55*cm,
-            "Ambiente": 3.15*cm,
-            "Potência (W)": 1.75*cm,
-            "Tensão (V)": 1.45*cm,
-            "Corrente estimada (A)": 1.85*cm,
-            "Bitola final (mm²)": 1.85*cm,
-            "Disjuntor preliminar (A)": 2.05*cm,
-            "Nº": 1.25*cm,
-            "Fase(s)": 1.45*cm,
-            "Polos": 1.35*cm,
-            "DR": 1.35*cm,
-        }
-        larguras = [larguras_por_coluna.get(c, 1.8*cm) for c in circuitos_df.columns]
-        story.append(_pdf_tabela(
-            circuitos_df, larguras, cabecalhos=cabecalhos, fonte=5.8
-        ))
+    # A seção 2 (circuitos considerados no quantitativo) permanece disponível
+    # internamente, mas não é exibida no PDF destinado ao usuário.
 
     story += [Spacer(1,10), Paragraph("3. BALANCEAMENTO AUTOMÁTICO DE FASES", secao)]
     if resumo_balanceamento.get("status") == "ok":
@@ -2621,7 +2607,7 @@ def _gerar_pdf_materiais_circuitos(
             "Trecho": 1.0*cm,
             "Nº": 0.7*cm,
             "Circuito": 1.4*cm,
-            "Ambiente": 3.0*cm,
+            "Ambiente": 7.5*cm,
             "Comprimento (m)": 1.6*cm,
             "Circuitos no trecho": 1.8*cm,
             "Fator agrup.": 1.4*cm,
@@ -2914,45 +2900,16 @@ def _gerar_pdf_materiais_circuitos(
         story += [
             Spacer(1,8),
             Paragraph(
-                "16. MAPA FÍSICO DO QDC",
+                "16. LISTA DE DISPOSITIVOS E POSIÇÕES DIN NO QDC",
                 secao
             )
         ]
 
-        colunas_mapa = len(
-            mapa_qdc_df.columns
-        )
-        largura_col = (
-            26.0 * cm
-            / max(
-                1,
-                colunas_mapa
-            )
-        )
-
-        story.append(
-            _pdf_tabela(
-                mapa_qdc_df,
-                [
-                    largura_col
-                    for _ in mapa_qdc_df.columns
-                ],
-                fonte=5.6
-            )
-        )
-
+        # O antigo mapa físico em tabela foi removido do PDF.
         if (
             mapa_qdc_dispositivos_df is not None
             and not mapa_qdc_dispositivos_df.empty
         ):
-            story += [
-                Spacer(1,6),
-                Paragraph(
-                    "Lista de dispositivos e posições DIN",
-                    texto
-                )
-            ]
-
             story.append(
                 _pdf_tabela(
                     mapa_qdc_dispositivos_df,
