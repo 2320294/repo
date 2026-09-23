@@ -145,7 +145,7 @@ def renderizar_parametros_projeto(
             "Município:",
             opcoes_municipio,
             index=indice_municipio,
-            key=_widget_key("rede_municipio")
+            key=_widget_key(f"rede_municipio_{uf or 'SEM_UF'}")
         )
         municipio = "" if municipio_escolhido == "Selecione..." else municipio_escolhido
 
@@ -154,7 +154,7 @@ def renderizar_parametros_projeto(
 
     # Rev.187 — usuário comum somente seleciona perfis liberados pelo administrador.
     try:
-        perfis_liberados = listar_perfis_liberados(uf, municipio) if uf else []
+        perfis_liberados = listar_perfis_liberados(uf, municipio) if (uf and municipio) else []
     except Exception:
         perfis_liberados = []
 
@@ -179,7 +179,8 @@ def renderizar_parametros_projeto(
         "Perfil normativo liberado pelo AutoElétrica:",
         rotulos_perfis,
         index=indice_perfil,
-        key=_widget_key("rede_perfil_normativo")
+        key=_widget_key(f"rede_perfil_normativo_{uf or 'SEM_UF'}_{municipio or 'SEM_MUNICIPIO'}"),
+        disabled=not bool(municipio)
     )
     perfil_selecionado = mapa_perfis.get(perfil_rotulo)
     perfil_normativo_id = perfil_selecionado.get("id") if perfil_selecionado else None
