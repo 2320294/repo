@@ -601,10 +601,11 @@ def gerar_memorial_pdf(
     config_interruptores_usuario,
     local_qdc,
     tensao_projeto,
-    pe_direito
+    pe_direito,
+    resumo_rotas=None
 ):
     """
-    Gera Memorial Descritivo preliminar em PDF.
+    Gera Memorial Descritivo em PDF.
 
     O texto se apoia nos critérios gerais de instalações elétricas
     de baixa tensão e deixa explícito quando algo ainda depende
@@ -1063,10 +1064,11 @@ def gerar_memorial_pdf(
         config_interruptores_usuario=config_interruptores_usuario,
         local_qdc=local_qdc,
         tensao_projeto=tensao_projeto,
-        pe_direito=pe_direito
+        pe_direito=pe_direito,
+        resumo_rotas=resumo_rotas
     )
 
-    # REV.230 — mesma base do item 1 do Quantitativo de Materiais,
+    # REV.231 — mesma base do item 1 do Quantitativo de Materiais,
     # omitindo apenas a coluna Critério no Memorial Descritivo.
     dados_mat = [[
         "Categoria",
@@ -1123,17 +1125,6 @@ def gerar_memorial_pdf(
         Spacer(
             1,
             10
-        )
-    )
-
-    story.append(
-        Paragraph(
-            "<b>Observação:</b> Comprimentos de cabos/eletrodutos e "
-            "dimensionamentos de proteção apresentados nesta etapa são "
-            "preliminares quando o traçado executivo completo ainda não "
-            "estiver definido. O responsável técnico deverá validar o "
-            "dimensionamento final antes da execução.",
-            styles["Texto"]
         )
     )
 

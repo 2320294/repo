@@ -246,7 +246,8 @@ def renderizar_salvar_e_gerar_cad(
     local_qdc,
     config_interruptores_usuario,
     tensao_projeto,
-    pe_direito
+    pe_direito,
+    resumo_rotas=None
 ):
 
     st.subheader(
@@ -264,7 +265,8 @@ def renderizar_salvar_e_gerar_cad(
             config_interruptores_usuario=config_interruptores_usuario,
             local_qdc=local_qdc,
             tensao_projeto=tensao_projeto,
-            pe_direito=pe_direito
+            pe_direito=pe_direito,
+            resumo_rotas=resumo_rotas
         )
     except Exception as e:
         erro_memorial = str(e)

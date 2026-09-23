@@ -1157,6 +1157,23 @@ def renderizar_painel_principal():
             "correto, salve as configurações e gere os arquivos."
         )
 
+        # REV.231 — o Memorial usa exatamente o mesmo roteamento físico
+        # já empregado pelo Quantitativo de Materiais, mesmo sem exportar o DXF.
+        resumo_rotas_memorial = None
+        if dxf_bytes and local_qdc:
+            try:
+                resumo_rotas_memorial = _garantir_dimensionamento_fisico(
+                    dxf_bytes,
+                    tabela_editada,
+                    local_qdc,
+                    config_atual,
+                    parametros_projeto
+                )
+            except Exception:
+                # Mantém o fluxo de geração disponível; o Memorial exibirá
+                # os dados que estiverem efetivamente calculados.
+                resumo_rotas_memorial = st.session_state.get("dimensionamento_rotas")
+
         renderizar_salvar_e_gerar_cad(
             dxf_bytes=dxf_bytes,
             tabela_editada=tabela_editada,
@@ -1173,7 +1190,8 @@ def renderizar_painel_principal():
                 parametros_projeto[
                     "pe_direito"
                 ]
-            )
+            ),
+            resumo_rotas=resumo_rotas_memorial
         )
 
         return
