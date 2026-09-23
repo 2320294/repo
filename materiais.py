@@ -3152,6 +3152,14 @@ def renderizar_materiais(
         circuitos
     )
 
+    # REV.232 — snapshot exato da lista final exibida na Etapa 6.
+    # O Memorial reutiliza estes mesmos registros, na mesma ordem, sem
+    # reconstruir ou filtrar uma segunda lista independente.
+    if str(pagina or "materiais").strip().lower() == "materiais":
+        st.session_state["materiais_quantitativo_final"] = materiais_df.to_dict("records")
+        st.session_state["materiais_quantitativo_projeto"] = st.session_state.get("projeto_ativo")
+        st.session_state["materiais_quantitativo_versao"] = VERSAO_SISTEMA
+
     # ========================================================
     # FASE 13.6 REV.1 — APRESENTAÇÃO MODULAR
     # ========================================================

@@ -602,7 +602,8 @@ def gerar_memorial_pdf(
     local_qdc,
     tensao_projeto,
     pe_direito,
-    resumo_rotas=None
+    resumo_rotas=None,
+    materiais_snapshot=None
 ):
     """
     Gera Memorial Descritivo em PDF.
@@ -1059,17 +1060,25 @@ def gerar_memorial_pdf(
         )
     )
 
-    materiais, _ = calcular_quantitativo_materiais(
-        tabela_editada=tabela_editada,
-        config_interruptores_usuario=config_interruptores_usuario,
-        local_qdc=local_qdc,
-        tensao_projeto=tensao_projeto,
-        pe_direito=pe_direito,
-        resumo_rotas=resumo_rotas
-    )
+    # REV.232 — usa prioritariamente o snapshot EXATO da Lista de Materiais
+    # exibida na Etapa 6. Se o usuário ainda não abriu essa etapa na sessão,
+    # recalcula pela mesma rotina e com o mesmo resumo de rotas.
+    if isinstance(materiais_snapshot, list) and materiais_snapshot:
+        materiais = [dict(item) for item in materiais_snapshot]
+    else:
+        materiais, _ = calcular_quantitativo_materiais(
+            tabela_editada=tabela_editada,
+            config_interruptores_usuario=config_interruptores_usuario,
+            local_qdc=local_qdc,
+            tensao_projeto=tensao_projeto,
+            pe_direito=pe_direito,
+            resumo_rotas=resumo_rotas
+        )
+        materiais, _ = __import__("materiais")._dataframes_materiais_circuitos(materiais, [])
+        materiais = materiais.to_dict("records")
 
-    # REV.231 — mesma base do item 1 do Quantitativo de Materiais,
-    # omitindo apenas a coluna Critério no Memorial Descritivo.
+    # REV.232 — mesmas linhas e mesma ordem da Lista de Materiais;
+    # no Memorial é omitida somente a coluna Critério.
     dados_mat = [[
         "Categoria",
         "Material",
@@ -1087,24 +1096,34 @@ def gerar_memorial_pdf(
             pass
         return str(valor)
 
+    estilo_celula_mat = ParagraphStyle(
+        "CelulaMateriaisMemorial232",
+        parent=styles["Texto"],
+        fontName="Helvetica",
+        fontSize=7.2,
+        leading=8.6,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+
     for item in materiais:
         dados_mat.append([
-            str(item.get("Categoria", "")),
-            str(item.get("Material", "")),
-            str(item.get("Especificação", "")),
-            str(item.get("Unidade", "")),
-            _formatar_qtd_memorial(item.get("Quantidade", "")),
+            Paragraph(str(item.get("Categoria", "")), estilo_celula_mat),
+            Paragraph(str(item.get("Material", "")), estilo_celula_mat),
+            Paragraph(str(item.get("Especificação", "")), estilo_celula_mat),
+            Paragraph(str(item.get("Unidade", "")), estilo_celula_mat),
+            Paragraph(_formatar_qtd_memorial(item.get("Quantidade", "")), estilo_celula_mat),
         ])
 
     tabela_mat = Table(
         dados_mat,
         repeatRows=1,
         colWidths=[
-            2.6 * cm,
-            4.1 * cm,
-            6.0 * cm,
-            1.4 * cm,
-            1.8 * cm,
+            2.4 * cm,
+            3.7 * cm,
+            6.6 * cm,
+            1.3 * cm,
+            1.9 * cm,
         ]
     )
 
@@ -1115,7 +1134,11 @@ def gerar_memorial_pdf(
             ("GRID", (0, 0), (-1, -1), 0.35, colors.grey),
             ("FONTSIZE", (0, 0), (-1, -1), 7.5),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("ALIGN", (4, 0), (4, -1), "CENTER"),
+            ("ALIGN", (3, 0), (4, -1), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ])
     )
 

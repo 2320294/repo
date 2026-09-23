@@ -266,7 +266,13 @@ def renderizar_salvar_e_gerar_cad(
             local_qdc=local_qdc,
             tensao_projeto=tensao_projeto,
             pe_direito=pe_direito,
-            resumo_rotas=resumo_rotas
+            resumo_rotas=resumo_rotas,
+            materiais_snapshot=(
+                st.session_state.get("materiais_quantitativo_final")
+                if st.session_state.get("materiais_quantitativo_projeto") == st.session_state.get("projeto_ativo")
+                and st.session_state.get("materiais_quantitativo_versao") == VERSAO_SISTEMA
+                else None
+            )
         )
     except Exception as e:
         erro_memorial = str(e)
