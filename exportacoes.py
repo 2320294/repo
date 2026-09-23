@@ -62,11 +62,10 @@ def gerar_excel_projeto(
     pe_direito
 ):
     """
-    Gera uma planilha Excel em memória com:
-      - Quadro de cargas
-      - Quantitativo de materiais
-      - Parâmetros do projeto
-      - Configuração de interruptores
+    Gera a planilha Excel da Etapa 2 em memória.
+
+    A exportação apresenta o quadro de cargas e as informações técnicas
+    associadas, sem as abas de Materiais e Interruptores.
     """
     buffer = BytesIO()
 
@@ -468,21 +467,9 @@ def gerar_excel_projeto(
             index=False
         )
 
-        df_materiais.to_excel(
-            writer,
-            sheet_name="Materiais",
-            index=False
-        )
-
         df_parametros.to_excel(
             writer,
             sheet_name="Parâmetros",
-            index=False
-        )
-
-        df_interruptores.to_excel(
-            writer,
-            sheet_name="Interruptores",
             index=False
         )
 
@@ -515,9 +502,7 @@ def gerar_excel_projeto(
 
         for sheet_name, df in [
             ("Quadro de Cargas", df_cargas),
-            ("Materiais", df_materiais),
             ("Parâmetros", df_parametros),
-            ("Interruptores", df_interruptores),
             ("Circuitos", df_circuitos)
         ]:
             if sheet_name not in writer.sheets:
