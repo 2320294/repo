@@ -676,6 +676,16 @@ def renderizar_painel_principal():
             f"{dg} A" if dg is not None else "—"
         )
 
+        # REV.238 — alerta visual somente quando o perfil normativo realmente
+        # altera automaticamente a modalidade escolhida para o projeto.
+        if resultado_demanda.get("fornecimento_alterado_automaticamente"):
+            aviso_fornecimento = str(resultado_demanda.get("aviso_alteracao_fornecimento") or "").strip()
+            if aviso_fornecimento:
+                st.warning(
+                    "⚠️ **Modalidade de fornecimento alterada automaticamente**\n\n"
+                    + aviso_fornecimento
+                )
+
         status = resultado_demanda.get("status")
         if status == "aguardando_perfil":
             st.info(
@@ -805,6 +815,10 @@ def renderizar_painel_principal():
                 "tipo_fornecimento": resultado_demanda.get("tipo_fornecimento"),
                 "tensao_fornecimento": resultado_demanda.get("tensao_fornecimento"),
                 "fornecimento_auto_perfil": bool(resultado_demanda.get("fornecimento_auto_perfil")),
+                "fornecimento_alterado_automaticamente": bool(resultado_demanda.get("fornecimento_alterado_automaticamente")),
+                "tipo_fornecimento_anterior": resultado_demanda.get("tipo_fornecimento_anterior"),
+                "tensao_fornecimento_anterior": resultado_demanda.get("tensao_fornecimento_anterior"),
+                "aviso_alteracao_fornecimento": resultado_demanda.get("aviso_alteracao_fornecimento"),
                 "status": resultado_demanda.get("status"),
                 "perfil_normativo": resultado_demanda.get("perfil_normativo"),
                 "memoria_dimensionamento_entrada": resultado_demanda.get("memoria_dimensionamento_entrada"),

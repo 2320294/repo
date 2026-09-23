@@ -75,6 +75,10 @@ def _selecionar_fornecimento_perfil(potencia_instalada_w, rede, perfil):
     progressão usa as modalidades disponíveis do perfil.
     """
     rede = dict(rede or {})
+    # REV.238 — preserva a modalidade escolhida antes do enquadramento
+    # automático para informar claramente ao usuário quando houver mudança.
+    tipo_anterior = str(rede.get("tipo_fornecimento") or "").strip()
+    tensao_anterior = str(rede.get("tensao_fornecimento") or "").strip()
     regras = (perfil or {}).get("regras") or {}
     forn = regras.get("fornecimento") or {}
     modalidades = [str(x) for x in (forn.get("modalidades") or [])]
@@ -102,6 +106,18 @@ def _selecionar_fornecimento_perfil(potencia_instalada_w, rede, perfil):
     rede["tipo_fornecimento"] = tipo
     rede["tensao_fornecimento"] = tensao_calc
     rede["fornecimento_auto_perfil"] = True
+    mudou = bool(tipo_anterior and tipo_anterior != "A definir" and tipo_anterior != tipo)
+    rede["fornecimento_alterado_automaticamente"] = mudou
+    rede["tipo_fornecimento_anterior"] = tipo_anterior if mudou else ""
+    rede["tensao_fornecimento_anterior"] = tensao_anterior if mudou else ""
+    if mudou:
+        rede["aviso_alteracao_fornecimento"] = (
+            f"Devido à potência instalada de {kw:.2f} kW ultrapassar o limite "
+            f"aplicável à modalidade {tipo_anterior}, o sistema alterou automaticamente "
+            f"o fornecimento para {tipo} {tensao_calc}, conforme o perfil normativo selecionado."
+        )
+    else:
+        rede["aviso_alteracao_fornecimento"] = ""
     return rede
 
 
@@ -352,6 +368,10 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         "tipo_fornecimento": tipo_fornec or "A definir",
         "tensao_fornecimento": tensao_fornec or "A definir",
         "fornecimento_auto_perfil": bool(rede_efetiva.get("fornecimento_auto_perfil")),
+        "fornecimento_alterado_automaticamente": bool(rede_efetiva.get("fornecimento_alterado_automaticamente")),
+        "tipo_fornecimento_anterior": rede_efetiva.get("tipo_fornecimento_anterior", ""),
+        "tensao_fornecimento_anterior": rede_efetiva.get("tensao_fornecimento_anterior", ""),
+        "aviso_alteracao_fornecimento": rede_efetiva.get("aviso_alteracao_fornecimento", ""),
         "perfil_normativo_id": perfil.get("id"),
         "perfil_normativo": f"{perfil.get('concessionaria','')} — {perfil.get('documento','')} {perfil.get('revisao','')}".strip(),
         "detalhes_demanda": detalhes,

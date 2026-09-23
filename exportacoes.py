@@ -752,6 +752,16 @@ def gerar_memorial_pdf(
             f"Potência demandada: <b>{float(demanda_memorial.get('potencia_demanda_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
             f"Corrente de demanda: <b>{float(demanda_memorial.get('corrente_demanda_a',0) or 0):.1f} A</b> &nbsp; | &nbsp; "
             f"DG: <b>{demanda_memorial.get('disjuntor_geral_a','—')} A</b>.", styles["Texto"]))
+    # REV.238 — registra no Memorial a mesma alteração automática comunicada
+    # ao usuário na etapa QDC, preservando a rastreabilidade do dimensionamento.
+    if demanda_memorial.get("fornecimento_alterado_automaticamente"):
+        aviso_memorial = str(demanda_memorial.get("aviso_alteracao_fornecimento") or "").strip()
+        if aviso_memorial:
+            story.append(Paragraph(
+                f"<b>Modalidade de fornecimento alterada automaticamente:</b> {aviso_memorial}",
+                styles["Texto"]
+            ))
+
     if alim_memorial.get("secao_final_mm2") is not None:
         sq = alim_memorial.get("secao_por_queda_mm2")
         sqtxt = f"{float(sq):g} mm²" if sq is not None else "não concluída"
