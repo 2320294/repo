@@ -123,6 +123,23 @@ def renderizar_upload_dxf(
                     config_interruptores=config_salva
                 )
 
+                # Fase 13.6 Rev.242 — no primeiro DXF de um projeto novo,
+                # o cache da Etapa 2 já havia sido inicializado vazio antes
+                # do upload. Sincroniza imediatamente com os ambientes/cargas
+                # recém-processados para que o rerun abra a tabela preenchida.
+                projeto_cache = str(
+                    st.session_state.get(
+                        "projeto_ativo",
+                        "SEM_PROJETO"
+                    )
+                )
+                chave_tabela_cache = (
+                    f"fase8_16_{projeto_cache}_tabela_editada"
+                )
+                st.session_state[chave_tabela_cache] = list(
+                    novos_dados or []
+                )
+
                 # Troca a chave do uploader ANTES do rerun.
                 st.session_state[
                     "upload_inicial_nonce"

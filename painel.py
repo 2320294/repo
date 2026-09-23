@@ -107,6 +107,15 @@ def _inicializar_cache_etapas(
             dados_ambientes
             or []
         )
+    elif (
+        not st.session_state.get(chave_tabela)
+        and dados_ambientes
+    ):
+        # Fase 13.6 Rev.242 — recuperação defensiva para projeto novo:
+        # se a sessão criou a tabela vazia antes do primeiro upload, mas o
+        # Supabase já possui os ambientes/cargas processados, hidrata o cache
+        # local em vez de manter a Etapa 2 vazia.
+        st.session_state[chave_tabela] = list(dados_ambientes)
 
     if chave_config not in st.session_state:
         st.session_state[
