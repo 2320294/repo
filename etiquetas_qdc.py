@@ -1,3 +1,4 @@
+from pdf_rodape import texto_rodape_pdf
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, landscape
@@ -199,6 +200,8 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
         c.drawString(margem,H-26*mm,'RECOMENDADO IMPRIMIR EM PAPEL ADESIVO')
         c.setFont('Helvetica',7.2)
         c.drawRightString(W-margem,H-22*mm,f'Módulo: {MODULO_MM:.1f} mm  |  Etiqueta: {ALTURA_ETIQUETA_MM:.0f} mm')
+        c.setFont('Helvetica',6.5)
+        c.drawCentredString(W/2,5*mm,texto_rodape_pdf())
 
     cabecalho_pagina()
 
@@ -365,6 +368,4 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             c.drawString(margem+col1+pad_x,yy,linha); yy-=line_h
         y-=rh
 
-    c.setFillColor(colors.black); c.setFont('Helvetica',6.5)
-    c.drawRightString(W-margem,8*mm,f'Versão: {versao}')
     c.save(); return buf.getvalue()

@@ -1,3 +1,4 @@
+from pdf_rodape import texto_rodape_pdf
 """Plotagem PDF do projeto elétrico a partir do DXF final.
 
 Fase 13.6 Rev.165 — PDF A3 com arquitetura/layer 0 em cinza claro, elétrica preta e recorte estrito da legenda.
@@ -335,8 +336,7 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
                      fontsize=7.2,ha="left",va="center")
             fig.text(0.50,0.043,f"Prancha {numero}/{total_paginas}",
                      fontsize=7.2,ha="center",va="center")
-            if versao:
-                fig.text(0.965,0.043,f"Versão: {versao}",fontsize=7.2,ha="right",va="center")
+            fig.text(0.50,0.018,texto_rodape_pdf(),fontsize=6.8,ha="center",va="center")
 
         # Evita que configurações externas do Streamlit/Matplotlib recortem a folha
         # ao redor do conteúdo. A mídia permanece A3 paisagem integral.

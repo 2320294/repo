@@ -1,3 +1,4 @@
+from pdf_rodape import desenhar_rodape_reportlab
 from io import BytesIO
 
 import pandas as pd
@@ -620,7 +621,7 @@ def gerar_memorial_pdf(
         rightMargin=1.6 * cm,
         leftMargin=1.6 * cm,
         topMargin=1.5 * cm,
-        bottomMargin=1.5 * cm
+        bottomMargin=1.8 * cm
     )
 
     styles = getSampleStyleSheet()
@@ -667,13 +668,6 @@ def gerar_memorial_pdf(
     story.append(
         Paragraph(
             f"<b>Projeto:</b> {nome_projeto}",
-            styles["Texto"]
-        )
-    )
-
-    story.append(
-        Paragraph(
-            f"<b>Versão:</b> {VERSAO_SISTEMA}",
             styles["Texto"]
         )
     )
@@ -1152,7 +1146,9 @@ def gerar_memorial_pdf(
     )
 
     doc.build(
-        story
+        story,
+        onFirstPage=desenhar_rodape_reportlab,
+        onLaterPages=desenhar_rodape_reportlab
     )
 
     buffer.seek(0)

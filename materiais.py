@@ -1,3 +1,4 @@
+from pdf_rodape import desenhar_rodape_reportlab
 import math
 from io import BytesIO
 
@@ -2183,7 +2184,7 @@ def _gerar_pdf_materiais_circuitos(
     doc = SimpleDocTemplate(
         buffer, pagesize=landscape(A4),
         rightMargin=0.8*cm, leftMargin=0.8*cm,
-        topMargin=0.8*cm, bottomMargin=0.8*cm
+        topMargin=0.8*cm, bottomMargin=1.1*cm
     )
     styles = getSampleStyleSheet()
     titulo = ParagraphStyle(
@@ -2940,7 +2941,7 @@ def _gerar_pdf_materiais_circuitos(
         )
     ]
 
-    doc.build(story)
+    doc.build(story, onFirstPage=desenhar_rodape_reportlab, onLaterPages=desenhar_rodape_reportlab)
     buffer.seek(0)
     return buffer.getvalue()
 
