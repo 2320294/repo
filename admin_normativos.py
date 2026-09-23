@@ -3,6 +3,7 @@ import streamlit as st
 from perfis_normativos import listar_perfis, salvar_perfil, atualizar_status
 from concessionarias import UFS
 
+from municipios_brasil import municipios_da_uf
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
@@ -593,7 +594,13 @@ def renderizar_admin_normativos(email):
             c1, c2, c3 = st.columns(3)
             concessionaria = c1.text_input("Concessionária")
             uf = c2.selectbox("UF", UFS)
-            municipio = c3.text_input("Município (vazio = toda a UF)")
+            municipios_uf = municipios_da_uf(uf)
+            municipio = c3.selectbox(
+                "Município (opcional)",
+                ["Toda a UF"] + municipios_uf,
+                help="Selecione uma cidade para restringir o perfil. Use 'Toda a UF' somente quando a norma realmente se aplicar a todo o estado."
+            )
+            municipio = "" if municipio == "Toda a UF" else municipio
             documento = st.text_input("Documento / norma oficial")
             c4, c5 = st.columns(2)
             revisao = c4.text_input("Revisão")

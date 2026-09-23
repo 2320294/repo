@@ -3,6 +3,7 @@ import streamlit as st
 
 from tensoes_circuitos import tensao_base_fornecimento
 from perfis_normativos import listar_perfis_liberados
+from municipios_brasil import municipios_da_uf
 
 from concessionarias import (
     UFS,
@@ -124,15 +125,32 @@ def renderizar_parametros_projeto(
         )
 
     with col_municipio:
-        municipio = st.text_input(
+        # Rev.244 — município em cascata pela UF. A lista vem da API oficial
+        # de localidades do IBGE; não há mais digitação livre na operação normal.
+        municipio_salvo = str(rede.get("municipio", "") or "").strip()
+        municipios = municipios_da_uf(uf) if uf else []
+        opcoes_municipio = ["Selecione..."] + municipios
+
+        # Preserva projetos antigos mesmo se a API estiver temporariamente
+        # indisponível ou se o nome histórico não vier na consulta atual.
+        if municipio_salvo and municipio_salvo not in opcoes_municipio:
+            opcoes_municipio.append(municipio_salvo)
+
+        indice_municipio = (
+            opcoes_municipio.index(municipio_salvo)
+            if municipio_salvo in opcoes_municipio
+            else 0
+        )
+        municipio_escolhido = st.selectbox(
             "Município:",
-            value=rede.get(
-                "municipio",
-                ""
-            ),
-            placeholder="Ex.: Belo Horizonte",
+            opcoes_municipio,
+            index=indice_municipio,
             key=_widget_key("rede_municipio")
-        ).strip()
+        )
+        municipio = "" if municipio_escolhido == "Selecione..." else municipio_escolhido
+
+        if uf and not municipios:
+            st.caption("Não foi possível atualizar a lista de municípios do IBGE agora; o valor salvo foi preservado.")
 
     # Rev.187 — usuário comum somente seleciona perfis liberados pelo administrador.
     try:
