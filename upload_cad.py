@@ -530,10 +530,6 @@ def renderizar_salvar_e_gerar_cad(
             on_click="ignore",
         )
 
-        st.caption(
-            f"Arquivo DXF pronto para download: {tamanho / 1024:.1f} KB"
-        )
-
         # Após o DXF estar pronto, Plotagem e Identificação do QDC
         # são liberadas juntas e exibidas lado a lado.
         col_plotagem, col_qdc = st.columns(2, gap="large")
@@ -566,11 +562,10 @@ def renderizar_salvar_e_gerar_cad(
                 )
 
         with col_qdc:
-            st.markdown("### 🏷️ Identificação do QDC")
+            st.markdown("### 🏷️ Etiquetas de Identificação do QDC")
             st.caption(
-                "Gera etiquetas em folha A4, em tamanho real: 17,5 mm por módulo × 12 mm de altura, "
-                "com cores por tipo de circuito, nome do equipamento nas TUEs, ajuste automático dos textos, "
-                "tabela para a porta do QDC e régua de 100 mm."
+                "Gera etiquetas em folha A4 para facilitar identificação dos disjuntores "
+                "e tabela para a porta do QDC."
             )
             try:
                 resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
@@ -603,10 +598,6 @@ def renderizar_salvar_e_gerar_cad(
                         key="download_etiquetas_qdc",
                         on_click="ignore",
                     )
-                    st.caption(
-                        "Folha A4. Impressão: Tamanho real (100%). Não utilizar ‘Ajustar à página’. "
-                        "Recomendado imprimir em papel adesivo. Confira a régua de 100 mm após imprimir."
-                    )
                 else:
                     st.info(
                         "⌛ Consolidando os circuitos definitivos para preparar a identificação do QDC."
@@ -617,6 +608,6 @@ def renderizar_salvar_e_gerar_cad(
                 )
     else:
         st.info(
-            "⌛ Aguardando a geração do projeto DXF para liberar a Identificação do QDC "
-            "e a Plotagem do Projeto (PDF)."
+            "⌛ Aguardando a geração do projeto DXF para liberar a Plotagem do Projeto (PDF) "
+            "e Etiquetas de Identificação do QDC"
         )

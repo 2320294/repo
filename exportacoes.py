@@ -1066,95 +1066,58 @@ def gerar_memorial_pdf(
         pe_direito=pe_direito
     )
 
-    dados_mat = [
-        [
-            "Material",
-            "Especificação",
-            "Un.",
-            "Qtd."
-        ]
-    ]
+    # REV.230 — mesma base do item 1 do Quantitativo de Materiais,
+    # omitindo apenas a coluna Critério no Memorial Descritivo.
+    dados_mat = [[
+        "Categoria",
+        "Material",
+        "Especificação",
+        "Unidade",
+        "Quantidade",
+    ]]
+
+    def _formatar_qtd_memorial(valor):
+        try:
+            numero = float(valor)
+            if numero.is_integer():
+                return str(int(numero))
+        except (TypeError, ValueError):
+            pass
+        return str(valor)
 
     for item in materiais:
         dados_mat.append([
-            str(
-                item.get(
-                    "Material",
-                    ""
-                )
-            ),
-            str(
-                item.get(
-                    "Especificação",
-                    ""
-                )
-            ),
-            str(
-                item.get(
-                    "Unidade",
-                    ""
-                )
-            ),
-            str(
-                item.get(
-                    "Quantidade",
-                    ""
-                )
-            )
+            str(item.get("Categoria", "")),
+            str(item.get("Material", "")),
+            str(item.get("Especificação", "")),
+            str(item.get("Unidade", "")),
+            _formatar_qtd_memorial(item.get("Quantidade", "")),
         ])
 
     tabela_mat = Table(
         dados_mat,
         repeatRows=1,
         colWidths=[
-            5.0 * cm,
-            7.0 * cm,
-            1.2 * cm,
-            1.5 * cm
+            2.6 * cm,
+            4.1 * cm,
+            6.0 * cm,
+            1.4 * cm,
+            1.8 * cm,
         ]
     )
 
     tabela_mat.setStyle(
         TableStyle([
-            (
-                "BACKGROUND",
-                (0, 0),
-                (-1, 0),
-                colors.HexColor(
-                    "#F0F2F6"
-                )
-            ),
-            (
-                "FONTNAME",
-                (0, 0),
-                (-1, 0),
-                "Helvetica-Bold"
-            ),
-            (
-                "GRID",
-                (0, 0),
-                (-1, -1),
-                0.35,
-                colors.grey
-            ),
-            (
-                "FONTSIZE",
-                (0, 0),
-                (-1, -1),
-                7.5
-            ),
-            (
-                "VALIGN",
-                (0, 0),
-                (-1, -1),
-                "TOP"
-            )
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F0F2F6")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (4, 0), (4, -1), "CENTER"),
         ])
     )
 
-    story.append(
-        tabela_mat
-    )
+    story.append(tabela_mat)
 
     story.append(
         Spacer(
