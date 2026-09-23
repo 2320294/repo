@@ -167,7 +167,7 @@ def _editor_regras(prefixo, regras=None):
     fm1, fm2, fm3 = st.columns(3)
     max_mono = fm1.text_input("Máximo monofásico (kW)", value=_max_faixa("Monofásico"), key=f"{prefixo}_max_mono")
     max_bi = fm2.text_input("Máximo bifásico (kW)", value=_max_faixa("Bifásico"), key=f"{prefixo}_max_bi")
-    max_tri = fm3.text_input("Máximo trifásico (kW)", value=_max_faixa("Trifásico") or _texto_numero(f.get("limite_potencia_instalada_kw")), key=f"{prefixo}_max_tri")
+    max_tri = fm3.text_input("Máximo trifásico (kW)", value=_max_faixa("Trifásico"), key=f"{prefixo}_max_tri")
 
     st.markdown("#### Regras de demanda")
     st.caption("Cadastre somente fatores/faixas confirmados na norma oficial. Campos vazios permanecem sem regra e não são inventados pelo sistema.")
@@ -450,6 +450,22 @@ def _validar_perfil_ged13(regras):
     teste("Fornecimento", "Limite de potência instalada", 75.0, f.get("limite_potencia_instalada_kw"))
     mods = set(f.get("modalidades") or [])
     teste("Fornecimento", "Modalidades M/B/T", "Monofásico, Bifásico, Trifásico", ", ".join(sorted(mods)), mods == {"Monofásico", "Bifásico", "Trifásico"})
+    faixas_fornecimento = f.get("faixas_modalidade_kw") or []
+    faixas_por_modalidade = {
+        faixa.get("modalidade"): faixa for faixa in faixas_fornecimento
+        if isinstance(faixa, dict)
+    } if isinstance(faixas_fornecimento, list) else {}
+    anterior = 0.0
+    for modalidade in ("Monofásico", "Bifásico", "Trifásico"):
+        faixa = faixas_por_modalidade.get(modalidade) or {}
+        minimo = _numero(faixa.get("min_kw"))
+        maximo = _numero(faixa.get("max_kw"))
+        valido = (minimo is not None and maximo is not None
+                  and abs(minimo - anterior) < 1e-8 and maximo > minimo)
+        teste("Fornecimento", f"Faixa {modalidade} (kW)",
+              "limites cadastrados e crescentes", faixa or "ausente", valido)
+        if valido:
+            anterior = maximo
 
     d = regras.get("demanda") or {}
 
@@ -649,6 +665,7 @@ def renderizar_admin_normativos(email):
                         st.error(f"Não foi possível sincronizar o perfil GED-13 no banco: {e}")
                 else:
                     regras_validacao = regras_sincronizadas
+                regras_atual = p.get("regras") or regras_atual
 
             # Auditoria sempre visível antes da longa edição do perfil.
             validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao) if (regras_validacao.get("tipo_instalacao") == "Residencial individual") else (False, [])

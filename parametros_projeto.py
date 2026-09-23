@@ -434,9 +434,10 @@ def renderizar_parametros_projeto(
         _forn = (perfil_selecionado.get("regras") or {}).get("fornecimento") or {}
         if not (_forn.get("faixas_modalidade_kw") or []):
             st.warning(
-                "⚠️ O perfil selecionado ainda não possui as faixas de modalidade de fornecimento "
-                "cadastradas. O AutoElétrica preservará a modalidade informada e não inventará "
-                "limites de outra concessionária. O administrador deve completar esse perfil."
+                "⚠️ Este perfil permite selecionar modalidades de fornecimento, mas o registro "
+                "ATIVO não contém as faixas em kW necessárias para escolhê-las automaticamente. "
+                "A modalidade informada foi preservada. Confira as faixas no cadastro "
+                "administrativo deste perfil."
             )
 
     return {
