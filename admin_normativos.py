@@ -4,6 +4,7 @@ from perfis_normativos import listar_perfis, salvar_perfil, atualizar_status
 from concessionarias import UFS
 
 from municipios_brasil import municipios_da_uf
+from municipios_elektro import MUNICIPIOS_ELEKTRO
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
@@ -621,6 +622,35 @@ def renderizar_admin_normativos(email):
         st.code(str(e))
         return
 
+    st.markdown("#### Neoenergia Elektro — preparação do cadastro")
+    st.caption("Cria dois rascunhos da DIS-NOR-030 Rev. 07, vinculados aos 223 municípios de SP e 5 de MS. Regras de fornecimento e demanda não são importadas da CPFL; a ativação fica bloqueada até haver auditoria própria.")
+    if st.button("Criar rascunhos Neoenergia Elektro (SP e MS)"):
+        try:
+            existentes = {
+                str(p.get("uf") or "").upper() for p in perfis
+                if str(p.get("concessionaria") or "").strip().casefold() == "neoenergia elektro"
+                and str(p.get("documento") or "").strip().upper() == "DIS-NOR-030"
+                and str(p.get("revisao") or "").strip() == "07"
+            }
+            criados = []
+            for estado, cidades in MUNICIPIOS_ELEKTRO.items():
+                if estado in existentes:
+                    continue
+                salvar_perfil({
+                    "concessionaria": "Neoenergia Elektro", "uf": estado,
+                    "municipio": "", "municipios_atendidos": cidades,
+                    "documento": "DIS-NOR-030", "revisao": "07",
+                    "vigencia": "17/04/2026",
+                    "fonte_oficial": "https://www.neoenergia.com/documents/d/sp/dis-nor-030-rev07?download=true",
+                    "regras": {"schema": "autoeletrica.perfil_normativo.v2", "tipo_instalacao": "Residencial individual", "fornecimento": {}, "demanda": {}, "fonte_conferida": False},
+                    "status": "RASCUNHO", "criado_por": email,
+                })
+                criados.append(estado)
+            st.success("Rascunhos criados: " + (", ".join(criados) if criados else "nenhum; já existiam"))
+            st.rerun()
+        except Exception as e:
+            st.error(f"Não foi possível criar os rascunhos: {e}")
+
     with st.expander("➕ Novo perfil normativo", expanded=not bool(perfis)):
         with st.form("novo_perfil_normativo"):
             c1, c2, c3 = st.columns(3)
@@ -633,6 +663,11 @@ def renderizar_admin_normativos(email):
                 help="Selecione uma cidade para restringir o perfil. Use 'Toda a UF' somente quando a norma realmente se aplicar a todo o estado."
             )
             municipio = "" if municipio == "Toda a UF" else municipio
+            municipios_atendidos = st.multiselect(
+                "Municípios atendidos pela distribuidora (lista explícita)",
+                municipios_uf,
+                help="Selecione somente municípios confirmados na área de concessão. Uma lista vazia mantém o perfil indisponível no projeto.",
+            )
             documento = st.text_input("Documento / norma oficial")
             c4, c5 = st.columns(2)
             revisao = c4.text_input("Revisão")
@@ -641,7 +676,7 @@ def renderizar_admin_normativos(email):
             regras_json = _editor_regras("novo")
             if st.form_submit_button("Salvar como RASCUNHO", use_container_width=True):
                 try:
-                    salvar_perfil({"concessionaria": concessionaria.strip(), "uf": uf, "municipio": municipio.strip(), "documento": documento.strip(), "revisao": revisao.strip(), "vigencia": vigencia.strip(), "fonte_oficial": fonte.strip(), "regras": regras_json, "status": "RASCUNHO", "criado_por": email})
+                    salvar_perfil({"concessionaria": concessionaria.strip(), "uf": uf, "municipio": municipio.strip(), "municipios_atendidos": municipios_atendidos, "documento": documento.strip(), "revisao": revisao.strip(), "vigencia": vigencia.strip(), "fonte_oficial": fonte.strip(), "regras": regras_json, "status": "RASCUNHO", "criado_por": email})
                     st.success("Perfil salvo como RASCUNHO.")
                     st.rerun()
                 except Exception as e:
@@ -653,9 +688,32 @@ def renderizar_admin_normativos(email):
 
     st.subheader("Perfis cadastrados")
     for p in perfis:
-        titulo = f"{p.get('concessionaria','')} — {p.get('municipio') or 'Toda a UF'}/{p.get('uf','')} — {p.get('documento') or 'Sem documento'} {p.get('revisao') or ''}"
+        alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
+        titulo = f"{p.get('concessionaria','')} — {alcance}/{p.get('uf','')} — {p.get('documento') or 'Sem documento'} {p.get('revisao') or ''}"
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
+            if p.get("municipios_atendidos") is not None:
+                st.caption(f"Municípios vinculados: {len(p.get('municipios_atendidos') or [])}")
+            with st.form(f"municipios_perfil_{p.get('id')}"):
+                opcoes_cidades = municipios_da_uf(p.get("uf") or "")
+                atuais = p.get("municipios_atendidos")
+                if atuais is None:
+                    atuais = [p.get("municipio")] if p.get("municipio") else []
+                opcoes_cidades = sorted(set(opcoes_cidades) | set(atuais))
+                cidades_editadas = st.multiselect(
+                    "Municípios atendidos (vínculo explícito)",
+                    opcoes_cidades,
+                    default=atuais,
+                    key=f"municipios_atendidos_{p.get('id')}",
+                    help="Conferir a lista oficial antes de salvar. Uma lista vazia bloqueia este perfil em todos os municípios.",
+                )
+                if st.form_submit_button("Salvar municípios vinculados"):
+                    try:
+                        salvar_perfil({"municipios_atendidos": cidades_editadas}, perfil_id=p.get("id"))
+                        st.success("Municípios vinculados atualizados.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Não foi possível salvar os municípios: {e}")
             regras_atual = p.get("regras") or {}
             # Rev.201 — migração/sincronização do perfil GED-13 já existente, incluindo fornecimento.
             # O editor das revisões 192–196 exibia as tabelas canônicas, mas perfis
@@ -684,7 +742,7 @@ def renderizar_admin_normativos(email):
                 regras_atual = p.get("regras") or regras_atual
 
             # Auditoria sempre visível antes da longa edição do perfil.
-            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao) if (regras_validacao.get("tipo_instalacao") == "Residencial individual") else (False, [])
+            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao) if eh_ged13_cpfl else (False, [])
 
             with st.form(f"editar_perfil_{p.get('id')}"):
                 regras_editadas = _editor_regras(f"edit_{p.get('id')}", regras_atual)
@@ -696,7 +754,9 @@ def renderizar_admin_normativos(email):
                     except Exception as e:
                         st.error(f"Não foi possível atualizar: {e}")
 
-            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if (regras_validacao.get("tipo_instalacao") == "Residencial individual") else False
+            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if eh_ged13_cpfl else False
+            if not eh_ged13_cpfl:
+                st.info("Auditoria normativa específica ainda não cadastrada para este documento. O perfil permanece em RASCUNHO.")
 
             # A confirmação humana é deliberadamente a última etapa.
             fonte_conferida = bool(regras_validacao.get("fonte_conferida"))

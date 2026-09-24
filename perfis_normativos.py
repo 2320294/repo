@@ -3,6 +3,21 @@ from config import obter_supabase, obter_supabase_admin
 STATUS_PUBLICADOS = {"ATIVO"}
 
 
+def perfil_atende_municipio(perfil, uf, municipio):
+    """Respeita a lista explícita; mantém os perfis antigos de cidade/UF."""
+    uf_perfil = str(perfil.get("uf") or "").strip().upper()
+    if uf_perfil and uf_perfil != str(uf or "").strip().upper():
+        return False
+    cidade = str(municipio or "").strip().casefold()
+    cidades = perfil.get("municipios_atendidos")
+    if cidades is not None:
+        return bool(cidade and cidade in {
+            str(nome).strip().casefold() for nome in cidades if str(nome).strip()
+        })
+    cidade_antiga = str(perfil.get("municipio") or "").strip().casefold()
+    return not cidade_antiga or cidade_antiga == cidade
+
+
 def _db():
     return obter_supabase()
 
@@ -37,11 +52,7 @@ def listar_perfis_liberados(uf="", municipio=""):
 
     mun = str(municipio or "").strip().casefold()
     if mun:
-        itens = [
-            p for p in itens
-            if not str(p.get("municipio") or "").strip()
-            or str(p.get("municipio") or "").strip().casefold() == mun
-        ]
+        itens = [p for p in itens if perfil_atende_municipio(p, uf_norm, mun)]
         itens.sort(
             key=lambda p: (
                 0 if str(p.get("municipio") or "").strip().casefold() == mun else 1,

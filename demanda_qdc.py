@@ -429,8 +429,8 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
             uf_rede = str(rede.get("uf") or "").strip().upper()
             uf_perfil = str(perfil.get("uf") or "").strip().upper()
             mun_rede = str(rede.get("municipio") or "").strip().casefold()
-            mun_perfil = str(perfil.get("municipio") or "").strip().casefold()
-            perfil_aplicavel = (not uf_perfil or uf_rede == uf_perfil) and (not mun_perfil or mun_rede == mun_perfil)
+            from perfis_normativos import perfil_atende_municipio
+            perfil_aplicavel = perfil_atende_municipio(perfil, uf_rede, mun_rede)
         if not perfil_aplicavel:
             return {
                 **pot,
