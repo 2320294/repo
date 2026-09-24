@@ -727,12 +727,6 @@ def renderizar_painel_principal():
                 "⚠️ A corrente calculada ultrapassa a faixa preliminar "
                 "de disjuntores cadastrada. Reavalie o fornecimento."
             )
-        else:
-            st.caption(
-                "Pré-dimensionamento da Fase 13.6 Rev.124. O DG depende da validação "
-                "do alimentador e do perfil da concessionária."
-            )
-
         detalhes_demanda = resultado_demanda.get("detalhes_demanda") or []
         # REV.218 — memória técnica mantida no motor, ocultada da interface.
         if False and detalhes_demanda:
