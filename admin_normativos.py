@@ -6,7 +6,8 @@ from concessionarias import UFS
 from municipios_brasil import municipios_da_uf
 from municipios_elektro import MUNICIPIOS_ELEKTRO
 from neoenergia_elektro import (
-    eh_perfil_elektro, preparar_regras, MUNICIPIO_TENSAO_ESPECIAL,
+    eh_perfil_elektro, preparar_regras, preparar_tabelas_demanda,
+    auditar_tabelas_demanda, MUNICIPIO_TENSAO_ESPECIAL,
 )
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
@@ -626,7 +627,7 @@ def renderizar_admin_normativos(email):
         return
 
     st.markdown("#### Neoenergia Elektro — preparação do cadastro")
-    st.caption("Cria dois rascunhos da DIS-NOR-030 Rev. 07, vinculados aos 223 municípios de SP e 5 de MS. Regras de fornecimento e demanda não são importadas da CPFL; a ativação fica bloqueada até haver auditoria própria.")
+    st.caption("Cria dois rascunhos da DIS-NOR-030 Rev. 07: lista inicial de 223 municípios de SP e 5 de MS. Após preparar as faixas, São João da Boa Vista sai da lista (222 em SP). A ativação depende de cálculo e auditoria próprios.")
     if st.button("Criar rascunhos Neoenergia Elektro (SP e MS)"):
         try:
             existentes = {
@@ -698,7 +699,11 @@ def renderizar_admin_normativos(email):
             if eh_perfil_elektro(p):
                 st.info("Fornecimento 220/127 V preparado por faixas sem conflito. "
                         "10,1–11 kW e 13,1–18 kW exigem conferência técnica. "
-                        "Demanda ainda sem auditoria normativa: mantenha RASCUNHO.")
+                        "A demanda trifásica ainda não possui motor integrado: mantenha RASCUNHO.")
+                if auditar_tabelas_demanda(p.get("regras")):
+                    st.success("Tabelas 6–16 da demanda registradas e conferidas no rascunho (sem cálculo automático).")
+                else:
+                    st.caption("Tabelas 6–16 da demanda ainda não preparadas neste rascunho.")
                 if str(p.get("status") or "").upper() == "RASCUNHO":
                     if st.button("Preparar faixas Elektro e excluir São João da Boa Vista", key=f"preparar_elektro_{p.get('id')}"):
                         try:
@@ -713,6 +718,16 @@ def renderizar_admin_normativos(email):
                             st.rerun()
                         except Exception as e:
                             st.error(f"Não foi possível preparar o perfil: {e}")
+                    if st.button("Registrar tabelas de demanda DIS-NOR-030", key=f"demanda_elektro_{p.get('id')}"):
+                        try:
+                            regras = preparar_tabelas_demanda(p.get("regras"))
+                            if not auditar_tabelas_demanda(regras):
+                                raise ValueError("Falha na auditoria das tabelas de demanda.")
+                            salvar_perfil({"regras": regras}, perfil_id=p.get("id"))
+                            st.success("Tabelas registradas. Perfil permanece RASCUNHO até integração do cálculo.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Não foi possível registrar a demanda: {e}")
             if p.get("municipios_atendidos") is not None:
                 st.caption(f"Municípios vinculados: {len(p.get('municipios_atendidos') or [])}")
             with st.form(f"municipios_perfil_{p.get('id')}"):
@@ -773,6 +788,10 @@ def renderizar_admin_normativos(email):
                             # O editor comum pressupõe faixas contíguas e
                             # preencheria indevidamente os dois intervalos bloqueados.
                             regras_editadas["fornecimento"] = (regras_atual.get("fornecimento") or {})
+                            regras_editadas["demanda"] = (regras_atual.get("demanda") or {})
+                            if "demanda_elektro_auditoria" in regras_atual:
+                                regras_editadas["demanda_elektro_auditoria"] = regras_atual["demanda_elektro_auditoria"]
+                            regras_editadas["fonte_conferida"] = False
                         salvar_perfil({"regras": regras_editadas}, perfil_id=p.get("id"))
                         st.success("Regras salvas.")
                         st.rerun()

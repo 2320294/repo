@@ -61,3 +61,77 @@ def preparar_regras(regras):
     r.setdefault("demanda", {})
     r["fonte_conferida"] = False
     return r
+
+
+def preparar_tabelas_demanda(regras):
+    """Transcreve tabelas do Anexo II para auditoria, sem habilitar o cálculo.
+
+    O item 6.27 aplica a demanda a instalações trifásicas; o motor de cálculo
+    atual ainda não interpreta estas tabelas nem todas as cargas da Elektro.
+    """
+    r = deepcopy(regras or {})
+    def faixas(limites, fatores):
+        return [{"ate": limite, "fator": fator} for limite, fator in zip(limites, fatores)]
+
+    r["demanda_elektro_auditoria"] = {
+        "documento": DOCUMENTO, "revisao": REVISAO,
+        "fonte": "Anexo II, Tabelas 6 a 16; itens 6.27 e 6.28",
+        "unidade_resultado": "kVA", "aplicacao": "instalacao_trifasica",
+        "tabela_6_iluminacao_tug": {"unidade_entrada": "kW", "faixas": faixas(
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, None],
+            [.86, .75, .66, .59, .52, .45, .40, .35, .31, .27, .24])},
+        "tabela_7_chuveiros": {"faixas": faixas(
+            list(range(1, 26)) + [None],
+            [1, 1, .84, .76, .70, .65, .60, .57, .54, .52, .49, .48,
+             .46, .45, .44, .43, .42, .41, .40, .40, .39, .39, .39, .38, .38, .38])},
+        "tabela_8_boiler": {"faixas": faixas([1, 2, 3, None], [1, .72, .62, .62])},
+        "tabela_9_eletrodomesticos": {"faixas": [
+            {"min": 1, "max": 1, "fator": 1}, {"min": 2, "max": 4, "fator": .70},
+            {"min": 5, "max": 6, "fator": .60}, {"min": 7, "max": None, "fator": .50}]},
+        "tabela_10_fogoes": {"faixas": faixas(
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 15, None],
+            [1, .60, .48, .40, .37, .35, .33, .32, .31, .30, .28, .26])},
+        "tabela_11_ar_condicionado": {"potencias": [
+            {"btu_h": b, "va": va, "w": w} for b, va, w in [
+                (7500, 1100, 900), (9000, 1550, 1300), (10000, 1650, 1400),
+                (12000, 1900, 1600), (15000, 2100, 1900), (18000, 2860, 2600),
+                (21000, 3080, 2800), (30000, 4000, 3800), (41000, 5500, 5000),
+                (60000, 9000, 7500)]], "preferir_placa": True},
+        "tabela_12_ar_condicionado": {"ate_quantidade": [10, 20, 30, 40, 50, 75, 100, None],
+            "residencial": [1, .86, .80, .78, .75, .70, .65, .60],
+            "comercial": [1, .90, .82, .80, .77, .75, .75, .75],
+            "unidade_central": 1},
+        "tabela_13_recarga": {"faixas": faixas([10, 20, 30, 40, 50, None],
+            [1, .90, .82, .80, .77, .75])},
+        "tabela_14_motores": {"maior": 1, "demais": .50,
+            "partida_simultanea_agrupar": True},
+        "tabela_15_especiais": {"maior": 1, "demais": .60},
+        "tabela_16_bombas_hidromassagem": {"faixas": faixas(
+            [1, 2, 3, None], [1, .56, .47, .39])},
+        "pendencias": [
+            "Integrar motor de demanda exclusivo, FP e classificacao de cargas por item 6.27.",
+            "Conferir divergencia entre texto do item 6.27.5 e titulo da Tabela 10.",
+            "Validar alimentador trifasico e casos de tensao local com a distribuidora."],
+    }
+    r["fonte_conferida"] = False
+    return r
+
+
+def auditar_tabelas_demanda(regras):
+    """Checa independentemente marcadores que divergem do perfil CPFL."""
+    d = (regras or {}).get("demanda_elektro_auditoria") or {}
+    if d.get("documento") != DOCUMENTO or d.get("revisao") != REVISAO:
+        return False
+    try:
+        return (d["tabela_6_iluminacao_tug"]["faixas"][-1]["fator"] == .24
+                and d["tabela_7_chuveiros"]["faixas"][6]["fator"] == .60
+                and d["tabela_9_eletrodomesticos"]["faixas"][1]["fator"] == .70
+                and d["tabela_10_fogoes"]["faixas"][-1]["fator"] == .26
+                and d["tabela_11_ar_condicionado"]["potencias"][0]["va"] == 1100
+                and d["tabela_12_ar_condicionado"]["residencial"][1] == .86
+                and d["tabela_13_recarga"]["faixas"][-1]["fator"] == .75
+                and d["tabela_14_motores"]["demais"] == .50
+                and d["tabela_15_especiais"]["demais"] == .60
+                and d["tabela_16_bombas_hidromassagem"]["faixas"][-1]["fator"] == .39)
+    except (KeyError, IndexError, TypeError):
+        return False
