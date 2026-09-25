@@ -700,7 +700,8 @@ def renderizar_admin_normativos(email):
             if eh_perfil_elektro(p):
                 st.info("Fornecimento 220/127 V preparado por faixas sem conflito. "
                         "10,1–11 kW e 13,1–18 kW exigem conferência técnica. "
-                        "A demanda trifásica ainda não possui motor integrado: mantenha RASCUNHO.")
+                        "A prévia de demanda trifásica já está disponível para auditoria, "
+                        "mas ainda não está integrada ao cálculo dos projetos: mantenha RASCUNHO.")
                 if auditar_tabelas_demanda(p.get("regras")):
                     st.success("Tabelas 6–16 registradas no rascunho. Prévia isolada disponível para auditoria.")
                     if st.button("Verificar prévia de demanda Elektro", key=f"testar_demanda_elektro_{p.get('id')}"):
