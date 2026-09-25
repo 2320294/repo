@@ -9,6 +9,7 @@ from neoenergia_elektro import (
     eh_perfil_elektro, preparar_regras, preparar_tabelas_demanda,
     auditar_tabelas_demanda, MUNICIPIO_TENSAO_ESPECIAL,
 )
+from demanda_elektro import calcular_previa
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
@@ -701,7 +702,26 @@ def renderizar_admin_normativos(email):
                         "10,1–11 kW e 13,1–18 kW exigem conferência técnica. "
                         "A demanda trifásica ainda não possui motor integrado: mantenha RASCUNHO.")
                 if auditar_tabelas_demanda(p.get("regras")):
-                    st.success("Tabelas 6–16 da demanda registradas e conferidas no rascunho (sem cálculo automático).")
+                    st.success("Tabelas 6–16 registradas no rascunho. Prévia isolada disponível para auditoria.")
+                    if st.button("Verificar prévia de demanda Elektro", key=f"testar_demanda_elektro_{p.get('id')}"):
+                        linhas_auditoria = [
+                            {"Qtd Ilum.": 1, "Pot. Unit. Ilum (W)": 2000,
+                             "Qtd TUE": 2, "Pot. Unit. TUE (W)": 5500, "Equipamento TUE": "Chuveiro elétrico"},
+                            {"Qtd TUE": 2, "Pot. Unit. TUE (W)": 1000,
+                             "Equipamento TUE": "Máquina de lavar roupas"},
+                        ]
+                        previo = calcular_previa(linhas_auditoria, p.get("regras"))
+                        esperado = 1.5 + 11 + 1.4 / .92
+                        forno = calcular_previa([{"Qtd TUE": 1, "Pot. Unit. TUE (W)": 1000,
+                                                 "Equipamento TUE": "Forno elétrico"}], p.get("regras"))
+                        if (previo["status"] == "calculado" and
+                                abs(previo["demanda_kva"] - esperado) < 1e-8 and
+                                forno["status"] == "pendente" and forno["demanda_kva"] is None):
+                            st.success(f"Prévia residencial: {previo['demanda_kva']:.4f} kVA. "
+                                       "Forno ambíguo corretamente encaminhado à conferência técnica.")
+                            st.dataframe(previo["detalhes"], use_container_width=True, hide_index=True)
+                        else:
+                            st.error("Falha na verificação isolada da demanda Elektro.")
                 else:
                     st.caption("Tabelas 6–16 da demanda ainda não preparadas neste rascunho.")
                 if str(p.get("status") or "").upper() == "RASCUNHO":

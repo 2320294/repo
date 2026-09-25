@@ -1,0 +1,147 @@
+"""Prévia isolada da demanda residencial trifásica DIS-NOR-030 Rev. 07.
+
+Não dimensiona DG ou alimentador, não publica perfil e não altera GED-13.
+Quando a planilha não informa os dados exigidos pelo item 6.27, não fecha
+demanda nem supõe fator de potência ou categoria de equipamento.
+"""
+
+import math
+import unicodedata
+
+from neoenergia_elektro import auditar_tabelas_demanda
+
+
+def _numero(valor):
+    try:
+        n = float(valor)
+        return n if math.isfinite(n) else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _nome(texto):
+    s = unicodedata.normalize("NFKD", str(texto or "").casefold())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def _fator(faixas, quantidade):
+    for faixa in faixas:
+        if "min" in faixa and quantidade < faixa["min"]:
+            continue
+        maximo = faixa.get("max", faixa.get("ate"))
+        if maximo is None or quantidade <= maximo:
+            return faixa["fator"]
+    return None
+
+
+def calcular_previa(tabela, regras):
+    """Retorna kVA e memória apenas para dados completos e sem ambiguidades."""
+    if not auditar_tabelas_demanda(regras):
+        return {"status": "pendente", "demanda_kva": None,
+                "pendencias": ["Tabelas da Elektro ausentes ou inconsistentes."], "detalhes": []}
+    t = regras["demanda_elektro_auditoria"]
+    pendencias, detalhes = [], []
+    grupos = {k: [] for k in ("chuveiros", "boiler", "eletrodomesticos", "fogoes",
+                                "ar_condicionado", "bombas", "motores", "especiais", "recarga")}
+    iluminacao_tug_w = 0.0
+    for i, linha in enumerate(tabela or [], 1):
+        qi = int(_numero(linha.get("Qtd Ilum.", 0)))
+        qt = int(_numero(linha.get("Qtd TUG", linha.get("TUGs (Qtd)", 0))))
+        qe = int(_numero(linha.get("Qtd TUE", 0)))
+        wi = _numero(linha.get("Pot. Unit. Ilum (W)", linha.get("Pot. Unit. Ilum (VA)", 0)))
+        wt = _numero(linha.get("Pot. Unit. TUG (W)", linha.get("Pot. Unit. TUG (VA)", 0)))
+        w = _numero(linha.get("Pot. Unit. TUE (W)", linha.get("Pot. Unit. TUE (VA)", 0)))
+        if min(qi, qt, qe, wi, wt, w) < 0:
+            pendencias.append(f"Linha {i}: carga ou quantidade negativa.")
+            continue
+        iluminacao_tug_w += qi * wi + qt * wt
+        if not qe:
+            continue
+        nome = str(linha.get("Equipamento TUE") or linha.get("Equipamento") or "")
+        n = _nome(nome)
+        if not n or n == "-" or w <= 0:
+            pendencias.append(f"Linha {i}: TUE sem nome ou potência de placa.")
+            continue
+        categoria = None
+        if any(x in n for x in ("chuve", "torneira eletrica", "aquecedor de passagem", "ferro eletrico")):
+            categoria = "chuveiros"
+        elif any(x in n for x in ("boiler", "aquecedor central", "acumulacao")):
+            categoria = "boiler"
+        elif any(x in n for x in ("lava e seca", "lavaseca", "lava-e-seca", "micro", "secadora", "maquina de lavar", "lavadora", "lava-louca", "lava louca")):
+            categoria = "eletrodomesticos"
+        elif "forno" in n:
+            pendencias.append(f"Linha {i}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+        elif any(x in n for x in ("fogao", "cooktop")):
+            categoria = "fogoes"
+        elif any(x in n for x in ("ar-condicionado", "ar condicionado", "split")):
+            categoria = "ar_condicionado"
+        elif any(x in n for x in ("hidromassagem", "banheira eletrica", "bomba")):
+            categoria = "bombas"
+        elif any(x in n for x in ("motor", "maquina de solda a motor")):
+            categoria = "motores"
+        elif any(x in n for x in ("recarga", "carregador veicular", "wallbox")):
+            categoria = "recarga"
+        elif any(x in n for x in ("raios x", "solda", "galvaniz")):
+            categoria = "especiais"
+        else:
+            pendencias.append(f"Linha {i}: classificar TUE '{nome}' para aplicar o item 6.27.")
+        if categoria:
+            fp = _numero(linha.get("Fator de Potência TUE", linha.get("FP TUE")))
+            if fp < 0 or fp > 1:
+                pendencias.append(f"Linha {i}: fator de potência fora do intervalo (0, 1].")
+                fp = 0.0
+            if categoria in ("eletrodomesticos", "recarga", "motores", "especiais", "ar_condicionado") and not 0 < fp <= 1:
+                # Para ar-condicionado, VA de placa explícito dispensa FP.
+                va_placa = _numero(linha.get("Pot. Unit. TUE (VA)"))
+                if categoria != "ar_condicionado" or va_placa <= 0:
+                    if categoria != "eletrodomesticos":
+                        pendencias.append(f"Linha {i}: informar fator de potência/VA de placa de '{nome}'.")
+            for _ in range(qe):
+                grupos[categoria].append({"w": w, "fp": fp, "va": _numero(linha.get("Pot. Unit. TUE (VA)")), "nome": nome})
+
+    def acrescentar(categoria, itens, fator, fp=1.0, tabela_id=""):
+        watts = sum(x["w"] for x in itens)
+        kva = watts * fator / fp / 1000.0
+        detalhes.append({"categoria": categoria, "tabela_id": tabela_id,
+                         "quantidade": len(itens), "carga_w": watts, "fator": fator,
+                         "fator_potencia": fp, "demanda_kva": kva})
+
+    if iluminacao_tug_w:
+        fd = _fator(t["tabela_6_iluminacao_tug"]["faixas"], iluminacao_tug_w / 1000)
+        acrescentar("Iluminação + TUG", [{"w": iluminacao_tug_w}], fd, tabela_id="DISNOR030_T6")
+    simples = [("chuveiros", 7), ("boiler", 8), ("eletrodomesticos", 9),
+               ("fogoes", 10), ("bombas", 16)]
+    for chave, numero in simples:
+        itens = grupos[chave]
+        if itens:
+            fd = _fator(t[f"tabela_{numero}_" + {
+                7: "chuveiros", 8: "boiler", 9: "eletrodomesticos", 10: "fogoes",
+                16: "bombas_hidromassagem"}[numero]]["faixas"], len(itens))
+            if chave == "eletrodomesticos" and any(x["fp"] > 0 for x in itens):
+                # FP de fabricante informado por aparelho prevalece sobre 0,92.
+                kva = sum(x["w"] * fd / (x["fp"] or .92) for x in itens) / 1000
+                detalhes.append({"categoria": chave, "tabela_id": "DISNOR030_T9",
+                                 "quantidade": len(itens), "carga_w": sum(x["w"] for x in itens),
+                                 "fator": fd, "demanda_kva": kva})
+            else:
+                acrescentar(chave, itens, fd, .92 if chave == "eletrodomesticos" else 1.0,
+                            f"DISNOR030_T{numero}")
+    if grupos["ar_condicionado"]:
+        itens = grupos["ar_condicionado"]
+        tab = t["tabela_12_ar_condicionado"]
+        n = len(itens)
+        fd = next((tab["residencial"][i] for i, limite in enumerate(tab["ate_quantidade"])
+                   if limite is None or n <= limite), None)
+        kva = sum((x["va"] if x["va"] > 0 else x["w"] / x["fp"] if x["fp"] > 0 else 0)
+                  for x in itens) * fd / 1000
+        detalhes.append({"categoria": "ar_condicionado", "tabela_id": "DISNOR030_T11_T12",
+                         "quantidade": n, "fator": fd, "demanda_kva": kva})
+    # Equipamentos restantes dependem de dados que a planilha atual não guarda:
+    # potência de placa e FP por aparelho, simultaneidade dos motores, tipo de
+    # equipamento especial e recarga individual/coletiva.
+    for chave in ("motores", "especiais", "recarga"):
+        if grupos[chave]:
+            pendencias.append(f"{chave}: informar parâmetros específicos de placa e simultaneidade para o item 6.27.")
+    return {"status": "pendente" if pendencias else "calculado",
+            "demanda_kva": None if pendencias else sum(x["demanda_kva"] for x in detalhes),
+            "pendencias": pendencias, "detalhes": detalhes}
