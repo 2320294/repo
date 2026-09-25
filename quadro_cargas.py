@@ -1,5 +1,13 @@
 import pandas as pd
 import streamlit as st
+from neoenergia_elektro import preparar_tabelas_demanda
+
+
+POTENCIAS_AR_ELEKTRO = {
+    item["btu_h"]: item
+    for item in preparar_tabelas_demanda({})["demanda_elektro_auditoria"]
+    ["tabela_11_ar_condicionado"]["potencias"]
+}
 
 
 CATEGORIAS_TUE_AUDITORIA = {
@@ -143,6 +151,16 @@ def renderizar_edicao_cargas(dados_ambientes):
                         help="Sem VA ou FP de placa, a prévia usa o VA orientativo da "
                              "Tabela 11 da DIS-NOR-030 para a capacidade selecionada.",
                     )
+                    referencia = POTENCIAS_AR_ELEKTRO.get(capacidade_btu_tue)
+                    if (categoria_tue == "ar_condicionado" and referencia
+                            and not va_placa_tue and not fator_potencia_tue
+                            and pot_tue_unit != referencia["w"]):
+                        st.warning(
+                            f"Tabela 11: {capacidade_btu_tue:,} BTU/h corresponde a "
+                            f"{referencia['w']} W e {referencia['va']} VA orientativos. "
+                            f"O projeto informa {pot_tue_unit} W. Confira o valor em W "
+                            "ou informe VA/FP de placa antes de usar a prévia Elektro."
+                        )
 
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum

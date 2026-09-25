@@ -113,10 +113,14 @@ def calcular_previa(tabela, regras):
                         pendencias.append(f"Linha {i}: informar fator de potência/VA de placa de '{nome}'.")
             btu = int(_numero(linha.get("Capacidade TUE (BTU/h)")))
             if categoria == "ar_condicionado" and fp <= 0 and _numero(linha.get("Pot. Placa TUE (VA)")) <= 0:
-                conhecidos = {item["btu_h"] for item in t["tabela_11_ar_condicionado"]["potencias"]}
+                conhecidos = {item["btu_h"]: item for item in t["tabela_11_ar_condicionado"]["potencias"]}
                 if btu not in conhecidos:
                     pendencias.append(f"Linha {i}: informar VA/FP de placa ou capacidade (BTU/h) "
                                       f"da Tabela 11 para '{nome}'.")
+                elif w != conhecidos[btu]["w"]:
+                    pendencias.append(f"Linha {i}: {btu} BTU/h corresponde a "
+                                      f"{conhecidos[btu]['w']} W na Tabela 11, mas o projeto informa "
+                                      f"{w:g} W. Conferir W ou informar VA/FP de placa.")
             for _ in range(qe):
                 grupos[categoria].append({"w": w, "fp": fp, "va": _numero(linha.get("Pot. Placa TUE (VA)")),
                                           "btu": btu, "nome": nome})
