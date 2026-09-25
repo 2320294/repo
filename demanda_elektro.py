@@ -41,7 +41,7 @@ def calcular_previa(tabela, regras):
                 "pendencias": ["Tabelas da Elektro ausentes ou inconsistentes."], "detalhes": []}
     t = regras["demanda_elektro_auditoria"]
     pendencias, detalhes = [], []
-    grupos = {k: [] for k in ("chuveiros", "boiler", "eletrodomesticos", "fogoes",
+    grupos = {k: [] for k in ("chuveiros", "boiler", "eletrodomesticos", "forno_eletrico", "fogoes",
                                 "ar_condicionado", "bombas", "motores", "especiais", "recarga")}
     iluminacao_tug_w = 0.0
     for i, linha in enumerate(tabela or [], 1):
@@ -69,14 +69,20 @@ def calcular_previa(tabela, regras):
             continue
         categoria = None
         categoria_declarada = str(linha.get("Categoria Normativa TUE") or "")
-        categorias_validas = set(grupos) | {"forno_eletrico", "outros"}
+        categorias_validas = set(grupos) | {"outros"}
         if categoria_declarada and categoria_declarada not in categorias_validas:
             pendencias.append(f"{local}: categoria normativa da TUE desconhecida.")
             continue
         if "forno" in n and "micro" not in n:
-            pendencias.append(f"{local}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+            if categoria_declarada and categoria_declarada != "forno_eletrico":
+                pendencias.append(f"{local}: categoria declarada incompatível com forno elétrico.")
+            else:
+                categoria = "forno_eletrico"
+        elif "fogao" in n or "cooktop" in n or categoria_declarada == "fogoes":
+            pendencias.append(f"{local}: fogão elétrico exige esclarecer a divergência entre "
+                              "o item 6.27.5 e a Tabela 10 específica da DIS-NOR-030.")
         elif categoria_declarada == "forno_eletrico":
-            pendencias.append(f"{local}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+            pendencias.append(f"{local}: a categoria forno elétrico exige identificar o aparelho como forno.")
         elif categoria_declarada == "outros":
             pendencias.append(f"{local}: conferir norma aplicável à TUE '{nome}'.")
         elif categoria_declarada:
@@ -87,8 +93,6 @@ def calcular_previa(tabela, regras):
             categoria = "boiler"
         elif any(x in n for x in ("lava e seca", "lavaseca", "lava-e-seca", "micro", "secadora", "maquina de lavar", "lavadora", "lava-louca", "lava louca")):
             categoria = "eletrodomesticos"
-        elif any(x in n for x in ("fogao", "cooktop")):
-            categoria = "fogoes"
         elif any(x in n for x in ("ar-condicionado", "ar condicionado", "split")):
             categoria = "ar_condicionado"
         elif any(x in n for x in ("hidromassagem", "banheira eletrica", "bomba")):
@@ -137,13 +141,15 @@ def calcular_previa(tabela, regras):
         fd = _fator(t["tabela_6_iluminacao_tug"]["faixas"], iluminacao_tug_w / 1000)
         acrescentar("Iluminação + TUG", [{"w": iluminacao_tug_w}], fd, tabela_id="DISNOR030_T6")
     simples = [("chuveiros", 7), ("boiler", 8), ("eletrodomesticos", 9),
-               ("fogoes", 10), ("bombas", 16)]
+               ("forno_eletrico", 9), ("bombas", 16)]
     for chave, numero in simples:
         itens = grupos[chave]
         if itens:
-            fd = _fator(t[f"tabela_{numero}_" + {
-                7: "chuveiros", 8: "boiler", 9: "eletrodomesticos", 10: "fogoes",
-                16: "bombas_hidromassagem"}[numero]]["faixas"], len(itens))
+            tabela_chave = {"chuveiros": "tabela_7_chuveiros", "boiler": "tabela_8_boiler",
+                            "eletrodomesticos": "tabela_9_eletrodomesticos",
+                            "forno_eletrico": "tabela_9_eletrodomesticos",
+                            "bombas": "tabela_16_bombas_hidromassagem"}[chave]
+            fd = _fator(t[tabela_chave]["faixas"], len(itens))
             if chave == "eletrodomesticos" and any(x["fp"] > 0 for x in itens):
                 # FP de fabricante informado por aparelho prevalece sobre 0,92.
                 kva = sum(x["w"] * fd / (x["fp"] or .92) for x in itens) / 1000
@@ -152,7 +158,7 @@ def calcular_previa(tabela, regras):
                                  "fator": fd, "demanda_kva": kva})
             else:
                 acrescentar(chave, itens, fd, .92 if chave == "eletrodomesticos" else 1.0,
-                            f"DISNOR030_T{numero}")
+                            "DISNOR030_T9_FORNO" if chave == "forno_eletrico" else f"DISNOR030_T{numero}")
     if grupos["ar_condicionado"]:
         itens = grupos["ar_condicionado"]
         tab = t["tabela_12_ar_condicionado"]

@@ -110,7 +110,7 @@ def preparar_tabelas_demanda(regras):
             [1, 2, 3, None], [1, .56, .47, .39])},
         "pendencias": [
             "Integrar motor de demanda exclusivo, FP e classificacao de cargas por item 6.27.",
-            "Conferir divergencia entre texto do item 6.27.5 e titulo da Tabela 10.",
+            "Conferir divergencia do item 6.27.5 para fogoes eletricos frente a Tabela 10.",
             "Validar alimentador trifasico e casos de tensao local com a distribuidora."],
     }
     r["fonte_conferida"] = False

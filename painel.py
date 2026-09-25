@@ -594,8 +594,9 @@ def renderizar_painel_principal():
                         if not municipio_atual or not uf_atual:
                             st.info("Informe UF e município nos parâmetros do projeto para verificar a área de atendimento.")
                         elif not perfil_atende_municipio(perfil, uf_atual, municipio_atual):
-                            st.warning("O município do projeto não está vinculado ao rascunho selecionado. "
-                                       "Esta prévia serve apenas para conferir as cargas informadas.")
+                            st.warning(f"Projeto: {municipio_atual}/{uf_atual}. Este município não está "
+                                       f"vinculado ao rascunho Elektro/{perfil.get('uf')}. "
+                                       "A prévia serve apenas para conferir as cargas informadas.")
                         if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
                             previa = calcular_previa(tabela_editada, perfil.get("regras"))
                             if previa["status"] == "calculado":

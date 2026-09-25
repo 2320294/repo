@@ -715,11 +715,15 @@ def renderizar_admin_normativos(email):
                         esperado = 1.5 + 11 + 1.4 / .92
                         forno = calcular_previa([{"Qtd TUE": 1, "Pot. Unit. TUE (W)": 1000,
                                                  "Equipamento TUE": "Forno elétrico"}], p.get("regras"))
+                        fogao = calcular_previa([{"Qtd TUE": 1, "Pot. Unit. TUE (W)": 1000,
+                                                 "Equipamento TUE": "Fogão elétrico"}], p.get("regras"))
                         if (previo["status"] == "calculado" and
                                 abs(previo["demanda_kva"] - esperado) < 1e-8 and
-                                forno["status"] == "pendente" and forno["demanda_kva"] is None):
+                                forno["status"] == "calculado" and forno["demanda_kva"] == 1.0 and
+                                fogao["status"] == "pendente" and fogao["demanda_kva"] is None):
                             st.success(f"Prévia residencial: {previo['demanda_kva']:.4f} kVA. "
-                                       "Forno ambíguo corretamente encaminhado à conferência técnica.")
+                                       "Forno elétrico pela Tabela 9; fogão elétrico encaminhado "
+                                       "à conferência técnica.")
                             st.dataframe(previo["detalhes"], use_container_width=True, hide_index=True)
                         else:
                             st.error("Falha na verificação isolada da demanda Elektro.")
