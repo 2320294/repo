@@ -85,6 +85,10 @@ def renderizar_edicao_cargas(dados_ambientes):
                 value=str(row.get("Equipamento TUE", "-")),
                 key=f"eq_{ambiente}"
             )
+            if qtd_tue > 0 and "/" in eq_tue:
+                st.caption("Para a auditoria Elektro, substitua a descrição com '/' "
+                           "pelo equipamento realmente previsto. Ex.: escolha micro-ondas "
+                           "ou forno elétrico; não use ambos no mesmo campo.")
 
             categoria_tue = str(row.get("Categoria Normativa TUE") or "")
             if categoria_tue not in CATEGORIAS_TUE_AUDITORIA:

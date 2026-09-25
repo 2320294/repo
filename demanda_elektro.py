@@ -62,6 +62,10 @@ def calcular_previa(tabela, regras):
         if not n or n == "-" or w <= 0:
             pendencias.append(f"Linha {i}: TUE sem nome ou potência de placa.")
             continue
+        if "/" in n:
+            pendencias.append(f"Linha {i}: '{nome}' indica alternativas ou equipamentos diferentes; "
+                              "identificar um único equipamento por linha antes de calcular a demanda Elektro.")
+            continue
         categoria = None
         categoria_declarada = str(linha.get("Categoria Normativa TUE") or "")
         categorias_validas = set(grupos) | {"forno_eletrico", "outros"}
