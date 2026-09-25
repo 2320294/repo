@@ -187,6 +187,24 @@ def _nome_tue(row):
 
 def _calcular_automatico(tabela_editada, rede, perfil):
     pot = potencia_instalada(tabela_editada)
+    from neoenergia_elektro import motivo_conferencia
+    motivo = motivo_conferencia(pot["total_w"], perfil)
+    if motivo:
+        return {
+            **pot,
+            "status": "conferencia_tecnica",
+            "metodo": rede.get("metodo_demanda", ""),
+            "potencia_demanda_w": None,
+            "corrente_demanda_a": None,
+            "disjuntor_geral_a": None,
+            "tipo_fornecimento": "A definir",
+            "tensao_fornecimento": "A definir",
+            "fornecimento_auto_perfil": False,
+            "perfil_normativo_id": perfil.get("id"),
+            "pendencias": [motivo],
+            "detalhes_demanda": [],
+            "observacao": motivo,
+        }
     regras = (perfil or {}).get("regras") or {}
     demanda_cfg = regras.get("demanda") or {}
     detalhes = []

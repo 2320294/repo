@@ -5,6 +5,9 @@ from concessionarias import UFS
 
 from municipios_brasil import municipios_da_uf
 from municipios_elektro import MUNICIPIOS_ELEKTRO
+from neoenergia_elektro import (
+    eh_perfil_elektro, preparar_regras, MUNICIPIO_TENSAO_ESPECIAL,
+)
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
@@ -692,6 +695,24 @@ def renderizar_admin_normativos(email):
         titulo = f"{p.get('concessionaria','')} — {alcance}/{p.get('uf','')} — {p.get('documento') or 'Sem documento'} {p.get('revisao') or ''}"
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
+            if eh_perfil_elektro(p):
+                st.info("Fornecimento 220/127 V preparado por faixas sem conflito. "
+                        "10,1–11 kW e 13,1–18 kW exigem conferência técnica. "
+                        "Demanda ainda sem auditoria normativa: mantenha RASCUNHO.")
+                if str(p.get("status") or "").upper() == "RASCUNHO":
+                    if st.button("Preparar faixas Elektro e excluir São João da Boa Vista", key=f"preparar_elektro_{p.get('id')}"):
+                        try:
+                            cidades = list(p.get("municipios_atendidos") or [])
+                            if not cidades:
+                                raise ValueError("A lista de municípios atendidos está vazia.")
+                            if str(p.get("uf") or "").upper() == "SP":
+                                cidades = [x for x in cidades if str(x).strip().casefold() != MUNICIPIO_TENSAO_ESPECIAL.casefold()]
+                            regras_preparadas = preparar_regras(p.get("regras"))
+                            salvar_perfil({"municipios_atendidos": cidades, "regras": regras_preparadas}, perfil_id=p.get("id"))
+                            st.success(f"Faixas preparadas; {len(cidades)} municípios vinculados. O perfil permanece RASCUNHO.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Não foi possível preparar o perfil: {e}")
             if p.get("municipios_atendidos") is not None:
                 st.caption(f"Municípios vinculados: {len(p.get('municipios_atendidos') or [])}")
             with st.form(f"municipios_perfil_{p.get('id')}"):
@@ -748,6 +769,10 @@ def renderizar_admin_normativos(email):
                 regras_editadas = _editor_regras(f"edit_{p.get('id')}", regras_atual)
                 if st.form_submit_button("Salvar regras deste perfil", use_container_width=True):
                     try:
+                        if eh_perfil_elektro(p):
+                            # O editor comum pressupõe faixas contíguas e
+                            # preencheria indevidamente os dois intervalos bloqueados.
+                            regras_editadas["fornecimento"] = (regras_atual.get("fornecimento") or {})
                         salvar_perfil({"regras": regras_editadas}, perfil_id=p.get("id"))
                         st.success("Regras salvas.")
                         st.rerun()

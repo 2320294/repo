@@ -702,6 +702,9 @@ def renderizar_painel_principal():
                 "um perfil normativo ATIVO liberado pelo administrador. "
                 "Nenhum fator de demanda é inventado pelo sistema."
             )
+        elif status == "conferencia_tecnica":
+            st.warning("⚠️ " + str(resultado_demanda.get("observacao") or
+                                   "Enquadramento sujeito a conferência técnica da distribuidora."))
         elif status == "cargas_sem_regra":
             parcial = resultado_demanda.get("potencia_demanda_parcial_w")
             st.warning(
