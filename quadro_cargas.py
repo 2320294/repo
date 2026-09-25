@@ -2,6 +2,22 @@ import pandas as pd
 import streamlit as st
 
 
+CATEGORIAS_TUE_AUDITORIA = {
+    "": "A classificar (conferência técnica)",
+    "chuveiros": "Chuveiro, torneira ou aquecedor de passagem",
+    "boiler": "Boiler / aquecedor de acumulação",
+    "eletrodomesticos": "Lavadora, secadora ou micro-ondas",
+    "fogoes": "Fogão / cooktop elétrico",
+    "forno_eletrico": "Forno elétrico (conferência normativa)",
+    "ar_condicionado": "Ar-condicionado",
+    "bombas": "Bomba / hidromassagem",
+    "motores": "Motor / solda a motor",
+    "especiais": "Equipamento especial",
+    "recarga": "Estação de recarga veicular",
+    "outros": "Outro equipamento",
+}
+
+
 def valor_w(row, campo_w, campo_va, padrao=0):
     """
     Compatibilidade com projetos antigos.
@@ -70,6 +86,44 @@ def renderizar_edicao_cargas(dados_ambientes):
                 key=f"eq_{ambiente}"
             )
 
+            categoria_tue = str(row.get("Categoria Normativa TUE") or "")
+            if categoria_tue not in CATEGORIAS_TUE_AUDITORIA:
+                categoria_tue = ""
+            fator_potencia_tue = row.get("Fator de Potência TUE")
+            try:
+                fator_potencia_tue = float(fator_potencia_tue or 0)
+            except (ValueError, TypeError):
+                fator_potencia_tue = 0.0
+            try:
+                va_placa_tue = int(row.get("Pot. Placa TUE (VA)") or 0)
+            except (ValueError, TypeError):
+                va_placa_tue = 0
+            if qtd_tue > 0:
+                with st.expander("Dados de placa da TUE (auditoria Elektro)"):
+                    st.caption("Quando houver mais de uma TUE neste ambiente, os dados informados "
+                               "devem ser iguais para todas. Caso sejam equipamentos diferentes, "
+                               "o cálculo fica sujeito a conferência técnica.")
+                    chave = f"{st.session_state.get('projeto_ativo', 'SEM_PROJETO')}_{ambiente}"
+                    categoria_tue = st.selectbox(
+                        "Categoria normativa da TUE",
+                        list(CATEGORIAS_TUE_AUDITORIA),
+                        index=list(CATEGORIAS_TUE_AUDITORIA).index(categoria_tue),
+                        format_func=lambda x: CATEGORIAS_TUE_AUDITORIA[x],
+                        key=f"categoria_tue_{chave}",
+                    )
+                    c_fp, c_va = st.columns(2)
+                    fator_potencia_tue = c_fp.number_input(
+                        "FP de placa (0 = não informado)", min_value=0.0, max_value=1.0,
+                        value=fator_potencia_tue if 0 <= fator_potencia_tue <= 1 else 0.0,
+                        step=0.01, format="%.2f", key=f"fp_tue_{chave}",
+                        help="Informe o fator de potência do fabricante quando disponível.",
+                    )
+                    va_placa_tue = c_va.number_input(
+                        "Potência aparente de placa (VA; 0 = não informado)",
+                        min_value=0, value=max(0, va_placa_tue),
+                        key=f"va_placa_tue_{chave}",
+                    )
+
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
             row_modificado["Pot. Unit. Ilum (W)"] = p_ilum
@@ -82,6 +136,11 @@ def renderizar_edicao_cargas(dados_ambientes):
             row_modificado["Pot. Unit. TUE (W)"] = pot_tue_unit
             row_modificado["Carga TUE (W)"] = qtd_tue * pot_tue_unit
             row_modificado["Equipamento TUE"] = eq_tue
+            if qtd_tue > 0 or any(k in row for k in (
+                    "Categoria Normativa TUE", "Fator de Potência TUE", "Pot. Placa TUE (VA)")):
+                row_modificado["Categoria Normativa TUE"] = categoria_tue
+                row_modificado["Fator de Potência TUE"] = fator_potencia_tue
+                row_modificado["Pot. Placa TUE (VA)"] = va_placa_tue
             resultados[indice] = row_modificado
 
     # Índices 0,2,4... à esquerda; 1,3,5... à direita.
@@ -293,4 +352,3 @@ def renderizar_tabela_consolidada(tabela_editada):
         use_container_width=True,
         hide_index=True
     )
-

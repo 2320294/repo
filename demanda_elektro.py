@@ -63,14 +63,25 @@ def calcular_previa(tabela, regras):
             pendencias.append(f"Linha {i}: TUE sem nome ou potência de placa.")
             continue
         categoria = None
-        if any(x in n for x in ("chuve", "torneira eletrica", "aquecedor de passagem", "ferro eletrico")):
+        categoria_declarada = str(linha.get("Categoria Normativa TUE") or "")
+        categorias_validas = set(grupos) | {"forno_eletrico", "outros"}
+        if categoria_declarada and categoria_declarada not in categorias_validas:
+            pendencias.append(f"Linha {i}: categoria normativa da TUE desconhecida.")
+            continue
+        if "forno" in n and "micro" not in n:
+            pendencias.append(f"Linha {i}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+        elif categoria_declarada == "forno_eletrico":
+            pendencias.append(f"Linha {i}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+        elif categoria_declarada == "outros":
+            pendencias.append(f"Linha {i}: conferir norma aplicável à TUE '{nome}'.")
+        elif categoria_declarada:
+            categoria = categoria_declarada
+        elif any(x in n for x in ("chuve", "torneira eletrica", "aquecedor de passagem", "ferro eletrico")):
             categoria = "chuveiros"
         elif any(x in n for x in ("boiler", "aquecedor central", "acumulacao")):
             categoria = "boiler"
         elif any(x in n for x in ("lava e seca", "lavaseca", "lava-e-seca", "micro", "secadora", "maquina de lavar", "lavadora", "lava-louca", "lava louca")):
             categoria = "eletrodomesticos"
-        elif "forno" in n:
-            pendencias.append(f"Linha {i}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
         elif any(x in n for x in ("fogao", "cooktop")):
             categoria = "fogoes"
         elif any(x in n for x in ("ar-condicionado", "ar condicionado", "split")):
@@ -92,12 +103,12 @@ def calcular_previa(tabela, regras):
                 fp = 0.0
             if categoria in ("eletrodomesticos", "recarga", "motores", "especiais", "ar_condicionado") and not 0 < fp <= 1:
                 # Para ar-condicionado, VA de placa explícito dispensa FP.
-                va_placa = _numero(linha.get("Pot. Unit. TUE (VA)"))
+                va_placa = _numero(linha.get("Pot. Placa TUE (VA)"))
                 if categoria != "ar_condicionado" or va_placa <= 0:
                     if categoria != "eletrodomesticos":
                         pendencias.append(f"Linha {i}: informar fator de potência/VA de placa de '{nome}'.")
             for _ in range(qe):
-                grupos[categoria].append({"w": w, "fp": fp, "va": _numero(linha.get("Pot. Unit. TUE (VA)")), "nome": nome})
+                grupos[categoria].append({"w": w, "fp": fp, "va": _numero(linha.get("Pot. Placa TUE (VA)")), "nome": nome})
 
     def acrescentar(categoria, itens, fator, fp=1.0, tabela_id=""):
         watts = sum(x["w"] for x in itens)

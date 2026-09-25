@@ -550,6 +550,17 @@ def renderizar_painel_principal():
             tabela_editada
         )
 
+        if st.button("Salvar cargas e dados de placa das TUEs", key=_chave_projeto("salvar_cargas_tue")):
+            try:
+                salvar_dados_projeto(
+                    st.session_state.user_email,
+                    st.session_state.projeto_ativo,
+                    tabela_editada=tabela_editada,
+                )
+                st.success("Cargas e dados técnicos das TUEs salvos no projeto.")
+            except Exception as e:
+                st.error(f"Não foi possível salvar as cargas do projeto: {e}")
+
         st.markdown(
             "#### 📥 Exportação do Quadro de Cargas"
         )
