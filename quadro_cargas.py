@@ -102,6 +102,10 @@ def renderizar_edicao_cargas(dados_ambientes):
                 va_placa_tue = int(row.get("Pot. Placa TUE (VA)") or 0)
             except (ValueError, TypeError):
                 va_placa_tue = 0
+            try:
+                capacidade_btu_tue = int(row.get("Capacidade TUE (BTU/h)") or 0)
+            except (ValueError, TypeError):
+                capacidade_btu_tue = 0
             if qtd_tue > 0:
                 with st.expander("Dados de placa da TUE (auditoria Elektro)"):
                     st.caption("Quando houver mais de uma TUE neste ambiente, os dados informados "
@@ -127,6 +131,18 @@ def renderizar_edicao_cargas(dados_ambientes):
                         min_value=0, value=max(0, va_placa_tue),
                         key=f"va_placa_tue_{chave}",
                     )
+                    capacidades_btu = [0, 7500, 9000, 10000, 12000, 15000,
+                                       18000, 21000, 30000, 41000, 60000]
+                    capacidade_btu_tue = st.selectbox(
+                        "Ar-condicionado: capacidade (BTU/h), se conhecida",
+                        capacidades_btu,
+                        index=capacidades_btu.index(capacidade_btu_tue)
+                        if capacidade_btu_tue in capacidades_btu else 0,
+                        format_func=lambda valor: "Não informado" if valor == 0 else f"{valor:,}".replace(",", "."),
+                        key=f"btu_tue_{chave}",
+                        help="Sem VA ou FP de placa, a prévia usa o VA orientativo da "
+                             "Tabela 11 da DIS-NOR-030 para a capacidade selecionada.",
+                    )
 
             row_modificado = row.copy()
             row_modificado["Qtd Ilum."] = q_ilum
@@ -141,10 +157,12 @@ def renderizar_edicao_cargas(dados_ambientes):
             row_modificado["Carga TUE (W)"] = qtd_tue * pot_tue_unit
             row_modificado["Equipamento TUE"] = eq_tue
             if qtd_tue > 0 or any(k in row for k in (
-                    "Categoria Normativa TUE", "Fator de Potência TUE", "Pot. Placa TUE (VA)")):
+                    "Categoria Normativa TUE", "Fator de Potência TUE", "Pot. Placa TUE (VA)",
+                    "Capacidade TUE (BTU/h)")):
                 row_modificado["Categoria Normativa TUE"] = categoria_tue
                 row_modificado["Fator de Potência TUE"] = fator_potencia_tue
                 row_modificado["Pot. Placa TUE (VA)"] = va_placa_tue
+                row_modificado["Capacidade TUE (BTU/h)"] = capacidade_btu_tue
             resultados[indice] = row_modificado
 
     # Índices 0,2,4... à esquerda; 1,3,5... à direita.

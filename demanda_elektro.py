@@ -109,10 +109,17 @@ def calcular_previa(tabela, regras):
                 # Para ar-condicionado, VA de placa explícito dispensa FP.
                 va_placa = _numero(linha.get("Pot. Placa TUE (VA)"))
                 if categoria != "ar_condicionado" or va_placa <= 0:
-                    if categoria != "eletrodomesticos":
+                    if categoria not in ("eletrodomesticos", "ar_condicionado"):
                         pendencias.append(f"Linha {i}: informar fator de potência/VA de placa de '{nome}'.")
+            btu = int(_numero(linha.get("Capacidade TUE (BTU/h)")))
+            if categoria == "ar_condicionado" and fp <= 0 and _numero(linha.get("Pot. Placa TUE (VA)")) <= 0:
+                conhecidos = {item["btu_h"] for item in t["tabela_11_ar_condicionado"]["potencias"]}
+                if btu not in conhecidos:
+                    pendencias.append(f"Linha {i}: informar VA/FP de placa ou capacidade (BTU/h) "
+                                      f"da Tabela 11 para '{nome}'.")
             for _ in range(qe):
-                grupos[categoria].append({"w": w, "fp": fp, "va": _numero(linha.get("Pot. Placa TUE (VA)")), "nome": nome})
+                grupos[categoria].append({"w": w, "fp": fp, "va": _numero(linha.get("Pot. Placa TUE (VA)")),
+                                          "btu": btu, "nome": nome})
 
     def acrescentar(categoria, itens, fator, fp=1.0, tabela_id=""):
         watts = sum(x["w"] for x in itens)
@@ -147,7 +154,9 @@ def calcular_previa(tabela, regras):
         n = len(itens)
         fd = next((tab["residencial"][i] for i, limite in enumerate(tab["ate_quantidade"])
                    if limite is None or n <= limite), None)
-        kva = sum((x["va"] if x["va"] > 0 else x["w"] / x["fp"] if x["fp"] > 0 else 0)
+        potencias_btu = {item["btu_h"]: item["va"] for item in t["tabela_11_ar_condicionado"]["potencias"]}
+        kva = sum((x["va"] if x["va"] > 0 else x["w"] / x["fp"] if x["fp"] > 0
+                   else potencias_btu.get(x["btu"], 0))
                   for x in itens) * fd / 1000
         detalhes.append({"categoria": "ar_condicionado", "tabela_id": "DISNOR030_T11_T12",
                          "quantidade": n, "fator": fd, "demanda_kva": kva})
