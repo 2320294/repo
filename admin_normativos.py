@@ -820,7 +820,18 @@ def renderizar_admin_normativos(email):
                         st.error(f"Não foi possível atualizar: {e}")
 
             validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if eh_ged13_cpfl else False
-            if not eh_ged13_cpfl:
+            eh_elektro = eh_perfil_elektro(p)
+            if eh_elektro:
+                tabelas_ok = auditar_tabelas_demanda(regras_atual)
+                if tabelas_ok:
+                    st.info("Auditoria Elektro em andamento: tabelas 6–16 registradas e prévia "
+                            "residencial disponível. Falta integrar a demanda ao cálculo dos "
+                            "projetos, conferir os casos pendentes e validar o dimensionamento "
+                            "de entrada antes de liberar este perfil.")
+                else:
+                    st.info("Auditoria Elektro em andamento: registre e confira as tabelas "
+                            "de demanda da DIS-NOR-030 antes da integração com os projetos.")
+            elif not eh_ged13_cpfl:
                 st.info("Auditoria normativa específica ainda não cadastrada para este documento. O perfil permanece em RASCUNHO.")
 
             # A confirmação humana é deliberadamente a última etapa.
@@ -840,11 +851,21 @@ def renderizar_admin_normativos(email):
                     except Exception as e:
                         st.error(f"Não foi possível registrar a conferência: {e}")
             else:
-                st.caption("Confirmação documental bloqueada até 100% dos testes automáticos passarem.")
+                st.caption(
+                    "Confirmação documental da Elektro bloqueada enquanto a demanda e o "
+                    "dimensionamento de entrada não estiverem integrados e homologados."
+                    if eh_elektro else
+                    "Confirmação documental bloqueada até 100% dos testes automáticos passarem."
+                )
 
             pronto = _perfil_pronto(regras_validacao) and validacao_ok
             if not pronto:
-                st.info("Perfil ainda incompleto ou com validação pendente: mantenha em RASCUNHO até todos os testes obrigatórios passarem e a fonte oficial estar confirmada.")
+                st.info(
+                    "Perfil Elektro em preparação: mantenha em RASCUNHO até concluir a "
+                    "integração da demanda, a auditoria do padrão de entrada e a conferência documental."
+                    if eh_elektro else
+                    "Perfil ainda incompleto ou com validação pendente: mantenha em RASCUNHO até todos os testes obrigatórios passarem e a fonte oficial estar confirmada."
+                )
             cols = st.columns(4)
             for col, status in zip(cols, ["RASCUNHO", "VALIDADO", "ATIVO", "INATIVO"]):
                 bloquear = status in ("VALIDADO", "ATIVO") and not pronto
