@@ -561,6 +561,56 @@ def renderizar_painel_principal():
             except Exception as e:
                 st.error(f"Não foi possível salvar as cargas do projeto: {e}")
 
+        # Prévia administrativa lê as regras do rascunho efetivamente persistido.
+        # Os resultados não alimentam o QDC, DG, alimentador ou PDFs do projeto.
+        from admin_normativos import usuario_e_admin
+        if usuario_e_admin(st.session_state.user_email):
+            with st.expander("Prévia técnica da demanda Elektro para estas cargas"):
+                st.caption("Simulação administrativa em kVA com as cargas acima. "
+                           "Não dimensiona a entrada nem altera o projeto; "
+                           "o perfil Elektro permanece em RASCUNHO.")
+                try:
+                    from perfis_normativos import listar_perfis, perfil_atende_municipio
+                    from neoenergia_elektro import eh_perfil_elektro, auditar_tabelas_demanda
+                    from demanda_elektro import calcular_previa
+
+                    perfis_elektro = [p for p in listar_perfis(administrativo=True)
+                                      if eh_perfil_elektro(p) and auditar_tabelas_demanda(p.get("regras"))]
+                    if not perfis_elektro:
+                        st.info("Registre as tabelas de demanda em um rascunho Elektro antes de consultar a prévia.")
+                    else:
+                        rede_atual = (st.session_state.get(chave_parametros) or {}).get("parametros_rede") or {}
+                        uf_atual = str(rede_atual.get("uf") or "").strip().upper()
+                        municipio_atual = str(rede_atual.get("municipio") or "").strip()
+                        opcoes = {f"Neoenergia Elektro — {p.get('uf')}": p for p in perfis_elektro}
+                        preferida = f"Neoenergia Elektro — {uf_atual}"
+                        nomes = list(opcoes)
+                        selecionado = st.selectbox(
+                            "Rascunho usado na prévia",
+                            nomes, index=nomes.index(preferida) if preferida in nomes else 0,
+                            key=_chave_projeto("previa_perfil_elektro"),
+                        )
+                        perfil = opcoes[selecionado]
+                        if not municipio_atual or not uf_atual:
+                            st.info("Informe UF e município nos parâmetros do projeto para verificar a área de atendimento.")
+                        elif not perfil_atende_municipio(perfil, uf_atual, municipio_atual):
+                            st.warning("O município do projeto não está vinculado ao rascunho selecionado. "
+                                       "Esta prévia serve apenas para conferir as cargas informadas.")
+                        if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
+                            previa = calcular_previa(tabela_editada, perfil.get("regras"))
+                            if previa["status"] == "calculado":
+                                st.success(f"Demanda residencial trifásica preliminar: "
+                                           f"{previa['demanda_kva']:.3f} kVA. "
+                                           "Sem dimensionamento do padrão de entrada.")
+                            else:
+                                st.warning("Prévia sem total de demanda: confira as pendências abaixo.")
+                                for item in previa["pendencias"]:
+                                    st.write(f"• {item}")
+                            if previa["detalhes"]:
+                                st.dataframe(previa["detalhes"], use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error(f"Não foi possível consultar a prévia Elektro: {e}")
+
         st.markdown(
             "#### 📥 Exportação do Quadro de Cargas"
         )

@@ -45,6 +45,7 @@ def calcular_previa(tabela, regras):
                                 "ar_condicionado", "bombas", "motores", "especiais", "recarga")}
     iluminacao_tug_w = 0.0
     for i, linha in enumerate(tabela or [], 1):
+        local = str(linha.get("Ambiente") or f"Linha {i}").strip()
         qi = int(_numero(linha.get("Qtd Ilum.", 0)))
         qt = int(_numero(linha.get("Qtd TUG", linha.get("TUGs (Qtd)", 0))))
         qe = int(_numero(linha.get("Qtd TUE", 0)))
@@ -52,7 +53,7 @@ def calcular_previa(tabela, regras):
         wt = _numero(linha.get("Pot. Unit. TUG (W)", linha.get("Pot. Unit. TUG (VA)", 0)))
         w = _numero(linha.get("Pot. Unit. TUE (W)", linha.get("Pot. Unit. TUE (VA)", 0)))
         if min(qi, qt, qe, wi, wt, w) < 0:
-            pendencias.append(f"Linha {i}: carga ou quantidade negativa.")
+            pendencias.append(f"{local}: carga ou quantidade negativa.")
             continue
         iluminacao_tug_w += qi * wi + qt * wt
         if not qe:
@@ -60,24 +61,24 @@ def calcular_previa(tabela, regras):
         nome = str(linha.get("Equipamento TUE") or linha.get("Equipamento") or "")
         n = _nome(nome)
         if not n or n == "-" or w <= 0:
-            pendencias.append(f"Linha {i}: TUE sem nome ou potência de placa.")
+            pendencias.append(f"{local}: TUE sem nome ou potência de placa.")
             continue
         if "/" in n:
-            pendencias.append(f"Linha {i}: '{nome}' indica alternativas ou equipamentos diferentes; "
+            pendencias.append(f"{local}: '{nome}' indica alternativas ou equipamentos diferentes; "
                               "identificar um único equipamento por linha antes de calcular a demanda Elektro.")
             continue
         categoria = None
         categoria_declarada = str(linha.get("Categoria Normativa TUE") or "")
         categorias_validas = set(grupos) | {"forno_eletrico", "outros"}
         if categoria_declarada and categoria_declarada not in categorias_validas:
-            pendencias.append(f"Linha {i}: categoria normativa da TUE desconhecida.")
+            pendencias.append(f"{local}: categoria normativa da TUE desconhecida.")
             continue
         if "forno" in n and "micro" not in n:
-            pendencias.append(f"Linha {i}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+            pendencias.append(f"{local}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
         elif categoria_declarada == "forno_eletrico":
-            pendencias.append(f"Linha {i}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
+            pendencias.append(f"{local}: forno elétrico exige conferir divergência entre item 6.27.5 e Tabelas 9/10.")
         elif categoria_declarada == "outros":
-            pendencias.append(f"Linha {i}: conferir norma aplicável à TUE '{nome}'.")
+            pendencias.append(f"{local}: conferir norma aplicável à TUE '{nome}'.")
         elif categoria_declarada:
             categoria = categoria_declarada
         elif any(x in n for x in ("chuve", "torneira eletrica", "aquecedor de passagem", "ferro eletrico")):
@@ -99,26 +100,26 @@ def calcular_previa(tabela, regras):
         elif any(x in n for x in ("raios x", "solda", "galvaniz")):
             categoria = "especiais"
         else:
-            pendencias.append(f"Linha {i}: classificar TUE '{nome}' para aplicar o item 6.27.")
+            pendencias.append(f"{local}: classificar TUE '{nome}' para aplicar o item 6.27.")
         if categoria:
             fp = _numero(linha.get("Fator de Potência TUE", linha.get("FP TUE")))
             if fp < 0 or fp > 1:
-                pendencias.append(f"Linha {i}: fator de potência fora do intervalo (0, 1].")
+                pendencias.append(f"{local}: fator de potência fora do intervalo (0, 1].")
                 fp = 0.0
             if categoria in ("eletrodomesticos", "recarga", "motores", "especiais", "ar_condicionado") and not 0 < fp <= 1:
                 # Para ar-condicionado, VA de placa explícito dispensa FP.
                 va_placa = _numero(linha.get("Pot. Placa TUE (VA)"))
                 if categoria != "ar_condicionado" or va_placa <= 0:
                     if categoria not in ("eletrodomesticos", "ar_condicionado"):
-                        pendencias.append(f"Linha {i}: informar fator de potência/VA de placa de '{nome}'.")
+                        pendencias.append(f"{local}: informar fator de potência/VA de placa de '{nome}'.")
             btu = int(_numero(linha.get("Capacidade TUE (BTU/h)")))
             if categoria == "ar_condicionado" and fp <= 0 and _numero(linha.get("Pot. Placa TUE (VA)")) <= 0:
                 conhecidos = {item["btu_h"]: item for item in t["tabela_11_ar_condicionado"]["potencias"]}
                 if btu not in conhecidos:
-                    pendencias.append(f"Linha {i}: informar VA/FP de placa ou capacidade (BTU/h) "
+                    pendencias.append(f"{local}: informar VA/FP de placa ou capacidade (BTU/h) "
                                       f"da Tabela 11 para '{nome}'.")
                 elif w != conhecidos[btu]["w"]:
-                    pendencias.append(f"Linha {i}: {btu} BTU/h corresponde a "
+                    pendencias.append(f"{local}: {btu} BTU/h corresponde a "
                                       f"{conhecidos[btu]['w']} W na Tabela 11, mas o projeto informa "
                                       f"{w:g} W. Conferir W ou informar VA/FP de placa.")
             for _ in range(qe):
