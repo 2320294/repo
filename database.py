@@ -217,6 +217,8 @@ def salvar_dados_projeto(
         config_anterior = (existentes.data[0].get("config_interruptores") or {}) if existentes.data else {}
         if "auditoria_elektro_preliminar" in config_anterior and "auditoria_elektro_preliminar" not in config_para_salvar:
             config_para_salvar["auditoria_elektro_preliminar"] = config_anterior["auditoria_elektro_preliminar"]
+        if "conferencia_entrada_qdc_elektro" in config_anterior and "conferencia_entrada_qdc_elektro" not in config_para_salvar:
+            config_para_salvar["conferencia_entrada_qdc_elektro"] = config_anterior["conferencia_entrada_qdc_elektro"]
         registro["config_interruptores"] = config_para_salvar
 
     # Fase 13.6 Rev.124:
@@ -299,5 +301,16 @@ def salvar_auditoria_elektro(email, nome_projeto, registro):
         raise ValueError("Projeto sem dados salvos. Salve o projeto antes da auditoria.")
     config = dict(dados.get("config_interruptores") or {})
     config["auditoria_elektro_preliminar"] = registro
+    salvar_dados_projeto(email, nome_projeto, config_interruptores=config)
+    return config
+
+
+def salvar_conferencia_entrada_qdc(email, nome_projeto, registro):
+    """Salva somente a conferência, preservando as demais configurações."""
+    _, dados = buscar_projeto(email, nome_projeto)
+    if not dados:
+        raise ValueError("Salve o projeto antes da conferência.")
+    config = dict(dados.get("config_interruptores") or {})
+    config["conferencia_entrada_qdc_elektro"] = registro
     salvar_dados_projeto(email, nome_projeto, config_interruptores=config)
     return config

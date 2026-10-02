@@ -1012,7 +1012,21 @@ def renderizar_painel_principal():
                     st.caption(f"Demanda aparente total: {demanda_total_elektro:.3f} kVA. Total calculado com os valores completos, antes do arredondamento exibido.")
                 st.caption("— indica dado não informado ou não aplicável à categoria. Cargas de ar-condicionado podem ter demanda obtida pela tabela específica, sem carga em W ou fator de potência nesta memória. O resultado permanece em modo de teste, sem liberação de DG ou alimentador.")
             from conferencia_entrada_qdc_elektro import renderizar as renderizar_entrada_elektro
-            renderizar_entrada_elektro(resultado_demanda, _chave_projeto)
+            from registro_auditoria_elektro import assinatura_contexto
+            from perfis_normativos import perfil_por_id
+            perfil_contexto_entrada = perfil_por_id(resultado_demanda.get("perfil_normativo_id")) or {}
+            contexto_entrada = assinatura_contexto(tabela_editada, parametros_projeto, perfil_contexto_entrada)
+            def salvar_entrada_qdc(registro):
+                from database import salvar_conferencia_entrada_qdc
+                config_salva = salvar_conferencia_entrada_qdc(st.session_state.user_email,
+                    st.session_state.projeto_ativo, registro)
+                dados_obj["config_interruptores"] = config_salva
+                st.session_state[chave_config]["conferencia_entrada_qdc_elektro"] = registro
+            renderizar_entrada_elektro(resultado_demanda, _chave_projeto,
+                contexto=contexto_entrada,
+                salvo=((dados_obj or {}).get("config_interruptores") or {}).get("conferencia_entrada_qdc_elektro"),
+                salvar=salvar_entrada_qdc,
+                projeto=st.session_state.projeto_ativo)
         elif status == "aguardando_perfil":
             st.info(
                 "ℹ️ O método automático está selecionado. Selecione em Parâmetros "

@@ -6,9 +6,32 @@ from componentes_entrada_elektro import consultar_componentes, URL_FONTE
 from verificacao_ramal_elektro import verificar_ramal
 
 
-def renderizar(resultado, chave_projeto):
+def assinatura_registro(registro):
+    return hashlib.sha256(json.dumps({k: registro.get(k) for k in
+        ("assinatura_contexto_projeto", "demanda_integrada", "componentes", "dados_ramal", "selecoes_informadas")},
+        sort_keys=True, default=str).encode()).hexdigest()
+
+
+def renderizar(resultado, chave_projeto, contexto=None, salvo=None, salvar=None, projeto=None):
     auditoria = resultado.get("enquadramento_elektro") or {}
     candidato = auditoria.get("candidato") or {}
+    salvo = salvo if isinstance(salvo, dict) else None
+    contexto_igual = bool(salvo and salvo.get("assinatura_contexto_projeto") == contexto
+        and salvo.get("demanda_integrada") == resultado)
+    if salvo:
+        with st.expander("Última conferência de entrada e ramal salva no projeto"):
+            st.caption("Registro de " + str(salvo.get("registrado_em_utc", "data não informada")) + " (UTC)")
+            if contexto_igual:
+                st.info("Registro histórico correspondente às cargas e ao contexto atuais. Confira os dados do ramal antes de reutilizar.")
+            else:
+                st.warning("Conferência desatualizada: as cargas, o perfil ou o contexto do projeto mudaram. Faça nova conferência.")
+            historico = salvo.get("verificacao_ramal") or {}
+            st.write("Resultado salvo: " + str(historico.get("status", "pendente")))
+            if historico.get("criterios"):
+                st.table(historico["criterios"])
+            st.caption("Registro histórico sem aprovação técnica; não aplica DG ou alimentador.")
+            st.download_button("Baixar última conferência salva (JSON)", data=json.dumps(salvo, ensure_ascii=False, indent=2, allow_nan=False),
+                file_name="Conferencia_Entrada_Ramal_Elektro_Salva.json", mime="application/json", key=chave_projeto("entrada_salva_json"))
     with st.expander("Conferir entrada e ramal Elektro no QDC — teste"):
         if auditoria.get("status") != "candidato" or auditoria.get("pendencias") or candidato.get("modalidade") != "Trifásico":
             st.info("Esta etapa exige categoria trifásica candidata fora das faixas bloqueadas, com contexto e dados completos. A demanda pode ser consultada; a conferência de entrada e ramal permanece pendente.")
@@ -16,9 +39,19 @@ def renderizar(resultado, chave_projeto):
         st.caption(f"Categoria candidata {candidato.get('categoria')} — disjuntor de referência da tabela: {candidato.get('disjuntor_tabela_a')} A. Não aplicado como DG do projeto.")
         # O escopo inclui todo o cálculo atual: alterações das cargas ou do contexto
         # trocam as chaves e não reaproveitam dados confirmados para outro cenário.
-        escopo = hashlib.sha256(json.dumps(resultado, sort_keys=True, default=str).encode()).hexdigest()[:20]
+        escopo = hashlib.sha256(json.dumps([resultado, contexto], sort_keys=True, default=str).encode()).hexdigest()[:20]
         def chave(campo):
             return chave_projeto(f"qdc_elektro_{escopo}_{campo}")
+        # Recupera valores somente no mesmo contexto; a confirmação não é restaurada.
+        if contexto_igual:
+            selecoes_salvas = salvo.get("selecoes_informadas") or {}
+            dados_salvos = salvo.get("dados_ramal") or {}
+            defaults = dict(selecoes_salvas)
+            defaults.update({k: v for k, v in dados_salvos.items() if k not in ("confirmado", "sem_dados")})
+            defaults["modo"] = "Não tenho esses dados" if dados_salvos.get("sem_dados") else "Informar dados para conferência"
+            for campo, valor in defaults.items():
+                if chave(campo) not in st.session_state:
+                    st.session_state[chave(campo)] = valor
         tipo = st.selectbox("Tipo do ramal de entrada", ["Não informado", "Embutido", "Subterrâneo"], key=chave("tipo"))
         isolacao_entrada = st.selectbox("Isolação do ramal de entrada", ["Não informada", "XLPE/HEPR", "PVC"], key=chave("isolacao_entrada"))
         isolacao = st.selectbox("Isolação do ramal de distribuição", ["Não informada", "XLPE/HEPR", "PVC"], key=chave("isolacao_distribuicao"))
@@ -62,4 +95,17 @@ def renderizar(resultado, chave_projeto):
             st.info("Os critérios de capacidade e queda atendem aos dados informados. A validação completa da entrada e do alimentador permanece pendente.")
         st.caption("Não verifica curto-circuito, atuação da proteção, neutro, PE ou aterramento. Não aplica DG, cabos ou materiais ao projeto.")
         registro = {"escopo": "Conferência de entrada e ramal no QDC — teste", "aprovado": False, "demanda_integrada": resultado, "componentes": componentes, "dados_ramal": dados, "verificacao_ramal": ramal}
+        registro["assinatura_contexto_projeto"] = contexto
+        registro["projeto"] = projeto
+        registro["selecoes_informadas"] = {"tipo": tipo, "isolacao_entrada": isolacao_entrada, "isolacao_distribuicao": isolacao}
+        if salvo and contexto_igual and assinatura_registro(salvo) != assinatura_registro(registro):
+            st.warning("Os dados ou a confirmação do ramal diferem do registro salvo. Reconfira e salve um novo registro.")
+        if salvar is not None and st.button("Salvar conferência de entrada e ramal no projeto", key=chave("salvar")):
+            from datetime import datetime, timezone
+            registro["registrado_em_utc"] = datetime.now(timezone.utc).isoformat()
+            try:
+                salvar(registro)
+                st.success("Conferência salva no projeto. Será recuperada ao reabrir, sem restaurar a confirmação técnica.")
+            except Exception as erro:
+                st.error(f"Não foi possível salvar a conferência: {erro}")
         st.download_button("Baixar conferência de entrada e ramal (JSON)", data=json.dumps(registro, ensure_ascii=False, indent=2, allow_nan=False), file_name="Conferencia_Entrada_Ramal_Elektro_QDC.json", mime="application/json", key=chave("baixar"))
