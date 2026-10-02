@@ -1011,6 +1011,8 @@ def renderizar_painel_principal():
                 if demanda_total_elektro is not None:
                     st.caption(f"Demanda aparente total: {demanda_total_elektro:.3f} kVA. Total calculado com os valores completos, antes do arredondamento exibido.")
                 st.caption("— indica dado não informado ou não aplicável à categoria. Cargas de ar-condicionado podem ter demanda obtida pela tabela específica, sem carga em W ou fator de potência nesta memória. O resultado permanece em modo de teste, sem liberação de DG ou alimentador.")
+            from conferencia_entrada_qdc_elektro import renderizar as renderizar_entrada_elektro
+            renderizar_entrada_elektro(resultado_demanda, _chave_projeto)
         elif status == "aguardando_perfil":
             st.info(
                 "ℹ️ O método automático está selecionado. Selecione em Parâmetros "
