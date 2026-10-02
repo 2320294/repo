@@ -635,6 +635,27 @@ def renderizar_painel_principal():
                                 "Isolação do ramal de distribuição",
                                 ["Não informada", "XLPE/HEPR", "PVC"],
                                 key=_chave_projeto(f"elektro_isolacao_distribuicao_{escopo_auditoria}"))
+                        dados_ramal_auditoria = {}
+                        with st.expander("Conferir ramal de distribuição — capacidade e queda de tensão"):
+                            st.caption("Opcional. Zero ou campo vazio significa dado desconhecido. Os resultados permanecem preliminares.")
+                            for campo, rotulo in [("metodo", "Método de instalação e condições reais"),
+                                                  ("fonte", "Fonte técnica: fabricante, documento, revisão e tabela/página")]:
+                                dados_ramal_auditoria[campo] = st.text_input(rotulo,
+                                    key=_chave_projeto(f"ramal_{campo}_{escopo_auditoria}"))
+                            for campo, rotulo in [
+                                ("corrente_a", "Corrente de projeto do trecho crítico (A)"),
+                                ("iz_corrigida_a", "Capacidade de condução já corrigida — Iz (A)"),
+                                ("comprimento_m", "Comprimento de ida do ramal (m)"),
+                                ("coeficiente_mv_am", "Coeficiente de queda aplicável ao circuito (mV/A/m)"),
+                                ("tensao_v", "Tensão de referência do trecho (V)"),
+                                ("limite_percentual", "Limite de queda disponível para este trecho (%)")]:
+                                dados_ramal_auditoria[campo] = st.number_input(rotulo,
+                                    min_value=0.0, value=0.0, format="%.3f",
+                                    key=_chave_projeto(f"ramal_{campo}_{escopo_auditoria}"))
+                            st.caption("O coeficiente deve incorporar a configuração do circuito, fator de potência e temperatura aplicáveis. Não acrescente multiplicadores 2 ou √3 a um coeficiente que já os incorpora. V/A/km tem o mesmo valor numérico que mV/A/m. Considere a queda acumulada nos demais trechos ao informar o limite disponível.")
+                            dados_ramal_auditoria["confirmado"] = st.checkbox(
+                                "Conferi que corrente, Iz corrigida, coeficiente e tensão correspondem ao cabo selecionado e às condições reais do trecho",
+                                key=_chave_projeto(f"ramal_confirmado_{escopo_auditoria}_{isolacao_distribuicao_auditoria}"))
                         if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
                             previa = calcular_previa(tabela_editada, perfil.get("regras"))
                             if previa["status"] == "calculado":
@@ -681,6 +702,21 @@ def renderizar_painel_principal():
                                         "queda de tensão, capacidade de condução, aterramento e modelo do padrão "
                                         "ainda exigem conferência técnica. Estes valores não são aplicados ao projeto.")
                                 st.markdown(f"[Consultar DIS-NOR-030 Rev. 07 — Tabela 3]({URL_FONTE})")
+                                from verificacao_ramal_elektro import verificar_ramal
+                                verificacao_ramal = verificar_ramal(auditoria, componentes, dados_ramal_auditoria)
+                                st.markdown("##### Conferência do ramal de distribuição")
+                                if verificacao_ramal.get("cabo"):
+                                    st.write("Cabo de referência: " + verificacao_ramal["cabo"])
+                                if verificacao_ramal["criterios"]:
+                                    st.dataframe(verificacao_ramal["criterios"], use_container_width=True, hide_index=True)
+                                for item in verificacao_ramal["pendencias"]:
+                                    st.write(f"• {item}")
+                                if verificacao_ramal["status"] == "nao_atende":
+                                    st.warning("Um ou mais critérios informados não atendem. Revise o dimensionamento com o responsável técnico.")
+                                elif verificacao_ramal["status"] == "criterios_informados_atendidos":
+                                    st.info("Os dois critérios aritméticos atendem aos parâmetros informados. A conferência técnica do padrão permanece pendente.")
+                                st.caption("Esta conferência não verifica curto-circuito, atuação da proteção, neutro, PE ou aterramento; não aprova o padrão nem altera o alimentador do projeto.")
+
                             else:
                                 st.warning("Enquadramento automático bloqueado: conferência técnica pendente.")
                                 for item in auditoria["pendencias"]:
