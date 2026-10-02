@@ -597,6 +597,29 @@ def renderizar_painel_principal():
                             st.warning(f"Projeto: {municipio_atual}/{uf_atual}. Este município não está "
                                        f"vinculado ao rascunho Elektro/{perfil.get('uf')}. "
                                        "A prévia serve apenas para conferir as cargas informadas.")
+                        st.markdown("##### Conferência do enquadramento Elektro")
+                        import hashlib
+                        escopo_auditoria = hashlib.sha256(repr((perfil.get('id'), uf_atual,
+                            municipio_atual, tabela_editada)).encode('utf-8')).hexdigest()[:16]
+                        st.caption("Informe apenas o que já foi conferido. Sem esses dados, "
+                                   "a demanda pode ser simulada e o enquadramento fica para conferência técnica.")
+                        tensao_auditoria = st.selectbox(
+                            "Tensão local conferida no endereço",
+                            ["Não informada", "220/127 V", "380/220 V"],
+                            key=_chave_projeto(f"elektro_tensao_{escopo_auditoria}"),
+                        )
+                        atendimento_ok = st.checkbox(
+                            "Conferi que o endereço é atendido pela Elektro na tensão indicada",
+                            key=_chave_projeto(f"elektro_endereco_{escopo_auditoria}_{tensao_auditoria}"))
+                        urbano_ok = st.checkbox(
+                            "Esta instalação é residencial individual urbana",
+                            key=_chave_projeto(f"elektro_urbano_{escopo_auditoria}"))
+                        cargas_ok = st.checkbox(
+                            "Conferi quantidades, potências ativas em W e dados usados na prévia",
+                            key=_chave_projeto(f"elektro_cargas_{escopo_auditoria}"))
+                        equipamentos_ok = st.checkbox(
+                            "Conferi que não há motores ou cargas especiais exigindo estudo específico",
+                            key=_chave_projeto(f"elektro_especiais_{escopo_auditoria}"))
                         if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
                             previa = calcular_previa(tabela_editada, perfil.get("regras"))
                             if previa["status"] == "calculado":
@@ -609,6 +632,27 @@ def renderizar_painel_principal():
                                     st.write(f"• {item}")
                             if previa["detalhes"]:
                                 st.dataframe(previa["detalhes"], use_container_width=True, hide_index=True)
+                            from enquadramento_elektro import auditar_enquadramento
+                            auditoria = auditar_enquadramento(tabela_editada, perfil, previa, {
+                                "municipio_vinculado": bool(uf_atual and municipio_atual and
+                                    perfil_atende_municipio(perfil, uf_atual, municipio_atual)),
+                                "tensao": tensao_auditoria, "atendimento_confirmado": atendimento_ok,
+                                "urbano_individual": urbano_ok, "cargas_conferidas": cargas_ok,
+                                "equipamentos_conferidos": equipamentos_ok,
+                            })
+                            st.write(f"Carga instalada cadastrada: {auditoria['carga_instalada_kw']:.3f} kW.")
+                            if auditoria["candidato"]:
+                                candidato = auditoria["candidato"]
+                                st.info(f"Categoria candidata à conferência: {candidato['categoria']} "
+                                        f"({candidato['modalidade']}). Disjuntor indicado na Tabela 3: "
+                                        f"{candidato['disjuntor_tabela_a']} A. "
+                                        "Resultado preliminar, sem aprovação do padrão de entrada.")
+                            else:
+                                st.warning("Enquadramento automático bloqueado: conferência técnica pendente.")
+                                for item in auditoria["pendencias"]:
+                                    st.write(f"• {item}")
+                            st.caption(auditoria["fonte"] + ". O perfil permanece em RASCUNHO; "
+                                       "esta auditoria não define cabos ou alimentador.")
                 except Exception as e:
                     st.error(f"Não foi possível consultar a prévia Elektro: {e}")
 

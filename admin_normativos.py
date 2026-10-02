@@ -699,7 +699,8 @@ def renderizar_admin_normativos(email):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             if eh_perfil_elektro(p):
                 st.info("Fornecimento 220/127 V preparado por faixas sem conflito. "
-                        "10,1–11 kW e 13,1–18 kW exigem conferência técnica. "
+                        "Cargas acima de 10 e abaixo de 11,1 kW, e acima de 13 até 18 kW, "
+                        "exigem conferência técnica, sem arredondamento automático. "
                         "A prévia de demanda trifásica já está disponível para auditoria, "
                         "mas ainda não está integrada ao cálculo dos projetos: mantenha RASCUNHO.")
                 if auditar_tabelas_demanda(p.get("regras")):

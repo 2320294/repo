@@ -5,6 +5,7 @@ dimensionamento de entrada exigem auditoria própria antes da ativação.
 """
 
 from copy import deepcopy
+import math
 
 DOCUMENTO = "DIS-NOR-030"
 REVISAO = "07"
@@ -21,13 +22,22 @@ def eh_perfil_elektro(perfil):
 def motivo_conferencia(potencia_w, perfil):
     if not eh_perfil_elektro(perfil):
         return ""
-    kw = max(0.0, float(potencia_w or 0)) / 1000.0
+    try:
+        watts = float(potencia_w)
+    except (TypeError, ValueError):
+        return "Carga instalada inválida: informar potência numérica para conferência."
+    if not math.isfinite(watts) or watts <= 0:
+        return "Carga instalada inválida: informar potência positiva e finita para conferência."
+    kw = watts / 1000.0
+    if 11.0 < kw < 11.1:
+        return ("Carga instalada entre 11 e 11,1 kW: lacuna entre B0 e B1 na Tabela 3. "
+                "Encaminhar à conferência técnica sem arredondamento automático.")
     for minimo, maximo in FAIXAS_CONFERENCIA_KW:
         if minimo < kw <= maximo:
             return (f"Carga instalada de {kw:.2f} kW: enquadramento da Neoenergia Elektro "
                     f"entre {minimo:g} e {maximo:g} kW requer conferência técnica. "
-                    "A DIS-NOR-030 Rev. 07 não permite escolher automaticamente uma "
-                    "categoria urbana inequívoca nesta faixa.")
+                    "O AutoElétrica mantém o enquadramento automático bloqueado nesta faixa "
+                    "até a conferência documental da DIS-NOR-030 Rev. 07.")
     return ""
 
 
@@ -46,8 +56,8 @@ def preparar_regras(regras):
         "faixas_modalidade_kw": [
             {"modalidade": "Monofásico", "min_kw": 0.0, "max_kw": 10.0,
              "inclui_min": True, "inclui_max": True},
-            {"modalidade": "Bifásico", "min_kw": 11.0, "max_kw": 13.0,
-             "inclui_min": False, "inclui_max": True},
+            {"modalidade": "Bifásico", "min_kw": 11.1, "max_kw": 13.0,
+             "inclui_min": True, "inclui_max": True},
             {"modalidade": "Trifásico", "min_kw": 18.0, "max_kw": 75.0,
              "inclui_min": False, "inclui_max": True},
         ],
@@ -56,6 +66,9 @@ def preparar_regras(regras):
             for a, b in FAIXAS_CONFERENCIA_KW
         ],
         "fonte_faixas": "DIS-NOR-030 Rev. 07, itens 6.2.8 e Anexo I, Tabela 3",
+        "lacunas_conferencia_tecnica_kw": [
+            {"min_kw": 11.0, "max_kw": 11.1, "inclui_min": False, "inclui_max": False}
+        ],
     })
     r["fornecimento"] = f
     r.setdefault("demanda", {})
