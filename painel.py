@@ -637,25 +637,45 @@ def renderizar_painel_principal():
                                 key=_chave_projeto(f"elektro_isolacao_distribuicao_{escopo_auditoria}"))
                         dados_ramal_auditoria = {}
                         with st.expander("Conferir ramal de distribuição — capacidade e queda de tensão"):
-                            st.caption("Opcional. Zero ou campo vazio significa dado desconhecido. Os resultados permanecem preliminares.")
-                            for campo, rotulo in [("metodo", "Método de instalação e condições reais"),
-                                                  ("fonte", "Fonte técnica: fabricante, documento, revisão e tabela/página")]:
-                                dados_ramal_auditoria[campo] = st.text_input(rotulo,
-                                    key=_chave_projeto(f"ramal_{campo}_{escopo_auditoria}"))
-                            for campo, rotulo in [
-                                ("corrente_a", "Corrente de projeto do trecho crítico (A)"),
-                                ("iz_corrigida_a", "Capacidade de condução já corrigida — Iz (A)"),
-                                ("comprimento_m", "Comprimento de ida do ramal (m)"),
-                                ("coeficiente_mv_am", "Coeficiente de queda aplicável ao circuito (mV/A/m)"),
-                                ("tensao_v", "Tensão de referência do trecho (V)"),
-                                ("limite_percentual", "Limite de queda disponível para este trecho (%)")]:
-                                dados_ramal_auditoria[campo] = st.number_input(rotulo,
-                                    min_value=0.0, value=0.0, format="%.3f",
-                                    key=_chave_projeto(f"ramal_{campo}_{escopo_auditoria}"))
-                            st.caption("O coeficiente deve incorporar a configuração do circuito, fator de potência e temperatura aplicáveis. Não acrescente multiplicadores 2 ou √3 a um coeficiente que já os incorpora. V/A/km tem o mesmo valor numérico que mV/A/m. Considere a queda acumulada nos demais trechos ao informar o limite disponível.")
-                            dados_ramal_auditoria["confirmado"] = st.checkbox(
-                                "Conferi que corrente, Iz corrigida, coeficiente e tensão correspondem ao cabo selecionado e às condições reais do trecho",
-                                key=_chave_projeto(f"ramal_confirmado_{escopo_auditoria}_{isolacao_distribuicao_auditoria}"))
+                            modo_dados_ramal = st.radio("Dados para conferir o ramal",
+                                ["Não tenho esses dados", "Informar dados para conferência"],
+                                key=_chave_projeto(f"ramal_modo_{escopo_auditoria}"))
+                            dados_ramal_auditoria["sem_dados"] = modo_dados_ramal == "Não tenho esses dados"
+                            if dados_ramal_auditoria["sem_dados"]:
+                                st.info("Você pode calcular a prévia de demanda. A conferência do ramal ficará pendente até obter os dados com o responsável técnico.")
+                                st.write("Informações a obter: método e condições de instalação; fonte técnica; corrente de projeto; Iz corrigida; comprimento; coeficiente de queda; tensão de referência; limite de queda disponível.")
+                            else:
+                                st.caption("Zero ou campo vazio significa dado desconhecido. Preencha apenas o que já foi conferido.")
+                                for campo, rotulo in [("metodo", "Método de instalação e condições reais"),
+                                                      ("fonte", "Fonte técnica: fabricante, documento, revisão e tabela/página")]:
+                                    dados_ramal_auditoria[campo] = st.text_input(rotulo,
+                                        key=_chave_projeto(f"ramal_{campo}_{escopo_auditoria}"))
+                                for campo, rotulo in [
+                                    ("corrente_a", "Corrente de projeto do trecho crítico (A)"),
+                                    ("iz_corrigida_a", "Capacidade de condução já corrigida — Iz (A)"),
+                                    ("comprimento_m", "Comprimento de ida do ramal (m)"),
+                                    ("coeficiente_mv_am", "Coeficiente de queda aplicável ao circuito (mV/A/m)"),
+                                    ("tensao_v", "Tensão de referência do trecho (V)"),
+                                    ("limite_percentual", "Limite de queda disponível para este trecho (%)")]:
+                                    dados_ramal_auditoria[campo] = st.number_input(rotulo,
+                                        min_value=0.0, value=0.0, format="%.3f",
+                                        key=_chave_projeto(f"ramal_{campo}_{escopo_auditoria}"))
+                                st.caption("O coeficiente deve incorporar a configuração do circuito, fator de potência e temperatura aplicáveis. Não acrescente multiplicadores 2 ou √3 a um coeficiente que já os incorpora. V/A/km tem o mesmo valor numérico que mV/A/m. Considere a queda acumulada nos demais trechos ao informar o limite disponível.")
+                                campos_ramal_completos = (
+                                    bool(dados_ramal_auditoria["metodo"].strip()) and
+                                    bool(dados_ramal_auditoria["fonte"].strip()) and
+                                    all(dados_ramal_auditoria[k] > 0 for k in
+                                        ("corrente_a", "iz_corrigida_a", "comprimento_m", "coeficiente_mv_am", "tensao_v", "limite_percentual")) and
+                                    isolacao_distribuicao_auditoria != "Não informada")
+                                assinatura_ramal = hashlib.sha256(repr((dados_ramal_auditoria,
+                                    isolacao_distribuicao_auditoria)).encode("utf-8")).hexdigest()[:16]
+                                confirmacao_ramal = st.checkbox(
+                                    "Conferi que corrente, Iz corrigida, coeficiente e tensão correspondem ao cabo selecionado e às condições reais do trecho",
+                                    disabled=not campos_ramal_completos,
+                                    key=_chave_projeto(f"ramal_confirmado_{escopo_auditoria}_{assinatura_ramal}"))
+                                dados_ramal_auditoria["confirmado"] = bool(campos_ramal_completos and confirmacao_ramal)
+                                if not campos_ramal_completos:
+                                    st.caption("A confirmação será habilitada após preencher os campos e selecionar a isolação do ramal de distribuição.")
                         if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
                             previa = calcular_previa(tabela_editada, perfil.get("regras"))
                             if previa["status"] == "calculado":
