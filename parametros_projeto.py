@@ -277,6 +277,14 @@ def renderizar_parametros_projeto(
         "Manual pelo responsável técnico"
     ]
 
+    from admin_normativos import usuario_e_admin
+    from integracao_demanda_elektro import METODO as METODO_ELEKTRO
+    admin_teste_elektro = usuario_e_admin(st.session_state.get("user_email", ""))
+    if admin_teste_elektro:
+        metodos.append(METODO_ELEKTRO)
+    perfil_elektro_teste_id = None
+    contexto_elektro_teste = {}
+
     metodo_salvo = rede.get(
         "metodo_demanda",
         metodos[0]
@@ -326,6 +334,40 @@ def renderizar_parametros_projeto(
             key=_widget_key("qdc_esquema_aterramento")
         )
 
+    if metodo_demanda == METODO_ELEKTRO and admin_teste_elektro:
+        st.info("Teste administrativo integrado: usa as cargas atuais na etapa de demanda do QDC. O perfil continua em RASCUNHO e não libera corrente, DG ou alimentador.")
+        from perfis_normativos import listar_perfis, perfil_atende_municipio
+        from neoenergia_elektro import eh_perfil_elektro, auditar_tabelas_demanda
+        try:
+            perfis_teste = [p for p in listar_perfis(administrativo=True)
+                           if eh_perfil_elektro(p) and p.get("status") in ("RASCUNHO", "VALIDADO", "ATIVO")
+                           and auditar_tabelas_demanda(p.get("regras"))
+                           and perfil_atende_municipio(p, uf, municipio)] if uf and municipio else []
+        except Exception:
+            perfis_teste = []
+        rotulos_teste = ["Selecione o perfil do teste..."] + [f"Elektro/{p.get('uf')} — {p.get('id')}" for p in perfis_teste]
+        indice_teste = next((i + 1 for i, p in enumerate(perfis_teste)
+                            if str(p.get("id")) == str(rede.get("perfil_elektro_teste_id"))), 0)
+        escolhido_teste = st.selectbox("Perfil Elektro para o teste integrado:", rotulos_teste,
+            index=indice_teste, key=_widget_key(f"elektro_teste_{uf}_{municipio}"))
+        if escolhido_teste in rotulos_teste[1:]:
+            perfil_elektro_teste_id = perfis_teste[rotulos_teste.index(escolhido_teste)-1].get("id")
+        if not perfis_teste:
+            st.warning("Nenhum rascunho Elektro com tabelas conferidas está vinculado a este município.")
+        contexto_salvo = rede.get("contexto_elektro_teste") or {}
+        contexto_compativel = (str(rede.get("perfil_elektro_teste_id")) == str(perfil_elektro_teste_id)
+                              and rede.get("uf") == uf and rede.get("municipio") == municipio
+                              and rede.get("tensao_fornecimento") == tensao_fornecimento)
+        for campo, rotulo in (
+            ("atendimento_confirmado", "Conferi atendimento Elektro e tensão no endereço do teste"),
+            ("urbano_individual", "Cenário residencial individual urbano"),
+            ("cargas_conferidas", "Conferi quantidades, potências em W e dados de placa do teste"),
+            ("equipamentos_conferidos", "Conferi ausência de motores e cargas especiais neste cenário"),
+        ):
+            contexto_elektro_teste[campo] = st.checkbox(rotulo,
+                value=bool(contexto_salvo.get(campo)) if contexto_compativel else False,
+                key=_widget_key(f"elektro_teste_{campo}_{uf}_{municipio}_{perfil_elektro_teste_id}_{tensao_fornecimento}"))
+
     fator_demanda_manual = float(rede.get("fator_demanda_manual", 100.0) or 100.0)
     if metodo_demanda == "Manual pelo responsável técnico":
         fator_demanda_manual = st.number_input(
@@ -370,6 +412,8 @@ def renderizar_parametros_projeto(
         "concessionaria_manual":
             concessionaria_manual,
         "perfil_normativo_id": perfil_normativo_id,
+        "perfil_elektro_teste_id": perfil_elektro_teste_id,
+        "contexto_elektro_teste": contexto_elektro_teste,
         # Rev.202 — snapshot textual para rastreabilidade do projeto.
         # O ID continua sendo a fonte de verdade para carregar as regras.
         "perfil_normativo_concessionaria": (

@@ -941,10 +941,14 @@ def renderizar_painel_principal():
         idm = resultado_demanda.get("corrente_demanda_a")
         dg = resultado_demanda.get("disjuntor_geral_a")
 
-        c2.metric(
-            "Potência demandada",
-            f"{pd/1000:.2f} kW" if pd is not None else "Aguardando perfil"
-        )
+        if resultado_demanda.get("metodo") == "Elektro — teste integrado de demanda (sem DG)":
+            aparente = resultado_demanda.get("demanda_aparente_kva")
+            c2.metric("Demanda Elektro (teste)", f"{aparente:.3f} kVA" if aparente is not None else "Pendente")
+        else:
+            c2.metric(
+                "Potência demandada",
+                f"{pd/1000:.2f} kW" if pd is not None else "Aguardando perfil"
+            )
         c3.metric(
             "Corrente de demanda",
             f"{idm:.1f} A" if idm is not None else "—"
@@ -965,7 +969,16 @@ def renderizar_painel_principal():
                 )
 
         status = resultado_demanda.get("status")
-        if status == "aguardando_perfil":
+        if status in ("elektro_demanda_integrada", "elektro_integracao_pendente"):
+            st.info("Demanda Elektro recalculada com as cargas atuais do projeto, em modo de teste. Corrente, DG e alimentador continuam pendentes de homologação.")
+            for pendencia in resultado_demanda.get("pendencias", []):
+                st.warning(pendencia)
+            candidato = (resultado_demanda.get("enquadramento_elektro") or {}).get("candidato")
+            if candidato:
+                st.caption(f"Categoria candidata à conferência: {candidato['categoria']} ({candidato['modalidade']}). Disjuntor de referência da tabela: {candidato['disjuntor_tabela_a']} A. Não aplicado como DG.")
+            with st.expander("Memória da demanda Elektro integrada — teste"):
+                st.write(resultado_demanda.get("detalhes_demanda") or [])
+        elif status == "aguardando_perfil":
             st.info(
                 "ℹ️ O método automático está selecionado. Selecione em Parâmetros "
                 "um perfil normativo ATIVO liberado pelo administrador. "

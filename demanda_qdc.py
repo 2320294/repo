@@ -436,6 +436,14 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
     pot = potencia_instalada(tabela_editada)
     metodo = str(rede.get("metodo_demanda", ""))
 
+    if metodo == "Elektro — teste integrado de demanda (sem DG)":
+        from integracao_demanda_elektro import calcular_integrada
+        try:
+            perfil_teste = perfil_por_id(rede.get("perfil_elektro_teste_id"))
+        except Exception:
+            perfil_teste = None
+        return calcular_integrada(tabela_editada, rede, perfil_teste, pot)
+
     if metodo.startswith("Automático"):
         perfil = None
         try:
