@@ -977,7 +977,39 @@ def renderizar_painel_principal():
             if candidato:
                 st.caption(f"Categoria candidata à conferência: {candidato['categoria']} ({candidato['modalidade']}). Disjuntor de referência da tabela: {candidato['disjuntor_tabela_a']} A. Não aplicado como DG.")
             with st.expander("Memória da demanda Elektro integrada — teste"):
-                st.write(resultado_demanda.get("detalhes_demanda") or [])
+                detalhes_elektro = resultado_demanda.get("detalhes_demanda") or []
+                nomes_elektro = {
+                    "Iluminação + TUG": "Iluminação + TUG",
+                    "chuveiros": "Chuveiros",
+                    "boiler": "Boiler / aquecedor",
+                    "eletrodomesticos": "Eletrodomésticos",
+                    "forno_eletrico": "Forno elétrico",
+                    "fogoes": "Fogões / cooktops",
+                    "ar_condicionado": "Ar-condicionado",
+                    "bombas": "Bombas",
+                    "motores": "Motores",
+                    "especiais": "Cargas especiais",
+                    "recarga": "Recarga de veículos",
+                }
+                memoria_legivel = []
+                for item in detalhes_elektro:
+                    memoria_legivel.append({
+                        "Categoria": nomes_elektro.get(item.get("categoria"), item.get("categoria") or "—"),
+                        "Referência": {"DISNOR030_T6": "Tabela 6", "DISNOR030_T7": "Tabela 7", "DISNOR030_T8": "Tabela 8", "DISNOR030_T9": "Tabela 9", "DISNOR030_T9_FORNO": "Tabela 9 — forno", "DISNOR030_T10": "Tabela 10", "DISNOR030_T11_T12": "Tabelas 11–12", "DISNOR030_T13": "Tabela 13", "DISNOR030_T14": "Tabela 14", "DISNOR030_T15": "Tabela 15", "DISNOR030_T16": "Tabela 16"}.get(item.get("tabela_id"), item.get("tabela_id") or "—"),
+                        "Quantidade": item.get("quantidade") if item.get("quantidade") is not None else "—",
+                        "Carga (W)": f"{item['carga_w']:.3f}" if item.get("carga_w") is not None else "—",
+                        "Fator de demanda": f"{item['fator']:.3f}" if item.get("fator") is not None else "—",
+                        "Fator de potência": f"{item['fator_potencia']:.3f}" if item.get("fator_potencia") is not None else "—",
+                        "Demanda (kVA)": f"{item['demanda_kva']:.3f}" if item.get("demanda_kva") is not None else "—",
+                    })
+                if memoria_legivel:
+                    st.table(memoria_legivel)
+                else:
+                    st.info("Memória de demanda indisponível: confira as pendências do teste.")
+                demanda_total_elektro = resultado_demanda.get("demanda_aparente_kva")
+                if demanda_total_elektro is not None:
+                    st.caption(f"Demanda aparente total: {demanda_total_elektro:.3f} kVA. Total calculado com os valores completos, antes do arredondamento exibido.")
+                st.caption("— indica dado não informado ou não aplicável à categoria. Cargas de ar-condicionado podem ter demanda obtida pela tabela específica, sem carga em W ou fator de potência nesta memória. O resultado permanece em modo de teste, sem liberação de DG ou alimentador.")
         elif status == "aguardando_perfil":
             st.info(
                 "ℹ️ O método automático está selecionado. Selecione em Parâmetros "
