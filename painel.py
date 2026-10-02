@@ -676,6 +676,22 @@ def renderizar_painel_principal():
                                 dados_ramal_auditoria["confirmado"] = bool(campos_ramal_completos and confirmacao_ramal)
                                 if not campos_ramal_completos:
                                     st.caption("A confirmação será habilitada após preencher os campos e selecionar a isolação do ramal de distribuição.")
+                        entradas_registro = {
+                            "tensao": tensao_auditoria, "atendimento_confirmado": atendimento_ok,
+                            "urbano_individual": urbano_ok, "cargas_conferidas": cargas_ok,
+                            "equipamentos_conferidos": equipamentos_ok,
+                            "tipo_entrada": tipo_entrada_auditoria,
+                            "isolacao_entrada": isolacao_entrada_auditoria,
+                            "isolacao_distribuicao": isolacao_distribuicao_auditoria,
+                            "ramal": dados_ramal_auditoria,
+                        }
+                        assinatura_registro = hashlib.sha256(repr((perfil, uf_atual,
+                            municipio_atual, tabela_editada, entradas_registro)).encode("utf-8")).hexdigest()
+                        chave_registro = _chave_projeto("registro_auditoria_elektro")
+                        registro_anterior = st.session_state.get(chave_registro)
+                        if registro_anterior and registro_anterior["assinatura"] != assinatura_registro:
+                            st.session_state.pop(chave_registro, None)
+                            st.info("Os dados da simulação mudaram. Calcule novamente para registrar e exportar um resultado atualizado.")
                         if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
                             previa = calcular_previa(tabela_editada, perfil.get("regras"))
                             if previa["status"] == "calculado":
@@ -696,6 +712,10 @@ def renderizar_painel_principal():
                                 "urbano_individual": urbano_ok, "cargas_conferidas": cargas_ok,
                                 "equipamentos_conferidos": equipamentos_ok,
                             })
+                            componentes = {"status": "pendente", "linhas": [], "selecoes": {},
+                                           "pendencias": ["Enquadramento candidato indisponível."], "aprovado": False}
+                            verificacao_ramal = {"status": "pendente", "criterios": [],
+                                                "pendencias": ["Enquadramento candidato indisponível."], "aprovado": False}
                             st.write(f"Carga instalada cadastrada: {auditoria['carga_instalada_kw']:.3f} kW.")
                             if auditoria["candidato"]:
                                 candidato = auditoria["candidato"]
@@ -743,6 +763,26 @@ def renderizar_painel_principal():
                                     st.write(f"• {item}")
                             st.caption(auditoria["fonte"] + ". O perfil permanece em RASCUNHO; "
                                        "esta auditoria não define cabos ou alimentador.")
+                            from registro_auditoria_elektro import registrar
+                            registro_atual = registrar(st.session_state.projeto_ativo,
+                                f"{municipio_atual}/{uf_atual}", perfil, entradas_registro,
+                                tabela_editada, previa, auditoria, componentes, verificacao_ramal)
+                            st.session_state[chave_registro] = {"assinatura": assinatura_registro,
+                                                              "registro": registro_atual}
+                        registro_guardado = st.session_state.get(chave_registro)
+                        if registro_guardado and registro_guardado["assinatura"] == assinatura_registro:
+                            from registro_auditoria_elektro import exportar_json, exportar_resumo
+                            registro_exportacao = registro_guardado["registro"]
+                            st.markdown("##### Registro da auditoria preliminar")
+                            st.caption("Resultado mantido nesta sessão. Baixe o registro para guardá-lo; ele não constitui aprovação técnica.")
+                            st.download_button("Baixar resumo da auditoria (TXT)",
+                                data=exportar_resumo(registro_exportacao),
+                                file_name="Auditoria_Elektro_Preliminar.txt", mime="text/plain",
+                                key=_chave_projeto("baixar_resumo_auditoria_elektro"))
+                            st.download_button("Baixar dados completos da auditoria (JSON)",
+                                data=exportar_json(registro_exportacao),
+                                file_name="Auditoria_Elektro_Preliminar.json", mime="application/json",
+                                key=_chave_projeto("baixar_json_auditoria_elektro"))
                 except Exception as e:
                     st.error(f"Não foi possível consultar a prévia Elektro: {e}")
 
