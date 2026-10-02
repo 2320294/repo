@@ -10,6 +10,7 @@ from neoenergia_elektro import (
     auditar_tabelas_demanda, MUNICIPIO_TENSAO_ESPECIAL,
 )
 from demanda_elektro import calcular_previa
+from auditoria_perfil_elektro import CHAVE, CASOS, registrar, registro_atual
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
@@ -817,6 +818,8 @@ def renderizar_admin_normativos(email):
                             regras_editadas["demanda"] = (regras_atual.get("demanda") or {})
                             if "demanda_elektro_auditoria" in regras_atual:
                                 regras_editadas["demanda_elektro_auditoria"] = regras_atual["demanda_elektro_auditoria"]
+                            if CHAVE in regras_atual:
+                                regras_editadas[CHAVE] = regras_atual[CHAVE]
                             regras_editadas["fonte_conferida"] = False
                         salvar_perfil({"regras": regras_editadas}, perfil_id=p.get("id"))
                         st.success("Regras salvas.")
@@ -828,14 +831,41 @@ def renderizar_admin_normativos(email):
             eh_elektro = eh_perfil_elektro(p)
             if eh_elektro:
                 tabelas_ok = auditar_tabelas_demanda(regras_atual)
-                if tabelas_ok:
-                    st.info("Auditoria Elektro em andamento: tabelas 6–16 registradas e prévia "
-                            "residencial disponível. Falta integrar a demanda ao cálculo dos "
-                            "projetos, conferir os casos pendentes e validar o dimensionamento "
-                            "de entrada antes de liberar este perfil.")
+                st.markdown("#### Auditoria do enquadramento Elektro")
+                st.caption("Evidências dos testes de software em Guarujá/SP, 220/127 V, em 02/10/2026. Não são aprovação técnica nem homologação do perfil.")
+                st.table([{"Carga instalada (kW)": f"{kw:.3f}",
+                           "Resultado observado": cat or "Bloqueado — conferência técnica",
+                           "Modalidade": mod, "Disjuntor da tabela (A)": amp or "—"}
+                          for kw, cat, mod, amp in CASOS])
+                registro = regras_atual.get(CHAVE) or {}
+                if registro_atual(p):
+                    st.success("Conferência dos testes registrada para os dados atuais deste perfil.")
+                    st.caption(f"Registrado em {registro.get('data_utc', '—')} por {registro.get('registrado_por', '—')}.")
                 else:
-                    st.info("Auditoria Elektro em andamento: registre e confira as tabelas "
-                            "de demanda da DIS-NOR-030 antes da integração com os projetos.")
+                    if registro:
+                        st.warning("Registro de testes desatualizado: o perfil foi alterado. Confira novamente antes de registrar.")
+                    else:
+                        st.info("Resultados observados disponíveis; a conferência ainda não foi registrada neste perfil.")
+                    st.caption("Registre somente após conferir que as evidências acima correspondem a este perfil. Os testes foram realizados em SP; não comprovam atendimento ou tensão em outros municípios ou UFs.")
+                    if st.button("Registrar conferência destes testes de software", key=f"registrar_testes_elektro_{p.get('id')}"):
+                        try:
+                            regras_registradas = dict(regras_atual)
+                            regras_registradas[CHAVE] = registrar(p, email)
+                            salvar_perfil({"regras": regras_registradas}, perfil_id=p.get("id"))
+                            st.success("Conferência registrada. Perfil continua sem homologação normativa.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Não foi possível registrar os testes: {e}")
+                st.markdown("**Verificado nos testes de software**")
+                st.write("• Candidata B1 abaixo da faixa conflitante; bloqueio dentro da faixa e em 18 kW; candidata T0 acima da faixa.")
+                st.write("• Auditoria do projeto salva e recuperada; aviso de desatualização após alterar cargas e correspondência ao restaurá-las.")
+                st.markdown("**Pendências para VALIDADO / ATIVO**")
+                if not tabelas_ok:
+                    st.write("• Registrar e conferir as tabelas de demanda no rascunho.")
+                st.write("• Integrar e homologar a demanda no cálculo efetivo dos projetos.")
+                st.write("• Concluir a validação do padrão de entrada e do alimentador, incluindo os casos fora do escopo testado.")
+                st.write("• Concluir a conferência documental oficial e a cobertura de atendimento e tensão.")
+                st.info("O registro dos testes não libera VALIDADO ou ATIVO. Permanecem os bloqueios acima de 10 e abaixo de 11,1 kW, e acima de 13 até 18 kW. Mantenha o perfil em RASCUNHO.")
             elif not eh_ged13_cpfl:
                 st.info("Auditoria normativa específica ainda não cadastrada para este documento. O perfil permanece em RASCUNHO.")
 
