@@ -1015,6 +1015,17 @@ def renderizar_painel_principal():
             from registro_auditoria_elektro import assinatura_contexto
             from perfis_normativos import perfil_por_id
             perfil_contexto_entrada = perfil_por_id(resultado_demanda.get("perfil_normativo_id")) or {}
+            from atendimento_endereco_elektro import renderizar as renderizar_atendimento_elektro
+            def salvar_atendimento_qdc(registro):
+                from database import salvar_atendimento_endereco_elektro
+                config_salva = salvar_atendimento_endereco_elektro(st.session_state.user_email,
+                    st.session_state.projeto_ativo, registro)
+                dados_obj["config_interruptores"] = config_salva
+                st.session_state[chave_config]["atendimento_endereco_elektro"] = registro
+            renderizar_atendimento_elektro(parametros_projeto.get("parametros_rede") or {},
+                perfil_contexto_entrada,
+                ((dados_obj or {}).get("config_interruptores") or {}).get("atendimento_endereco_elektro"),
+                salvar_atendimento_qdc, _chave_projeto, st.session_state.projeto_ativo, st.session_state.user_email)
             contexto_entrada = assinatura_contexto(tabela_editada, parametros_projeto, perfil_contexto_entrada)
             from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro, resumo_projeto
             renderizar_resumo_elektro(perfil_contexto_entrada, _chave_projeto("resumo_auditoria_perfil_qdc"))
