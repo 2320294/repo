@@ -818,6 +818,8 @@ def renderizar_admin_normativos(email):
                             regras_editadas["demanda"] = (regras_atual.get("demanda") or {})
                             if "demanda_elektro_auditoria" in regras_atual:
                                 regras_editadas["demanda_elektro_auditoria"] = regras_atual["demanda_elektro_auditoria"]
+                            if "validacao_automatica_integracao_elektro" in regras_atual:
+                                regras_editadas["validacao_automatica_integracao_elektro"] = regras_atual["validacao_automatica_integracao_elektro"]
                             if CHAVE in regras_atual:
                                 regras_editadas[CHAVE] = regras_atual[CHAVE]
                             regras_editadas["fonte_conferida"] = False
@@ -831,6 +833,34 @@ def renderizar_admin_normativos(email):
             eh_elektro = eh_perfil_elektro(p)
             if eh_elektro:
                 tabelas_ok = auditar_tabelas_demanda(regras_atual)
+                from validacao_integrada_elektro import CHAVE as CHAVE_INTEGRACAO, executar
+                from auditoria_perfil_elektro import assinatura as assinatura_testes
+                st.markdown("#### Validação automática da demanda integrada")
+                st.caption("Executa o motor integrado com cargas fictícias e regras deste perfil. Verifica limites de 13 e 18 kW, dados incompletos, localidade e ausência de liberação de DG. Não homologação normativa.")
+                if st.button("Executar e registrar testes da demanda integrada", key=f"testes_integrados_{p.get('id')}"):
+                    try:
+                        registro_integracao = executar(p, email)
+                        novas_regras = dict(regras_atual)
+                        novas_regras[CHAVE_INTEGRACAO] = registro_integracao
+                        salvar_perfil({"regras": novas_regras}, perfil_id=p.get("id"))
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Não foi possível executar ou registrar a validação: {e}")
+                validacao_integrada = regras_atual.get(CHAVE_INTEGRACAO) or {}
+                if validacao_integrada:
+                    st.table([{k: ("Passou" if v else "Falhou") if k == "Passou" else ("—" if v is None else v)
+                               for k, v in caso.items() if k != "erro"}
+                              for caso in validacao_integrada.get("casos", [])])
+                    if validacao_integrada.get("assinatura_perfil") != assinatura_testes(p):
+                        st.warning("Validação integrada desatualizada: execute novamente após alterações do perfil.")
+                    elif validacao_integrada.get("passou"):
+                        st.success("Todos os testes automáticos do modo integrado passaram. O perfil continua sem homologação normativa.")
+                    else:
+                        st.error("A validação integrada possui falhas. Confira as regras antes de avançar.")
+                    st.caption(f"Execução: {validacao_integrada.get('data_utc', '—')} · Responsável: {validacao_integrada.get('responsavel', '—')}")
+                else:
+                    st.info("Validação automática integrada ainda não executada neste perfil.")
+
                 st.markdown("#### Auditoria do enquadramento Elektro")
                 st.caption("Evidências dos testes de software em Guarujá/SP, 220/127 V, em 02/10/2026. Não são aprovação técnica nem homologação do perfil.")
                 st.table([{"Carga instalada (kW)": f"{kw:.3f}",
@@ -862,7 +892,7 @@ def renderizar_admin_normativos(email):
                 st.markdown("**Pendências para VALIDADO / ATIVO**")
                 if not tabelas_ok:
                     st.write("• Registrar e conferir as tabelas de demanda no rascunho.")
-                st.write("• Integrar e homologar a demanda no cálculo efetivo dos projetos.")
+                st.write("• Concluir a homologação da demanda no cálculo efetivo dos projetos; o modo de teste integrado já está disponível.")
                 st.write("• Concluir a validação do padrão de entrada e do alimentador, incluindo os casos fora do escopo testado.")
                 st.write("• Concluir a conferência documental oficial e a cobertura de atendimento e tensão.")
                 st.info("O registro dos testes não libera VALIDADO ou ATIVO. Permanecem os bloqueios acima de 10 e abaixo de 11,1 kW, e acima de 13 até 18 kW. Mantenha o perfil em RASCUNHO.")
