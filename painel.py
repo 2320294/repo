@@ -973,6 +973,7 @@ def renderizar_painel_principal():
             st.info("Demanda Elektro recalculada com as cargas atuais do projeto, em modo de teste. Corrente, DG e alimentador continuam pendentes de homologação.")
             for pendencia in resultado_demanda.get("pendencias", []):
                 st.warning(pendencia)
+            st.caption("Escopo documental: item 6.27 — demanda trifásica. Em cenários monofásicos ou bifásicos, o valor em kVA é somente simulação do modo de teste, sem dimensionamento da entrada.")
             candidato = (resultado_demanda.get("enquadramento_elektro") or {}).get("candidato")
             if candidato:
                 st.caption(f"Categoria candidata à conferência: {candidato['categoria']} ({candidato['modalidade']}). Disjuntor de referência da tabela: {candidato['disjuntor_tabela_a']} A. Não aplicado como DG.")

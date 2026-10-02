@@ -818,6 +818,8 @@ def renderizar_admin_normativos(email):
                             regras_editadas["demanda"] = (regras_atual.get("demanda") or {})
                             if "demanda_elektro_auditoria" in regras_atual:
                                 regras_editadas["demanda_elektro_auditoria"] = regras_atual["demanda_elektro_auditoria"]
+                            if "conferencia_documental_parcial_elektro" in regras_atual:
+                                regras_editadas["conferencia_documental_parcial_elektro"] = regras_atual["conferencia_documental_parcial_elektro"]
                             if "validacao_automatica_integracao_elektro" in regras_atual:
                                 regras_editadas["validacao_automatica_integracao_elektro"] = regras_atual["validacao_automatica_integracao_elektro"]
                             if CHAVE in regras_atual:
@@ -860,6 +862,36 @@ def renderizar_admin_normativos(email):
                     st.caption(f"Execução: {validacao_integrada.get('data_utc', '—')} · Responsável: {validacao_integrada.get('responsavel', '—')}")
                 else:
                     st.info("Validação automática integrada ainda não executada neste perfil.")
+
+                from conferencia_documental_elektro import CHAVE as CHAVE_DOCUMENTAL, FONTE as FONTE_DOCUMENTAL, registrar as registrar_documental
+                st.markdown("#### Conferência documental parcial Elektro")
+                st.markdown(f"[Consultar DIS-NOR-030 Rev. 07 no site oficial]({FONTE_DOCUMENTAL})")
+                st.caption("Documento aprovado em 17/04/2026. Confira a identificação na página 1, o item 6.27 nas páginas 47–49 e a Tabela 3 na página 63. A fonte estar disponível não equivale a homologação do projeto.")
+                st.info("O item 6.27 descreve demanda de instalações trifásicas. Para candidatos monofásicos ou bifásicos, o valor em kVA do modo de teste é apenas simulação e não dimensiona a entrada. Permanecem as faixas conflitantes bloqueadas.")
+                registro_documental = regras_atual.get(CHAVE_DOCUMENTAL) or {}
+                if registro_documental:
+                    if registro_documental.get("assinatura_perfil") == assinatura_testes(p):
+                        st.success("Conferência documental parcial registrada para os dados atuais do perfil.")
+                    else:
+                        st.warning("Conferência documental parcial desatualizada: confira as alterações do perfil.")
+                    st.caption(f"Registro: {registro_documental.get('data_utc', '—')} · Responsável: {registro_documental.get('responsavel', '—')}")
+                    if registro_documental.get("notas"):
+                        st.write(registro_documental["notas"])
+                with st.form(f"conferencia_parcial_elektro_{p.get('id')}"):
+                    conf_doc = st.checkbox("Conferi código, revisão e identificação da fonte oficial")
+                    conf_escopo = st.checkbox("Conferi o escopo trifásico do item 6.27 e a unidade kVA")
+                    conf_entrada = st.checkbox("Conferi as referências da Tabela 3 sem liberar faixas conflitantes")
+                    notas_doc = st.text_area("Observações da conferência parcial", value="")
+                    if st.form_submit_button("Registrar conferência documental parcial"):
+                        try:
+                            registro_doc = registrar_documental(p, email, {"documento": conf_doc, "escopo_demanda": conf_escopo, "tabela_entrada": conf_entrada}, notas_doc)
+                            novas_regras = dict(regras_atual)
+                            novas_regras[CHAVE_DOCUMENTAL] = registro_doc
+                            salvar_perfil({"regras": novas_regras}, perfil_id=p.get("id"))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Não foi possível registrar a conferência parcial: {e}")
+                st.caption("Este registro não altera a confirmação documental final, VALIDADO ou ATIVO. Alimentador, proteções e atendimento por endereço continuam pendentes.")
 
                 st.markdown("#### Auditoria do enquadramento Elektro")
                 st.caption("Evidências dos testes de software em Guarujá/SP, 220/127 V, em 02/10/2026. Não são aprovação técnica nem homologação do perfil.")

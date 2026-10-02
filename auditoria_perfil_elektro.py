@@ -15,6 +15,7 @@ def assinatura(perfil):
     regras = dict(perfil.get("regras") or {})
     regras.pop(CHAVE, None)
     regras.pop("validacao_automatica_integracao_elektro", None)
+    regras.pop("conferencia_documental_parcial_elektro", None)
     dados = {k: perfil.get(k) for k in ("concessionaria", "documento", "revisao", "uf", "fonte_oficial", "municipios_atendidos", "municipio")}
     dados["regras"] = regras
     return sha256(json.dumps(dados, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
