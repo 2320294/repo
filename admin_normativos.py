@@ -834,6 +834,8 @@ def renderizar_admin_normativos(email):
             validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if eh_ged13_cpfl else False
             eh_elektro = eh_perfil_elektro(p)
             if eh_elektro:
+                from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro
+                renderizar_resumo_elektro(p, f"resumo_auditoria_perfil_{p.get('id')}")
                 tabelas_ok = auditar_tabelas_demanda(regras_atual)
                 from validacao_integrada_elektro import CHAVE as CHAVE_INTEGRACAO, executar
                 from auditoria_perfil_elektro import assinatura as assinatura_testes

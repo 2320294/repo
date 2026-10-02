@@ -1016,6 +1016,11 @@ def renderizar_painel_principal():
             from perfis_normativos import perfil_por_id
             perfil_contexto_entrada = perfil_por_id(resultado_demanda.get("perfil_normativo_id")) or {}
             contexto_entrada = assinatura_contexto(tabela_editada, parametros_projeto, perfil_contexto_entrada)
+            from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro, resumo_projeto
+            renderizar_resumo_elektro(perfil_contexto_entrada, _chave_projeto("resumo_auditoria_perfil_qdc"))
+            registro_entrada_salvo = ((dados_obj or {}).get("config_interruptores") or {}).get("conferencia_entrada_qdc_elektro")
+            situacao_entrada, passo_entrada = resumo_projeto(registro_entrada_salvo, contexto_entrada, resultado_demanda)
+            st.caption(f"Conferência salva deste projeto: {situacao_entrada}. {passo_entrada}")
             def salvar_entrada_qdc(registro):
                 from database import salvar_conferencia_entrada_qdc
                 config_salva = salvar_conferencia_entrada_qdc(st.session_state.user_email,
