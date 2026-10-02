@@ -620,6 +620,21 @@ def renderizar_painel_principal():
                         equipamentos_ok = st.checkbox(
                             "Conferi que não há motores ou cargas especiais exigindo estudo específico",
                             key=_chave_projeto(f"elektro_especiais_{escopo_auditoria}"))
+                        with st.expander("Consultar componentes da entrada — Tabela 3"):
+                            st.caption("Se não souber o tipo de entrada ou a isolação, deixe não informado. "
+                                       "A consulta mostrará as alternativas documentais sem escolher um cabo.")
+                            tipo_entrada_auditoria = st.selectbox(
+                                "Tipo do ramal de entrada",
+                                ["Não informado", "Embutido", "Subterrâneo"],
+                                key=_chave_projeto(f"elektro_entrada_{escopo_auditoria}"))
+                            isolacao_entrada_auditoria = st.selectbox(
+                                "Isolação do ramal de entrada",
+                                ["Não informada", "XLPE/HEPR", "PVC"],
+                                key=_chave_projeto(f"elektro_isolacao_entrada_{escopo_auditoria}"))
+                            isolacao_distribuicao_auditoria = st.selectbox(
+                                "Isolação do ramal de distribuição",
+                                ["Não informada", "XLPE/HEPR", "PVC"],
+                                key=_chave_projeto(f"elektro_isolacao_distribuicao_{escopo_auditoria}"))
                         if st.button("Calcular prévia de demanda Elektro", key=_chave_projeto("calcular_previa_elektro")):
                             previa = calcular_previa(tabela_editada, perfil.get("regras"))
                             if previa["status"] == "calculado":
@@ -647,6 +662,25 @@ def renderizar_painel_principal():
                                         f"({candidato['modalidade']}). Disjuntor indicado na Tabela 3: "
                                         f"{candidato['disjuntor_tabela_a']} A. "
                                         "Resultado preliminar, sem aprovação do padrão de entrada.")
+                                from componentes_entrada_elektro import consultar_componentes, URL_FONTE
+                                componentes = consultar_componentes(auditoria, tipo_entrada_auditoria,
+                                    isolacao_entrada_auditoria, isolacao_distribuicao_auditoria)
+                                st.markdown("##### Referências dos componentes da entrada")
+                                if componentes["linhas"]:
+                                    st.dataframe(componentes["linhas"], use_container_width=True, hide_index=True)
+                                    st.caption("Seções em mm². CU: cobre; AL: alumínio; MULT: multiplexado; "
+                                               "CONC: concêntrico. FN/FF/3F: motor fase-neutro, fase-fase ou trifásico.")
+                                    if candidato["categoria"] == "T2":
+                                        st.caption("Para ramais com cabos de 35 mm², a observação da tabela sugere "
+                                                   "caixa para medidor 200 A ou módulo de policarbonato.")
+                                for componente, referencia in componentes["selecoes"].items():
+                                    st.write(f"**{componente} — alternativa informada:** {referencia}")
+                                for item in componentes["pendencias"]:
+                                    st.write(f"• {item}")
+                                st.info("Consulta documental preliminar. Comprimento, método de instalação, "
+                                        "queda de tensão, capacidade de condução, aterramento e modelo do padrão "
+                                        "ainda exigem conferência técnica. Estes valores não são aplicados ao projeto.")
+                                st.markdown(f"[Consultar DIS-NOR-030 Rev. 07 — Tabela 3]({URL_FONTE})")
                             else:
                                 st.warning("Enquadramento automático bloqueado: conferência técnica pendente.")
                                 for item in auditoria["pendencias"]:
