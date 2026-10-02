@@ -190,7 +190,7 @@ def salvar_dados_projeto(
     existentes = (
         _db()
         .table("dados_projetos")
-        .select("id")
+        .select("id,config_interruptores")
         .eq("user_email", email)
         .eq("nome_projeto", nome_projeto)
         .order("id", desc=True)
@@ -212,9 +212,12 @@ def salvar_dados_projeto(
         registro["local_qdc"] = local_qdc
 
     if config_interruptores is not None:
-        registro["config_interruptores"] = (
-            config_interruptores
-        )
+        config_para_salvar = dict(config_interruptores)
+        # Preserva exclusivamente o registro de auditoria ao salvar outras etapas.
+        config_anterior = (existentes.data[0].get("config_interruptores") or {}) if existentes.data else {}
+        if "auditoria_elektro_preliminar" in config_anterior and "auditoria_elektro_preliminar" not in config_para_salvar:
+            config_para_salvar["auditoria_elektro_preliminar"] = config_anterior["auditoria_elektro_preliminar"]
+        registro["config_interruptores"] = config_para_salvar
 
     # Fase 13.6 Rev.124:
     # "tensao_projeto" é uma coluna legada do banco, com CHECK histórico
@@ -287,3 +290,14 @@ def converter_dxf_do_supabase(valor):
             return None
 
     return None
+
+
+def salvar_auditoria_elektro(email, nome_projeto, registro):
+    """Mescla somente a auditoria na configuração mais recente do projeto."""
+    _, dados = buscar_projeto(email, nome_projeto)
+    if not dados:
+        raise ValueError("Projeto sem dados salvos. Salve o projeto antes da auditoria.")
+    config = dict(dados.get("config_interruptores") or {})
+    config["auditoria_elektro_preliminar"] = registro
+    salvar_dados_projeto(email, nome_projeto, config_interruptores=config)
+    return config

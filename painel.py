@@ -685,6 +685,9 @@ def renderizar_painel_principal():
                             "isolacao_distribuicao": isolacao_distribuicao_auditoria,
                             "ramal": dados_ramal_auditoria,
                         }
+                        from registro_auditoria_elektro import assinatura_contexto
+                        contexto_atual_auditoria = assinatura_contexto(tabela_editada,
+                            st.session_state.get(chave_parametros) or {}, perfil)
                         assinatura_registro = hashlib.sha256(repr((perfil, uf_atual,
                             municipio_atual, tabela_editada, entradas_registro)).encode("utf-8")).hexdigest()
                         chave_registro = _chave_projeto("registro_auditoria_elektro")
@@ -767,6 +770,7 @@ def renderizar_painel_principal():
                             registro_atual = registrar(st.session_state.projeto_ativo,
                                 f"{municipio_atual}/{uf_atual}", perfil, entradas_registro,
                                 tabela_editada, previa, auditoria, componentes, verificacao_ramal)
+                            registro_atual["assinatura_contexto_projeto"] = contexto_atual_auditoria
                             st.session_state[chave_registro] = {"assinatura": assinatura_registro,
                                                               "registro": registro_atual}
                         registro_guardado = st.session_state.get(chave_registro)
@@ -775,6 +779,16 @@ def renderizar_painel_principal():
                             registro_exportacao = registro_guardado["registro"]
                             st.markdown("##### Registro da auditoria preliminar")
                             st.caption("Resultado mantido nesta sessão. Baixe o registro para guardá-lo; ele não constitui aprovação técnica.")
+                            if st.button("Salvar auditoria no projeto", key=_chave_projeto("salvar_auditoria_elektro")):
+                                try:
+                                    from database import salvar_auditoria_elektro
+                                    config_com_auditoria = salvar_auditoria_elektro(st.session_state.user_email,
+                                        st.session_state.projeto_ativo, registro_exportacao)
+                                    dados_obj["config_interruptores"] = config_com_auditoria
+                                    st.session_state[chave_config]["auditoria_elektro_preliminar"] = registro_exportacao
+                                    st.success("Auditoria salva no projeto. Será recuperada ao reabrir.")
+                                except Exception as erro_salvar_auditoria:
+                                    st.error(f"Não foi possível salvar a auditoria no projeto: {erro_salvar_auditoria}")
                             st.download_button("Baixar resumo da auditoria (TXT)",
                                 data=exportar_resumo(registro_exportacao),
                                 file_name="Auditoria_Elektro_Preliminar.txt", mime="text/plain",
@@ -783,6 +797,25 @@ def renderizar_painel_principal():
                                 data=exportar_json(registro_exportacao),
                                 file_name="Auditoria_Elektro_Preliminar.json", mime="application/json",
                                 key=_chave_projeto("baixar_json_auditoria_elektro"))
+                        auditoria_salva = ((dados_obj or {}).get("config_interruptores") or {}).get("auditoria_elektro_preliminar")
+                        if isinstance(auditoria_salva, dict):
+                            with st.expander("Última auditoria salva no projeto", expanded=False):
+                                st.write("Registro de " + str(auditoria_salva.get("registrado_em_utc", "data não informada")) + " (UTC)")
+                                contexto_igual = auditoria_salva.get("assinatura_contexto_projeto") == contexto_atual_auditoria
+                                if not contexto_igual:
+                                    st.warning("Auditoria desatualizada: as cargas, os parâmetros do projeto ou o perfil diferem do registro salvo. Faça uma nova simulação e salve novamente.")
+                                else:
+                                    st.info("Registro recuperado: cargas, parâmetros do projeto e perfil coincidem com o registro salvo. Confira os dados específicos da auditoria antes de um novo cálculo.")
+                                st.caption("Consulta do registro salvo. As confirmações técnicas não são restauradas automaticamente; este registro não aprova o padrão.")
+                                from registro_auditoria_elektro import exportar_json, exportar_resumo
+                                resumo_salvo = exportar_resumo(auditoria_salva)
+                                st.text(resumo_salvo.decode("utf-8"))
+                                st.download_button("Baixar registro salvo (TXT — consulta)", data=resumo_salvo,
+                                    file_name="Auditoria_Elektro_Registro_Salvo.txt", mime="text/plain",
+                                    key=_chave_projeto("baixar_auditoria_salva_txt"))
+                                st.download_button("Baixar registro salvo (JSON — consulta)",
+                                    data=exportar_json(auditoria_salva), file_name="Auditoria_Elektro_Registro_Salvo.json",
+                                    mime="application/json", key=_chave_projeto("baixar_auditoria_salva_json"))
                 except Exception as e:
                     st.error(f"Não foi possível consultar a prévia Elektro: {e}")
 
