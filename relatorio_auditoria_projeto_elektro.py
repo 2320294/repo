@@ -7,6 +7,34 @@ from atendimento_endereco_elektro import linhas_registro
 from resumo_auditoria_elektro import resumir, resumir_projeto
 
 
+
+def identificar_perfil(perfil, resultado):
+    dados = {k: perfil.get(k) for k in ('id', 'documento', 'revisao', 'status', 'fonte_oficial')}
+    dados['distribuidora'] = perfil.get('concessionaria') or perfil.get('distribuidora')
+    partes = [str(v) for v in (dados['distribuidora'], dados['documento']) if v]
+    if dados['revisao']:
+        partes.append('Rev. ' + str(dados['revisao']))
+    dados['nome'] = perfil.get('nome') or (' — '.join(partes) if partes else resultado.get('perfil_normativo'))
+    return dados
+
+
+def comparar_contextos(rede, perfil, resultado):
+    identificado = identificar_perfil(perfil, resultado)
+    candidata = ((resultado.get('enquadramento_elektro') or {}).get('candidato') or {}).get('modalidade')
+    pares = [('Distribuidora', rede.get('concessionaria_manual') or rede.get('concessionaria'), identificado['distribuidora']),
+        ('Perfil normativo (ID)', rede.get('perfil_normativo_id'), identificado['id']),
+        ('Modalidade de fornecimento', rede.get('tipo_fornecimento'), candidata)]
+    linhas = []
+    for campo, atual, teste in pares:
+        if atual is None or atual == '' or teste is None or teste == '':
+            situacao = 'Comparação pendente — dado ausente'
+        else:
+            situacao = 'Correspondente' if str(atual).strip().casefold() == str(teste).strip().casefold() else 'Divergente — conferir antes da aplicação'
+        linhas.append({'Campo': campo, 'Parâmetro do projeto': atual,
+            'Perfil ou candidato da simulação': teste, 'Situação': situacao})
+    return linhas
+
+
 def consolidar(atendimento, rede, perfil, entrada, contexto, resultado, projeto):
     etapas = resumir_projeto(atendimento, rede, perfil, entrada, contexto, resultado)
     textos = json.dumps([atendimento, (entrada or {}).get('dados_ramal')], ensure_ascii=False).casefold()
@@ -17,7 +45,8 @@ def consolidar(atendimento, rede, perfil, entrada, contexto, resultado, projeto)
         'aprovado': False, 'homologado': False, 'dg_liberado': False, 'alimentador_liberado': False,
         'indicacao_dados_teste': indicios,
         'nota_dados': 'Há indicação textual de dados fictícios ou simulação nos registros.' if indicios else 'A origem real dos dados exige conferência; ausência de indicação textual não confirma autenticidade.',
-        'perfil': {k: perfil.get(k) for k in ('id', 'nome', 'distribuidora', 'documento', 'revisao', 'status', 'fonte_oficial')},
+        'perfil': identificar_perfil(perfil, resultado),
+        'comparacao_contextos': comparar_contextos(rede, perfil, resultado),
         'rede_atual': rede, 'assinatura_contexto_projeto': contexto,
         'situacao_registros': etapas, 'auditoria_perfil': resumir(perfil),
         'demanda_atual': resultado, 'atendimento_salvo': atendimento, 'entrada_ramal_salva': entrada,
@@ -45,7 +74,11 @@ def gerar_html(relatorio):
         pares({'Projeto':r['projeto'],'Emissão (UTC)':r['emitido_em_utc'],'Escopo':r['escopo']}),
         '<p class="aviso">'+esc(r['nota_dados'])+' Este relatório não aprova o projeto nem homologa o perfil.</p>',
         '<h2>Situação dos registros deste projeto</h2>',tabela(r['situacao_registros']),
-        '<h2>Perfil normativo</h2>',pares(r['perfil']),'<h2>Parâmetros atuais da rede</h2>',pares(r['rede_atual']),
+        '<h2>Contexto do projeto e da simulação</h2>',
+        '<p class="aviso">O perfil de teste e a categoria candidata não alteram a distribuidora, o perfil ativo ou a modalidade de fornecimento cadastrados no projeto. Diferenças abaixo exigem conferência antes de qualquer aplicação.</p>',
+        tabela(r.get('comparacao_contextos') or []),
+        '<h2>Perfil normativo usado na simulação</h2>',pares({'Identificação':r['perfil'].get('nome'),'Distribuidora':r['perfil'].get('distribuidora'),'ID':r['perfil'].get('id'),'Documento':r['perfil'].get('documento'),'Revisão':r['perfil'].get('revisao'),'Situação':r['perfil'].get('status'),'Fonte oficial':r['perfil'].get('fonte_oficial')}),
+        '<h2>Parâmetros atuais do projeto</h2>',pares(r['rede_atual']),
         '<h2>Demanda e enquadramento atuais — teste</h2>',pares({'Situação da demanda':dem.get('status'),'Demanda aparente (kVA)':dem.get('demanda_aparente_kva'),'Situação do enquadramento':aud.get('status'),'Categoria candidata':cand.get('categoria'),'Modalidade candidata':cand.get('modalidade'),'Disjuntor de referência da tabela (A), sem aplicação como DG':cand.get('disjuntor_tabela_a')}),
         '<h2>Evidência de atendimento salva</h2>']
     at=r['atendimento_salvo']
