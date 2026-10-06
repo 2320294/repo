@@ -1033,7 +1033,8 @@ def renderizar_painel_principal():
             renderizar_resumo_projeto_elektro(
                 ((dados_obj or {}).get("config_interruptores") or {}).get("atendimento_endereco_elektro"),
                 parametros_projeto.get("parametros_rede") or {}, perfil_contexto_entrada,
-                registro_entrada_salvo, contexto_entrada, resultado_demanda)
+                registro_entrada_salvo, contexto_entrada, resultado_demanda,
+                projeto=st.session_state.projeto_ativo, chave=_chave_projeto("relatorio_auditoria_projeto"))
             def salvar_entrada_qdc(registro):
                 from database import salvar_conferencia_entrada_qdc
                 config_salva = salvar_conferencia_entrada_qdc(st.session_state.user_email,

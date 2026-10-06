@@ -85,8 +85,17 @@ def resumir_projeto(atendimento, rede, perfil, entrada, contexto, resultado):
         {"Etapa": "Conferência de entrada e ramal", "Situação": estado_entrada, "Próximo passo": passo_entrada}]
 
 
-def renderizar_projeto(atendimento, rede, perfil, entrada, contexto, resultado):
+def renderizar_projeto(atendimento, rede, perfil, entrada, contexto, resultado, projeto=None, chave=None):
     import streamlit as st
     with st.expander("Resumo da auditoria deste projeto — Elektro"):
         st.table(resumir_projeto(atendimento, rede, perfil, entrada, contexto, resultado))
         st.caption("Resumo dos registros salvos deste projeto. Evidência declarada e critérios informados atendidos exigem validação técnica. Os bloqueios normativos permanecem e não há liberação de DG ou alimentador.")
+
+        from relatorio_auditoria_projeto_elektro import consolidar, gerar_html
+        import json
+        relatorio = consolidar(atendimento, rede, perfil, entrada, contexto, resultado, projeto)
+        st.caption("O relatório reúne o cálculo atual e os registros salvos, indicando dados de teste e registros desatualizados. Abra o HTML no navegador para ler ou imprimir.")
+        st.download_button("Baixar relatório da auditoria do projeto (HTML)", data=gerar_html(relatorio),
+            file_name="Auditoria_Projeto_Elektro.html", mime="text/html", key=(chave + "_html") if chave else None)
+        st.download_button("Baixar dados completos da auditoria do projeto (JSON)", data=json.dumps(relatorio, ensure_ascii=False, indent=2, default=str),
+            file_name="Auditoria_Projeto_Elektro.json", mime="application/json", key=(chave + "_json") if chave else None)
