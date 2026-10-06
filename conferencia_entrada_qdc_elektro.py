@@ -13,6 +13,9 @@ def assinatura_registro(registro):
 
 
 def renderizar(resultado, chave_projeto, contexto=None, salvo=None, salvar=None, projeto=None):
+    aviso_salvo = chave_projeto("entrada_salva_aviso")
+    if st.session_state.pop(aviso_salvo, False):
+        st.success('Conferência salva no projeto. Resumo atualizado; ao reabrir, a confirmação técnica deverá ser refeita.')
     auditoria = resultado.get("enquadramento_elektro") or {}
     candidato = auditoria.get("candidato") or {}
     salvo = salvo if isinstance(salvo, dict) else None
@@ -105,7 +108,10 @@ def renderizar(resultado, chave_projeto, contexto=None, salvo=None, salvar=None,
             registro["registrado_em_utc"] = datetime.now(timezone.utc).isoformat()
             try:
                 salvar(registro)
-                st.success("Conferência salva no projeto. Será recuperada ao reabrir, sem restaurar a confirmação técnica.")
+
             except Exception as erro:
                 st.error(f"Não foi possível salvar a conferência: {erro}")
+            else:
+                st.session_state[aviso_salvo] = True
+                st.rerun()
         st.download_button("Baixar conferência de entrada e ramal (JSON)", data=json.dumps(registro, ensure_ascii=False, indent=2, allow_nan=False), file_name="Conferencia_Entrada_Ramal_Elektro_QDC.json", mime="application/json", key=chave("baixar"))

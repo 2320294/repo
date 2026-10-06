@@ -93,6 +93,9 @@ def linhas_registro(salvo):
 
 def renderizar(rede, perfil, salvo, salvar, chave, projeto, responsavel):
     import streamlit as st
+    aviso_salvo = chave("atendimento_salvo_aviso")
+    if st.session_state.pop(aviso_salvo, False):
+        st.success('Registro salvo. Resumo atualizado; será recuperado ao reabrir o projeto.')
     with st.expander("Atendimento e tensão por endereço — Elektro"):
         st.caption("O município vinculado ao perfil não confirma o atendimento ou a tensão de cada endereço. Registre a fonte aplicável ao imóvel.")
         if isinstance(salvo, dict):
@@ -126,6 +129,9 @@ def renderizar(rede, perfil, salvo, salvar, chave, projeto, responsavel):
         if st.button("Salvar atendimento e tensão no projeto", key=k("salvar")):
             try:
                 salvar(registro)
-                st.success("Registro salvo. Será recuperado ao reabrir o projeto.")
+
             except Exception as erro:
                 st.error(f"Não foi possível salvar: {erro}")
+            else:
+                st.session_state[aviso_salvo] = True
+                st.rerun()
