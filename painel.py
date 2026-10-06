@@ -1027,11 +1027,13 @@ def renderizar_painel_principal():
                 ((dados_obj or {}).get("config_interruptores") or {}).get("atendimento_endereco_elektro"),
                 salvar_atendimento_qdc, _chave_projeto, st.session_state.projeto_ativo, st.session_state.user_email)
             contexto_entrada = assinatura_contexto(tabela_editada, parametros_projeto, perfil_contexto_entrada)
-            from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro, resumo_projeto
+            from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro, renderizar_projeto as renderizar_resumo_projeto_elektro
             renderizar_resumo_elektro(perfil_contexto_entrada, _chave_projeto("resumo_auditoria_perfil_qdc"))
             registro_entrada_salvo = ((dados_obj or {}).get("config_interruptores") or {}).get("conferencia_entrada_qdc_elektro")
-            situacao_entrada, passo_entrada = resumo_projeto(registro_entrada_salvo, contexto_entrada, resultado_demanda)
-            st.caption(f"Conferência salva deste projeto: {situacao_entrada}. {passo_entrada}")
+            renderizar_resumo_projeto_elektro(
+                ((dados_obj or {}).get("config_interruptores") or {}).get("atendimento_endereco_elektro"),
+                parametros_projeto.get("parametros_rede") or {}, perfil_contexto_entrada,
+                registro_entrada_salvo, contexto_entrada, resultado_demanda)
             def salvar_entrada_qdc(registro):
                 from database import salvar_conferencia_entrada_qdc
                 config_salva = salvar_conferencia_entrada_qdc(st.session_state.user_email,

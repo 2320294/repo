@@ -63,6 +63,34 @@ def situacao(salvo, rede, perfil):
     return "Evidência declarada completa — exige validação técnica" if salvo.get("status") == "evidencia_declarada_completa" else "Pendente de dados ou conferência"
 
 
+def linhas_registro(salvo):
+    """Apresentação legível sem modificar a evidência ou o JSON exportado."""
+    entrada = salvo.get("entradas") or {}
+    local = salvo.get("local") or {}
+    def valor(campo):
+        return str(entrada.get(campo) or "Não informado")
+    def confirmacao(campo):
+        if campo not in entrada:
+            return "Não informado"
+        return "Sim" if entrada[campo] is True else "Não"
+    data = valor("data_fonte")
+    try:
+        data = datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        pass
+    pares = [("UF", local.get("uf") or "Não informada"),
+        ("Município", local.get("municipio") or "Não informado"),
+        ("Usuário sem dados do endereço", confirmacao("sem_dados")),
+        ("Endereço do imóvel", valor("endereco")),
+        ("Fonte da informação", valor("fonte")),
+        ("Protocolo ou referência documental", valor("referencia")),
+        ("Data da informação", data),
+        ("Tensão informada", valor("tensao_informada")),
+        ("Atendimento confirmado na fonte", confirmacao("atendimento_confirmado")),
+        ("Correspondência da fonte com o endereço conferida", confirmacao("conferido"))]
+    return [{"Campo": campo, "Informação salva": informacao} for campo, informacao in pares]
+
+
 def renderizar(rede, perfil, salvo, salvar, chave, projeto, responsavel):
     import streamlit as st
     with st.expander("Atendimento e tensão por endereço — Elektro"):
@@ -70,7 +98,7 @@ def renderizar(rede, perfil, salvo, salvar, chave, projeto, responsavel):
         if isinstance(salvo, dict):
             st.write("Registro salvo: " + situacao(salvo, rede, perfil))
             st.caption("Data do registro: " + str(salvo.get("registrado_em_utc")) + " (UTC)")
-            st.write(salvo.get("entradas") or {})
+            st.table(linhas_registro(salvo))
             for item in salvo.get("pendencias") or []:
                 st.caption("• " + item)
             st.download_button("Baixar registro de atendimento salvo (JSON)", data=json.dumps(salvo, ensure_ascii=False, indent=2),

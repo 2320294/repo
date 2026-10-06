@@ -67,3 +67,26 @@ def renderizar(perfil, chave):
                 "revisao": perfil.get("revisao"), "assinatura_perfil": assinatura(perfil),
                 "homologado": False, "etapas": linhas}, ensure_ascii=False, indent=2),
             file_name="Resumo_Auditoria_Perfil_Elektro.json", mime="application/json", key=chave)
+
+
+def resumir_projeto(atendimento, rede, perfil, entrada, contexto, resultado):
+    from atendimento_endereco_elektro import situacao
+    estado = situacao(atendimento, rede, perfil)
+    if estado == "Não registrado":
+        passo = "Registrar os dados do endereço ou indicar que ainda não os possui."
+    elif estado.startswith("Desatualizado"):
+        passo = "Conferir a fonte para a localidade, tensão e perfil atuais e salvar novo registro."
+    elif estado.startswith("Evidência declarada completa"):
+        passo = "Obter validação técnica da evidência; dados declarados não aprovam o atendimento."
+    else:
+        passo = "Completar os dados e confirmar a fonte aplicável ao endereço."
+    estado_entrada, passo_entrada = resumo_projeto(entrada, contexto, resultado)
+    return [{"Etapa": "Atendimento e tensão por endereço", "Situação": estado, "Próximo passo": passo},
+        {"Etapa": "Conferência de entrada e ramal", "Situação": estado_entrada, "Próximo passo": passo_entrada}]
+
+
+def renderizar_projeto(atendimento, rede, perfil, entrada, contexto, resultado):
+    import streamlit as st
+    with st.expander("Resumo da auditoria deste projeto — Elektro"):
+        st.table(resumir_projeto(atendimento, rede, perfil, entrada, contexto, resultado))
+        st.caption("Resumo dos registros salvos deste projeto. Evidência declarada e critérios informados atendidos exigem validação técnica. Os bloqueios normativos permanecem e não há liberação de DG ou alimentador.")
