@@ -262,7 +262,9 @@ def fator_tabela3_limites_cpfl(regra, carga_kw):
 def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao):
     import math
     """Consulta documental independente; não altera DG nem alimentador."""
-    if "CPFL" not in str(perfil.get("concessionaria", "")).upper() or str(perfil.get("documento", "")).upper() != "GED-13":
+    import re
+    documento = str(perfil.get("documento", "")).upper()
+    if "CPFL" not in str(perfil.get("concessionaria", "")).upper() or not re.search(r"\bGED\s*[-–—]?\s*13\b", documento):
         return None
     if tipo != "Trifásico" or tensao != "127/220 V":
         return None
