@@ -534,11 +534,18 @@ def renderizar_painel_principal():
             "antes de prosseguir para o dimensionamento do projeto elétrico."
         )
 
+        from perfis_normativos import perfil_por_id
+        from normativo_elektro import perfil_eh_perfil_elektro
+        rede_cargas = (st.session_state.get(chave_parametros) or {}).get("parametros_rede") or {}
+        perfil_cargas = perfil_por_id(rede_cargas.get("perfil_normativo_id")) or {}
+        auditoria_elektro_cargas = perfil_eh_perfil_elektro(perfil_cargas)
+
         tabela_editada = (
             renderizar_edicao_cargas(
                 st.session_state[
                     chave_tabela
-                ]
+                ],
+                auditoria_elektro=auditoria_elektro_cargas
             )
         )
 
@@ -550,7 +557,7 @@ def renderizar_painel_principal():
             tabela_editada
         )
 
-        if st.button("Salvar cargas e dados de placa das TUEs", key=_chave_projeto("salvar_cargas_tue")):
+        if st.button("Salvar cargas e dados de placa das TUEs" if auditoria_elektro_cargas else "Salvar cargas", key=_chave_projeto("salvar_cargas_tue")):
             try:
                 salvar_dados_projeto(
                     st.session_state.user_email,
@@ -967,6 +974,22 @@ def renderizar_painel_principal():
                     "⚠️ **Modalidade de fornecimento alterada automaticamente**\n\n"
                     + aviso_fornecimento
                 )
+
+        if resultado_demanda.get("auditoria_entrada_cpfl"):
+            from normativo_cpfl import renderizar_dados_entrada_cpfl, conferir_entrada_trifasica_cpfl
+            from perfis_normativos import perfil_por_id
+            perfil_cpfl = perfil_por_id(resultado_demanda.get("perfil_normativo_id")) or {}
+            dados_cpfl = (dados_obj.get("config_interruptores") or {}).get("dados_entrada_cpfl") or {}
+            def salvar_dados_cpfl(registros):
+                from database import salvar_dados_entrada_cpfl
+                config_salva = salvar_dados_entrada_cpfl(st.session_state.user_email, st.session_state.projeto_ativo, registros)
+                dados_obj["config_interruptores"] = config_salva
+                st.session_state[chave_config]["dados_entrada_cpfl"] = registros
+            renderizar_dados_entrada_cpfl(perfil_cpfl, resultado_demanda, dados_cpfl, salvar_dados_cpfl, _chave_projeto)
+            resultado_demanda["auditoria_entrada_cpfl"] = conferir_entrada_trifasica_cpfl(
+                perfil_cpfl, resultado_demanda.get("detalhes_demanda") or [],
+                resultado_demanda.get("tipo_fornecimento"), resultado_demanda.get("tensao_fornecimento"),
+                dados_cpfl.get(str(perfil_cpfl.get("id", "")), {}))
 
         status = resultado_demanda.get("status")
         auditoria_cpfl = resultado_demanda.get("auditoria_entrada_cpfl") or {}

@@ -259,7 +259,7 @@ def fator_tabela3_limites_cpfl(regra, carga_kw):
     return None
 
 
-def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao):
+def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao, dados=None):
     import math
     """Consulta documental independente; não altera DG nem alimentador."""
     import re
@@ -281,6 +281,21 @@ def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao):
         if item.get("tabela_id") in fp_unidade:
             parcial += watts / 1000.0
         else:
+            registro = (dados or {}).get(chave_dado_cpfl(item)) or {}
+            try:
+                valor = float(registro.get("valor", 0))
+                modo = registro.get("modo")
+                carga = float(item.get("carga_instalada_w", 0) or 0)
+                fator = float(item.get("fator", 0) or 0)
+                valido = bool(str(registro.get("fonte", "")).strip()) and math.isfinite(valor)
+                if modo == "Fator de potência (FP)" and valido and 0 < valor <= 1:
+                    parcial += watts / valor / 1000.0
+                    continue
+                if modo == "Potência aparente total (VA)" and valido and valor >= carga > 0 and 0 < fator <= 1:
+                    parcial += valor * fator / 1000.0
+                    continue
+            except (TypeError, ValueError):
+                pass
             pendencias.append(str(item.get("categoria") or "Carga") + ": confirmar potência aparente (VA) ou fator de potência e regra aplicável.")
     resultado = {"status": "pendente", "demanda_parcial_kva": parcial, "demanda_kva": None, "categoria": None, "pendencias": pendencias, "fonte": "GED-13 Rev.46.0, itens 6.22.1 e Tabela 1C", "aprovacao_automatica": False}
     if pendencias or not detalhes or parcial <= 0:
@@ -295,3 +310,56 @@ def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao):
             return resultado
     resultado["pendencias"] = ["Demanda acima da faixa da Tabela 1C cadastrada."]
     return resultado
+
+
+def chave_dado_cpfl(item):
+    import hashlib
+    import json
+    campos = {k: item.get(k) for k in ("categoria", "carga_instalada_w", "quantidade", "fator", "demanda_w", "tabela_id")}
+    return hashlib.sha256(json.dumps(campos, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def renderizar_dados_entrada_cpfl(perfil, resultado, salvos, salvar, chave):
+    import streamlit as st
+    if not resultado.get("auditoria_entrada_cpfl"):
+        return
+    detalhes = resultado.get("detalhes_demanda") or []
+    # A elegibilidade é informada pela conferência específica do perfil.
+    necessarios = [i for i in detalhes if conferir_entrada_trifasica_cpfl(perfil, [i], resultado.get("tipo_fornecimento"), resultado.get("tensao_fornecimento")) and conferir_entrada_trifasica_cpfl(perfil, [i], resultado.get("tipo_fornecimento"), resultado.get("tensao_fornecimento"))["status"] == "pendente" and float(i.get("demanda_w", 0) or 0) > 0]
+    if not necessarios:
+        return
+    with st.expander("Completar dados dos equipamentos", expanded=False):
+        st.caption("Consulte placa, ficha técnica ou fabricante. Os valores abaixo se referem ao total de cada grupo listado; para equipamentos diferentes, obtenha o total em VA de todos eles. BTU/h indica capacidade térmica e não substitui VA.")
+        novos = {}
+        perfil_id = str(perfil.get("id", ""))
+        guardados = salvos.get(perfil_id, {}) if isinstance(salvos, dict) else {}
+        with st.form(chave("form_dados_cpfl_" + perfil_id)):
+            erros = []
+            for item in necessarios:
+                ident = chave_dado_cpfl(item)
+                anterior = guardados.get(ident) or {}
+                st.markdown("**" + str(item.get("categoria", "Equipamento")) + "**")
+                st.caption(f"Quantidade: {item.get('quantidade')} | Potência ativa total: {float(item.get('carga_instalada_w', 0))/1000:.3f} kW")
+                opcoes = ["Não tenho esses dados", "Potência aparente total (VA)", "Fator de potência (FP)"]
+                modo = st.selectbox("Dado disponível", opcoes, index=opcoes.index(anterior.get("modo")) if anterior.get("modo") in opcoes else 0, key=chave("modo_cpfl_" + perfil_id + ident))
+                valor = st.number_input("Valor de VA ou FP conforme a opção selecionada", min_value=0.0, value=float(anterior.get("valor", 0) or 0), format="%.4f", key=chave("valor_cpfl_" + perfil_id + ident))
+                fonte = st.text_input("Fonte (fabricante, modelo e placa/ficha técnica)", value=str(anterior.get("fonte", "")), key=chave("fonte_cpfl_" + perfil_id + ident))
+                if modo != opcoes[0]:
+                    carga = float(item.get("carga_instalada_w", 0) or 0)
+                    if not fonte.strip() or (modo == opcoes[1] and valor < carga) or (modo == opcoes[2] and not 0 < valor <= 1):
+                        erros.append(str(item.get("categoria")) + ": informe fonte e VA ≥ W ou FP entre 0 e 1 (maior que zero).")
+                novos[ident] = {"modo": modo, "valor": valor, "fonte": fonte.strip()}
+            enviar = st.form_submit_button("Salvar e conferir entrada")
+        if enviar:
+            if erros:
+                for erro in erros:
+                    st.error(erro)
+            else:
+                registros = dict(salvos or {})
+                registros[perfil_id] = novos
+                try:
+                    salvar(registros)
+                except Exception as erro:
+                    st.error(f"Não foi possível salvar os dados: {erro}")
+                else:
+                    st.rerun()

@@ -215,6 +215,8 @@ def salvar_dados_projeto(
         config_para_salvar = dict(config_interruptores)
         # Preserva exclusivamente o registro de auditoria ao salvar outras etapas.
         config_anterior = (existentes.data[0].get("config_interruptores") or {}) if existentes.data else {}
+        if "dados_entrada_cpfl" in config_anterior and "dados_entrada_cpfl" not in config_para_salvar:
+            config_para_salvar["dados_entrada_cpfl"] = config_anterior["dados_entrada_cpfl"]
         if "auditoria_elektro_preliminar" in config_anterior and "auditoria_elektro_preliminar" not in config_para_salvar:
             config_para_salvar["auditoria_elektro_preliminar"] = config_anterior["auditoria_elektro_preliminar"]
         if "conferencia_entrada_qdc_elektro" in config_anterior and "conferencia_entrada_qdc_elektro" not in config_para_salvar:
@@ -324,5 +326,15 @@ def salvar_atendimento_endereco_elektro(email, nome_projeto, registro):
         raise ValueError("Salve o projeto antes do registro de atendimento.")
     config = dict(dados.get("config_interruptores") or {})
     config["atendimento_endereco_elektro"] = registro
+    salvar_dados_projeto(email, nome_projeto, config_interruptores=config)
+    return config
+
+
+def salvar_dados_entrada_cpfl(email, nome_projeto, registros):
+    _, dados = buscar_projeto(email, nome_projeto)
+    if not dados:
+        raise ValueError("Salve o projeto antes de completar os dados.")
+    config = dict(dados.get("config_interruptores") or {})
+    config["dados_entrada_cpfl"] = registros
     salvar_dados_projeto(email, nome_projeto, config_interruptores=config)
     return config

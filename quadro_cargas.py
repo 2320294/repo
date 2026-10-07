@@ -51,7 +51,7 @@ def valor_w(row, campo_w, campo_va, padrao=0):
     return int(padrao)
 
 
-def renderizar_edicao_cargas(dados_ambientes):
+def renderizar_edicao_cargas(dados_ambientes, auditoria_elektro=False):
     """Exibe os campos editáveis de iluminação, TUG e TUE em duas colunas."""
     dados_ambientes = sorted(
         dados_ambientes,
@@ -93,7 +93,7 @@ def renderizar_edicao_cargas(dados_ambientes):
                 value=str(row.get("Equipamento TUE", "-")),
                 key=f"eq_{ambiente}"
             )
-            if qtd_tue > 0 and "/" in eq_tue:
+            if auditoria_elektro and qtd_tue > 0 and "/" in eq_tue:
                 st.caption("Para a auditoria Elektro, substitua a descrição com '/' "
                            "pelo equipamento realmente previsto. Ex.: escolha micro-ondas "
                            "ou forno elétrico; não use ambos no mesmo campo.")
@@ -114,7 +114,7 @@ def renderizar_edicao_cargas(dados_ambientes):
                 capacidade_btu_tue = int(row.get("Capacidade TUE (BTU/h)") or 0)
             except (ValueError, TypeError):
                 capacidade_btu_tue = 0
-            if qtd_tue > 0:
+            if auditoria_elektro and qtd_tue > 0:
                 with st.expander("Dados de placa da TUE (auditoria Elektro)"):
                     st.caption("Quando houver mais de uma TUE neste ambiente, os dados informados "
                                "devem ser iguais para todas. Caso sejam equipamentos diferentes, "
