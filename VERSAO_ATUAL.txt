@@ -1,9 +1,0 @@
-AUTOELÉTRICA
-VERSÃO ATUAL: Fase 8.15
-IDENTIFICADOR: Fase_8_15
-
-[OK] exclusão de projeto exige confirmação
-[OK] botão de cancelamento disponível
-[OK] nome do projeto aparece no alerta
-[OK] saudação removida do painel principal
-[OK] saudação mantida no menu lateral
