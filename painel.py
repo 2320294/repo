@@ -969,6 +969,14 @@ def renderizar_painel_principal():
                 )
 
         status = resultado_demanda.get("status")
+        auditoria_cpfl = resultado_demanda.get("auditoria_entrada_cpfl") or {}
+        if auditoria_cpfl.get("status") == "pendente":
+            st.warning("Entrada CPFL: categoria pendente de conferência em kVA. "
+                       "Confirme VA ou fator de potência das cargas sem conversão disponível. "
+                       "DG e alimentador exibidos permanecem preliminares.")
+        elif auditoria_cpfl.get("categoria"):
+            st.caption(f"Referência do padrão CPFL: {auditoria_cpfl['categoria']} "
+                       f"({auditoria_cpfl['demanda_kva']:.2f} kVA). Conferência técnica pendente.")
         if status in ("elektro_demanda_integrada", "elektro_integracao_pendente"):
             st.info("Demanda Elektro recalculada com as cargas atuais do projeto, em modo de teste. Corrente, DG e alimentador continuam pendentes de homologação.")
             for pendencia in resultado_demanda.get("pendencias", []):

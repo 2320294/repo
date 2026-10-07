@@ -403,6 +403,8 @@ def _calcular_automatico(tabela_editada, rede, perfil):
     status_base = "ok" if corrente is not None and dg is not None else ("fornecimento_incompleto" if corrente is None else "acima_da_faixa")
     status = "ok_com_criterio_tecnico" if criterio_tecnico and status_base == "ok" else status_base
     fator_global = (demanda_total / pot["total_w"] * 100.0) if pot["total_w"] > 0 else 0.0
+    from normativo_cpfl import conferir_entrada_trifasica_cpfl
+    auditoria_cpfl = conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo_fornec, tensao_fornec)
     return {
         **pot,
         "status": status,
@@ -425,6 +427,7 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         "pendencias": [],
         "criterio_tecnico_conservador": criterio_tecnico,
         "memoria_dimensionamento_entrada": memoria_entrada,
+        "auditoria_entrada_cpfl": auditoria_cpfl,
         "observacao": (
             "Demanda calculada com as regras persistidas no perfil normativo ATIVO; "
             "TUEs sem fator específico foram consideradas a 100% como critério técnico conservador, "

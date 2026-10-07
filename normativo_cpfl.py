@@ -257,3 +257,39 @@ def fator_tabela3_limites_cpfl(regra, carga_kw):
         if carga > minimo and (maximo in (None, "") or carga <= float(maximo)):
             return float(faixa.get("fator", 0) or 0)
     return None
+
+
+def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao):
+    import math
+    """Consulta documental independente; não altera DG nem alimentador."""
+    if "CPFL" not in str(perfil.get("concessionaria", "")).upper() or str(perfil.get("documento", "")).upper() != "GED-13":
+        return None
+    if tipo != "Trifásico" or tensao != "127/220 V":
+        return None
+    fp_unidade = {"GED13_TABELA_3", "GED13_TABELA_4", "GED13_TABELA_5", "GED13_TABELA_6", "GED13_TABELA_6_CRITERIO_FUNCAO_SECAGEM", "GED13_TABELA_7", "GED13_TABELA_10_HIDROMASSAGEM"}
+    parcial = 0.0
+    pendencias = []
+    for item in detalhes:
+        watts = float(item.get("demanda_w", 0) or 0)
+        if not math.isfinite(watts) or watts < 0:
+            pendencias.append("Parcela de demanda inválida.")
+            continue
+        if watts == 0:
+            continue
+        if item.get("tabela_id") in fp_unidade:
+            parcial += watts / 1000.0
+        else:
+            pendencias.append(str(item.get("categoria") or "Carga") + ": confirmar potência aparente (VA) ou fator de potência e regra aplicável.")
+    resultado = {"status": "pendente", "demanda_parcial_kva": parcial, "demanda_kva": None, "categoria": None, "pendencias": pendencias, "fonte": "GED-13 Rev.46.0, itens 6.22.1 e Tabela 1C", "aprovacao_automatica": False}
+    if pendencias or not detalhes or parcial <= 0:
+        if not pendencias:
+            resultado["pendencias"] = ["Demanda aparente total indisponível."]
+        return resultado
+    resultado["demanda_kva"] = parcial
+    limites = [(23, "C1", 63, 16, 10, 40), (30, "C2", 80, 25, 10, 40), (38, "C3", 100, 35, 10, 40), (47, "C4", 125, 50, 16, 50), (57, "C5", 150, 70, 25, 60), (76, "C6", 200, 95, 35, 60)]
+    for maximo, categoria, disjuntor, cobre, terra, eletroduto in limites:
+        if parcial <= maximo:
+            resultado.update(status="referencia_documental", categoria=categoria, disjuntor_padrao_a=disjuntor, ramal_entrada_cobre_mm2=cobre, aterramento_padrao_mm2=terra, eletroduto_padrao_mm=eletroduto)
+            return resultado
+    resultado["pendencias"] = ["Demanda acima da faixa da Tabela 1C cadastrada."]
+    return resultado
