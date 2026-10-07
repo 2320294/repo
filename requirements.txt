@@ -1,9 +1,0 @@
-streamlit[auth]>=1.42.0,<2.0
-pandas
-ezdxf
-supabase==2.24.0
-xlsxwriter
-reportlab
-Authlib>=1.3.2
-
-matplotlib
