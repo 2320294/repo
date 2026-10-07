@@ -368,6 +368,24 @@ def renderizar_parametros_projeto(
                 value=bool(contexto_salvo.get(campo)) if contexto_compativel else False,
                 key=_widget_key(f"elektro_teste_{campo}_{uf}_{municipio}_{perfil_elektro_teste_id}_{tensao_fornecimento}"))
 
+    from normativo_elektro import perfil_eh_perfil_elektro
+    if metodo_demanda.startswith("Automático") and perfil_eh_perfil_elektro(perfil_selecionado or {}):
+        st.info("Elektro: demanda residencial trifásica em 220/127 V. Confirme os dados disponíveis; dúvidas mantêm o caso sob conferência técnica. Entrada, DG e alimentador não são liberados automaticamente.")
+        contexto_salvo = rede.get("contexto_elektro_teste") or {}
+        contexto_compativel = (str(rede.get("perfil_normativo_id")) == str(perfil_selecionado.get("id"))
+                              and rede.get("metodo_demanda", "").startswith("Automático")
+                              and rede.get("uf") == uf and rede.get("municipio") == municipio
+                              and rede.get("tensao_fornecimento") == tensao_fornecimento)
+        for campo, rotulo in (
+            ("atendimento_confirmado", "Tenho confirmação de atendimento Elektro e tensão no endereço"),
+            ("urbano_individual", "Instalação residencial individual urbana"),
+            ("cargas_conferidas", "Conferi quantidades, potências em W e dados de placa"),
+            ("equipamentos_conferidos", "Conferi ausência de motores e cargas especiais"),
+        ):
+            contexto_elektro_teste[campo] = st.checkbox(rotulo,
+                value=bool(contexto_salvo.get(campo)) if contexto_compativel else False,
+                key=_widget_key(f"elektro_ativo_{campo}_{uf}_{municipio}_{perfil_selecionado.get('id')}_{tensao_fornecimento}"))
+
     fator_demanda_manual = float(rede.get("fator_demanda_manual", 100.0) or 100.0)
     if metodo_demanda == "Manual pelo responsável técnico":
         fator_demanda_manual = st.number_input(

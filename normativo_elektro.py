@@ -802,6 +802,7 @@ auditoria_CASOS = (
 
 def auditoria_assinatura(perfil):
     regras = dict(perfil.get("regras") or {})
+    regras.pop("fonte_conferida", None)
     regras.pop(auditoria_CHAVE, None)
     regras.pop("validacao_automatica_integracao_elektro", None)
     regras.pop("conferencia_documental_parcial_elektro", None)
@@ -1419,3 +1420,63 @@ def relatorio_gerar_html(relatorio):
     partes+=['<p>'+esc(p)+'</p>' for p in r['bloqueios']]
     partes+=['<h2>Memória completa da demanda atual</h2><pre>'+html.escape(json.dumps(dem,ensure_ascii=False,indent=2,default=str))+'</pre></body></html>']
     return ''.join(partes)
+
+
+# Publicação operacional limitada: não declara homologação de entrada.
+ativacao_ESCOPO = "Demanda trifásica residencial urbana em 220/127 V; entrada sob conferência técnica"
+
+def ativacao_pendencias(perfil, exigir_fonte=True):
+    regras = (perfil or {}).get("regras") or {}
+    pendencias = []
+    if not perfil_eh_perfil_elektro(perfil):
+        return ["Documento Elektro incompatível."]
+    uf = str(perfil.get("uf") or "").strip().upper()
+    cidades = perfil.get("municipios_atendidos") or [perfil.get("municipio")]
+    conhecidas = {x.casefold() for x in municipios_MUNICIPIOS_ELEKTRO.get(uf, [])}
+    if not conhecidas or not cidades or any(not isinstance(x, str) or x.strip().casefold() not in conhecidas for x in cidades):
+        pendencias.append("Definir UF e municípios explícitos atendidos pela Elektro.")
+    fornecimento = regras.get("fornecimento") or {}
+    if (regras.get("schema") not in ("autoeletrica.perfil_normativo.v1", "autoeletrica.perfil_normativo.v2")
+        or regras.get("tipo_instalacao") != "Residencial individual"
+        or fornecimento.get("tensao_fase_neutro_v") != 127
+        or fornecimento.get("tensao_fase_fase_v") != 220):
+        pendencias.append("Configurar perfil residencial individual em 220/127 V.")
+    tabelas = regras.get("demanda_elektro_auditoria") or {}
+    referencia = perfil_preparar_tabelas_demanda({})["demanda_elektro_auditoria"]
+    if not perfil_auditar_tabelas_demanda(regras) or any(tabelas.get(k) != v for k, v in referencia.items() if k.startswith("tabela_")):
+        pendencias.append("Cadastrar e conferir todas as tabelas de demanda Elektro desta revisão.")
+    assinatura = auditoria_assinatura(perfil)
+    registro = regras.get(validacao_CHAVE) or {}
+    if not registro.get("passou") or registro.get("assinatura_perfil") != assinatura:
+        pendencias.append("Executar e registrar novamente os testes da demanda integrada.")
+    # Não confiar somente no booleano persistido pelo cliente.
+    if not pendencias and not validacao_executar(perfil, "validação interna").get("passou"):
+        pendencias.append("O motor atual não passou nos testes obrigatórios.")
+    doc = regras.get(documental_CHAVE) or {}
+    if doc.get("assinatura_perfil") != assinatura or not all((doc.get("confirmacoes") or {}).get(k) is True for k in ("documento", "escopo_demanda", "tabela_entrada")):
+        pendencias.append("Registrar a conferência documental para as regras atuais.")
+    if exigir_fonte and regras.get("fonte_conferida") is not True:
+        pendencias.append("Confirmar a fonte oficial e o escopo operacional limitado.")
+    return pendencias
+
+
+def ativacao_calcular_automatica(tabela, rede, perfil, potencia):
+    resultado = integracao_calcular_integrada(tabela, rede, perfil, potencia)
+    resultado.update(metodo=rede.get("metodo_demanda"),
+                     perfil_normativo="Neoenergia Elektro — DIS-NOR-030 Rev. 07",
+                     elektro_operacional=True, escopo_normativo=ativacao_ESCOPO,
+                     observacao="Perfil operacional ativo. DG, entrada e alimentador aguardam conferência técnica.")
+    pendencias = ativacao_pendencias(perfil) + list(resultado.get("pendencias") or [])
+    if str(perfil.get("status") or "").upper() != "ATIVO":
+        pendencias.append("Perfil Elektro ainda não ativo.")
+    if str(rede.get("municipio") or "").strip().casefold() == perfil_MUNICIPIO_TENSAO_ESPECIAL.casefold():
+        pendencias.append("São João da Boa Vista excluído do enquadramento automático; conferir atendimento e tensão.")
+    if rede.get("tipo_fornecimento") != "Trifásico" or potencia.get("total_w", 0) <= 18000:
+        pendencias.append("Demanda operacional restrita ao atendimento trifásico acima de 18 kW; conferir os demais casos tecnicamente.")
+    if pendencias:
+        resultado["demanda_aparente_kva"] = None
+        resultado["enquadramento_elektro"] = {"pendencias": pendencias, "candidato": None, "aprovado": False}
+    resultado["pendencias"] = list(dict.fromkeys(pendencias + resultado.get("pendencias", [])))
+    resultado["pendencias"].append("Padrão de entrada, DG e alimentador exigem conferência técnica; não liberados automaticamente.")
+    resultado["status"] = "elektro_integracao_pendente"
+    return resultado

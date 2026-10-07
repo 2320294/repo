@@ -693,13 +693,13 @@ def renderizar_admin_normativos(email):
                 st.markdown("**Verificado nos testes de software**")
                 st.write("• Candidata B1 abaixo da faixa conflitante; bloqueio dentro da faixa e em 18 kW; candidata T0 acima da faixa.")
                 st.write("• Auditoria do projeto salva e recuperada; aviso de desatualização após alterar cargas e correspondência ao restaurá-las.")
-                st.markdown("**Pendências para VALIDADO / ATIVO**")
-                if not tabelas_ok:
-                    st.write("• Registrar e conferir as tabelas de demanda no rascunho.")
-                st.write("• Concluir a homologação da demanda no cálculo efetivo dos projetos; o modo de teste integrado já está disponível.")
-                st.write("• Concluir a validação do padrão de entrada e do alimentador, incluindo os casos fora do escopo testado.")
-                st.write("• Concluir a conferência documental oficial e a cobertura de atendimento e tensão.")
-                st.info("O registro dos testes não libera VALIDADO ou ATIVO. Permanecem os bloqueios acima de 10 e abaixo de 11,1 kW, e acima de 13 até 18 kW. Mantenha o perfil em RASCUNHO.")
+                from normativo_elektro import ativacao_pendencias, ativacao_ESCOPO
+                st.markdown("**Ativação operacional Elektro**")
+                st.info(ativacao_ESCOPO + ". São João da Boa Vista e faixas conflitantes permanecem fora do enquadramento automático. A publicação não homologa DG ou alimentador.")
+                pendencias_ativacao = ativacao_pendencias(p, exigir_fonte=False)
+                validacao_ok = not pendencias_ativacao
+                for pendencia_ativacao in pendencias_ativacao:
+                    st.warning(pendencia_ativacao)
             elif not eh_ged13_cpfl:
                 st.info("Auditoria normativa específica ainda não cadastrada para este documento. O perfil permanece em RASCUNHO.")
 
@@ -709,7 +709,7 @@ def renderizar_admin_normativos(email):
             if fonte_conferida:
                 st.success("Fonte oficial confirmada pelo administrador.")
             elif validacao_ok:
-                st.info("Todos os testes automáticos passaram. Confira o documento oficial e, somente depois, registre a confirmação abaixo.")
+                st.info("Testes e conferência documental do escopo operacional aprovados. Confirme a fonte oficial para publicar o perfil com as restrições indicadas." if eh_elektro else "Todos os testes automáticos passaram. Confira o documento oficial e, somente depois, registre a confirmação abaixo.")
                 if st.button("Confirmo a conferência no documento oficial", key=f"confirmar_fonte_{p.get('id')}", use_container_width=True):
                     try:
                         regras_confirmadas = dict(regras_validacao)
@@ -721,8 +721,7 @@ def renderizar_admin_normativos(email):
                         st.error(f"Não foi possível registrar a conferência: {e}")
             else:
                 st.caption(
-                    "Confirmação documental da Elektro bloqueada enquanto a demanda e o "
-                    "dimensionamento de entrada não estiverem integrados e homologados."
+                    "Conclua os testes e a conferência documental do escopo operacional Elektro."
                     if eh_elektro else
                     "Confirmação documental bloqueada até 100% dos testes automáticos passarem."
                 )
@@ -730,8 +729,7 @@ def renderizar_admin_normativos(email):
             pronto = _perfil_pronto(regras_validacao) and validacao_ok
             if not pronto:
                 st.info(
-                    "Perfil Elektro em preparação: mantenha em RASCUNHO até concluir a "
-                    "integração da demanda, a auditoria do padrão de entrada e a conferência documental."
+                    "Perfil Elektro pendente: conclua as etapas indicadas para liberar a ativação operacional."
                     if eh_elektro else
                     "Perfil ainda incompleto ou com validação pendente: mantenha em RASCUNHO até todos os testes obrigatórios passarem e a fonte oficial estar confirmada."
                 )

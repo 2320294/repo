@@ -478,6 +478,9 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
                 "pendencias": [],
                 "observacao": "Selecione um perfil normativo ATIVO compatível com a UF/município do projeto. Regras de outra região não são aplicadas automaticamente."
             }
+        from normativo_elektro import perfil_eh_perfil_elektro, ativacao_calcular_automatica
+        if perfil_eh_perfil_elektro(perfil):
+            return ativacao_calcular_automatica(tabela_editada, rede, perfil, pot)
         return _calcular_automatico(tabela_editada, rede, perfil)
 
     fator = min(100.0, max(0.0, _float(rede.get("fator_demanda_manual", 100.0), 100.0)))

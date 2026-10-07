@@ -72,6 +72,13 @@ def salvar_perfil(dados, perfil_id=None):
 
 def atualizar_status(perfil_id, status, validado_por=""):
     db = obter_supabase_admin()
+    if status in ("VALIDADO", "ATIVO"):
+        from normativo_elektro import perfil_eh_perfil_elektro, ativacao_pendencias
+        perfil = perfil_por_id(perfil_id) or {}
+        if perfil_eh_perfil_elektro(perfil):
+            pendencias = ativacao_pendencias(perfil)
+            if pendencias:
+                raise ValueError("Perfil Elektro não pode ser publicado: " + " ".join(pendencias))
     payload = {"status": status}
     if status in ("VALIDADO", "ATIVO"):
         payload["validado_por"] = validado_por
