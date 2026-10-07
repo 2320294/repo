@@ -1081,9 +1081,12 @@ def renderizar_painel_principal():
                 "de disjuntores cadastrada. Reavalie o fornecimento."
             )
         detalhes_demanda = resultado_demanda.get("detalhes_demanda") or []
-        # REV.218 — memória técnica mantida no motor, ocultada da interface.
-        if False and detalhes_demanda:
+        # Memória dos resultados existentes; Elektro possui memória própria em kVA.
+        if detalhes_demanda and status not in ("elektro_demanda_integrada", "elektro_integracao_pendente"): 
             with st.expander("📋 Memória do cálculo de demanda", expanded=False):
+                metodo_aplicado = resultado_demanda.get("metodo")
+                if metodo_aplicado:
+                    st.caption(f"Método aplicado: {metodo_aplicado}")
                 perfil_usado = resultado_demanda.get("perfil_normativo")
                 if perfil_usado:
                     st.caption(f"Perfil aplicado: {perfil_usado}")
