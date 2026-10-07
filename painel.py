@@ -571,7 +571,7 @@ def renderizar_painel_principal():
         # Prévia administrativa lê as regras do rascunho efetivamente persistido.
         # Os resultados não alimentam o QDC, DG, alimentador ou PDFs do projeto.
         from admin_normativos import usuario_e_admin
-        if usuario_e_admin(st.session_state.user_email):
+        if auditoria_elektro_cargas and usuario_e_admin(st.session_state.user_email):
             with st.expander("Prévia técnica da demanda Elektro para estas cargas"):
                 st.caption("Simulação administrativa em kVA com as cargas acima. "
                            "Não dimensiona a entrada nem altera o projeto; "
