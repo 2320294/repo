@@ -1082,7 +1082,7 @@ def renderizar_painel_principal():
             )
         detalhes_demanda = resultado_demanda.get("detalhes_demanda") or []
         # Memória dos resultados existentes; Elektro possui memória própria em kVA.
-        if detalhes_demanda and status not in ("elektro_demanda_integrada", "elektro_integracao_pendente"): 
+        if False and detalhes_demanda:  # Memória preservada no motor e oculta na interface.
             with st.expander("📋 Memória do cálculo de demanda", expanded=False):
                 metodo_aplicado = resultado_demanda.get("metodo")
                 if metodo_aplicado:
