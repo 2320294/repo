@@ -571,8 +571,8 @@ def renderizar_painel_principal():
                            "o perfil Elektro permanece em RASCUNHO.")
                 try:
                     from perfis_normativos import listar_perfis, perfil_atende_municipio
-                    from neoenergia_elektro import eh_perfil_elektro, auditar_tabelas_demanda
-                    from demanda_elektro import calcular_previa
+                    from normativo_elektro import perfil_eh_perfil_elektro as eh_perfil_elektro, perfil_auditar_tabelas_demanda as auditar_tabelas_demanda
+                    from normativo_elektro import demanda_calcular_previa as calcular_previa
 
                     perfis_elektro = [p for p in listar_perfis(administrativo=True)
                                       if eh_perfil_elektro(p) and auditar_tabelas_demanda(p.get("regras"))]
@@ -685,7 +685,7 @@ def renderizar_painel_principal():
                             "isolacao_distribuicao": isolacao_distribuicao_auditoria,
                             "ramal": dados_ramal_auditoria,
                         }
-                        from registro_auditoria_elektro import assinatura_contexto
+                        from normativo_elektro import registro_assinatura_contexto as assinatura_contexto
                         contexto_atual_auditoria = assinatura_contexto(tabela_editada,
                             st.session_state.get(chave_parametros) or {}, perfil)
                         assinatura_registro = hashlib.sha256(repr((perfil, uf_atual,
@@ -707,7 +707,7 @@ def renderizar_painel_principal():
                                     st.write(f"• {item}")
                             if previa["detalhes"]:
                                 st.dataframe(previa["detalhes"], use_container_width=True, hide_index=True)
-                            from enquadramento_elektro import auditar_enquadramento
+                            from normativo_elektro import enquadramento_auditar_enquadramento as auditar_enquadramento
                             auditoria = auditar_enquadramento(tabela_editada, perfil, previa, {
                                 "municipio_vinculado": bool(uf_atual and municipio_atual and
                                     perfil_atende_municipio(perfil, uf_atual, municipio_atual)),
@@ -726,7 +726,7 @@ def renderizar_painel_principal():
                                         f"({candidato['modalidade']}). Disjuntor indicado na Tabela 3: "
                                         f"{candidato['disjuntor_tabela_a']} A. "
                                         "Resultado preliminar, sem aprovação do padrão de entrada.")
-                                from componentes_entrada_elektro import consultar_componentes, URL_FONTE
+                                from normativo_elektro import componentes_consultar_componentes as consultar_componentes, componentes_URL_FONTE as URL_FONTE
                                 componentes = consultar_componentes(auditoria, tipo_entrada_auditoria,
                                     isolacao_entrada_auditoria, isolacao_distribuicao_auditoria)
                                 st.markdown("##### Referências dos componentes da entrada")
@@ -745,7 +745,7 @@ def renderizar_painel_principal():
                                         "queda de tensão, capacidade de condução, aterramento e modelo do padrão "
                                         "ainda exigem conferência técnica. Estes valores não são aplicados ao projeto.")
                                 st.markdown(f"[Consultar DIS-NOR-030 Rev. 07 — Tabela 3]({URL_FONTE})")
-                                from verificacao_ramal_elektro import verificar_ramal
+                                from normativo_elektro import ramal_verificar_ramal as verificar_ramal
                                 verificacao_ramal = verificar_ramal(auditoria, componentes, dados_ramal_auditoria)
                                 st.markdown("##### Conferência do ramal de distribuição")
                                 if verificacao_ramal.get("cabo"):
@@ -766,7 +766,7 @@ def renderizar_painel_principal():
                                     st.write(f"• {item}")
                             st.caption(auditoria["fonte"] + ". O perfil permanece em RASCUNHO; "
                                        "esta auditoria não define cabos ou alimentador.")
-                            from registro_auditoria_elektro import registrar
+                            from normativo_elektro import registro_registrar as registrar
                             registro_atual = registrar(st.session_state.projeto_ativo,
                                 f"{municipio_atual}/{uf_atual}", perfil, entradas_registro,
                                 tabela_editada, previa, auditoria, componentes, verificacao_ramal)
@@ -775,7 +775,7 @@ def renderizar_painel_principal():
                                                               "registro": registro_atual}
                         registro_guardado = st.session_state.get(chave_registro)
                         if registro_guardado and registro_guardado["assinatura"] == assinatura_registro:
-                            from registro_auditoria_elektro import exportar_json, exportar_resumo
+                            from normativo_elektro import registro_exportar_json as exportar_json, registro_exportar_resumo as exportar_resumo
                             registro_exportacao = registro_guardado["registro"]
                             st.markdown("##### Registro da auditoria preliminar")
                             st.caption("Resultado mantido nesta sessão. Baixe o registro para guardá-lo; ele não constitui aprovação técnica.")
@@ -807,7 +807,7 @@ def renderizar_painel_principal():
                                 else:
                                     st.info("Registro recuperado: cargas, parâmetros do projeto e perfil coincidem com o registro salvo. Confira os dados específicos da auditoria antes de um novo cálculo.")
                                 st.caption("Consulta do registro salvo. As confirmações técnicas não são restauradas automaticamente; este registro não aprova o padrão.")
-                                from registro_auditoria_elektro import exportar_json, exportar_resumo
+                                from normativo_elektro import registro_exportar_json as exportar_json, registro_exportar_resumo as exportar_resumo
                                 resumo_salvo = exportar_resumo(auditoria_salva)
                                 st.text(resumo_salvo.decode("utf-8"))
                                 st.download_button("Baixar registro salvo (TXT — consulta)", data=resumo_salvo,
@@ -1011,11 +1011,11 @@ def renderizar_painel_principal():
                 if demanda_total_elektro is not None:
                     st.caption(f"Demanda aparente total: {demanda_total_elektro:.3f} kVA. Total calculado com os valores completos, antes do arredondamento exibido.")
                 st.caption("— indica dado não informado ou não aplicável à categoria. Cargas de ar-condicionado podem ter demanda obtida pela tabela específica, sem carga em W ou fator de potência nesta memória. O resultado permanece em modo de teste, sem liberação de DG ou alimentador.")
-            from conferencia_entrada_qdc_elektro import renderizar as renderizar_entrada_elektro
-            from registro_auditoria_elektro import assinatura_contexto
+            from normativo_elektro import entrada_qdc_renderizar as renderizar_entrada_elektro
+            from normativo_elektro import registro_assinatura_contexto as assinatura_contexto
             from perfis_normativos import perfil_por_id
             perfil_contexto_entrada = perfil_por_id(resultado_demanda.get("perfil_normativo_id")) or {}
-            from atendimento_endereco_elektro import renderizar as renderizar_atendimento_elektro
+            from normativo_elektro import endereco_renderizar as renderizar_atendimento_elektro
             def salvar_atendimento_qdc(registro):
                 from database import salvar_atendimento_endereco_elektro
                 config_salva = salvar_atendimento_endereco_elektro(st.session_state.user_email,
@@ -1027,7 +1027,7 @@ def renderizar_painel_principal():
                 ((dados_obj or {}).get("config_interruptores") or {}).get("atendimento_endereco_elektro"),
                 salvar_atendimento_qdc, _chave_projeto, st.session_state.projeto_ativo, st.session_state.user_email)
             contexto_entrada = assinatura_contexto(tabela_editada, parametros_projeto, perfil_contexto_entrada)
-            from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro, renderizar_projeto as renderizar_resumo_projeto_elektro
+            from normativo_elektro import resumo_renderizar as renderizar_resumo_elektro, resumo_renderizar_projeto as renderizar_resumo_projeto_elektro
             renderizar_resumo_elektro(perfil_contexto_entrada, _chave_projeto("resumo_auditoria_perfil_qdc"))
             registro_entrada_salvo = ((dados_obj or {}).get("config_interruptores") or {}).get("conferencia_entrada_qdc_elektro")
             renderizar_resumo_projeto_elektro(

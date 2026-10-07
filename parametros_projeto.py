@@ -278,7 +278,7 @@ def renderizar_parametros_projeto(
     ]
 
     from admin_normativos import usuario_e_admin
-    from integracao_demanda_elektro import METODO as METODO_ELEKTRO
+    from normativo_elektro import integracao_METODO as METODO_ELEKTRO
     admin_teste_elektro = usuario_e_admin(st.session_state.get("user_email", ""))
     if admin_teste_elektro:
         metodos.append(METODO_ELEKTRO)
@@ -337,7 +337,7 @@ def renderizar_parametros_projeto(
     if metodo_demanda == METODO_ELEKTRO and admin_teste_elektro:
         st.info("Teste administrativo integrado: usa as cargas atuais na etapa de demanda do QDC. O perfil continua em RASCUNHO e não libera corrente, DG ou alimentador.")
         from perfis_normativos import listar_perfis, perfil_atende_municipio
-        from neoenergia_elektro import eh_perfil_elektro, auditar_tabelas_demanda
+        from normativo_elektro import perfil_eh_perfil_elektro as eh_perfil_elektro, perfil_auditar_tabelas_demanda as auditar_tabelas_demanda
         try:
             perfis_teste = [p for p in listar_perfis(administrativo=True)
                            if eh_perfil_elektro(p) and p.get("status") in ("RASCUNHO", "VALIDADO", "ATIVO")

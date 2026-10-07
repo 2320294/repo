@@ -4,13 +4,10 @@ from perfis_normativos import listar_perfis, salvar_perfil, atualizar_status
 from concessionarias import UFS
 
 from municipios_brasil import municipios_da_uf
-from municipios_elektro import MUNICIPIOS_ELEKTRO
-from neoenergia_elektro import (
-    eh_perfil_elektro, preparar_regras, preparar_tabelas_demanda,
-    auditar_tabelas_demanda, MUNICIPIO_TENSAO_ESPECIAL,
-)
-from demanda_elektro import calcular_previa
-from auditoria_perfil_elektro import CHAVE, CASOS, registrar, registro_atual
+from normativo_elektro import municipios_MUNICIPIOS_ELEKTRO as MUNICIPIOS_ELEKTRO
+from normativo_elektro import perfil_eh_perfil_elektro as eh_perfil_elektro, perfil_preparar_regras as preparar_regras, perfil_preparar_tabelas_demanda as preparar_tabelas_demanda, perfil_auditar_tabelas_demanda as auditar_tabelas_demanda, perfil_MUNICIPIO_TENSAO_ESPECIAL as MUNICIPIO_TENSAO_ESPECIAL
+from normativo_elektro import demanda_calcular_previa as calcular_previa
+from normativo_elektro import auditoria_CHAVE as CHAVE, auditoria_CASOS as CASOS, auditoria_registrar as registrar, auditoria_registro_atual as registro_atual
 CATEGORIAS_DEMANDA = [
     ("iluminacao_tug", "Iluminação + TUG"),
     ("chuveiros", "Chuveiros / aquecimento elétrico"),
@@ -834,11 +831,11 @@ def renderizar_admin_normativos(email):
             validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if eh_ged13_cpfl else False
             eh_elektro = eh_perfil_elektro(p)
             if eh_elektro:
-                from resumo_auditoria_elektro import renderizar as renderizar_resumo_elektro
+                from normativo_elektro import resumo_renderizar as renderizar_resumo_elektro
                 renderizar_resumo_elektro(p, f"resumo_auditoria_perfil_{p.get('id')}")
                 tabelas_ok = auditar_tabelas_demanda(regras_atual)
-                from validacao_integrada_elektro import CHAVE as CHAVE_INTEGRACAO, executar
-                from auditoria_perfil_elektro import assinatura as assinatura_testes
+                from normativo_elektro import validacao_CHAVE as CHAVE_INTEGRACAO, validacao_executar as executar
+                from normativo_elektro import auditoria_assinatura as assinatura_testes
                 st.markdown("#### Validação automática da demanda integrada")
                 st.caption("Executa o motor integrado com cargas fictícias e regras deste perfil. Verifica limites de 13 e 18 kW, dados incompletos, localidade e ausência de liberação de DG. Não homologação normativa.")
                 if st.button("Executar e registrar testes da demanda integrada", key=f"testes_integrados_{p.get('id')}"):
@@ -865,7 +862,7 @@ def renderizar_admin_normativos(email):
                 else:
                     st.info("Validação automática integrada ainda não executada neste perfil.")
 
-                from conferencia_documental_elektro import CHAVE as CHAVE_DOCUMENTAL, FONTE as FONTE_DOCUMENTAL, registrar as registrar_documental
+                from normativo_elektro import documental_CHAVE as CHAVE_DOCUMENTAL, documental_FONTE as FONTE_DOCUMENTAL, documental_registrar as registrar_documental
                 st.markdown("#### Conferência documental parcial Elektro")
                 st.markdown(f"[Consultar DIS-NOR-030 Rev. 07 no site oficial]({FONTE_DOCUMENTAL})")
                 st.caption("Documento aprovado em 17/04/2026. Confira a identificação na página 1, o item 6.27 nas páginas 47–49 e a Tabela 3 na página 63. A fonte estar disponível não equivale a homologação do projeto.")

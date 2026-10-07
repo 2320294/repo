@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from neoenergia_elektro import preparar_tabelas_demanda
+from normativo_elektro import perfil_preparar_tabelas_demanda as preparar_tabelas_demanda
 
 
 POTENCIAS_AR_ELEKTRO = {

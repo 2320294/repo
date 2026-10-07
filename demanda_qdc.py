@@ -187,7 +187,7 @@ def _nome_tue(row):
 
 def _calcular_automatico(tabela_editada, rede, perfil):
     pot = potencia_instalada(tabela_editada)
-    from neoenergia_elektro import motivo_conferencia
+    from normativo_elektro import perfil_motivo_conferencia as motivo_conferencia
     motivo = motivo_conferencia(pot["total_w"], perfil)
     if motivo:
         return {
@@ -437,7 +437,7 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
     metodo = str(rede.get("metodo_demanda", ""))
 
     if metodo == "Elektro — teste integrado de demanda (sem DG)":
-        from integracao_demanda_elektro import calcular_integrada
+        from normativo_elektro import integracao_calcular_integrada as calcular_integrada
         try:
             perfil_teste = perfil_por_id(rede.get("perfil_elektro_teste_id"))
         except Exception:
