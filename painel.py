@@ -539,6 +539,13 @@ def renderizar_painel_principal():
         rede_cargas = (st.session_state.get(chave_parametros) or {}).get("parametros_rede") or {}
         perfil_cargas = perfil_por_id(rede_cargas.get("perfil_normativo_id")) or {}
         auditoria_elektro_cargas = perfil_eh_perfil_elektro(perfil_cargas)
+        from admin_normativos import usuario_e_admin
+        if (not auditoria_elektro_cargas
+                and usuario_e_admin(st.session_state.user_email)
+                and rede_cargas.get("metodo_demanda") == "Elektro — teste integrado de demanda (sem DG)"
+                and rede_cargas.get("perfil_elektro_teste_id")):
+            perfil_teste_cargas = perfil_por_id(rede_cargas["perfil_elektro_teste_id"]) or {}
+            auditoria_elektro_cargas = perfil_eh_perfil_elektro(perfil_teste_cargas)
 
         tabela_editada = (
             renderizar_edicao_cargas(
