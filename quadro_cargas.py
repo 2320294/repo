@@ -1,0 +1,394 @@
+import pandas as pd
+import streamlit as st
+from normativo_elektro import perfil_preparar_tabelas_demanda as preparar_tabelas_demanda
+
+
+POTENCIAS_AR_ELEKTRO = {
+    item["btu_h"]: item
+    for item in preparar_tabelas_demanda({})["demanda_elektro_auditoria"]
+    ["tabela_11_ar_condicionado"]["potencias"]
+}
+
+
+CATEGORIAS_TUE_AUDITORIA = {
+    "": "A classificar (conferência técnica)",
+    "chuveiros": "Chuveiro, torneira ou aquecedor de passagem",
+    "boiler": "Boiler / aquecedor de acumulação",
+    "eletrodomesticos": "Lavadora, secadora ou micro-ondas",
+    "fogoes": "Fogão / cooktop elétrico (conferência normativa)",
+    "forno_eletrico": "Forno elétrico",
+    "ar_condicionado": "Ar-condicionado",
+    "bombas": "Bomba / hidromassagem",
+    "motores": "Motor / solda a motor",
+    "especiais": "Equipamento especial",
+    "recarga": "Estação de recarga veicular",
+    "outros": "Outro equipamento",
+}
+
+
+def valor_w(row, campo_w, campo_va, padrao=0):
+    """
+    Compatibilidade com projetos antigos.
+    Se existir campo em W, usa W.
+    Caso exista somente VA, converte usando FP=1,0:
+        W = VA * 1,0
+    """
+    if campo_w in row:
+        return int(row.get(campo_w, padrao))
+
+    if campo_va in row:
+        return int(
+            round(
+                float(
+                    row.get(
+                        campo_va,
+                        padrao
+                    )
+                ) * 1.0
+            )
+        )
+
+    return int(padrao)
+
+
+def renderizar_edicao_cargas(dados_ambientes):
+    """Exibe os campos editáveis de iluminação, TUG e TUE em duas colunas."""
+    dados_ambientes = sorted(
+        dados_ambientes,
+        key=lambda x: str(x.get("Ambiente", "")).casefold()
+    )
+
+    resultados = [None] * len(dados_ambientes)
+    coluna_esquerda, coluna_direita = st.columns(2, gap="large")
+
+    def renderizar_ambiente(row, indice):
+        ambiente = row["Ambiente"]
+        with st.container(border=True):
+            st.markdown(
+                f"**Ambiente: {ambiente}**  \n"
+                f"*Área: {float(row.get('Área (m²)', 0)):.2f} m² | "
+                f"Perímetro: {float(row.get('Perímetro (m)', 0)):.2f} m*"
+            )
+
+            c1, c2 = st.columns(2)
+            with c1:
+                q_ilum = st.number_input("Qtd Ilum", min_value=0, value=int(row.get("Qtd Ilum.", 1)), key=f"ilum_{ambiente}")
+            with c2:
+                p_ilum = st.number_input("Pot Ilum (W)", min_value=0, value=valor_w(row, "Pot. Unit. Ilum (W)", "Pot. Unit. Ilum (VA)", 100), key=f"pilum_{ambiente}")
+
+            c3, c4 = st.columns(2)
+            with c3:
+                qtd_tugs = st.number_input("Qtd TUG", min_value=0, value=int(row.get("Qtd TUG", row.get("TUGs (Qtd)", 1))), key=f"tugs_{ambiente}")
+            with c4:
+                pot_tug_unit = st.number_input("Pot TUG (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUG (W)", "Pot. Unit. TUG (VA)", 100), key=f"ptug_{ambiente}")
+
+            c5, c6 = st.columns(2)
+            with c5:
+                qtd_tue = st.number_input("Qtd TUE", min_value=0, value=int(row.get("Qtd TUE", 0)), key=f"tue_{ambiente}")
+            with c6:
+                pot_tue_unit = st.number_input("Pot TUE (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUE (W)", "Pot. Unit. TUE (VA)", 0), key=f"ptue_{ambiente}")
+
+            eq_tue = st.text_input(
+                f"Equipamento TUE ({ambiente})",
+                value=str(row.get("Equipamento TUE", "-")),
+                key=f"eq_{ambiente}"
+            )
+            if qtd_tue > 0 and "/" in eq_tue:
+                st.caption("Para a auditoria Elektro, substitua a descrição com '/' "
+                           "pelo equipamento realmente previsto. Ex.: escolha micro-ondas "
+                           "ou forno elétrico; não use ambos no mesmo campo.")
+
+            categoria_tue = str(row.get("Categoria Normativa TUE") or "")
+            if categoria_tue not in CATEGORIAS_TUE_AUDITORIA:
+                categoria_tue = ""
+            fator_potencia_tue = row.get("Fator de Potência TUE")
+            try:
+                fator_potencia_tue = float(fator_potencia_tue or 0)
+            except (ValueError, TypeError):
+                fator_potencia_tue = 0.0
+            try:
+                va_placa_tue = int(row.get("Pot. Placa TUE (VA)") or 0)
+            except (ValueError, TypeError):
+                va_placa_tue = 0
+            try:
+                capacidade_btu_tue = int(row.get("Capacidade TUE (BTU/h)") or 0)
+            except (ValueError, TypeError):
+                capacidade_btu_tue = 0
+            if qtd_tue > 0:
+                with st.expander("Dados de placa da TUE (auditoria Elektro)"):
+                    st.caption("Quando houver mais de uma TUE neste ambiente, os dados informados "
+                               "devem ser iguais para todas. Caso sejam equipamentos diferentes, "
+                               "o cálculo fica sujeito a conferência técnica.")
+                    chave = f"{st.session_state.get('projeto_ativo', 'SEM_PROJETO')}_{ambiente}"
+                    categoria_tue = st.selectbox(
+                        "Categoria normativa da TUE",
+                        list(CATEGORIAS_TUE_AUDITORIA),
+                        index=list(CATEGORIAS_TUE_AUDITORIA).index(categoria_tue),
+                        format_func=lambda x: CATEGORIAS_TUE_AUDITORIA[x],
+                        key=f"categoria_tue_{chave}",
+                    )
+                    c_fp, c_va = st.columns(2)
+                    fator_potencia_tue = c_fp.number_input(
+                        "FP de placa (0 = não informado)", min_value=0.0, max_value=1.0,
+                        value=fator_potencia_tue if 0 <= fator_potencia_tue <= 1 else 0.0,
+                        step=0.01, format="%.2f", key=f"fp_tue_{chave}",
+                        help="Informe o fator de potência do fabricante quando disponível.",
+                    )
+                    va_placa_tue = c_va.number_input(
+                        "Potência aparente de placa (VA; 0 = não informado)",
+                        min_value=0, value=max(0, va_placa_tue),
+                        key=f"va_placa_tue_{chave}",
+                    )
+                    capacidades_btu = [0, 7500, 9000, 10000, 12000, 15000,
+                                       18000, 21000, 30000, 41000, 60000]
+                    capacidade_btu_tue = st.selectbox(
+                        "Ar-condicionado: capacidade (BTU/h), se conhecida",
+                        capacidades_btu,
+                        index=capacidades_btu.index(capacidade_btu_tue)
+                        if capacidade_btu_tue in capacidades_btu else 0,
+                        format_func=lambda valor: "Não informado" if valor == 0 else f"{valor:,}".replace(",", "."),
+                        key=f"btu_tue_{chave}",
+                        help="Sem VA ou FP de placa, a prévia usa o VA orientativo da "
+                             "Tabela 11 da DIS-NOR-030 para a capacidade selecionada.",
+                    )
+                    referencia = POTENCIAS_AR_ELEKTRO.get(capacidade_btu_tue)
+                    if (categoria_tue == "ar_condicionado" and referencia
+                            and not va_placa_tue and not fator_potencia_tue
+                            and pot_tue_unit != referencia["w"]):
+                        st.warning(
+                            f"Tabela 11: {capacidade_btu_tue:,} BTU/h corresponde a "
+                            f"{referencia['w']} W e {referencia['va']} VA orientativos. "
+                            f"O projeto informa {pot_tue_unit} W. Confira o valor em W "
+                            "ou informe VA/FP de placa antes de usar a prévia Elektro."
+                        )
+
+            row_modificado = row.copy()
+            row_modificado["Qtd Ilum."] = q_ilum
+            row_modificado["Pot. Unit. Ilum (W)"] = p_ilum
+            row_modificado["Carga Ilum. (W)"] = q_ilum * p_ilum
+            row_modificado["Qtd TUG"] = qtd_tugs
+            row_modificado["TUGs (Qtd)"] = qtd_tugs
+            row_modificado["Pot. Unit. TUG (W)"] = pot_tug_unit
+            row_modificado["Carga TUGs (W)"] = qtd_tugs * pot_tug_unit
+            row_modificado["Qtd TUE"] = qtd_tue
+            row_modificado["Pot. Unit. TUE (W)"] = pot_tue_unit
+            row_modificado["Carga TUE (W)"] = qtd_tue * pot_tue_unit
+            row_modificado["Equipamento TUE"] = eq_tue
+            if qtd_tue > 0 or any(k in row for k in (
+                    "Categoria Normativa TUE", "Fator de Potência TUE", "Pot. Placa TUE (VA)",
+                    "Capacidade TUE (BTU/h)")):
+                row_modificado["Categoria Normativa TUE"] = categoria_tue
+                row_modificado["Fator de Potência TUE"] = fator_potencia_tue
+                row_modificado["Pot. Placa TUE (VA)"] = va_placa_tue
+                row_modificado["Capacidade TUE (BTU/h)"] = capacidade_btu_tue
+            resultados[indice] = row_modificado
+
+    # Índices 0,2,4... à esquerda; 1,3,5... à direita.
+    with coluna_esquerda:
+        for i in range(0, len(dados_ambientes), 2):
+            renderizar_ambiente(dados_ambientes[i], i)
+
+    with coluna_direita:
+        for i in range(1, len(dados_ambientes), 2):
+            renderizar_ambiente(dados_ambientes[i], i)
+
+    return [row for row in resultados if row is not None]
+
+
+def renderizar_tabela_consolidada(tabela_editada):
+    """
+    Fase 8.2 — ordem definitiva das colunas:
+
+    1. Ambiente
+    2. Área (m²)
+    3. Perímetro (m)
+    4. Qtd Ilum.
+    5. Potência Ilum. (W)
+    6. Qtd TUG
+    7. Potência TUG (W)
+    8. Qtd TUE
+    9. Potência TUE (W)
+    10. Equipamento TUE
+
+    A linha TOTAL GERAL segue exatamente a mesma ordem.
+    """
+    tabela_ordenada = sorted(
+        tabela_editada,
+        key=lambda x: str(
+            x.get("Ambiente", "")
+        ).casefold()
+    )
+
+    linhas = []
+
+    for row in tabela_ordenada:
+        linhas.append({
+            "Ambiente": row.get("Ambiente", ""),
+
+            "Área (m²)": round(
+                float(row.get("Área (m²)", 0)),
+                2
+            ),
+
+            "Perímetro (m)": round(
+                float(row.get("Perímetro (m)", 0)),
+                2
+            ),
+
+            "Qtd Ilum.": int(
+                row.get("Qtd Ilum.", 0)
+            ),
+
+            "Potência Ilum. (W)": valor_w(
+                row,
+                "Pot. Unit. Ilum (W)",
+                "Pot. Unit. Ilum (VA)",
+                0
+            ),
+
+            "Qtd TUG": int(
+                row.get(
+                    "Qtd TUG",
+                    row.get("TUGs (Qtd)", 0)
+                )
+            ),
+
+            "Potência TUG (W)": valor_w(
+                row,
+                "Pot. Unit. TUG (W)",
+                "Pot. Unit. TUG (VA)",
+                0
+            ),
+
+            "Qtd TUE": int(
+                row.get("Qtd TUE", 0)
+            ),
+
+            "Potência TUE (W)": valor_w(
+                row,
+                "Pot. Unit. TUE (W)",
+                "Pot. Unit. TUE (VA)",
+                0
+            ),
+
+            "Equipamento TUE": row.get(
+                "Equipamento TUE",
+                "-"
+            )
+        })
+
+    colunas = [
+        "Ambiente",
+        "Área (m²)",
+        "Perímetro (m)",
+        "Qtd Ilum.",
+        "Potência Ilum. (W)",
+        "Qtd TUG",
+        "Potência TUG (W)",
+        "Qtd TUE",
+        "Potência TUE (W)",
+        "Equipamento TUE"
+    ]
+
+    df = pd.DataFrame(
+        linhas,
+        columns=colunas
+    )
+
+    if df.empty:
+        return
+
+    linha_total = {
+        "Ambiente": "TOTAL GERAL",
+
+        "Área (m²)": round(
+            df["Área (m²)"].sum(),
+            2
+        ),
+
+        "Perímetro (m)": round(
+            df["Perímetro (m)"].sum(),
+            2
+        ),
+
+        "Qtd Ilum.": int(
+            df["Qtd Ilum."].sum()
+        ),
+
+        "Potência Ilum. (W)": int(
+            sum(
+                int(r["Qtd Ilum."])
+                * int(r["Potência Ilum. (W)"])
+                for _, r in df.iterrows()
+            )
+        ),
+
+        "Qtd TUG": int(
+            df["Qtd TUG"].sum()
+        ),
+
+        "Potência TUG (W)": int(
+            sum(
+                int(r["Qtd TUG"])
+                * int(r["Potência TUG (W)"])
+                for _, r in df.iterrows()
+            )
+        ),
+
+        "Qtd TUE": int(
+            df["Qtd TUE"].sum()
+        ),
+
+        "Potência TUE (W)": int(
+            sum(
+                int(r["Qtd TUE"])
+                * int(r["Potência TUE (W)"])
+                for _, r in df.iterrows()
+            )
+        ),
+
+        "Equipamento TUE": "-"
+    }
+
+    df_total = pd.concat(
+        [
+            df,
+            pd.DataFrame(
+                [linha_total],
+                columns=colunas
+            )
+        ],
+        ignore_index=True
+    )
+
+    # Reforço explícito da ordem final mesmo após o concat.
+    df_total = df_total[colunas]
+
+    def destacar_total(row):
+        if row["Ambiente"] == "TOTAL GERAL":
+            return [
+                "background-color: #f0f2f6;"
+                "font-weight: 600;"
+                for _ in row
+            ]
+
+        return ["" for _ in row]
+
+    tabela_estilizada = (
+        df_total
+        .style
+        .apply(
+            destacar_total,
+            axis=1
+        )
+        .format({
+            "Área (m²)": "{:.2f}",
+            "Perímetro (m)": "{:.2f}"
+        })
+    )
+
+    st.dataframe(
+        tabela_estilizada,
+        use_container_width=True,
+        hide_index=True
+    )

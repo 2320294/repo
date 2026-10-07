@@ -1,0 +1,1198 @@
+from pdf_rodape import desenhar_rodape_reportlab
+from io import BytesIO
+
+import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+    PageBreak
+)
+
+from materiais import calcular_quantitativo_materiais
+from versao import VERSAO_SISTEMA
+
+
+from qdc_config import descricao_qdc
+
+from concessionarias import (
+    CHAVE_PARAMETROS_REDE,
+    normalizar_parametros_rede,
+    nome_concessionaria,
+    descricao_localidade
+)
+
+from demanda_qdc import (
+    calcular_demanda_qdc
+)
+
+from balanceamento_fases import (
+    balancear_circuitos
+)
+
+from agrupamento_dr import (
+    agrupar_circuitos_dr
+)
+
+from protecao_alimentador import (
+    avaliar_protecoes_alimentador
+)
+
+def _valor_w(row, campo_w, campo_va, padrao=0):
+    if campo_w in row:
+        return float(row.get(campo_w, padrao) or 0)
+
+    if campo_va in row:
+        return float(row.get(campo_va, padrao) or 0)
+
+    return float(padrao)
+
+
+def gerar_excel_projeto(
+    tabela_editada,
+    config_interruptores_usuario,
+    local_qdc,
+    tensao_projeto,
+    pe_direito
+):
+    """
+    Gera a planilha Excel da Etapa 2 em memória.
+
+    A exportação apresenta o quadro de cargas e as informações técnicas
+    associadas, sem as abas de Materiais e Interruptores.
+    """
+    buffer = BytesIO()
+
+    materiais, circuitos = calcular_quantitativo_materiais(
+        tabela_editada=tabela_editada,
+        config_interruptores_usuario=config_interruptores_usuario,
+        local_qdc=local_qdc,
+        tensao_projeto=tensao_projeto,
+        pe_direito=pe_direito
+    )
+
+    linhas_cargas = []
+
+    for row in sorted(
+        tabela_editada,
+        key=lambda x: str(
+            x.get("Ambiente", "")
+        ).casefold()
+    ):
+        linhas_cargas.append({
+            "Ambiente": row.get("Ambiente", ""),
+            "Área (m²)": round(
+                float(
+                    row.get(
+                        "Área (m²)",
+                        0
+                    )
+                ),
+                2
+            ),
+            "Perímetro (m)": round(
+                float(
+                    row.get(
+                        "Perímetro (m)",
+                        0
+                    )
+                ),
+                2
+            ),
+            "Qtd Ilum.": int(
+                row.get(
+                    "Qtd Ilum.",
+                    0
+                )
+            ),
+            "Potência Ilum. (W)": int(
+                _valor_w(
+                    row,
+                    "Pot. Unit. Ilum (W)",
+                    "Pot. Unit. Ilum (VA)",
+                    0
+                )
+            ),
+            "Qtd TUG": int(
+                row.get(
+                    "Qtd TUG",
+                    row.get(
+                        "TUGs (Qtd)",
+                        0
+                    )
+                )
+            ),
+            "Potência TUG (W)": int(
+                _valor_w(
+                    row,
+                    "Pot. Unit. TUG (W)",
+                    "Pot. Unit. TUG (VA)",
+                    0
+                )
+            ),
+            "Qtd TUE": int(
+                row.get(
+                    "Qtd TUE",
+                    0
+                )
+            ),
+            "Potência TUE (W)": int(
+                _valor_w(
+                    row,
+                    "Pot. Unit. TUE (W)",
+                    "Pot. Unit. TUE (VA)",
+                    0
+                )
+            ),
+            "Equipamento TUE": row.get(
+                "Equipamento TUE",
+                "-"
+            )
+        })
+
+    df_cargas = pd.DataFrame(
+        linhas_cargas
+    )
+
+    if not df_cargas.empty:
+        total = {
+            "Ambiente": "TOTAL GERAL",
+            "Área (m²)": round(
+                df_cargas[
+                    "Área (m²)"
+                ].sum(),
+                2
+            ),
+            "Perímetro (m)": round(
+                df_cargas[
+                    "Perímetro (m)"
+                ].sum(),
+                2
+            ),
+            "Qtd Ilum.": int(
+                df_cargas[
+                    "Qtd Ilum."
+                ].sum()
+            ),
+            "Potência Ilum. (W)": int(
+                sum(
+                    int(r["Qtd Ilum."])
+                    *
+                    int(r["Potência Ilum. (W)"])
+                    for _, r
+                    in df_cargas.iterrows()
+                )
+            ),
+            "Qtd TUG": int(
+                df_cargas[
+                    "Qtd TUG"
+                ].sum()
+            ),
+            "Potência TUG (W)": int(
+                sum(
+                    int(r["Qtd TUG"])
+                    *
+                    int(r["Potência TUG (W)"])
+                    for _, r
+                    in df_cargas.iterrows()
+                )
+            ),
+            "Qtd TUE": int(
+                df_cargas[
+                    "Qtd TUE"
+                ].sum()
+            ),
+            "Potência TUE (W)": int(
+                sum(
+                    int(r["Qtd TUE"])
+                    *
+                    int(r["Potência TUE (W)"])
+                    for _, r
+                    in df_cargas.iterrows()
+                )
+            ),
+            "Equipamento TUE": "-"
+        }
+
+        df_cargas = pd.concat(
+            [
+                df_cargas,
+                pd.DataFrame(
+                    [total]
+                )
+            ],
+            ignore_index=True
+        )
+
+    df_materiais = pd.DataFrame(
+        materiais
+    )
+
+    df_circuitos = pd.DataFrame(
+        circuitos
+    )
+
+    df_parametros = pd.DataFrame([
+        {
+            "Parâmetro": "Tensão base dos cálculos",
+            "Valor": (
+                str(
+                    parametros_rede.get(
+                        "tensao_fornecimento",
+                        ""
+                    )
+                )
+                if 'parametros_rede' in locals()
+                else f"{int(tensao_projeto)} V"
+            )
+        },
+        {
+            "Parâmetro": "Pé-direito do pavimento",
+            "Valor": f"{float(pe_direito):.2f} m"
+        },
+        {
+            "Parâmetro": "Local do QDC",
+            "Valor": descricao_qdc(local_qdc)
+        }
+    ])
+
+    parametros_rede = normalizar_parametros_rede(
+        (
+            config_interruptores_usuario
+            or {}
+        ).get(
+            CHAVE_PARAMETROS_REDE,
+            {}
+        )
+    )
+
+    circuitos_balanceados, resumo_balanceamento = balancear_circuitos(
+        circuitos,
+        parametros_rede
+    )
+    df_circuitos = pd.DataFrame(circuitos_balanceados)
+    if not df_circuitos.empty and "numero" in df_circuitos.columns:
+        df_circuitos["numero"] = df_circuitos["numero"].apply(
+            lambda valor: f"C{int(valor):02d}"
+        )
+
+    df_parametros = pd.concat(
+        [
+            df_parametros,
+            pd.DataFrame([
+                {
+                    "Parâmetro": "Localidade",
+                    "Valor": descricao_localidade(
+                        parametros_rede
+                    )
+                },
+                {
+                    "Parâmetro": "Concessionária",
+                    "Valor": nome_concessionaria(
+                        parametros_rede
+                    )
+                },
+                {
+                    "Parâmetro": "Tipo de fornecimento",
+                    "Valor": parametros_rede.get(
+                        "tipo_fornecimento",
+                        "A definir"
+                    )
+                },
+                {
+                    "Parâmetro": "Tensão de fornecimento",
+                    "Valor": parametros_rede.get(
+                        "tensao_fornecimento",
+                        "A definir"
+                    )
+                },
+                {
+                    "Parâmetro": "Método de demanda",
+                    "Valor": parametros_rede.get(
+                        "metodo_demanda",
+                        ""
+                    )
+                }
+            ])
+        ],
+        ignore_index=True
+    )
+
+    resultado_demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
+    if not resultado_demanda:
+        resultado_demanda = calcular_demanda_qdc(
+            tabela_editada,
+            parametros_rede
+        )
+
+    circuitos_dr_export, resumo_drs_export = agrupar_circuitos_dr(
+        circuitos_balanceados,
+        resultado_demanda.get("disjuntor_geral_a")
+    )
+    resumo_protecao_export = avaliar_protecoes_alimentador(
+        resultado_demanda,
+        parametros_rede,
+        circuitos_dr_export,
+        resumo_drs_export
+    )
+    df_circuitos = pd.DataFrame(circuitos_dr_export)
+    if not df_circuitos.empty and "numero" in df_circuitos.columns:
+        df_circuitos["numero"] = df_circuitos["numero"].apply(
+            lambda valor: f"C{int(valor):02d}"
+        )
+
+    linhas_demanda = [{
+        "Parâmetro": "Potência instalada",
+        "Valor": f"{resultado_demanda['total_w']/1000:.2f} kW"
+    }]
+
+    if resultado_demanda.get("fator_demanda_pct") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Fator global de demanda",
+            "Valor": f"{resultado_demanda['fator_demanda_pct']:.1f} %"
+        })
+
+    if resultado_demanda.get("potencia_demanda_w") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Potência demandada",
+            "Valor": f"{resultado_demanda['potencia_demanda_w']/1000:.2f} kW"
+        })
+
+    if resultado_demanda.get("corrente_demanda_a") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "Corrente equivalente de demanda",
+            "Valor": f"{resultado_demanda['corrente_demanda_a']:.1f} A"
+        })
+
+    if resultado_demanda.get("disjuntor_geral_a") is not None:
+        linhas_demanda.append({
+            "Parâmetro": "DG pré-selecionado",
+            "Valor": f"{resultado_demanda['disjuntor_geral_a']} A"
+        })
+
+    df_parametros = pd.concat(
+        [df_parametros, pd.DataFrame(linhas_demanda)],
+        ignore_index=True
+    )
+
+    linhas_balanceamento = []
+    for fase, potencia_fase in resumo_balanceamento.get("fases", {}).items():
+        linhas_balanceamento.append({
+            "Parâmetro": f"Potência instalada - Fase {fase}",
+            "Valor": f"{potencia_fase/1000:.2f} kW"
+        })
+    if resumo_balanceamento.get("desequilibrio_pct") is not None:
+        linhas_balanceamento.append({
+            "Parâmetro": "Desequilíbrio preliminar entre fases",
+            "Valor": f"{resumo_balanceamento['desequilibrio_pct']:.1f} %"
+        })
+    if linhas_balanceamento:
+        df_parametros = pd.concat(
+            [df_parametros, pd.DataFrame(linhas_balanceamento)],
+            ignore_index=True
+        )
+
+    linhas_protecao = []
+    rp = resumo_protecao_export
+    if rp.get("dg_a") is not None:
+        linhas_protecao.append({
+            "Parâmetro": "Disjuntor geral consolidado preliminar",
+            "Valor": f"{rp['dg_a']} A {rp.get('dg_polos','')}".strip()
+        })
+    if rp.get("alimentador_fase_mm2") is not None:
+        linhas_protecao.extend([
+            {"Parâmetro":"Alimentador - fase","Valor":f"{rp['alimentador_fase_mm2']:g} mm²"},
+            {"Parâmetro":"Alimentador - neutro","Valor":f"{rp['alimentador_neutro_mm2']:g} mm²"},
+            {"Parâmetro":"Alimentador - PE","Valor":f"{rp['alimentador_pe_mm2']:g} mm²"},
+            {"Parâmetro":"Capacidade de interrupção","Valor":rp["capacidade_interrupcao"]},
+            {"Parâmetro":"Seletividade","Valor":rp["seletividade"]},
+        ])
+    if linhas_protecao:
+        df_parametros = pd.concat(
+            [df_parametros, pd.DataFrame(linhas_protecao)],
+            ignore_index=True
+        )
+
+    linhas_interruptores = []
+
+    for ambiente in sorted(
+        (config_interruptores_usuario or {}),
+        key=lambda valor: str(valor).casefold()
+    ):
+        if str(
+            ambiente
+        ).startswith("__"):
+            continue
+
+        cfg = (
+            config_interruptores_usuario.get(
+                ambiente,
+                {}
+            )
+        )
+
+        linhas_interruptores.append({
+            "Ambiente": ambiente,
+            "Quantidade": int(
+                cfg.get(
+                    "quantidade",
+                    0
+                )
+            ),
+            "Porta": (
+                cfg.get(
+                    "porta",
+                    "-"
+                )
+            )
+        })
+
+    df_interruptores = pd.DataFrame(
+        linhas_interruptores
+    )
+
+    with pd.ExcelWriter(
+        buffer,
+        engine="xlsxwriter"
+    ) as writer:
+        df_cargas.to_excel(
+            writer,
+            sheet_name="Quadro de Cargas",
+            index=False
+        )
+
+        df_parametros.to_excel(
+            writer,
+            sheet_name="Parâmetros",
+            index=False
+        )
+
+        if not df_circuitos.empty:
+            df_circuitos.to_excel(
+                writer,
+                sheet_name="Circuitos",
+                index=False
+            )
+
+        workbook = writer.book
+
+        formato_cabecalho = workbook.add_format({
+            "bold": True,
+            "bg_color": "#F0F2F6",
+            "border": 1,
+            "align": "center",
+            "valign": "vcenter"
+        })
+
+        formato_total = workbook.add_format({
+            "bold": True,
+            "bg_color": "#F0F2F6",
+            "border": 1
+        })
+
+        formato_borda = workbook.add_format({
+            "border": 1
+        })
+
+        for sheet_name, df in [
+            ("Quadro de Cargas", df_cargas),
+            ("Parâmetros", df_parametros),
+            ("Circuitos", df_circuitos)
+        ]:
+            if sheet_name not in writer.sheets:
+                continue
+
+            worksheet = writer.sheets[
+                sheet_name
+            ]
+
+            worksheet.freeze_panes(
+                1,
+                0
+            )
+
+            for col_num, coluna in enumerate(
+                df.columns
+            ):
+                worksheet.write(
+                    0,
+                    col_num,
+                    coluna,
+                    formato_cabecalho
+                )
+
+                valores = (
+                    df[coluna]
+                    .astype(str)
+                    .tolist()
+                    if not df.empty
+                    else []
+                )
+
+                largura = max(
+                    [len(str(coluna))]
+                    +
+                    [
+                        len(str(v))
+                        for v in valores[:200]
+                    ]
+                )
+
+                worksheet.set_column(
+                    col_num,
+                    col_num,
+                    min(
+                        max(
+                            largura + 2,
+                            12
+                        ),
+                        40
+                    )
+                )
+
+            if not df.empty:
+                worksheet.conditional_format(
+                    1,
+                    0,
+                    len(df),
+                    max(
+                        len(df.columns) - 1,
+                        0
+                    ),
+                    {
+                        "type": "no_blanks",
+                        "format": formato_borda
+                    }
+                )
+
+        if (
+            "Quadro de Cargas"
+            in writer.sheets
+            and not df_cargas.empty
+        ):
+            ws = writer.sheets[
+                "Quadro de Cargas"
+            ]
+
+            total_row = len(
+                df_cargas
+            )
+
+            ws.set_row(
+                total_row,
+                None,
+                formato_total
+            )
+
+    buffer.seek(0)
+
+    return buffer.getvalue()
+
+
+def gerar_memorial_pdf(
+    nome_projeto,
+    tabela_editada,
+    config_interruptores_usuario,
+    local_qdc,
+    tensao_projeto,
+    pe_direito,
+    resumo_rotas=None,
+    materiais_snapshot=None
+):
+    """
+    Gera Memorial Descritivo em PDF.
+
+    O texto se apoia nos critérios gerais de instalações elétricas
+    de baixa tensão e deixa explícito quando algo ainda depende
+    do detalhamento executivo/validação final.
+    """
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=1.6 * cm,
+        leftMargin=1.6 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.8 * cm
+    )
+
+    styles = getSampleStyleSheet()
+
+    styles.add(
+        ParagraphStyle(
+            name="TituloCentral",
+            parent=styles["Title"],
+            alignment=TA_CENTER,
+            fontSize=16,
+            spaceAfter=14
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            name="Secao",
+            parent=styles["Heading2"],
+            fontSize=12,
+            spaceBefore=10,
+            spaceAfter=6
+        )
+    )
+
+    styles.add(
+        ParagraphStyle(
+            name="Texto",
+            parent=styles["BodyText"],
+            fontSize=9.5,
+            leading=13,
+            spaceAfter=6
+        )
+    )
+
+    story = []
+
+    story.append(
+        Paragraph(
+            "MEMORIAL DESCRITIVO - INSTALAÇÕES ELÉTRICAS",
+            styles["TituloCentral"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"<b>Projeto:</b> {nome_projeto}",
+            styles["Texto"]
+        )
+    )
+
+    # REV.239 — o cabeçalho do Memorial usa a mesma fonte de verdade do QDC/
+    # unifilar. A tensão legada do projeto permanece apenas como fallback para
+    # projetos antigos sem parâmetros de rede/demanda fechada.
+    rede_memorial = dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+    demanda_memorial = dict(rede_memorial.get("demanda_fechada", {}) or {})
+    if not demanda_memorial:
+        demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)
+
+    tipo_fornecimento_memorial = str(
+        demanda_memorial.get("tipo_fornecimento")
+        or rede_memorial.get("tipo_fornecimento")
+        or "A definir"
+    ).strip()
+    tensao_fornecimento_memorial = str(
+        demanda_memorial.get("tensao_fornecimento")
+        or rede_memorial.get("tensao_fornecimento")
+        or f"{int(tensao_projeto)} V"
+    ).strip()
+
+    story.append(
+        Paragraph(
+            f"<b>Tipo de fornecimento:</b> {tipo_fornecimento_memorial}",
+            styles["Texto"]
+        )
+    )
+    story.append(
+        Paragraph(
+            f"<b>Tensão de fornecimento:</b> {tensao_fornecimento_memorial}",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"<b>Pé-direito:</b> {float(pe_direito):.2f} m",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            f"<b>Local previsto para o QDC:</b> {descricao_qdc(local_qdc)}",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Spacer(
+            1,
+            8
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "1. OBJETO",
+            styles["Secao"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Este memorial apresenta os critérios adotados para o "
+            "dimensionamento preliminar das instalações elétricas de "
+            "baixa tensão do projeto, incluindo pontos de iluminação, "
+            "tomadas de uso geral, tomadas de uso específico, dispositivos "
+            "de proteção, quadro de distribuição e quantitativo de materiais.",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "2. REFERÊNCIAS E CRITÉRIOS",
+            styles["Secao"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "O projeto deve ser executado e verificado conforme a edição "
+            "vigente da ABNT NBR 5410 e demais normas, regulamentos da "
+            "concessionária e requisitos de segurança aplicáveis. "
+            "As seções de condutores, proteções e dispositivos diferenciais "
+            "devem ser confirmadas no projeto executivo considerando corrente "
+            "de projeto, método de instalação, capacidade de condução, "
+            "agrupamento, temperatura, queda de tensão e condições reais da obra.",
+            styles["Texto"]
+        )
+    )
+
+    # REV.212/239 — demanda, modalidade e tensão já foram consolidadas acima
+    # a partir do mesmo snapshot persistido pelo QDC. Só o alimentador é lido aqui.
+    alim_memorial = dict(rede_memorial.get("alimentador_geral", {}) or {})
+    story.append(Paragraph("2A. DEMANDA, PROTEÇÃO GERAL E ALIMENTADOR", styles["Secao"]))
+    if demanda_memorial.get("potencia_demanda_w") is not None:
+        polos_dg_memorial = {"Monofásico": "1P", "Bifásico": "2P", "Trifásico": "3P"}.get(
+            tipo_fornecimento_memorial, ""
+        )
+        dg_valor = demanda_memorial.get('disjuntor_geral_a', '—')
+        dg_txt = f"{dg_valor} A" + (f" {polos_dg_memorial}" if polos_dg_memorial else "")
+        story.append(Paragraph(
+            f"Fornecimento: <b>{tipo_fornecimento_memorial} - {tensao_fornecimento_memorial}</b>.<br/>"
+            f"Potência instalada: <b>{float(demanda_memorial.get('total_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
+            f"Potência demandada: <b>{float(demanda_memorial.get('potencia_demanda_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
+            f"Corrente de demanda: <b>{float(demanda_memorial.get('corrente_demanda_a',0) or 0):.1f} A</b> &nbsp; | &nbsp; "
+            f"DG: <b>{dg_txt}</b>.", styles["Texto"]))
+    # REV.238 — registra no Memorial a mesma alteração automática comunicada
+    # ao usuário na etapa QDC, preservando a rastreabilidade do dimensionamento.
+    if demanda_memorial.get("fornecimento_alterado_automaticamente"):
+        aviso_memorial = str(demanda_memorial.get("aviso_alteracao_fornecimento") or "").strip()
+        if aviso_memorial:
+            story.append(Paragraph(
+                f"<b>Modalidade de fornecimento alterada automaticamente:</b> {aviso_memorial}",
+                styles["Texto"]
+            ))
+
+    if alim_memorial.get("secao_final_mm2") is not None:
+        sq = alim_memorial.get("secao_por_queda_mm2")
+        sqtxt = f"{float(sq):g} mm²" if sq is not None else "não concluída"
+        composicao_alimentador = {
+            "Monofásico": "F + N + PE",
+            "Bifásico": "2F + N + PE",
+            "Trifásico": "3F + N + PE",
+        }.get(tipo_fornecimento_memorial, "A definir")
+        story.append(Paragraph(
+            f"Alimentador final: <b>{composicao_alimentador}</b>; fase <b>{float(alim_memorial.get('fase_mm2')):g} mm²</b>, "
+            f"neutro <b>{float(alim_memorial.get('neutro_mm2')):g} mm²</b> e PE <b>{float(alim_memorial.get('pe_mm2')):g} mm²</b>. "
+            f"Seção por capacidade: {float(alim_memorial.get('secao_por_capacidade_mm2')):g} mm²; "
+            f"seção por queda: {sqtxt}; critério determinante: <b>{alim_memorial.get('criterio_determinante','')}</b>.", styles["Texto"]))
+        if alim_memorial.get("queda_tensao_pct") is not None:
+            story.append(Paragraph(
+                f"Comprimento considerado: {float(alim_memorial.get('comprimento_m',0) or 0):.2f} m; "
+                f"queda de tensão: {float(alim_memorial.get('queda_tensao_v',0) or 0):.2f} V "
+                f"({float(alim_memorial.get('queda_tensao_pct',0) or 0):.2f}%), limite adotado "
+                f"{float(alim_memorial.get('limite_queda_pct',0) or 0):.2f}%.", styles["Texto"]))
+    else:
+        story.append(Paragraph("O alimentador geral ainda não foi fechado na etapa QDC.", styles["Texto"]))
+
+    story.append(
+        Paragraph(
+            "3. QUADRO DE CARGAS",
+            styles["Secao"]
+        )
+    )
+
+    cabecalho = [
+        "Ambiente",
+        "Ilum.",
+        "P.Ilum.(W)",
+        "TUG",
+        "P.TUG(W)",
+        "TUE",
+        "P.TUE(W)"
+    ]
+
+    dados_tabela = [
+        cabecalho
+    ]
+
+    total_qtd_ilum = 0
+    total_pot_ilum = 0
+    total_qtd_tug = 0
+    total_pot_tug = 0
+    total_qtd_tue = 0
+    total_pot_tue = 0
+
+    for row in sorted(
+        tabela_editada,
+        key=lambda x: str(
+            x.get(
+                "Ambiente",
+                ""
+            )
+        ).casefold()
+    ):
+        qtd_ilum = int(
+            row.get(
+                "Qtd Ilum.",
+                0
+            )
+            or 0
+        )
+
+        pot_ilum_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. Ilum (W)",
+                "Pot. Unit. Ilum (VA)",
+                0
+            )
+        )
+
+        qtd_tug = int(
+            row.get(
+                "Qtd TUG",
+                row.get(
+                    "TUGs (Qtd)",
+                    0
+                )
+            )
+            or 0
+        )
+
+        pot_tug_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. TUG (W)",
+                "Pot. Unit. TUG (VA)",
+                0
+            )
+        )
+
+        qtd_tue = int(
+            row.get(
+                "Qtd TUE",
+                0
+            )
+            or 0
+        )
+
+        pot_tue_unit = int(
+            _valor_w(
+                row,
+                "Pot. Unit. TUE (W)",
+                "Pot. Unit. TUE (VA)",
+                0
+            )
+        )
+
+        dados_tabela.append([
+            str(
+                row.get(
+                    "Ambiente",
+                    ""
+                )
+            ),
+            str(qtd_ilum),
+            str(pot_ilum_unit),
+            str(qtd_tug),
+            str(pot_tug_unit),
+            str(qtd_tue),
+            str(pot_tue_unit)
+        ])
+
+        total_qtd_ilum += qtd_ilum
+        total_pot_ilum += (
+            qtd_ilum
+            * pot_ilum_unit
+        )
+
+        total_qtd_tug += qtd_tug
+        total_pot_tug += (
+            qtd_tug
+            * pot_tug_unit
+        )
+
+        total_qtd_tue += qtd_tue
+        total_pot_tue += (
+            qtd_tue
+            * pot_tue_unit
+        )
+
+    # Linha de totais do Quadro de Cargas.
+    # As potências totais seguem a mesma lógica já usada no quadro
+    # consolidado e no Excel: quantidade x potência unitária.
+    dados_tabela.append([
+        "TOTAL GERAL",
+        str(total_qtd_ilum),
+        str(total_pot_ilum),
+        str(total_qtd_tug),
+        str(total_pot_tug),
+        str(total_qtd_tue),
+        str(total_pot_tue)
+    ])
+
+    tabela = Table(
+        dados_tabela,
+        repeatRows=1,
+        colWidths=[
+            4.0 * cm,
+            1.2 * cm,
+            2.2 * cm,
+            1.2 * cm,
+            2.2 * cm,
+            1.2 * cm,
+            2.2 * cm
+        ]
+    )
+
+    tabela.setStyle(
+        TableStyle([
+            (
+                "BACKGROUND",
+                (0, 0),
+                (-1, 0),
+                colors.HexColor(
+                    "#F0F2F6"
+                )
+            ),
+            (
+                "FONTNAME",
+                (0, 0),
+                (-1, 0),
+                "Helvetica-Bold"
+            ),
+            (
+                "GRID",
+                (0, 0),
+                (-1, -1),
+                0.4,
+                colors.grey
+            ),
+            (
+                "FONTSIZE",
+                (0, 0),
+                (-1, -1),
+                8
+            ),
+            (
+                "VALIGN",
+                (0, 0),
+                (-1, -1),
+                "MIDDLE"
+            ),
+            (
+                "BACKGROUND",
+                (0, -1),
+                (-1, -1),
+                colors.HexColor(
+                    "#E8EEF8"
+                )
+            ),
+            (
+                "FONTNAME",
+                (0, -1),
+                (-1, -1),
+                "Helvetica-Bold"
+            ),
+            (
+                "LINEABOVE",
+                (0, -1),
+                (-1, -1),
+                0.8,
+                colors.HexColor(
+                    "#4A5568"
+                )
+            )
+        ])
+    )
+
+    story.append(
+        tabela
+    )
+
+    story.append(
+        Paragraph(
+            "4. PROTEÇÕES",
+            styles["Secao"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Os circuitos deverão possuir proteção contra sobrecorrente "
+            "compatível com a seção dos condutores e com a corrente prevista. "
+            "O quadro deverá prever dispositivo diferencial residual (DR/IDR) "
+            "nos circuitos aplicáveis, proteção contra surtos (DPS) conforme "
+            "as condições da instalação e dispositivos de seccionamento "
+            "adequados ao esquema de alimentação.",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "5. ATERRAMENTO E CONDUTOR DE PROTEÇÃO",
+            styles["Secao"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "Todos os circuitos deverão possuir condutor de proteção e "
+            "equipotencialização conforme aplicável. O barramento de proteção "
+            "do QDC deverá ser interligado ao sistema de aterramento da edificação.",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "6. INTERRUPTORES E PONTOS DE UTILIZAÇÃO",
+            styles["Secao"]
+        )
+    )
+
+    total_interruptores = sum(
+        int(
+            cfg.get(
+                "quantidade",
+                0
+            )
+        )
+        for cfg
+        in config_interruptores_usuario.values()
+    )
+
+    story.append(
+        Paragraph(
+            f"O projeto prevê {total_interruptores} ponto(s) de interruptor "
+            "conforme configuração definida por ambiente. Os pontos são "
+            "posicionados junto às portas/soleiras conforme a geometria do CAD.",
+            styles["Texto"]
+        )
+    )
+
+    story.append(
+        Paragraph(
+            "7. QUANTITATIVO",
+            styles["Secao"]
+        )
+    )
+
+    # REV.232 — usa prioritariamente o snapshot EXATO da Lista de Materiais
+    # exibida na Etapa 6. Se o usuário ainda não abriu essa etapa na sessão,
+    # recalcula pela mesma rotina e com o mesmo resumo de rotas.
+    if isinstance(materiais_snapshot, list) and materiais_snapshot:
+        materiais = [dict(item) for item in materiais_snapshot]
+    else:
+        materiais, _ = calcular_quantitativo_materiais(
+            tabela_editada=tabela_editada,
+            config_interruptores_usuario=config_interruptores_usuario,
+            local_qdc=local_qdc,
+            tensao_projeto=tensao_projeto,
+            pe_direito=pe_direito,
+            resumo_rotas=resumo_rotas
+        )
+        materiais, _ = __import__("materiais")._dataframes_materiais_circuitos(materiais, [])
+        materiais = materiais.to_dict("records")
+
+    # REV.232 — mesmas linhas e mesma ordem da Lista de Materiais;
+    # no Memorial é omitida somente a coluna Critério.
+    dados_mat = [[
+        "Categoria",
+        "Material",
+        "Especificação",
+        "Unidade",
+        "Quantidade",
+    ]]
+
+    def _formatar_qtd_memorial(valor):
+        try:
+            numero = float(valor)
+            if numero.is_integer():
+                return str(int(numero))
+        except (TypeError, ValueError):
+            pass
+        return str(valor)
+
+    estilo_celula_mat = ParagraphStyle(
+        "CelulaMateriaisMemorial232",
+        parent=styles["Texto"],
+        fontName="Helvetica",
+        fontSize=7.2,
+        leading=8.6,
+        spaceAfter=0,
+        spaceBefore=0,
+    )
+
+    for item in materiais:
+        dados_mat.append([
+            Paragraph(str(item.get("Categoria", "")), estilo_celula_mat),
+            Paragraph(str(item.get("Material", "")), estilo_celula_mat),
+            Paragraph(str(item.get("Especificação", "")), estilo_celula_mat),
+            Paragraph(str(item.get("Unidade", "")), estilo_celula_mat),
+            Paragraph(_formatar_qtd_memorial(item.get("Quantidade", "")), estilo_celula_mat),
+        ])
+
+    tabela_mat = Table(
+        dados_mat,
+        repeatRows=1,
+        colWidths=[
+            2.4 * cm,
+            3.7 * cm,
+            6.6 * cm,
+            1.3 * cm,
+            1.9 * cm,
+        ]
+    )
+
+    tabela_mat.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F0F2F6")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.grey),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ALIGN", (3, 0), (4, -1), "CENTER"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ])
+    )
+
+    story.append(tabela_mat)
+
+    story.append(
+        Spacer(
+            1,
+            10
+        )
+    )
+
+    doc.build(
+        story,
+        onFirstPage=desenhar_rodape_reportlab,
+        onLaterPages=desenhar_rodape_reportlab
+    )
+
+    buffer.seek(0)
+
+    return buffer.getvalue()
