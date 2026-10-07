@@ -64,6 +64,15 @@ def _texto_numero(valor):
 
 
 
+def _regras_confirmacao_fonte(perfil, regras_validacao):
+    """Preserva tabelas e evidências Elektro ao confirmar somente a fonte."""
+    from copy import deepcopy
+    origem = (perfil.get("regras") or {}) if eh_perfil_elektro(perfil) else regras_validacao
+    regras = deepcopy(origem)
+    regras["fonte_conferida"] = True
+    return regras
+
+
 def _perfil_pronto(regras):
     if not isinstance(regras, dict) or regras.get("schema") not in ("autoeletrica.perfil_normativo.v1", "autoeletrica.perfil_normativo.v2"):
         return False
@@ -712,8 +721,7 @@ def renderizar_admin_normativos(email):
                 st.info("Testes e conferência documental do escopo operacional aprovados. Confirme a fonte oficial para publicar o perfil com as restrições indicadas." if eh_elektro else "Todos os testes automáticos passaram. Confira o documento oficial e, somente depois, registre a confirmação abaixo.")
                 if st.button("Confirmo a conferência no documento oficial", key=f"confirmar_fonte_{p.get('id')}", use_container_width=True):
                     try:
-                        regras_confirmadas = dict(regras_validacao)
-                        regras_confirmadas["fonte_conferida"] = True
+                        regras_confirmadas = _regras_confirmacao_fonte(p, regras_validacao)
                         salvar_perfil({"regras": regras_confirmadas}, perfil_id=p.get("id"))
                         st.success("Conferência documental registrada.")
                         st.rerun()
