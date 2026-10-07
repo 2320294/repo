@@ -244,3 +244,16 @@ def _resumo_auditoria_ged13(regras):
     return passou, resultados, tabelas_ok, len(categorias), aprovados, total, pendencias
 
 
+
+
+def fator_tabela3_limites_cpfl(regra, carga_kw):
+    """Tabela 3 GED-13: limite inferior exclusivo e superior inclusivo."""
+    carga = float(carga_kw)
+    if carga == 0:
+        return 0.0
+    for faixa in regra.get("faixas", []) or []:
+        minimo = float(faixa.get("min_kw", 0) or 0)
+        maximo = faixa.get("max_kw")
+        if carga > minimo and (maximo in (None, "") or carga <= float(maximo)):
+            return float(faixa.get("fator", 0) or 0)
+    return None

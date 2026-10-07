@@ -148,6 +148,9 @@ def _selecionar_fornecimento_perfil(potencia_instalada_w, rede, perfil):
     return rede
 
 def _fator_faixa_kw(regra, carga_kw):
+    if regra.get("tabela_id") == "GED13_TABELA_3":
+        from normativo_cpfl import fator_tabela3_limites_cpfl
+        return fator_tabela3_limites_cpfl(regra, carga_kw)
     for faixa in regra.get("faixas", []) or []:
         minimo = _float(faixa.get("min_kw"), 0)
         maximo = faixa.get("max_kw")
