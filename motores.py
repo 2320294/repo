@@ -1619,6 +1619,9 @@ def gerar_cad_unifilar(
         convergiu = False
 
         MAX_ITERACOES_DIMENSIONAMENTO = 6
+        from percursos_verticais import contexto_queda, CHAVE as CHAVE_ALTURAS
+        contexto_vertical = contexto_queda((config_interruptores or {}).get(CHAVE_ALTURAS),
+            pe_direito, pontos_eletricos, pontos_interruptores, qdc_info)
 
         for iteracao in range(
             1,
@@ -1660,7 +1663,8 @@ def gerar_cad_unifilar(
                 relatorio_queda
             ) = corrigir_bitolas_por_queda(
                 rotas_fisicas,
-                circuitos_dimensionados
+                circuitos_dimensionados,
+                contexto_vertical=contexto_vertical
             )
 
             resumo_intermediario = dimensionar_rotas(
@@ -1901,6 +1905,7 @@ def gerar_cad_unifilar(
         resumo_rotas = aplicar_verticais(resumo_rotas,
             (config_interruptores or {}).get(CHAVE_ALTURAS), pe_direito,
             pontos_eletricos, pontos_interruptores, qdc_info, circuitos_dimensionados)
+        resumo_rotas["contexto_queda_vertical"] = contexto_vertical
 
         resumo_rotas[
             "correcoes_bitola"

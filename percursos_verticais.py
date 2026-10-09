@@ -151,5 +151,41 @@ def relatorio_auditoria(projeto, resumo, materiais, circuitos, pe_direito):
             "auditoria_vertical": (resumo or {}).get("auditoria_vertical", {}),
             "cabos_por_circuito": (resumo or {}).get("cabos", []),
             "eletrodutos": (resumo or {}).get("eletrodutos", []),
+            "contexto_queda_vertical": (resumo or {}).get("contexto_queda_vertical", {}),
+            "validacao_eletrica": (resumo or {}).get("validacao_eletrica", {}),
+            "correcoes_bitola": (resumo or {}).get("correcoes_bitola", []),
             "circuitos": circuitos, "materiais": materiais,
             "escopo": "Conferência de quantitativos. Não constitui validação normativa nem liberação da instalação."}
+
+
+def contexto_queda(registro, pe_direito, pontos, interruptores, qdc):
+    """Alturas nos pontos de conexão; percurso horizontal fica no teto/piso escolhido."""
+    if not validar(registro, pe_direito):
+        return {"aplicado": False, "status": "Alturas e percurso pendentes"}
+    r = {**PADROES, **registro}
+    qxy = (qdc or {}).get("centro_externo") or (qdc or {}).get("centro")
+    if not qxy:
+        return {"aplicado": False, "status": "Origem do QDC pendente"}
+    nivel = float(pe_direito) if r["percurso"] == "Teto" else 0.0
+    descidas = {}
+    for p in list(pontos or []) + list(interruptores or []):
+        tipo = str(p.get("tipo", "")).upper()
+        if tipo in ("ILUMINACAO", "ILUMINAÇÃO"):
+            altura = float(pe_direito)
+        elif tipo == "INTERRUPTOR":
+            altura = r["interruptor_m"]
+        else:
+            altura = r.get({"BAIXA": "baixa_m", "MEDIA": "media_m", "ALTA": "alta_m"}.get(p.get("altura"), ""))
+        if altura is None:
+            continue
+        for campo in ("ponto", "ponto_conexao_parede", "ponto_conexao_ambiente",
+                      "ponto_tangencia", "ponto_tangencia_simbolo"):
+            if p.get(campo):
+                xy = tuple(round(float(v), 4) for v in p[campo][:2])
+                descidas[xy] = abs(nivel - float(altura))
+    return {"aplicado": True, "qdc": list(qxy[:2]),
+            "subida_qdc_m": abs(nivel - float(r["qdc_m"])),
+            "conexoes": [{"ponto": list(k), "vertical_m": v} for k, v in sorted(descidas.items())],
+            "criterio": "Percurso horizontal acumulado desde o QDC mais subida/descida do QDC "
+                        "e conexão vertical do ponto atendido; ramificações independentes não são somadas. "
+                        "A folga de compra de cabos não entra na queda de tensão."}

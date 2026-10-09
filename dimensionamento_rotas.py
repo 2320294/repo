@@ -686,7 +686,8 @@ def _disjuntor_a(circuito):
 
 def _comprimento_maximo_circuito(
     numero,
-    rotas
+    rotas,
+    contexto_vertical=None
 ):
     """
     Reconstrói o caminho dirigido do circuito usando a própria topologia
@@ -771,6 +772,10 @@ def _comprimento_maximo_circuito(
         )
 
     memo = {}
+    contexto = contexto_vertical or {}
+    verticais = {_ponto_chave(item.get("ponto")): float(item.get("vertical_m", 0))
+                 for item in contexto.get("conexoes", [])} if contexto.get("aplicado") else {}
+    qdc_vertical = _ponto_chave(contexto.get("qdc")) if contexto.get("aplicado") else None
 
     def maior_a_partir(no, visitando=None):
         if no in memo:
@@ -788,7 +793,7 @@ def _comprimento_maximo_circuito(
             no
         )
 
-        melhor = 0.0
+        melhor = 0.0 if no == qdc_vertical else verticais.get(no, 0.0)
 
         for e in saidas.get(
             no,
@@ -809,12 +814,15 @@ def _comprimento_maximo_circuito(
 
         return melhor
 
-    return max(
+    maior = max(
         maior_a_partir(
             origem
         )
         for origem in origens
     )
+    if contexto.get("aplicado") and qdc_vertical in origens:
+        maior += float(contexto.get("subida_qdc_m", 0.0))
+    return maior
 
 
 def _queda_tensao_pct(
@@ -905,7 +913,8 @@ def _proxima_secao_padronizada(
 def corrigir_bitolas_por_queda(
     rotas,
     circuitos,
-    limite_queda_pct=QUEDA_REFERENCIA_PCT
+    limite_queda_pct=QUEDA_REFERENCIA_PCT,
+    contexto_vertical=None
 ):
     """
     Fase 13.6 Rev.124.
@@ -976,7 +985,8 @@ def corrigir_bitolas_por_queda(
 
         comprimento = _comprimento_maximo_circuito(
             numero,
-            rotas
+            rotas,
+            contexto_vertical=contexto_vertical
         )
 
         original = _bitola(
@@ -1225,7 +1235,8 @@ def validar_eletrica_rotas(
         comprimento_max = (
             _comprimento_maximo_circuito(
                 numero,
-                rotas
+                rotas,
+                contexto_vertical=(resumo_rotas or {}).get("contexto_queda_vertical")
             )
         )
 
