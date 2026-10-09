@@ -1276,7 +1276,10 @@ def resumo_renderizar(perfil, chave):
         return
     with st.expander("Resumo da auditoria do perfil Elektro"):
         st.table(linhas)
-        st.caption("Resumo das evidências cadastradas e pendências. Testes de software e conferência parcial não homologam o perfil. Mantenha em RASCUNHO até concluir a homologação.")
+        if str(perfil.get("status") or "").strip().upper() == "ATIVO":
+            st.caption("Perfil ativo no escopo parcial de demanda trifásica residencial urbana em 220/127 V, condicionado às confirmações do projeto. A homologação completa permanece pendente. Faixas conflitantes continuam bloqueadas; atendimento e tensão por endereço, entrada, DG e alimentador exigem conferência técnica. Testes de software e conferência parcial não constituem homologação completa.")
+        else:
+            st.caption("Resumo das evidências cadastradas e pendências. Testes de software e conferência parcial não homologam o perfil. A ativação depende da validação do escopo aplicável e da confirmação da fonte oficial; a homologação completa permanece pendente.")
         st.download_button("Baixar resumo da auditoria Elektro (JSON)",
             data=json.dumps({"perfil_id": perfil.get("id"), "documento": perfil.get("documento"),
                 "revisao": perfil.get("revisao"), "assinatura_perfil": auditoria_assinatura(perfil),
