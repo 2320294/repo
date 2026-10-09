@@ -103,6 +103,16 @@ def _descricao(circ, tipo):
     amb = _txt(circ.get('ambiente')) or '-'
     return f'{nome} — {amb}'
 
+
+def _ambientes_etiqueta(c, texto, largura):
+    """Duas linhas legíveis; a relação completa permanece na tabela da porta."""
+    linhas, fonte = _quebrar_linhas(c, texto, largura, 'Helvetica', 5.2, 2, 4.0)
+    completo = ''.join(_txt(texto).replace(' + ', ', ').split())
+    exibido = ''.join(''.join(linhas).split())
+    if exibido != completo:
+        return ['Ver tabela'], 5.2
+    return linhas, fonte
+
 def _fases_ordem(c):
     fase = _txt(c.get('fase')).upper().replace('/', '-').replace(' ', '')
     tokens = tuple(x for x in ('A','B','C') if x in fase)
@@ -277,6 +287,8 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             # reduzindo automaticamente somente quando o texto realmente exigir.
             linhas1,fs1=_quebrar_linhas(c,item['linha1'],w-1.8*mm,'Helvetica-Bold',6.3,2,3.2)
             linhas2,fs2=_quebrar_linhas(c,item['linha2'],w-1.8*mm,'Helvetica',5.2,3,2.8)
+            if item['tipo'] != 'GERAL':
+                linhas2,fs2=_ambientes_etiqueta(c,item['linha2'],w-1.8*mm)
             if len(linhas1)==1:
                 c.setFont('Helvetica-Bold',fs1); c.drawCentredString(x+w/2,y-6.15*mm,linhas1[0]); base_y=y-8.45*mm
             else:
