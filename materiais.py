@@ -300,7 +300,7 @@ def _adicionar_material(
     ):
         quantidade = round(
             quantidade,
-            1
+            2 if material == "Trilho DIN 35 mm" else 1
         )
 
     materiais.append({
