@@ -803,7 +803,7 @@ def gerar_memorial_pdf(
             "Trifásico": "3F + N + PE",
         }.get(tipo_fornecimento_memorial, "A definir")
         story.append(Paragraph(
-            f"Alimentador final: <b>{composicao_alimentador}</b>; fase <b>{float(alim_memorial.get('fase_mm2')):g} mm²</b>, "
+            f"Alimentador preliminar: <b>{composicao_alimentador}</b>; fase <b>{float(alim_memorial.get('fase_mm2')):g} mm²</b>, "
             f"neutro <b>{float(alim_memorial.get('neutro_mm2')):g} mm²</b> e PE <b>{float(alim_memorial.get('pe_mm2')):g} mm²</b>. "
             f"Seção por capacidade: {float(alim_memorial.get('secao_por_capacidade_mm2')):g} mm²; "
             f"seção por queda: {sqtxt}; critério determinante: <b>{alim_memorial.get('criterio_determinante','')}</b>.", styles["Texto"]))
@@ -1054,21 +1054,15 @@ def gerar_memorial_pdf(
 
     story.append(KeepTogether(protecoes_memorial))
 
-    story.append(
-        Paragraph(
-            "5. ATERRAMENTO E CONDUTOR DE PROTEÇÃO",
-            styles["Secao"]
-        )
-    )
-
-    story.append(
+    story.append(KeepTogether([
+        Paragraph("5. ATERRAMENTO E CONDUTOR DE PROTEÇÃO", styles["Secao"]),
         Paragraph(
             "Todos os circuitos deverão possuir condutor de proteção e "
             "equipotencialização conforme aplicável. O barramento de proteção "
             "do QDC deverá ser interligado ao sistema de aterramento da edificação.",
             styles["Texto"]
-        )
-    )
+        ),
+    ]))
 
     story.append(
         Paragraph(

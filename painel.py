@@ -1170,11 +1170,30 @@ def renderizar_painel_principal():
         # REV.218 — dimensionamento do alimentador continua automático e persistido,
         # porém seus controles/memória deixam de ser exibidos na Etapa 3.
         if resultado_demanda.get("corrente_demanda_a") is not None and resultado_demanda.get("disjuntor_geral_a") is not None:
-            metodo_alim = st.session_state.get("rev209_metodo_alimentador", "B1")
-            temp_alim = st.session_state.get("rev209_temp_alimentador", 30)
-            comp_alim = float(st.session_state.get("rev209_comprimento_alimentador", 0.0) or 0.0)
-            fator_ag = float(st.session_state.get("rev209_fator_agrupamento", 1.0) or 1.0)
-            limite_q = float(st.session_state.get("rev209_limite_queda_alimentador", 2.0) or 2.0)
+            alimentador_salvo = (config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {}).get("alimentador_geral", {}) or {}
+            def chave_alimentador(campo):
+                return _chave_projeto("alimentador_297_" + campo)
+            with st.expander("Dados do alimentador — capacidade e queda de tensão", expanded=False):
+                st.caption("Informe as condições reais do trecho entre a entrada e o QDC. Sem comprimento, a queda de tensão permanece pendente. Os valores iniciais são referências de cálculo e devem ser conferidos.")
+                metodo_salvo = alimentador_salvo.get("metodo", "B1")
+                metodo_alim = st.selectbox("Método de instalação do alimentador", ["B1", "B2"],
+                    index=1 if metodo_salvo == "B2" else 0, key=chave_alimentador("metodo"))
+                st.caption("B1: condutores isolados em eletroduto; B2: cabo multipolar em eletroduto. Confirme a aplicabilidade com o responsável técnico.")
+                temperaturas = [25, 30, 35, 40, 45, 50, 55, 60]
+                temp_salva = float(alimentador_salvo.get("temperatura_c", 30) or 30)
+                temp_alim = st.selectbox("Temperatura ambiente do alimentador (°C)", temperaturas,
+                    index=min(range(len(temperaturas)), key=lambda i: abs(temperaturas[i] - temp_salva)),
+                    key=chave_alimentador("temperatura"))
+                comp_alim = st.number_input("Comprimento de ida entre a entrada e o QDC (m)", min_value=0.0,
+                    value=max(0.0, float(alimentador_salvo.get("comprimento_m", 0) or 0)), step=1.0,
+                    key=chave_alimentador("comprimento"))
+                fator_ag = st.number_input("Fator de correção por agrupamento", min_value=0.10, max_value=1.0,
+                    value=min(1.0, max(0.10, float(alimentador_salvo.get("fator_agrupamento", 1) or 1))),
+                    step=0.05, key=chave_alimentador("agrupamento"))
+                limite_q = st.number_input("Limite de queda reservado ao alimentador (%)", min_value=0.1,
+                    value=max(0.1, float(alimentador_salvo.get("limite_queda_pct", 2) or 2)), step=0.1,
+                    key=chave_alimentador("limite"))
+                st.caption("Após conferir, use Gerar Projeto → Salvar Alterações do Projeto. O cálculo é preliminar e não substitui a conferência técnica do padrão de entrada.")
             mem = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
             alim = dimensionar_alimentador_geral(
                 resultado_demanda.get("corrente_demanda_a"),
