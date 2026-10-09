@@ -633,6 +633,13 @@ def _adicionar_componentes_qdc_executivo(
     )
     modulos_requeridos = modulos_ocupados + reserva_modulos
     qdc_posicoes = _proximo_qdc_padrao(modulos_requeridos)
+    # A disposição física pode precisar de um quadro maior por quebra
+    # de fileira. A lista deve comprar o mesmo quadro usado no desenho.
+    mapa_capacidade = gerar_mapa_fisico_qdc(
+        circuitos, resumo_drs, resumo_protecao, resultado_demanda,
+        qdc_posicoes=qdc_posicoes
+    )
+    qdc_posicoes = int(mapa_capacidade["qdc_posicoes"])
 
     _adicionar_material(
         materiais,
