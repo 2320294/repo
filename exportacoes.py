@@ -13,7 +13,8 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
-    PageBreak
+    PageBreak,
+    KeepTogether
 )
 
 from materiais import calcular_quantitativo_materiais
@@ -1031,14 +1032,15 @@ def gerar_memorial_pdf(
         tabela
     )
 
-    story.append(
+    protecoes_memorial = []
+    protecoes_memorial.append(
         Paragraph(
             "4. PROTEÇÕES",
             styles["Secao"]
         )
     )
 
-    story.append(
+    protecoes_memorial.append(
         Paragraph(
             "Os circuitos deverão possuir proteção contra sobrecorrente "
             "compatível com a seção dos condutores e com a corrente prevista. "
@@ -1049,6 +1051,8 @@ def gerar_memorial_pdf(
             styles["Texto"]
         )
     )
+
+    story.append(KeepTogether(protecoes_memorial))
 
     story.append(
         Paragraph(
