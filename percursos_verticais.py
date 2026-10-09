@@ -121,7 +121,10 @@ def aplicar(resumo, registro, pe_direito, pontos, interruptores, qdc, circuitos)
         if diametro:
             tubos[int(diametro)] = tubos.get(int(diametro), 0.0) + comprimento
         verticais.append({"ponto": no["ponto"], "tipo": no["tipo"], "altura_m": no["altura_m"],
-                          "comprimento_m": round(comprimento, 4), "diametro_mm": diametro})
+                          "comprimento_m": round(comprimento, 4), "diametro_mm": diametro,
+                          "condutores": [{"circuito": k[0], "bitola_mm2": k[1], "funcao": k[2],
+                                          "cor": k[3], "quantidade": qtd}
+                                         for k, qtd in sorted(no["condutores"].items())]})
     resumo["cabos"] = [{"circuito": k[0], "bitola_mm2": k[1], "funcao": k[2], "cor": k[3],
                         "comprimento_rota_m": round(v, 2),
                         "comprimento_com_folga_m": round(v * dr.FOLGA_CABOS_ROTA, 2)}
@@ -135,3 +138,18 @@ def aplicar(resumo, registro, pe_direito, pontos, interruptores, qdc, circuitos)
         "criterio": "Derivações pelo teto/piso; uma conexão vertical por ponto; "
                     "condutores compartilhados sem duplicação. Não altera verificação elétrica dos circuitos."}
     return resumo
+
+
+def relatorio_auditoria(projeto, resumo, materiais, circuitos, pe_direito):
+    """Snapshot dos dados usados no quantitativo, para conferência externa."""
+    from versao import VERSAO_SISTEMA
+    return {"formato": "autoeletrica_auditoria_cabos_v1", "versao": VERSAO_SISTEMA,
+            "projeto": str(projeto or ""), "pe_direito_m": float(pe_direito),
+            "folga_cabos": 1.15, "reserva_eletrodutos": 1.10,
+            "arredondamento": "Cabos agrupados por seção, função e cor; quantidade final arredondada para cima em metros.",
+            "rotas_horizontais": (resumo or {}).get("rotas", []),
+            "auditoria_vertical": (resumo or {}).get("auditoria_vertical", {}),
+            "cabos_por_circuito": (resumo or {}).get("cabos", []),
+            "eletrodutos": (resumo or {}).get("eletrodutos", []),
+            "circuitos": circuitos, "materiais": materiais,
+            "escopo": "Conferência de quantitativos. Não constitui validação normativa nem liberação da instalação."}

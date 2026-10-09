@@ -3313,6 +3313,23 @@ def renderizar_materiais(
     # apresenta cada diagnóstico no módulo ao qual ele pertence.
     pagina = str(pagina or "materiais").strip().lower()
 
+    if pagina == "materiais":
+        with st.expander("Conferência das metragens de cabos", expanded=False):
+            st.caption("Exporte os dados dos trechos, condutores, alturas e quantitativos para conferência técnica.")
+            if isinstance(resumo_rotas, dict) and resumo_rotas.get("rotas"):
+                import json
+                from percursos_verticais import relatorio_auditoria
+                relatorio = relatorio_auditoria(st.session_state.get("projeto_ativo"), resumo_rotas,
+                    materiais_df.to_dict("records"), circuitos, pe_direito)
+                st.download_button("Baixar auditoria dos cabos (JSON)",
+                    data=json.dumps(relatorio, ensure_ascii=False, indent=2,
+                        default=lambda obj: obj.item() if hasattr(obj, "item") else
+                            sorted(obj) if isinstance(obj, set) else str(obj)),
+                    file_name="Auditoria_Cabos_Projeto.json", mime="application/json",
+                    key="download_auditoria_cabos")
+            else:
+                st.info("Gere o dimensionamento do projeto para disponibilizar os dados dos trechos.")
+
     if pagina == "qdc":
         st.markdown("#### 🧰 QDC executivo")
 
