@@ -424,6 +424,7 @@ def renderizar_parametros_projeto(
     )
 
     parametros_rede = {
+        **rede,  # Preserva alimentador e snapshots das outras etapas.
         "uf": uf,
         "municipio": municipio,
         "concessionaria": concessionaria,
