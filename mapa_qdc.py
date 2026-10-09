@@ -6146,6 +6146,14 @@ def desenhar_mapa_fisico_qdc(
         f"IDRs: {qtd_idr}",
         f"DPS: {qtd_dps_desenho}",
     ])
+    from normativo_elektro import exportacao_pendencias
+    import textwrap
+    for nota_elektro in exportacao_pendencias(
+        parametros_rede, parametros_rede.get("demanda_fechada") or {}
+    ):
+        # Usa o painel e sua moldura dinâmica sem deslocar dispositivos ou cabos.
+        largura_nota = max(20, int((px2 - px1 - 0.5) / (0.083 * 0.65)))
+        dados.extend(textwrap.wrap(nota_elektro, width=largura_nota))
     yy_d = dados_y - 0.32
     for linha in dados:
         _text(

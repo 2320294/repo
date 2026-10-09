@@ -2068,7 +2068,8 @@ def gerar_cad_unifilar(
             msp,
             mapa_fisico_qdc,
             polilinhas,
-            parametros_rede=parametros_rede_unifilar,
+            parametros_rede={**parametros_rede_unifilar,
+                "demanda_fechada": resultado_demanda_unifilar},
             resumo_balanceamento=resumo_balanceamento_unifilar
         )
 

@@ -1268,6 +1268,29 @@ def resumo_resumo_projeto(salvo, contexto, resultado):
     return "Dados ou confirmação pendentes", "Completar os dados técnicos e conferir sua aplicabilidade."
 
 
+def exportacao_pendencias(rede, demanda=None):
+    """Notas compactas de exportação; não alteram dimensionamento ou aprovação."""
+    rede = rede or {}
+    demanda = demanda or {}
+    identificacao = " ".join(str(rede.get(k) or "") for k in
+        ("concessionaria", "perfil_normativo_concessionaria"))
+    if "elektro" not in identificacao.lower():
+        return []
+    documento = str(rede.get("perfil_normativo_documento") or "DIS-NOR-030")
+    revisao = str(rede.get("perfil_normativo_revisao") or "não informada")
+    linhas = [f"Perfil: Neoenergia Elektro - {documento}, revisão {revisao}."]
+    if not (rede.get("contexto_elektro_teste") or {}).get("atendimento_confirmado"):
+        linhas.append("Atendimento e tensão no endereço: confirmação pendente.")
+    kva = demanda.get("demanda_aparente_kva")
+    if kva is None:
+        linhas.append("Demanda Elektro: pendente das confirmações do projeto.")
+    else:
+        linhas.append(f"Demanda Elektro: {float(kva):.3f} kVA, no escopo parcial do perfil.")
+    linhas.append("Entrada, DG e alimentador: sem liberação automática; exigem conferência técnica.")
+    linhas.append("Faixas conflitantes permanecem bloqueadas. Este registro não constitui aprovação.")
+    return linhas
+
+
 def resumo_renderizar(perfil, chave):
     import streamlit as st
     import json
