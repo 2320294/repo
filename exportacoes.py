@@ -769,8 +769,10 @@ def gerar_memorial_pdf(
     alim_memorial = dict(rede_memorial.get("alimentador_geral", {}) or {})
     story.append(Paragraph("2A. DEMANDA, PROTEÇÃO GERAL E ALIMENTADOR", styles["Secao"]))
     from normativo_elektro import exportacao_pendencias
+    from normativo_cpfl import exportacao_pendencias_cpfl
     from xml.sax.saxutils import escape
-    for nota_elektro in exportacao_pendencias(rede_memorial, demanda_memorial):
+    for nota_elektro in (exportacao_pendencias(rede_memorial, demanda_memorial)
+                        + exportacao_pendencias_cpfl(rede_memorial, demanda_memorial)):
         story.append(Paragraph(escape(nota_elektro), styles["Texto"]))
     if demanda_memorial.get("potencia_demanda_w") is not None:
         polos_dg_memorial = {"Monofásico": "1P", "Bifásico": "2P", "Trifásico": "3P"}.get(

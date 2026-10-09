@@ -637,6 +637,7 @@ def renderizar_salvar_e_gerar_cad(
                         polos_geral=polos_dg,
                         versao=VERSAO_SISTEMA,
                         mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
+                        ambientes_projeto=[row.get("Ambiente", "") for row in tabela_editada],
                     )
                     etiquetas_disponiveis = True
                 else:

@@ -312,6 +312,26 @@ def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao, dados=None):
     return resultado
 
 
+def exportacao_pendencias_cpfl(rede, demanda=None):
+    """Replica a situação da conferência de entrada, sem aprovar o projeto."""
+    rede = rede or {}
+    demanda = demanda or {}
+    identificacao = " ".join(str(rede.get(k) or "") for k in
+        ("concessionaria", "perfil_normativo_concessionaria"))
+    if "cpfl" not in identificacao.lower():
+        return []
+    auditoria = demanda.get("auditoria_entrada_cpfl") or {}
+    if not auditoria:
+        return []
+    if auditoria.get("status") == "referencia_documental" and auditoria.get("categoria"):
+        return [f"Entrada CPFL: referência documental {auditoria['categoria']} "
+                f"({float(auditoria['demanda_kva']):.2f} kVA). Conferência técnica pendente.",
+                "DG e alimentador preliminares; a referência não constitui aprovação automática."]
+    return ["Entrada CPFL: categoria pendente de conferência em kVA.",
+            "Confirmar potência aparente (VA) ou fator de potência das cargas pendentes.",
+            "DG e alimentador preliminares; entrada sem aprovação automática."]
+
+
 def chave_dado_cpfl(item):
     import hashlib
     import json

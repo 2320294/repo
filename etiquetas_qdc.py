@@ -172,8 +172,14 @@ def _fileiras_do_mapa(mapa_fisico, circuitos):
     if atual: linhas.append(atual)
     return linhas
 
-def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, polos_geral=2, versao='', mapa_fisico=None):
+def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, polos_geral=2, versao='', mapa_fisico=None, ambientes_projeto=None):
     circuitos=[dict(x) for x in (circuitos or []) if int(x.get('numero',0) or 0)>0]
+    iluminacao = [x for x in circuitos if _tipo(x) == 'ILUMINACAO']
+    ambientes = {_txt(x).casefold() for x in (ambientes_projeto or []) if _txt(x)}
+    if len(iluminacao) == 1 and ambientes:
+        atendidos = {_txt(x).casefold() for x in _txt(iluminacao[0].get('ambiente')).split(',') if _txt(x)}
+        if atendidos == ambientes:
+            iluminacao[0]['ambiente'] = 'Geral'
     por_id={f"C{int(x.get('numero',0)):02d}":x for x in circuitos}
     fileiras=_fileiras_do_mapa(mapa_fisico,circuitos)
     # Fallback apenas para projetos antigos que ainda não regeneraram o CAD.
