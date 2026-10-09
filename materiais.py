@@ -867,6 +867,24 @@ def _auditar_consistencia_qdc(
     }
 
 
+def contar_interruptores_projeto(configuracao, resumo_rotas=None):
+    """Usa os comandos desenhados; configurações antigas são apenas fallback."""
+    gerados = (resumo_rotas or {}).get("interruptores_gerados")
+    if isinstance(gerados, list):
+        paralelos = sum(1 for p in gerados if p.get("paralelo"))
+        return len(gerados) - paralelos, paralelos
+    simples = paralelos = 0
+    for chave, cfg in (configuracao or {}).items():
+        if str(chave).startswith("__") or not isinstance(cfg, dict):
+            continue
+        quantidade = _inteiro(cfg.get("quantidade", 0))
+        if quantidade == 1:
+            simples += 1
+        elif quantidade >= 2:
+            paralelos += quantidade
+    return simples, paralelos
+
+
 def calcular_quantitativo_materiais(
     tabela_editada,
     config_interruptores_usuario,
@@ -942,48 +960,8 @@ def calcular_quantitativo_materiais(
         for r in tabela_editada
     )
 
-    configuracoes_interruptores_reais = [
-        cfg
-        for chave_cfg, cfg
-        in config_interruptores_usuario.items()
-        if (
-            not str(
-                chave_cfg
-            ).startswith("__")
-            and isinstance(
-                cfg,
-                dict
-            )
-        )
-    ]
-
-    total_interruptores_simples = sum(
-        1
-        for cfg in configuracoes_interruptores_reais
-        if _inteiro(
-            cfg.get(
-                "quantidade",
-                0
-            )
-        )
-        == 1
-    )
-
-    total_interruptores_paralelos = sum(
-        _inteiro(
-            cfg.get(
-                "quantidade",
-                0
-            )
-        )
-        for cfg in configuracoes_interruptores_reais
-        if _inteiro(
-            cfg.get(
-                "quantidade",
-                0
-            )
-        )
-        >= 2
+    total_interruptores_simples, total_interruptores_paralelos = (
+        contar_interruptores_projeto(config_interruptores_usuario, resumo_rotas)
     )
 
     total_interruptores = (

@@ -1906,6 +1906,11 @@ def gerar_cad_unifilar(
             (config_interruptores or {}).get(CHAVE_ALTURAS), pe_direito,
             pontos_eletricos, pontos_interruptores, qdc_info, circuitos_dimensionados)
         resumo_rotas["contexto_queda_vertical"] = contexto_vertical
+        resumo_rotas["interruptores_gerados"] = [
+            {"ambiente": p.get("ambiente"), "paralelo": bool(p.get("paralelo")),
+             "ponto": list(p.get("ponto", ())) }
+            for p in pontos_interruptores
+        ]
 
         resumo_rotas[
             "correcoes_bitola"

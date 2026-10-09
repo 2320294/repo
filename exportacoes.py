@@ -17,7 +17,7 @@ from reportlab.platypus import (
     KeepTogether
 )
 
-from materiais import calcular_quantitativo_materiais
+from materiais import calcular_quantitativo_materiais, contar_interruptores_projeto
 from versao import VERSAO_SISTEMA
 
 
@@ -1073,16 +1073,9 @@ def gerar_memorial_pdf(
         )
     )
 
-    total_interruptores = sum(
-        int(
-            cfg.get(
-                "quantidade",
-                0
-            )
-        )
-        for cfg
-        in config_interruptores_usuario.values()
-    )
+    total_interruptores = sum(contar_interruptores_projeto(
+        config_interruptores_usuario, resumo_rotas
+    ))
 
     story.append(
         Paragraph(
