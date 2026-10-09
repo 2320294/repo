@@ -1104,7 +1104,8 @@ def gerar_memorial_pdf(
     if isinstance(materiais_snapshot, list) and materiais_snapshot:
         materiais = [dict(item) for item in materiais_snapshot]
     else:
-        materiais, _ = calcular_quantitativo_materiais(
+        from materiais import calcular_quantitativo_completo_memorial
+        materiais = calcular_quantitativo_completo_memorial(
             tabela_editada=tabela_editada,
             config_interruptores_usuario=config_interruptores_usuario,
             local_qdc=local_qdc,
@@ -1112,8 +1113,6 @@ def gerar_memorial_pdf(
             pe_direito=pe_direito,
             resumo_rotas=resumo_rotas
         )
-        materiais, _ = __import__("materiais")._dataframes_materiais_circuitos(materiais, [])
-        materiais = materiais.to_dict("records")
 
     # REV.232 — mesmas linhas e mesma ordem da Lista de Materiais;
     # no Memorial é omitida somente a coluna Critério.

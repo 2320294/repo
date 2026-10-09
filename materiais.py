@@ -2946,6 +2946,144 @@ def _gerar_pdf_materiais_circuitos(
     return buffer.getvalue()
 
 
+def calcular_quantitativo_completo_memorial(tabela_editada, config_interruptores_usuario,
+        local_qdc, tensao_projeto=220, pe_direito=2.8, resumo_rotas=None):
+    """Mesmo fechamento da lista de materiais, sem depender da navegação."""
+    materiais, circuitos = (
+        calcular_quantitativo_materiais(
+            tabela_editada,
+            config_interruptores_usuario,
+            local_qdc,
+            tensao_projeto,
+            pe_direito,
+            resumo_rotas=resumo_rotas
+        )
+    )
+
+    parametros_rede = (
+        (config_interruptores_usuario or {}).get(
+            CHAVE_PARAMETROS_REDE,
+            {}
+        )
+    )
+    circuitos, resumo_balanceamento = balancear_circuitos(
+        circuitos,
+        parametros_rede
+    )
+
+    # Fase 13.6 Rev.124:
+    # os números definitivos dos circuitos só existem depois do balanceamento.
+    # Por isso, as correções por queda de tensão são reaplicadas neste ponto
+    # para refletirem corretamente na tabela de circuitos, Excel e PDF.
+    if isinstance(resumo_rotas, dict):
+        correcoes_por_numero_ui = {
+            int(item.get("numero", 0) or 0): item
+            for item in (resumo_rotas.get("correcoes_bitola", []) or [])
+            if int(item.get("numero", 0) or 0) > 0
+        }
+
+        for circuito in circuitos:
+            numero = int(circuito.get("numero", 0) or 0)
+            correcao = correcoes_por_numero_ui.get(numero)
+
+            if correcao and correcao.get("status") == "CORRIGIDA":
+                circuito["bitola_original"] = correcao.get("bitola_original_mm2")
+                circuito["bitola"] = correcao.get("bitola_final_mm2")
+                circuito["queda_tensao_antes_pct"] = correcao.get("queda_antes_pct")
+                circuito["queda_tensao_depois_pct"] = correcao.get("queda_depois_pct")
+                circuito["criterio_bitola"] = (
+                    "Seção elevada automaticamente por queda de tensão"
+                )
+    # Fase 13.6 Rev.124:
+    # reaplica a seção FINAL calculada pelo ciclo iterativo
+    # (queda de tensão + capacidade de condução + reroteamento).
+    if isinstance(resumo_rotas, dict):
+        finais_por_numero = {
+            int(item.get("numero", 0) or 0): item
+            for item in (
+                resumo_rotas.get(
+                    "circuitos_dimensionados_finais",
+                    []
+                )
+                or []
+            )
+            if int(item.get("numero", 0) or 0) > 0
+        }
+
+        for circuito in circuitos:
+            numero = int(
+                circuito.get(
+                    "numero",
+                    0
+                )
+                or 0
+            )
+
+            final = finais_por_numero.get(
+                numero
+            )
+
+            if not final:
+                continue
+
+            bitola_final = float(
+                final.get(
+                    "bitola",
+                    circuito.get(
+                        "bitola",
+                        0.0
+                    )
+                )
+                or 0.0
+            )
+
+            if bitola_final > 0:
+                circuito[
+                    "bitola"
+                ] = bitola_final
+
+            criterio_final = final.get(
+                "criterio_bitola"
+            )
+
+            if criterio_final:
+                circuito[
+                    "criterio_bitola"
+                ] = criterio_final
+
+    # REV.212 — materiais/proteções usam a mesma demanda fechada no QDC.
+    resultado_demanda_materiais = dict(parametros_rede.get("demanda_fechada", {}) or {})
+    if not resultado_demanda_materiais:
+        resultado_demanda_materiais = calcular_demanda_qdc(
+            tabela_editada,
+            parametros_rede
+        )
+    circuitos, resumo_drs = agrupar_circuitos_dr(
+        circuitos,
+        resultado_demanda_materiais.get("disjuntor_geral_a")
+    )
+    resumo_protecao = avaliar_protecoes_alimentador(
+        resultado_demanda_materiais,
+        parametros_rede,
+        circuitos,
+        resumo_drs
+    )
+
+    # Fase 13.6 Rev.124 — componentes físicos do QDC derivados do unifilar.
+    # Conectores genéricos ficam deliberadamente fora desta fase.
+    resumo_qdc_executivo = _adicionar_componentes_qdc_executivo(
+        materiais,
+        circuitos,
+        resumo_drs,
+        resumo_protecao,
+        resultado_demanda_materiais,
+        local_qdc
+    )
+
+    materiais_df, _ = _dataframes_materiais_circuitos(materiais, circuitos)
+    return materiais_df.to_dict("records")
+
+
 def renderizar_materiais(
     tabela_editada,
     config_interruptores_usuario,
