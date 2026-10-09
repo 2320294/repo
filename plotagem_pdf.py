@@ -8,8 +8,11 @@ from io import BytesIO
 import os
 import tempfile
 import math
+from threading import RLock
 
 import ezdxf
+
+_LOCK_PLOTAGEM_PDF = RLock()
 
 
 def _bbox_entidade(ent, bbox_mod):
@@ -266,6 +269,12 @@ def _preparar_hierarquia_grafica_pdf(doc, msp):
             pass
 
 def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
+    # Matplotlib compartilha estado entre sessões do Streamlit.
+    with _LOCK_PLOTAGEM_PDF:
+        return _gerar_pdf_projeto(dxf_bytes, nome_projeto, versao)
+
+
+def _gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
     """Rev.165: PDF A3 horizontal fixo com arquitetura em cinza e elétrica em preto RGB.
 
     Prancha 1: planta elétrica + legenda de fiação lado a lado em A3 paisagem real,
@@ -310,13 +319,8 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
 
         def desenhar_regiao(fig, rect, regiao, titulo, margem_escala=0.0):
             ax=fig.add_axes(rect)
-            ax.set_aspect("equal",adjustable="datalim")
+            ax.set_aspect("equal",adjustable="box")
             ax.set_axis_off(); ax.set_facecolor("white")
-            ctx=RenderContext(doc); out=MatplotlibBackend(ax)
-            Frontend(ctx,out).draw_layout(
-                msp, finalize=True,
-                filter_func=_filtro_prancha(msp,regiao,titulo),
-            )
             x0,y0,x1,y1=regiao
             if margem_escala > 0:
                 # Rev.159: mantém a escala visual reduzida da legenda, ampliando sua
@@ -326,6 +330,15 @@ def gerar_pdf_projeto(dxf_bytes, nome_projeto="Projeto", versao=""):
                 h=max(y1-y0,1e-6)*(1.0+margem_escala)
                 x0,x1=cx-w/2.0,cx+w/2.0
                 y0,y1=cy-h/2.0,cy+h/2.0
+            ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
+            ax.set_autoscale_on(False)
+            ctx=RenderContext(doc); out=MatplotlibBackend(ax)
+            Frontend(ctx,out).draw_layout(
+                msp, finalize=True,
+                filter_func=_filtro_prancha(msp,regiao,titulo),
+            )
+            # O backend também configura o aspecto ao finalizar o desenho.
+            ax.set_aspect("equal",adjustable="box")
             ax.set_xlim(x0,x1); ax.set_ylim(y0,y1)
             return ax
 
