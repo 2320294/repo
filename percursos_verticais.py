@@ -153,6 +153,9 @@ def relatorio_auditoria(projeto, resumo, materiais, circuitos, pe_direito):
             "eletrodutos": (resumo or {}).get("eletrodutos", []),
             "contexto_queda_vertical": (resumo or {}).get("contexto_queda_vertical", {}),
             "validacao_eletrica": (resumo or {}).get("validacao_eletrica", {}),
+            "premissas_capacidade": (resumo or {}).get("premissas_capacidade", {}),
+            "capacidade_conducao_preliminar": (resumo or {}).get("capacidade_conducao_preliminar", {}),
+            "validacao_ib_in_iz": (resumo or {}).get("validacao_ib_in_iz", {}),
             "correcoes_bitola": (resumo or {}).get("correcoes_bitola", []),
             "circuitos": circuitos, "materiais": materiais,
             "escopo": "Conferência de quantitativos. Não constitui validação normativa nem liberação da instalação."}

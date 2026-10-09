@@ -1953,6 +1953,15 @@ def gerar_cad_unifilar(
                 historico_iteracoes,
         }
 
+        resumo_rotas["premissas_capacidade"] = {
+            "condutor": "Cobre", "isolacao": "PVC 70 °C",
+            "instalacao_prevista": "Fios individuais em eletrodutos embutidos na alvenaria",
+            "metodo_instalacao": str(metodo_instalacao),
+            "temperatura_ambiente_c": float(temperatura_ambiente_c),
+            "status": "Premissas de projeto; confirmação em obra pendente",
+            "agrupamento": "Circuitos presentes em cada trecho físico calculado",
+        }
+
         resumo_rotas[
             "validacao_eletrica"
         ] = validar_eletrica_rotas(

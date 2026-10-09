@@ -1056,6 +1056,17 @@ def gerar_memorial_pdf(
 
     story.append(KeepTogether(protecoes_memorial))
 
+    premissas = (resumo_rotas or {}).get("premissas_capacidade") or {}
+    if premissas:
+        story.append(Paragraph(
+            "Premissas da verificação preliminar de capacidade: condutores de cobre, "
+            "isolação PVC 70 °C, fios individuais em eletrodutos embutidos na alvenaria; "
+            f"método {premissas.get('metodo_instalacao', 'B1')}, temperatura ambiente "
+            f"{float(premissas.get('temperatura_ambiente_c', 30)):.0f} °C. "
+            "O agrupamento considera os circuitos presentes em cada trecho calculado. "
+            "São premissas de projeto, pendentes de confirmação em obra.", styles["Texto"]))
+
+
     story.append(KeepTogether([
         Paragraph("5. ATERRAMENTO E CONDUTOR DE PROTEÇÃO", styles["Secao"]),
         Paragraph(
@@ -1065,6 +1076,7 @@ def gerar_memorial_pdf(
             styles["Texto"]
         ),
     ]))
+
 
     story.append(
         Paragraph(
