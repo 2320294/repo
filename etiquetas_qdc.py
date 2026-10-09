@@ -177,7 +177,9 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
     iluminacao = [x for x in circuitos if _tipo(x) == 'ILUMINACAO']
     ambientes = {_txt(x).casefold() for x in (ambientes_projeto or []) if _txt(x)}
     if len(iluminacao) == 1 and ambientes:
-        atendidos = {_txt(x).casefold() for x in _txt(iluminacao[0].get('ambiente')).split(',') if _txt(x)}
+        import re
+        nomes_atendidos = iluminacao[0].get('ambientes') or re.split(r'\s*\+\s*|,', _txt(iluminacao[0].get('ambiente')))
+        atendidos = {_txt(x).casefold() for x in nomes_atendidos if _txt(x)}
         if atendidos == ambientes:
             iluminacao[0]['ambiente'] = 'Geral'
     por_id={f"C{int(x.get('numero',0)):02d}":x for x in circuitos}

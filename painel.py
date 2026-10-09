@@ -1251,6 +1251,7 @@ def renderizar_painel_principal():
                 "perfil_normativo": resultado_demanda.get("perfil_normativo"),
                 "memoria_dimensionamento_entrada": resultado_demanda.get("memoria_dimensionamento_entrada"),
                 "detalhes_demanda": resultado_demanda.get("detalhes_demanda"),
+                "auditoria_entrada_cpfl": resultado_demanda.get("auditoria_entrada_cpfl"),
                 "origem": "QDC_DEMANDA_FECHADA_REV212",
             }
             rede_integrada["alimentador_geral"] = {

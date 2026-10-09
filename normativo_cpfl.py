@@ -321,7 +321,9 @@ def exportacao_pendencias_cpfl(rede, demanda=None):
     if "cpfl" not in identificacao.lower():
         return []
     auditoria = demanda.get("auditoria_entrada_cpfl") or {}
-    if not auditoria:
+    tipo = demanda.get("tipo_fornecimento") or rede.get("tipo_fornecimento")
+    tensao = demanda.get("tensao_fornecimento") or rede.get("tensao_fornecimento")
+    if tipo != "Trifásico" or tensao != "127/220 V":
         return []
     if auditoria.get("status") == "referencia_documental" and auditoria.get("categoria"):
         return [f"Entrada CPFL: referência documental {auditoria['categoria']} "
