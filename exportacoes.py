@@ -1100,6 +1100,22 @@ def gerar_memorial_pdf(
         )
     )
 
+    auditoria_vertical = (resumo_rotas or {}).get("auditoria_vertical") or {}
+    if auditoria_vertical.get("aplicado"):
+        av = auditoria_vertical.get("parametros") or {}
+        story.append(Paragraph(
+            f"Percursos verticais incluídos no quantitativo: distribuição pelo {str(av.get('percurso', '')).lower()}, "
+            f"pé-direito {float(pe_direito):.2f} m; tomadas baixa/média/alta: "
+            f"{float(av['baixa_m']):.2f}/{float(av['media_m']):.2f}/{float(av['alta_m']):.2f} m; "
+            f"interruptores {float(av['interruptor_m']):.2f} m; entrada dos eletrodutos no QDC "
+            f"{float(av['qdc_m']):.2f} m. Alturas previstas confirmadas pelo usuário. "
+            "Cabos: 15% de folga; eletrodutos: 10% de reserva, aplicados após somar os percursos. "
+            "A verificação elétrica dos circuitos permanece preliminar.", styles["Texto"]))
+    else:
+        story.append(Paragraph(
+            "Quantitativo preliminar: percursos verticais aguardam confirmação das alturas e do percurso "
+            "na etapa QDC. As metragens apresentadas não incluem esses acréscimos.", styles["Texto"]))
+
     # REV.232 — usa prioritariamente o snapshot EXATO da Lista de Materiais
     # exibida na Etapa 6. Se o usuário ainda não abriu essa etapa na sessão,
     # recalcula pela mesma rotina e com o mesmo resumo de rotas.

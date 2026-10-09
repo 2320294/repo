@@ -935,6 +935,18 @@ def renderizar_painel_principal():
             chave_qdc
         ] = local_qdc
 
+        from percursos_verticais import renderizar as renderizar_alturas, CHAVE as CHAVE_ALTURAS
+        def salvar_alturas(registro):
+            config_nova = {**st.session_state[chave_config], CHAVE_ALTURAS: registro}
+            salvar_dados_projeto(st.session_state.user_email, st.session_state.projeto_ativo,
+                                config_interruptores=config_nova)
+            st.session_state[chave_config] = config_nova
+            dados_obj["config_interruptores"] = config_nova
+            st.session_state.pop("dimensionamento_rotas_versao", None)
+            st.session_state.pop("materiais_quantitativo_projeto", None)
+        renderizar_alturas(config_atual.get(CHAVE_ALTURAS), parametros_projeto["pe_direito"],
+                          _chave_projeto, salvar_alturas)
+
         st.markdown("#### ⚙️ Demanda e proteção geral")
 
         resultado_demanda = calcular_demanda_qdc(

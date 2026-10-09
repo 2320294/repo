@@ -1897,6 +1897,11 @@ def gerar_cad_unifilar(
                 "capacidade_conducao_preliminar"
             ] = capacidade_final
 
+        from percursos_verticais import aplicar as aplicar_verticais, CHAVE as CHAVE_ALTURAS
+        resumo_rotas = aplicar_verticais(resumo_rotas,
+            (config_interruptores or {}).get(CHAVE_ALTURAS), pe_direito,
+            pontos_eletricos, pontos_interruptores, qdc_info, circuitos_dimensionados)
+
         resumo_rotas[
             "correcoes_bitola"
         ] = list(
