@@ -431,6 +431,11 @@ def gerar_mapa_fisico_qdc(
             dispositivos,
             posicoes
         )
+        if layout is None:
+            # Antes de aumentar o quadro, aproveita espaços da fileira
+            # anterior. Preserva ordem, grupos e dispositivos inteiros.
+            compactos = [dict(d, nova_fileira_antes=False) for d in dispositivos]
+            layout = _tentar_alocar(compactos, posicoes)
         if layout is not None:
             break
         posicoes = _proximo_qdc(posicoes + 1)
