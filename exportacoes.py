@@ -771,6 +771,12 @@ def gerar_memorial_pdf(
     from normativo_elektro import exportacao_pendencias
     from normativo_cpfl import exportacao_pendencias_cpfl
     from xml.sax.saxutils import escape
+    if exportacao_pendencias(rede_memorial, demanda_memorial) and demanda_memorial.get("potencia_demanda_w") is None:
+        total_instalado = demanda_memorial.get("total_w")
+        if total_instalado is not None:
+            story.append(Paragraph(
+                f"Potência instalada: <b>{float(total_instalado)/1000:.3f} kW</b>.",
+                styles["Texto"]))
     for nota_elektro in (exportacao_pendencias(rede_memorial, demanda_memorial)
                         + exportacao_pendencias_cpfl(rede_memorial, demanda_memorial)):
         story.append(Paragraph(escape(nota_elektro), styles["Texto"]))
