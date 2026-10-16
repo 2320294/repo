@@ -88,7 +88,7 @@ def dimensionar_cargas(nome, area, perimetro):
         carga_tue = 5500
 
     elif "coz" in nome_lower:
-        tue_nome = "Micro-ondas/Forno"
+        tue_nome = "Forno Elétrico"
         qtd_tue = 1
         carga_tue = 2000
 
@@ -96,7 +96,7 @@ def dimensionar_cargas(nome, area, perimetro):
         x in nome_lower
         for x in ["quarto", "dorm", "suite"]
     ):
-        tue_nome = "Ar-Condicionado"
+        tue_nome = "Ar Condicionado"
         qtd_tue = 1
         carga_tue = 1200
 

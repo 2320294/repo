@@ -88,9 +88,13 @@ def renderizar_edicao_cargas(dados_ambientes, auditoria_elektro=False):
             with c6:
                 pot_tue_unit = st.number_input("Pot TUE (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUE (W)", "Pot. Unit. TUE (VA)", 0), key=f"ptue_{ambiente}")
 
+            equipamento_tue_padrao = str(row.get("Equipamento TUE", "-"))
+            equipamento_tue_padrao = equipamento_tue_padrao.replace("Ar-Condicionado", "Ar Condicionado")
+            if "coz" in str(ambiente).casefold() and equipamento_tue_padrao == "Micro-ondas/Forno":
+                equipamento_tue_padrao = "Forno Elétrico"
             eq_tue = st.text_input(
                 f"Equipamento TUE ({ambiente})",
-                value=str(row.get("Equipamento TUE", "-")),
+                value=equipamento_tue_padrao,
                 key=f"eq_{ambiente}"
             )
             if auditoria_elektro and qtd_tue > 0 and "/" in eq_tue:
