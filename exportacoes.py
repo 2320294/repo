@@ -1,3 +1,4 @@
+from concessionarias import normalizar_parametros_rede
 from pdf_rodape import desenhar_rodape_reportlab
 from io import BytesIO
 
@@ -676,7 +677,7 @@ def gerar_memorial_pdf(
     # REV.239 — o cabeçalho do Memorial usa a mesma fonte de verdade do QDC/
     # unifilar. A tensão legada do projeto permanece apenas como fallback para
     # projetos antigos sem parâmetros de rede/demanda fechada.
-    rede_memorial = dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+    rede_memorial = normalizar_parametros_rede(dict((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {}))
     demanda_memorial = dict(rede_memorial.get("demanda_fechada", {}) or {})
     if not demanda_memorial:
         demanda_memorial = calcular_demanda_qdc(tabela_editada, rede_memorial)

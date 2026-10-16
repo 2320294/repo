@@ -844,7 +844,7 @@ def integracao_calcular_integrada(tabela, rede, perfil, potencia):
         "detalhes_demanda": [], "pendencias": [], "aprovado": False,
         "observacao": "Teste integrado de demanda Elektro: não libera corrente, DG ou alimentador."}
     if not perfil_eh_perfil_elektro(perfil) or str((perfil or {}).get("status", "")).upper() not in ("RASCUNHO", "VALIDADO", "ATIVO"):
-        resultado["pendencias"] = ["Selecione um rascunho Elektro DIS-NOR-030 Rev. 07 disponível para o teste."]
+        resultado["pendencias"] = ["Selecione um perfil Elektro DIS-NOR-030 Rev. 07 disponível para o teste."]
         return resultado
     if not perfil_atende_municipio(perfil, rede.get("uf"), rede.get("municipio")):
         resultado["pendencias"] = ["UF/município não vinculado ao perfil Elektro do teste."]

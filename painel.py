@@ -36,7 +36,7 @@ from parametros_projeto import (
 
 from concessionarias import (
     CHAVE_PARAMETROS_REDE,
-    normalizar_parametros_rede
+    normalizar_parametros_rede, contexto_resultados_rede, limpar_resultados_contexto
 )
 
 from demanda_qdc import (
@@ -957,6 +957,18 @@ def renderizar_painel_principal():
             )
         )
 
+        # Remove resultados antigos também em projetos já salvos antes desta versão.
+        rede_anterior = dict(config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {})
+        rede_atualizada = limpar_resultados_contexto(rede_anterior)
+        if rede_atualizada != rede_anterior:
+            config_atual[CHAVE_PARAMETROS_REDE] = rede_atualizada
+            st.session_state[chave_config] = dict(config_atual)
+            parametros_projeto["parametros_rede"] = rede_atualizada
+            st.session_state[chave_parametros] = dict(parametros_projeto)
+            salvar_dados_projeto(st.session_state.user_email, st.session_state.projeto_ativo,
+                                config_interruptores=dict(config_atual))
+            dados_obj["config_interruptores"] = dict(config_atual)
+
         c1, c2, c3, c4 = st.columns(4)
         c1.metric(
             "Potência instalada",
@@ -1291,6 +1303,7 @@ def renderizar_painel_principal():
                 "atende_ib_in_iz": alim.get("atende_ib_in_iz"),
                 "status_queda": alim.get("status_queda"),
             }
+            rede_integrada["contexto_resultados_rede"] = contexto_resultados_rede(rede_integrada)
             config_atual[CHAVE_PARAMETROS_REDE] = rede_integrada
             st.session_state[chave_config] = dict(config_atual)
             parametros_projeto["parametros_rede"] = rede_integrada

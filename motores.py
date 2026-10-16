@@ -1,3 +1,4 @@
+from concessionarias import normalizar_parametros_rede
 import math
 import os
 import tempfile
@@ -1558,10 +1559,10 @@ def gerar_cad_unifilar(
         )
 
         parametros_rede_unifilar = (
-            (config_interruptores or {}).get(
+            normalizar_parametros_rede((config_interruptores or {}).get(
                 CHAVE_PARAMETROS_REDE,
                 {}
-            )
+            ))
         )
 
         # REV.212 — mesma demanda fechada exibida no QDC; não recalcular

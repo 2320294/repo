@@ -1,3 +1,4 @@
+from concessionarias import normalizar_parametros_rede
 from pdf_rodape import desenhar_rodape_reportlab
 import math
 from io import BytesIO
@@ -2946,10 +2947,10 @@ def calcular_quantitativo_completo_memorial(tabela_editada, config_interruptores
     )
 
     parametros_rede = (
-        (config_interruptores_usuario or {}).get(
+        normalizar_parametros_rede((config_interruptores_usuario or {}).get(
             CHAVE_PARAMETROS_REDE,
             {}
-        )
+        ))
     )
     circuitos, resumo_balanceamento = balancear_circuitos(
         circuitos,
@@ -3108,10 +3109,10 @@ def renderizar_materiais(
     )
 
     parametros_rede = (
-        (config_interruptores_usuario or {}).get(
+        normalizar_parametros_rede((config_interruptores_usuario or {}).get(
             CHAVE_PARAMETROS_REDE,
             {}
-        )
+        ))
     )
     circuitos, resumo_balanceamento = balancear_circuitos(
         circuitos,

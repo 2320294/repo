@@ -1,3 +1,4 @@
+from concessionarias import normalizar_parametros_rede
 import os
 import tempfile
 
@@ -624,7 +625,7 @@ def renderizar_salvar_e_gerar_cad(
                     or []
                 )
                 if circuitos_etiquetas:
-                    parametros_rede = (config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {}
+                    parametros_rede = normalizar_parametros_rede((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
                     demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
                     if not demanda:
                         demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)

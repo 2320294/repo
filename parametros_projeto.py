@@ -10,6 +10,7 @@ from concessionarias import (
     OUTRA_CONCESSIONARIA,
     concessionarias_da_uf,
     normalizar_parametros_rede,
+    limpar_resultados_contexto,
     nome_concessionaria,
     perfil_normativo_disponivel
 )
@@ -335,7 +336,7 @@ def renderizar_parametros_projeto(
         )
 
     if metodo_demanda == METODO_ELEKTRO and admin_teste_elektro:
-        st.info("Teste administrativo integrado: usa as cargas atuais na etapa de demanda do QDC. O perfil continua em RASCUNHO e não libera corrente, DG ou alimentador.")
+        st.info("Teste administrativo integrado: usa as cargas atuais na etapa de demanda do QDC. Este modo não altera o status cadastrado do perfil e não libera corrente, DG ou alimentador.")
         from perfis_normativos import listar_perfis, perfil_atende_municipio
         from normativo_elektro import perfil_eh_perfil_elektro as eh_perfil_elektro, perfil_auditar_tabelas_demanda as auditar_tabelas_demanda
         try:
@@ -479,6 +480,8 @@ def renderizar_parametros_projeto(
             requisitos_concessionaria_validos
         )
     }
+
+    parametros_rede = limpar_resultados_contexto(parametros_rede, anterior=rede)
 
     concessionaria_nome = (
         nome_concessionaria(

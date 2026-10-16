@@ -1,3 +1,4 @@
+from concessionarias import normalizar_parametros_rede
 
 BITOLAS_COBRE_MM2 = (1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95)
 AMPACIDADE_REFERENCIA_A = {
@@ -37,7 +38,7 @@ def avaliar_protecoes_alimentador(resultado_demanda, parametros_rede, circuitos,
     de instalação, temperatura, agrupamento, queda de tensão e perfil normativo.
     """
     resultado_demanda=dict(resultado_demanda or {})
-    parametros_rede=dict(parametros_rede or {})
+    parametros_rede=normalizar_parametros_rede(dict(parametros_rede or {}))
     circuitos=list(circuitos or [])
     resumo_drs=list(resumo_drs or [])
 

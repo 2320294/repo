@@ -88,6 +88,36 @@ def parametros_rede_padrao():
     }
 
 
+def contexto_resultados_rede(rede):
+    """Identidade dos parâmetros que originam demanda e alimentador."""
+    campos = ("uf", "municipio", "concessionaria", "perfil_normativo_id",
+              "perfil_normativo_documento", "perfil_normativo_revisao",
+              "metodo_demanda", "fator_demanda_manual", "tipo_fornecimento",
+              "tensao_fornecimento", "perfil_elektro_teste_id", "contexto_elektro_teste")
+    from copy import deepcopy
+    return deepcopy({k: (rede or {}).get(k) for k in campos})
+
+
+def limpar_resultados_contexto(rede, anterior=None):
+    """Descarta apenas resultados derivados incompatíveis; preserva entradas."""
+    r = dict(rede or {})
+    atual = contexto_resultados_rede(r)
+    salvo = r.get("contexto_resultados_rede")
+    mudou = anterior is not None and contexto_resultados_rede(anterior) != atual
+    invalido = mudou or (salvo is not None and salvo != atual)
+    # O modo de ensaio Elektro nunca aplica DG/alimentador fechado em outro fluxo.
+    invalido = invalido or r.get("metodo_demanda") == "Elektro — teste integrado de demanda (sem DG)"
+    demanda = r.get("demanda_fechada") or {}
+    identificacao = str(demanda.get("perfil_normativo") or "").casefold()
+    distribuidora = str(r.get("perfil_normativo_concessionaria") or r.get("concessionaria") or "").casefold()
+    if identificacao and distribuidora and ("cpfl" in identificacao or "elektro" in identificacao):
+        invalido = invalido or distribuidora not in identificacao
+    if invalido:
+        for chave in ("demanda_fechada", "alimentador_geral", "contexto_resultados_rede", "fornecimento_auto_perfil"):
+            r.pop(chave, None)
+    return r
+
+
 def normalizar_parametros_rede(valor):
     padrao = parametros_rede_padrao()
     if isinstance(valor, dict):
@@ -119,7 +149,7 @@ def normalizar_parametros_rede(valor):
         )
     ).strip()
 
-    return padrao
+    return limpar_resultados_contexto(padrao)
 
 
 def nome_concessionaria(parametros):
