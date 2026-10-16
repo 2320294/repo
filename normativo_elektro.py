@@ -50,8 +50,8 @@ def perfil_motivo_conferencia(potencia_w, perfil):
                 "Encaminhar à conferência técnica sem arredondamento automático.")
     for minimo, maximo in perfil_FAIXAS_CONFERENCIA_KW:
         if minimo < kw <= maximo:
-            return (f"Carga instalada de {kw:.2f} kW: enquadramento da Neoenergia Elektro "
-                    f"entre {minimo:g} e {maximo:g} kW requer conferência técnica. "
+            return (f"Carga instalada de {kw:.3f} kW: enquadramento da Neoenergia Elektro "
+                    f"acima de {minimo:g} kW até {maximo:g} kW, inclusive, requer conferência técnica. "
                     "O AutoElétrica mantém o enquadramento automático bloqueado nesta faixa "
                     "até a conferência documental da DIS-NOR-030 Rev. 07.")
     return ""

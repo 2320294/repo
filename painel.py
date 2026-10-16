@@ -960,7 +960,7 @@ def renderizar_painel_principal():
         c1, c2, c3, c4 = st.columns(4)
         c1.metric(
             "Potência instalada",
-            f"{resultado_demanda['total_w']/1000:.2f} kW"
+            f"{resultado_demanda['total_w']/1000:.3f} kW"
         )
 
         pd = resultado_demanda.get("potencia_demanda_w")

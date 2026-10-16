@@ -351,7 +351,7 @@ def gerar_excel_projeto(
 
     linhas_demanda = [{
         "Parâmetro": "Potência instalada",
-        "Valor": f"{resultado_demanda['total_w']/1000:.2f} kW"
+        "Valor": f"{resultado_demanda['total_w']/1000:.3f} kW"
     }]
 
     if resultado_demanda.get("fator_demanda_pct") is not None:
@@ -782,7 +782,7 @@ def gerar_memorial_pdf(
         dg_txt = f"{dg_valor} A" + (f" {polos_dg_memorial}" if polos_dg_memorial else "")
         story.append(Paragraph(
             f"Fornecimento: <b>{tipo_fornecimento_memorial} - {tensao_fornecimento_memorial}</b>.<br/>"
-            f"Potência instalada: <b>{float(demanda_memorial.get('total_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
+            f"Potência instalada: <b>{float(demanda_memorial.get('total_w',0) or 0)/1000:.3f} kW</b> &nbsp; | &nbsp; "
             f"Potência demandada: <b>{float(demanda_memorial.get('potencia_demanda_w',0) or 0)/1000:.2f} kW</b> &nbsp; | &nbsp; "
             f"Corrente de demanda: <b>{float(demanda_memorial.get('corrente_demanda_a',0) or 0):.1f} A</b> &nbsp; | &nbsp; "
             f"DG: <b>{dg_txt}</b>.", styles["Texto"]))
