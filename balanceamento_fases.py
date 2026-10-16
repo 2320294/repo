@@ -34,6 +34,11 @@ def balancear_circuitos(circuitos, parametros_rede):
         }
 
     cargas = {f: 0.0 for f in fases}
+    rede = parametros_rede or {}
+    tue_fase_neutro_paulista = (
+        rede.get("tensao_fornecimento") == "220/380 V"
+        and str(rede.get("perfil_normativo_concessionaria") or rede.get("concessionaria") or "").strip().casefold() == "cpfl paulista"
+    )
     atribuicoes = {}
 
     # Maior carga primeiro melhora o resultado do balanceamento guloso.
@@ -46,7 +51,7 @@ def balancear_circuitos(circuitos, parametros_rede):
         p = _potencia(c)
         tipo = str(c.get("tipo", "")).upper()
 
-        if tipo == "TUE" and len(fases) >= 2:
+        if tipo == "TUE" and len(fases) >= 2 and not tue_fase_neutro_paulista:
             if len(fases) == 2:
                 par = ("A", "B")
             else:

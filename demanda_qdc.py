@@ -46,6 +46,8 @@ def corrente_demanda_equivalente(potencia_demanda_w, tipo_fornecimento, tensao_f
     if tipo == "Bifásico":
         if tensao == "127/220 V":
             return p / (2.0 * 127.0)
+        if tensao == "220/380 V":
+            return p / (2.0 * 220.0)
         if tensao == "220 V":
             return p / 220.0
         return None
@@ -398,6 +400,8 @@ def _calcular_automatico(tabela_editada, rede, perfil):
         memoria_entrada.update({"formula": "I = P / (√3 × Vlinha)", "tensao_calculo_v": 380.0})
     elif str(tipo_fornec) == "Bifásico" and str(tensao_fornec) == "127/220 V":
         memoria_entrada.update({"formula": "I = P / (2 × Vf-n)", "tensao_calculo_v": 127.0})
+    elif str(tipo_fornec) == "Bifásico" and str(tensao_fornec) == "220/380 V":
+        memoria_entrada.update({"formula": "I = P / (2 × Vf-n)", "tensao_calculo_v": 220.0})
     elif str(tipo_fornec) == "Monofásico":
         memoria_entrada.update({"formula": "I = P / V", "tensao_calculo_v": 127.0 if str(tensao_fornec) == "127 V" else 220.0})
     status_base = "ok" if corrente is not None and dg is not None else ("fornecimento_incompleto" if corrente is None else "acima_da_faixa")

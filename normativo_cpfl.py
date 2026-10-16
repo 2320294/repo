@@ -272,7 +272,8 @@ def pendencias_ativacao_paulista(perfil):
     """Valida também no servidor os requisitos do escopo Paulista implementado."""
     pendencias = []
     regras = perfil.get("regras") or {}
-    passou, _ = _validar_perfil_ged13(regras)
+    especial = perfil_paulista_380(perfil)
+    passou, _ = _validar_perfil_ged13(regras, classe_380=especial)
     if not passou:
         pendencias.append("Conclua todos os testes GED-13.")
     if not regras.get("fonte_conferida"):
@@ -280,13 +281,49 @@ def pendencias_ativacao_paulista(perfil):
     if not str(perfil.get("fonte_oficial") or "").strip():
         pendencias.append("Informe a referência oficial.")
     cidades = perfil.get("municipios_atendidos") or []
-    permitidas = {n.casefold() for n in MUNICIPIOS_PAULISTA_127_220}
+    permitidas = {n.casefold() for n in (MUNICIPIOS_PAULISTA_220_380 if especial else MUNICIPIOS_PAULISTA_127_220)}
     if (str(perfil.get("uf") or "").upper() != "SP" or not cidades
             or any(str(n).strip().casefold() not in permitidas for n in cidades)):
-        pendencias.append("Vincule somente municípios do escopo Paulista 127/220 V.")
+        pendencias.append("Vincule somente municípios da classe de tensão deste perfil Paulista.")
     if regras.get("tipo_instalacao") != "Residencial individual":
         pendencias.append("Este perfil atende instalações residenciais individuais.")
     return pendencias
+
+MUNICIPIOS_PAULISTA_220_380 = ["Lins", "Piratininga"]
+LIMITES_TRIFASICOS_380 = [
+    (26, "C7", 40, 10, 6, 40), (40, "C8", 63, 16, 10, 40),
+    (52, "C9", 80, 25, 10, 40), (66, "C10", 100, 35, 10, 40),
+    (82, "C11", 125, 50, 16, 50),
+]
+
+
+def perfil_paulista_380(perfil):
+    f = ((perfil.get("regras") or {}).get("fornecimento") or {})
+    return (perfil_paulista_ged13(perfil)
+            and f.get("tensao_fase_neutro_v") == 220
+            and f.get("tensao_fase_fase_v") == 380)
+
+
+def preparar_rascunho_paulista_380(criado_por=""):
+    perfil = preparar_rascunho_paulista(criado_por)
+    perfil["municipios_atendidos"] = list(MUNICIPIOS_PAULISTA_220_380)
+    f = perfil["regras"]["fornecimento"]
+    f.update(tensao_fase_neutro_v=220.0, tensao_fase_fase_v=380.0)
+    f["faixas_modalidade_kw"] = [
+        {"modalidade": "Monofásico", "min_kw": 0.0, "max_kw": 15.0, "inclui_min": True, "inclui_max": True},
+        {"modalidade": "Bifásico", "min_kw": 15.0, "max_kw": 25.0, "inclui_min": False, "inclui_max": True},
+        {"modalidade": "Trifásico", "min_kw": 25.0, "max_kw": 75.0, "inclui_min": False, "inclui_max": True},
+    ]
+    perfil["regras"]["observacoes"] = (
+        "CPFL Paulista, residencial individual, Lins e Piratininga, 220/380 V. "
+        "GED-13 v46.0, item 6.3, limites do item 6.4 e Tabelas 1A/1B/1C. "
+        "Demanda residencial pelas Tabelas 3–11; referência trifásica C7–C11 em kVA, "
+        "sem aprovação automática. TUEs previstas em 220 V fase-neutro; equipamentos "
+        "380 V ou trifásicos exigem projeto específico. Confirmar placa e tensão no endereço. "
+        "Fonte municipal: " + FONTE_MUNICIPIOS_PAULISTA
+    )
+    return perfil
+
 
 FONTE_MUNICIPIOS_PIRATININGA = "https://www.cpfl.com.br/piratininga/tensao-nominal"
 MUNICIPIOS_PIRATININGA = [
@@ -401,7 +438,7 @@ def _quase_igual(a, b, tol=1e-9):
         return False
 
 
-def _validar_perfil_ged13(regras):
+def _validar_perfil_ged13(regras, classe_380=False):
     """Valida estrutura e casos matemáticos do perfil GED-13 residencial.
 
     Não altera cálculo de projeto. Serve como trava administrativa antes de
@@ -425,8 +462,8 @@ def _validar_perfil_ged13(regras):
         return False, resultados
 
     f = regras.get("fornecimento") or {}
-    teste("Fornecimento", "Tensão fase-neutro", 127.0, f.get("tensao_fase_neutro_v"))
-    teste("Fornecimento", "Tensão fase-fase", 220.0, f.get("tensao_fase_fase_v"))
+    teste("Fornecimento", "Tensão fase-neutro", 220.0 if classe_380 else 127.0, f.get("tensao_fase_neutro_v"))
+    teste("Fornecimento", "Tensão fase-fase", 380.0 if classe_380 else 220.0, f.get("tensao_fase_fase_v"))
     teste("Fornecimento", "Limite de potência instalada", 75.0, f.get("limite_potencia_instalada_kw"))
     mods = set(f.get("modalidades") or [])
     teste("Fornecimento", "Modalidades M/B/T", "Monofásico, Bifásico, Trifásico", ", ".join(sorted(mods)), mods == {"Monofásico", "Bifásico", "Trifásico"})
@@ -448,6 +485,13 @@ def _validar_perfil_ged13(regras):
               "limites cadastrados e crescentes", faixa or "ausente", valido)
         if valido:
             anterior = maximo
+
+    if classe_380:
+        for modalidade, mn, mx in (("Monofásico", 0, 15), ("Bifásico", 15, 25), ("Trifásico", 25, 75)):
+            faixa = faixas_por_modalidade.get(modalidade) or {}
+            teste("Fornecimento 380 V", modalidade, f"{mn}–{mx} kW", faixa,
+                  faixa.get("min_kw") == mn and faixa.get("max_kw") == mx
+                  and faixa.get("inclui_min") == (mn == 0) and faixa.get("inclui_max") is True)
 
     d = regras.get("demanda") or {}
 
@@ -530,12 +574,34 @@ def _validar_perfil_ged13(regras):
         ok_meta = regra.get("documento") == "GED-13" and regra.get("versao_documento") == "46.0" and regra.get("publicacao") == "19/03/2026"
         teste("Rastreabilidade", chave, "GED-13 v46.0 · 19/03/2026", f"{regra.get('documento')} v{regra.get('versao_documento')} · {regra.get('publicacao')}", ok_meta)
 
+    if classe_380:
+        perfil_teste = {"concessionaria": "CPFL Paulista", "documento": "GED-13",
+                        "revisao": "46.0", "regras": regras}
+        for kva, categoria in ((26, "C7"), (26.001, "C8"), (40, "C8"),
+                               (40.001, "C9"), (52, "C9"), (52.001, "C10"),
+                               (66, "C10"), (66.001, "C11"), (82, "C11")):
+            obtido = conferir_entrada_trifasica_cpfl(perfil_teste,
+                [{"demanda_w": kva * 1000, "tabela_id": "GED13_TABELA_3"}],
+                "Trifásico", "220/380 V") or {}
+            teste("Tabela 1C 380 V", f"{kva} kVA", categoria,
+                  obtido.get("categoria"), obtido.get("categoria") == categoria)
+        acima = conferir_entrada_trifasica_cpfl(perfil_teste,
+            [{"demanda_w": 82001, "tabela_id": "GED13_TABELA_3"}],
+            "Trifásico", "220/380 V") or {}
+        teste("Tabela 1C 380 V", "Acima de 82 kVA", "pendente", acima.get("status"),
+              acima.get("status") == "pendente" and acima.get("categoria") is None)
+        sem_fp = conferir_entrada_trifasica_cpfl(perfil_teste,
+            [{"demanda_w": 1000, "tabela_id": "GED13_TABELAS_8_9"}],
+            "Trifásico", "220/380 V") or {}
+        teste("Tabela 1C 380 V", "Sem VA/FP", "pendente", sem_fp.get("status"),
+              sem_fp.get("status") == "pendente")
+
     passou = bool(resultados) and all(x["Status"] == "PASSOU" for x in resultados)
     return passou, resultados
 
 
-def _resumo_auditoria_ged13(regras):
-    passou, resultados = _validar_perfil_ged13(regras)
+def _resumo_auditoria_ged13(regras, classe_380=False):
+    passou, resultados = _validar_perfil_ged13(regras, classe_380=classe_380)
     demanda = (regras or {}).get("demanda") or {}
     categorias = ["iluminacao_tug", "chuveiros", "boiler", "eletrodomesticos", "fogoes", "ar_condicionado", "motores", "equipamentos_especiais", "hidromassagem"]
     tabelas_ok = 0
@@ -571,7 +637,7 @@ def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao, dados=None):
     documento = str(perfil.get("documento", "")).upper()
     if "CPFL" not in str(perfil.get("concessionaria", "")).upper() or not re.search(r"\bGED\s*[-–—]?\s*13\b", documento):
         return None
-    if tipo != "Trifásico" or tensao != "127/220 V":
+    if tipo != "Trifásico" or (tensao != "127/220 V" and not (tensao == "220/380 V" and perfil_paulista_380(perfil))):
         return None
     fp_unidade = {"GED13_TABELA_3", "GED13_TABELA_4", "GED13_TABELA_5", "GED13_TABELA_6", "GED13_TABELA_6_CRITERIO_FUNCAO_SECAGEM", "GED13_TABELA_7", "GED13_TABELA_10_HIDROMASSAGEM"}
     parcial = 0.0
@@ -609,6 +675,8 @@ def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao, dados=None):
         return resultado
     resultado["demanda_kva"] = parcial
     limites = [(23, "C1", 63, 16, 10, 40), (30, "C2", 80, 25, 10, 40), (38, "C3", 100, 35, 10, 40), (47, "C4", 125, 50, 16, 50), (57, "C5", 150, 70, 25, 60), (76, "C6", 200, 95, 35, 60)]
+    if tensao == "220/380 V":
+        limites = LIMITES_TRIFASICOS_380
     for maximo, categoria, disjuntor, cobre, terra, eletroduto in limites:
         if parcial <= maximo:
             resultado.update(status="referencia_documental", categoria=categoria, disjuntor_padrao_a=disjuntor, ramal_entrada_cobre_mm2=cobre, aterramento_padrao_mm2=terra, eletroduto_padrao_mm=eletroduto)
@@ -628,7 +696,7 @@ def exportacao_pendencias_cpfl(rede, demanda=None):
     auditoria = demanda.get("auditoria_entrada_cpfl") or {}
     tipo = demanda.get("tipo_fornecimento") or rede.get("tipo_fornecimento")
     tensao = demanda.get("tensao_fornecimento") or rede.get("tensao_fornecimento")
-    if tipo != "Trifásico" or tensao != "127/220 V":
+    if tipo != "Trifásico" or tensao not in ("127/220 V", "220/380 V"):
         return []
     if auditoria.get("status") == "referencia_documental" and auditoria.get("categoria"):
         return [f"Entrada CPFL: referência documental {auditoria['categoria']} "

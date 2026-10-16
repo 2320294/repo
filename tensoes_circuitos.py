@@ -50,6 +50,9 @@ def tensao_circuito(tipo, parametros_rede, fallback=220):
         return 127
 
     if tensao=="220/380 V":
+        if str(rede.get("perfil_normativo_concessionaria") or rede.get("concessionaria") or "").strip().casefold() == "cpfl paulista":
+            # Escopo residencial Paulista: equipamentos previstos em 220 V FN.
+            return 220
         if tipo_u=="TUE" and fornecimento in {"Bifásico","Trifásico"}:
             return 380
         return 220

@@ -1,5 +1,6 @@
 from normativo_cpfl import _numero, _regras_base, _sincronizar_regras_ged13_residencial, _quase_igual, _validar_perfil_ged13, _resumo_auditoria_ged13
 import json
+from normativo_cpfl import preparar_rascunho_paulista_380, perfil_paulista_380
 from normativo_cpfl import perfil_eh_piratininga, MUNICIPIOS_PIRATININGA, FONTE_MUNICIPIOS_PIRATININGA
 from normativo_cpfl import preparar_rascunho_paulista, perfil_paulista_ged13, pendencias_ativacao_paulista
 import streamlit as st
@@ -369,8 +370,8 @@ def _editor_regras(prefixo, regras=None):
 
 
 
-def _renderizar_validador_ged13(regras, prefixo):
-    passou, resultados = _validar_perfil_ged13(regras)
+def _renderizar_validador_ged13(regras, prefixo, classe_380=False):
+    passou, resultados = _validar_perfil_ged13(regras, classe_380=classe_380)
     with st.expander("🧪 Validador do Perfil Normativo", expanded=True):
         st.caption("Verificação administrativa independente do cálculo dos projetos. Nenhuma demanda de projeto é alterada nesta etapa.")
         total = len(resultados)
@@ -384,8 +385,8 @@ def _renderizar_validador_ged13(regras, prefixo):
 
 
 
-def _renderizar_resumo_auditoria(regras):
-    passou, resultados, tabelas_ok, tabelas_total, aprovados, total, pendencias = _resumo_auditoria_ged13(regras)
+def _renderizar_resumo_auditoria(regras, classe_380=False):
+    passou, resultados, tabelas_ok, tabelas_total, aprovados, total, pendencias = _resumo_auditoria_ged13(regras, classe_380=classe_380)
     st.markdown("### 📋 Resumo da validação")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Tabelas verificadas", f"{tabelas_ok}/{tabelas_total}")
@@ -434,7 +435,7 @@ def renderizar_admin_normativos(email):
     st.caption("GED-13 v46.0, residencial individual, 127/220 V. Lista de 232 municípios; Lins e Piratininga exigem outro perfil de tensão. O cadastro começa em RASCUNHO, sem alterar perfis existentes.")
     if st.button("Criar rascunho CPFL Paulista (127/220 V)"):
         try:
-            if any(perfil_paulista_ged13(p) and str(p.get("uf") or "").upper() == "SP" for p in perfis):
+            if any(perfil_paulista_ged13(p) and not perfil_paulista_380(p) and str(p.get("uf") or "").upper() == "SP" for p in perfis):
                 st.info("Já existe um perfil Paulista GED-13 v46.0 em SP. Confira o cadastro abaixo; nenhum registro foi alterado.")
             else:
                 salvar_perfil(preparar_rascunho_paulista(email))
@@ -442,6 +443,19 @@ def renderizar_admin_normativos(email):
                 st.rerun()
         except Exception as e:
             st.error(f"Não foi possível criar o rascunho Paulista: {e}")
+
+    st.markdown("#### CPFL Paulista — Lins e Piratininga (220/380 V)")
+    st.caption("Perfil residencial individual separado, em RASCUNHO. Limites: 15/25/75 kW; referência trifásica C7–C11. TUEs previstas em 220 V fase-neutro. Requer conferência documental e testes antes da ativação.")
+    if st.button("Criar rascunho CPFL Paulista (220/380 V)"):
+        try:
+            if any(perfil_paulista_380(p) and str(p.get("uf") or "").upper() == "SP" for p in perfis):
+                st.info("O perfil Paulista 220/380 V já existe. Nenhum registro foi alterado.")
+            else:
+                salvar_perfil(preparar_rascunho_paulista_380(email))
+                st.success("Rascunho 220/380 V criado para Lins e Piratininga.")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Não foi possível criar o rascunho 220/380 V: {e}")
 
     st.markdown("#### Neoenergia Elektro — preparação do cadastro")
     st.caption("Cria dois rascunhos da DIS-NOR-030 Rev. 07: lista inicial de 223 municípios de SP e 5 de MS. Após preparar as faixas, São João da Boa Vista sai da lista (222 em SP). A ativação depende de cálculo e auditoria próprios.")
@@ -600,6 +614,7 @@ def renderizar_admin_normativos(email):
             regras_validacao = _regras_base(regras_atual)
             eh_ged13_cpfl = (
                 (str(p.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
+                 or perfil_paulista_380(p)
                  or (perfil_paulista_ged13(p)
                      and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_neutro_v") == 127
                      and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_fase_v") == 220))
@@ -623,7 +638,7 @@ def renderizar_admin_normativos(email):
                 regras_atual = p.get("regras") or regras_atual
 
             # Auditoria sempre visível antes da longa edição do perfil.
-            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao) if eh_ged13_cpfl else (False, [])
+            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao, classe_380=perfil_paulista_380(p)) if eh_ged13_cpfl else (False, [])
 
             with st.form(f"editar_perfil_{p.get('id')}"):
                 regras_editadas = _editor_regras(f"edit_{p.get('id')}", regras_atual)
@@ -649,7 +664,7 @@ def renderizar_admin_normativos(email):
                     except Exception as e:
                         st.error(f"Não foi possível atualizar: {e}")
 
-            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}") if eh_ged13_cpfl else False
+            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}", classe_380=perfil_paulista_380(p)) if eh_ged13_cpfl else False
             eh_elektro = eh_perfil_elektro(p)
             if eh_elektro:
                 from normativo_elektro import resumo_renderizar as renderizar_resumo_elektro
