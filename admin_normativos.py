@@ -1,5 +1,6 @@
 from normativo_cpfl import _numero, _regras_base, _sincronizar_regras_ged13_residencial, _quase_igual, _validar_perfil_ged13, _resumo_auditoria_ged13
 import json
+from normativo_cpfl import preparar_rascunho_paulista, perfil_paulista_ged13, pendencias_ativacao_paulista
 import streamlit as st
 from perfis_normativos import listar_perfis, salvar_perfil, atualizar_status
 from concessionarias import UFS
@@ -407,6 +408,19 @@ def renderizar_admin_normativos(email):
         st.code(str(e))
         return
 
+    st.markdown("#### CPFL Paulista — preparação do cadastro")
+    st.caption("GED-13 v46.0, residencial individual, 127/220 V. Lista de 232 municípios; Lins e Piratininga exigem outro perfil de tensão. O cadastro começa em RASCUNHO, sem alterar perfis existentes.")
+    if st.button("Criar rascunho CPFL Paulista (127/220 V)"):
+        try:
+            if any(perfil_paulista_ged13(p) and str(p.get("uf") or "").upper() == "SP" for p in perfis):
+                st.info("Já existe um perfil Paulista GED-13 v46.0 em SP. Confira o cadastro abaixo; nenhum registro foi alterado.")
+            else:
+                salvar_perfil(preparar_rascunho_paulista(email))
+                st.success("Rascunho Paulista criado. Abra o perfil abaixo para conferir os testes e a fonte oficial.")
+                st.rerun()
+        except Exception as e:
+            st.error(f"Não foi possível criar o rascunho Paulista: {e}")
+
     st.markdown("#### Neoenergia Elektro — preparação do cadastro")
     st.caption("Cria dois rascunhos da DIS-NOR-030 Rev. 07: lista inicial de 223 municípios de SP e 5 de MS. Após preparar as faixas, São João da Boa Vista sai da lista (222 em SP). A ativação depende de cálculo e auditoria próprios.")
     if st.button("Criar rascunhos Neoenergia Elektro (SP e MS)"):
@@ -563,7 +577,10 @@ def renderizar_admin_normativos(email):
             # estrutura oficial usada pela interface é materializada e persistida.
             regras_validacao = _regras_base(regras_atual)
             eh_ged13_cpfl = (
-                str(p.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
+                (str(p.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
+                 or (perfil_paulista_ged13(p)
+                     and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_neutro_v") == 127
+                     and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_fase_v") == 220))
                 and "ged-13" in str(p.get("documento") or "").casefold()
                 and regras_validacao.get("tipo_instalacao") == "Residencial individual"
             )
@@ -735,6 +752,11 @@ def renderizar_admin_normativos(email):
                 )
 
             pronto = _perfil_pronto(regras_validacao) and validacao_ok
+            if perfil_paulista_ged13(p):
+                pendencias_paulista = pendencias_ativacao_paulista(p)
+                pronto = pronto and not pendencias_paulista
+                for pendencia in pendencias_paulista:
+                    st.caption(pendencia)
             if not pronto:
                 st.info(
                     "Perfil Elektro pendente: conclua as etapas indicadas para liberar a ativação operacional."

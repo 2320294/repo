@@ -75,6 +75,11 @@ def atualizar_status(perfil_id, status, validado_por=""):
     if status in ("VALIDADO", "ATIVO"):
         from normativo_elektro import perfil_eh_perfil_elektro, ativacao_pendencias
         perfil = perfil_por_id(perfil_id) or {}
+        from normativo_cpfl import perfil_paulista_ged13, pendencias_ativacao_paulista
+        if perfil_paulista_ged13(perfil):
+            pendencias = pendencias_ativacao_paulista(perfil)
+            if pendencias:
+                raise ValueError("Perfil Paulista não pode ser publicado: " + " ".join(pendencias))
         if perfil_eh_perfil_elektro(perfil):
             pendencias = ativacao_pendencias(perfil)
             if pendencias:
