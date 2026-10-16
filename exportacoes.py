@@ -772,6 +772,19 @@ def gerar_memorial_pdf(
     from normativo_elektro import exportacao_pendencias
     from normativo_cpfl import exportacao_pendencias_cpfl
     from xml.sax.saxutils import escape
+    perfil_aplicado = str(demanda_memorial.get("perfil_normativo") or "").strip()
+    if "cpfl" in perfil_aplicado.casefold():
+        story.append(Paragraph(escape("Perfil aplicado ao cálculo: " + perfil_aplicado + "."), styles["Texto"]))
+        metodo_aplicado = demanda_memorial.get("metodo")
+        if not metodo_aplicado:
+            metodo_aplicado = (rede_memorial.get("contexto_resultados_rede") or {}).get("metodo_demanda")
+        story.append(Paragraph(escape("Método aplicado: " + str(metodo_aplicado or
+            "não registrado; recalcule na etapa QDC para atualizar a identificação") + "."), styles["Texto"]))
+        if (demanda_memorial.get("criterio_tecnico_conservador") or
+                demanda_memorial.get("status") == "ok_com_criterio_tecnico"):
+            story.append(Paragraph(
+                "TUEs sem fator específico no perfil foram consideradas a 100% como critério técnico conservador; "
+                "esse fator não é atribuído ao GED-13.", styles["Texto"]))
     if exportacao_pendencias(rede_memorial, demanda_memorial) and demanda_memorial.get("potencia_demanda_w") is None:
         total_instalado = demanda_memorial.get("total_w")
         if total_instalado is not None:

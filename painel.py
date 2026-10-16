@@ -1259,6 +1259,10 @@ def renderizar_painel_principal():
             # Ib/In e o fechamento do alimentador. Relatórios e unifilar devem
             # consumir este mesmo resultado, sem recalcular a demanda.
             rede_integrada["demanda_fechada"] = {
+                "metodo": resultado_demanda.get("metodo"),
+                "perfil_normativo_id": resultado_demanda.get("perfil_normativo_id"),
+                "criterio_tecnico_conservador": resultado_demanda.get("criterio_tecnico_conservador"),
+                "observacao": resultado_demanda.get("observacao"),
                 "total_w": resultado_demanda.get("total_w"),
                 "potencia_demanda_w": resultado_demanda.get("potencia_demanda_w"),
                 "potencia_demanda_parcial_w": resultado_demanda.get("potencia_demanda_parcial_w"),
