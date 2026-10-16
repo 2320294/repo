@@ -1,5 +1,6 @@
 from normativo_cpfl import _numero, _regras_base, _sincronizar_regras_ged13_residencial, _quase_igual, _validar_perfil_ged13, _resumo_auditoria_ged13
 import json
+from normativo_cpfl import perfil_eh_piratininga, MUNICIPIOS_PIRATININGA, FONTE_MUNICIPIOS_PIRATININGA
 from normativo_cpfl import preparar_rascunho_paulista, perfil_paulista_ged13, pendencias_ativacao_paulista
 import streamlit as st
 from perfis_normativos import listar_perfis, salvar_perfil, atualizar_status
@@ -407,6 +408,27 @@ def renderizar_admin_normativos(email):
         st.error("Banco de perfis normativos ainda não preparado. Execute o arquivo supabase_perfis_normativos.sql no Supabase.")
         st.code(str(e))
         return
+
+    st.markdown("#### CPFL Piratininga — abrangência municipal")
+    st.caption("27 municípios na lista oficial. Em Guarujá, o atendimento indicado é Vicente de Carvalho: confirme a distribuidora no endereço. A seleção municipal já restringe os cadastros antigos; o botão abaixo grava a lista nos perfis estaduais sem vínculo explícito.")
+    st.markdown(f"[Consultar municípios e tensões oficiais]({FONTE_MUNICIPIOS_PIRATININGA})")
+    if st.button("Vincular 27 municípios ao cadastro antigo da Piratininga"):
+        try:
+            atualizados = 0
+            for perfil_antigo in perfis:
+                if (perfil_eh_piratininga(perfil_antigo)
+                        and str(perfil_antigo.get("uf") or "").strip().upper() == "SP"
+                        and not str(perfil_antigo.get("municipio") or "").strip()
+                        and perfil_antigo.get("municipios_atendidos") is None):
+                    salvar_perfil({"municipios_atendidos": list(MUNICIPIOS_PIRATININGA)}, perfil_id=perfil_antigo.get("id"))
+                    atualizados += 1
+            if atualizados:
+                st.success(f"Lista municipal gravada em {atualizados} perfil(is). Regras e status preservados.")
+                st.rerun()
+            else:
+                st.info("Nenhum cadastro estadual antigo sem lista municipal para atualizar.")
+        except Exception as e:
+            st.error(f"Não foi possível concluir o vínculo municipal: {e}")
 
     st.markdown("#### CPFL Paulista — preparação do cadastro")
     st.caption("GED-13 v46.0, residencial individual, 127/220 V. Lista de 232 municípios; Lins e Piratininga exigem outro perfil de tensão. O cadastro começa em RASCUNHO, sem alterar perfis existentes.")

@@ -9,6 +9,9 @@ def perfil_atende_municipio(perfil, uf, municipio):
     if uf_perfil and uf_perfil != str(uf or "").strip().upper():
         return False
     cidade = str(municipio or "").strip().casefold()
+    from normativo_cpfl import perfil_eh_piratininga, piratininga_atende_localidade
+    if perfil_eh_piratininga(perfil) and not piratininga_atende_localidade(uf, municipio):
+        return False
     cidades = perfil.get("municipios_atendidos")
     if cidades is not None:
         return bool(cidade and cidade in {

@@ -288,6 +288,27 @@ def pendencias_ativacao_paulista(perfil):
         pendencias.append("Este perfil atende instalações residenciais individuais.")
     return pendencias
 
+FONTE_MUNICIPIOS_PIRATININGA = "https://www.cpfl.com.br/piratininga/tensao-nominal"
+MUNICIPIOS_PIRATININGA = [
+    "Alumínio", "Araçariguama", "Araçoiaba da Serra", "Boituva",
+    "Campo Limpo Paulista", "Capela do Alto", "Cubatão", "Guarujá", "Ibiúna",
+    "Indaiatuba", "Iperó", "Itu", "Itupeva", "Jundiaí", "Louveira", "Mairinque",
+    "Porto Feliz", "Praia Grande", "Salto", "Salto de Pirapora", "Santos",
+    "São Roque", "São Vicente", "Sorocaba", "Várzea Paulista", "Vinhedo", "Votorantim",
+]
+
+
+def perfil_eh_piratininga(perfil):
+    return str(perfil.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
+
+
+def piratininga_atende_localidade(uf, municipio):
+    """Limite municipal oficial; em Guarujá, confirmar o endereço em Vicente de Carvalho."""
+    return (str(uf or "").strip().upper() == "SP"
+            and str(municipio or "").strip().casefold()
+            in {n.casefold() for n in MUNICIPIOS_PIRATININGA})
+
+
 def _numero(txt):
     txt = str(txt or "").strip().replace(".", "").replace(",", ".") if "," in str(txt or "") else str(txt or "").strip()
     if not txt:
