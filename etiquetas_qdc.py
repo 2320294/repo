@@ -1,3 +1,4 @@
+from balanceamento_fases import rotulo_fase
 from pdf_rodape import texto_rodape_pdf
 from io import BytesIO
 from reportlab.pdfgen import canvas
@@ -232,7 +233,7 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             return {'id':'GERAL','tipo':'GERAL','polos':mod,'linha1':'Disjuntor geral','linha2':f'{a} A' if a else ''}
         if tipo_d=='DPS':
             fase=_txt(d.get('fase')).upper()
-            return {'id':ident or 'DPS','tipo':'GERAL','polos':mod,'linha1':'DPS','linha2':f'Fase {fase}' if fase else ''}
+            return {'id':ident or 'DPS','tipo':'GERAL','polos':mod,'linha1':'DPS','linha2':f'Fase {rotulo_fase(fase)}' if fase else ''}
         if tipo_d=='IDR':
             corrente=d.get('corrente_a'); sens=d.get('sensibilidade_ma')
             l2=' / '.join(x for x in ((f'{int(corrente)} A' if corrente else ''),(f'{int(sens)} mA' if sens else '')) if x)

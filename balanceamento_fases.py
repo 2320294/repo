@@ -1,4 +1,13 @@
 
+def rotulo_fase(fase):
+    """Rótulo público R/S/T; mantém os identificadores internos e a geometria."""
+    import re
+    texto = str(fase or "")
+    if re.fullmatch(r"[ABC](?:[-/+ ][ABC])*", texto):
+        return texto.translate(str.maketrans({"A": "R", "B": "S", "C": "T"}))
+    return texto
+
+
 def _potencia(circuito):
     try:
         return max(0.0, float(circuito.get("potencia", 0) or 0))

@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from concessionarias import CHAVE_PARAMETROS_REDE
-from balanceamento_fases import balancear_circuitos
+from balanceamento_fases import balancear_circuitos, rotulo_fase
 from agrupamento_dr import agrupar_circuitos_dr
 from demanda_qdc import calcular_demanda_qdc
 from protecao_alimentador import avaliar_protecoes_alimentador
@@ -1360,7 +1360,8 @@ def calcular_quantitativo_materiais(
 
             eletroduto_total += comprimento
 
-            # 220 V bifásico: 2 fases + PE.
+            tue_fase_neutro = tensao_circ == tensao_base_fornecimento(parametros_rede_calculo, fallback=tensao_base)
+            # Mesma metragem: FN + PE ou FF + PE, conforme o circuito.
             cabo = (
                 comprimento
                 *
@@ -1387,14 +1388,14 @@ def calcular_quantitativo_materiais(
             )
             acumular_cabo_cor(
                 bitola,
-                "Fase L1",
+                "Fase" if tue_fase_neutro else "Fase L1",
                 "Vermelho",
                 comprimento_condutor
             )
             acumular_cabo_cor(
                 bitola,
-                "Fase L2",
-                "Preto",
+                "Neutro" if tue_fase_neutro else "Fase L2",
+                "Azul-claro" if tue_fase_neutro else "Preto",
                 comprimento_condutor
             )
             acumular_cabo_cor(
@@ -1414,6 +1415,7 @@ def calcular_quantitativo_materiais(
 
             circuitos_elementares.append({
                 "tipo": "TUE",
+                "ligacao": "FN" if tue_fase_neutro else "FF",
                 "ambiente": ambiente,
                 "potencia": potencia,
                 "tensao": tensao_circ,
@@ -1803,6 +1805,8 @@ def _dataframes_materiais_circuitos(materiais, circuitos):
         ).reset_index(drop=True)
 
     circuitos_df = pd.DataFrame(circuitos)
+    if not circuitos_df.empty and "fase" in circuitos_df.columns:
+        circuitos_df["fase"] = circuitos_df["fase"].map(rotulo_fase)
     if not circuitos_df.empty:
         circuitos_df = circuitos_df.rename(columns={
             "numero": "Nº",
@@ -2228,7 +2232,7 @@ def _gerar_pdf_materiais_circuitos(
     if resumo_balanceamento.get("status") == "ok":
         linhas = []
         for fase, potencia in resumo_balanceamento.get("fases", {}).items():
-            linhas.append((f"Fase {fase}", f"{float(potencia)/1000:.2f} kW"))
+            linhas.append((f"Fase {rotulo_fase(fase)}", f"{float(potencia)/1000:.2f} kW"))
         linhas.extend([
             ("Diferença máxima entre fases", f"{float(resumo_balanceamento.get('diferenca_max_w', 0) or 0)/1000:.2f} kW"),
             ("Desequilíbrio preliminar", f"{float(resumo_balanceamento.get('desequilibrio_pct', 0) or 0):.1f}%"),
@@ -3337,7 +3341,7 @@ def renderizar_materiais(
             cols = st.columns(max(1, len(fases_resumo)))
             for col, (fase, pot) in zip(cols, fases_resumo.items()):
                 col.metric(
-                    f"Fase {fase}",
+                    f"Fase {rotulo_fase(fase)}",
                     f"{float(pot or 0)/1000:.2f} kW"
                 )
             st.caption(
@@ -4005,7 +4009,7 @@ def renderizar_materiais(
                     "Tipo": d.get("tipo"),
                     "Descrição": d.get("descricao"),
                     "Grupo": d.get("grupo"),
-                    "Fase": d.get("fase"),
+                    "Fase": rotulo_fase(d.get("fase")),
                     "Módulos": d.get("modulos"),
                     "Posição inicial": d.get("posicao_inicial"),
                     "Posição final": d.get("posicao_final"),

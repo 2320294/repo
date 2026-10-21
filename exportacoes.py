@@ -1,3 +1,4 @@
+from balanceamento_fases import rotulo_fase
 from concessionarias import normalizar_parametros_rede
 from pdf_rodape import desenhar_rodape_reportlab
 from io import BytesIO
@@ -345,6 +346,8 @@ def gerar_excel_projeto(
         resumo_drs_export
     )
     df_circuitos = pd.DataFrame(circuitos_dr_export)
+    if "fase" in df_circuitos.columns:
+        df_circuitos["fase"] = df_circuitos["fase"].map(rotulo_fase)
     if not df_circuitos.empty and "numero" in df_circuitos.columns:
         df_circuitos["numero"] = df_circuitos["numero"].apply(
             lambda valor: f"C{int(valor):02d}"
@@ -387,7 +390,7 @@ def gerar_excel_projeto(
     linhas_balanceamento = []
     for fase, potencia_fase in resumo_balanceamento.get("fases", {}).items():
         linhas_balanceamento.append({
-            "Parâmetro": f"Potência instalada - Fase {fase}",
+            "Parâmetro": f"Potência instalada - Fase {rotulo_fase(fase)}",
             "Valor": f"{potencia_fase/1000:.2f} kW"
         })
     if resumo_balanceamento.get("desequilibrio_pct") is not None:

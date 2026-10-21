@@ -1,3 +1,4 @@
+from balanceamento_fases import rotulo_fase
 
 LAYER_UNIFILAR = "PROJ_ELETRICA_UNIFILAR_QDC"
 LAYER_UNIFILAR_TEXTO = "PROJ_ELETRICA_UNIFILAR_QDC_TEXTO"
@@ -196,7 +197,7 @@ def _texto_circuito(c):
         and fase != "A definir"
     ):
         partes.append(
-            f"FASE {fase}"
+            f"FASE {rotulo_fase(fase)}"
         )
 
     return " | ".join(
@@ -851,7 +852,7 @@ def desenhar_unifilar_qdc(
     if cargas:
         texto_cargas = " | ".join(
             (
-                f"{fase}: "
+                f"{rotulo_fase(fase)}: "
                 f"{pot / 1000:.2f} kW"
             )
             for fase, pot

@@ -1,3 +1,4 @@
+from balanceamento_fases import rotulo_fase
 import math
 import re
 
@@ -503,7 +504,7 @@ def dataframe_slots(mapa):
                 texto = str(slot.get("identificador", "LIVRE") or "LIVRE")
                 fase = str(slot.get("fase", "") or "").strip()
                 if fase and texto != "LIVRE":
-                    texto += f" [{fase}]"
+                    texto += f" [{rotulo_fase(fase)}]"
             row[f"P{((linha - 1) * colunas + coluna):02d}"] = texto
         dados.append(row)
 
@@ -2796,7 +2797,7 @@ def desenhar_mapa_fisico_qdc(
                 (x_fase, dg["y2"]),
                 _layer_por_token(token)
             )
-            _text(msp, token, x_fase - 0.03, y_rotulos_entrada, 0.080, LT)
+            _text(msp, rotulo_fase(token), x_fase - 0.03, y_rotulos_entrada, 0.080, LT)
 
         # PE vem antes do N e segue diretamente ao barramento de proteção.
         if tem_pe:
@@ -5920,7 +5921,7 @@ def desenhar_mapa_fisico_qdc(
 
         linhas_tabela.append({
             "identificador": ident,
-            "fase": fase_c or "-",
+            "fase": rotulo_fase(fase_c) or "-",
             "dr": grupo_dr_c or "SEM DR",
             "disjuntor": f"{dj_c} A",
             "ambientes": linhas_ambientes,
@@ -6047,7 +6048,7 @@ def desenhar_mapa_fisico_qdc(
     if "A" in fases_reais:
         legendas.append(
             (
-                "Fase A",
+                "Fase R",
                 LA
             )
         )
@@ -6055,7 +6056,7 @@ def desenhar_mapa_fisico_qdc(
     if "B" in fases_reais:
         legendas.append(
             (
-                "Fase B",
+                "Fase S",
                 LB
             )
         )
@@ -6063,7 +6064,7 @@ def desenhar_mapa_fisico_qdc(
     if "C" in fases_reais:
         legendas.append(
             (
-                "Fase C",
+                "Fase T",
                 LC
             )
         )
@@ -6131,7 +6132,7 @@ def desenhar_mapa_fisico_qdc(
 
     cargas_fases_qdc = resumo_balanceamento.get("fases", {}) or {}
     texto_balanceamento_qdc = " | ".join(
-        f"{fase}: {float(pot or 0) / 1000:.2f} kW"
+        f"{rotulo_fase(fase)}: {float(pot or 0) / 1000:.2f} kW"
         for fase, pot in cargas_fases_qdc.items()
     )
 

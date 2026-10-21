@@ -98,10 +98,11 @@ def _condutores_circuito(circuito):
         )
     )
 
-    if (
-        tipo == "TUE"
-        and tensao >= 200
-    ):
+    ligacao = str(circuito.get("ligacao") or "").upper()
+    polos = str(circuito.get("polos") or "").upper()
+    duas_fases = (ligacao == "FF" if ligacao in ("FN", "FF") else
+                 polos in ("2", "2P") if polos else tipo == "TUE" and tensao >= 200)
+    if duas_fases:
         return [
             {
                 "funcao": "Fase L1",
