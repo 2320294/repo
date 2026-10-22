@@ -608,46 +608,69 @@ def renderizar_salvar_e_gerar_cad(
         erro_etiquetas = None
         etiquetas_disponiveis = False
 
-        with st.spinner("Preparando Plotagem do Projeto (PDF) e Etiquetas de Identificação do QDC..."):
-            try:
-                pdf_projeto = gerar_pdf_projeto(
-                    dxf_bytes=bytes(cad_salvo),
-                    nome_projeto=nome_seguro,
-                    versao=VERSAO_CAD,
-                )
-            except Exception as exc:
-                erro_pdf_projeto = str(exc)
+        # Reutiliza os PDFs apenas enquanto todos os dados de origem coincidirem.
+        import hashlib
+        import pickle
+        chave_preparo = hashlib.sha256(pickle.dumps((
+            bytes(cad_salvo), nome_seguro, VERSAO_CAD, VERSAO_SISTEMA,
+            config_interruptores_usuario, tabela_editada,
+            st.session_state.get("dimensionamento_rotas", {}),
+        ), protocol=4)).hexdigest()
+        preparo_anterior = st.session_state.get("pdfs_projeto_preparados", {})
+        if preparo_anterior.get("chave") == chave_preparo:
+            pdf_projeto = preparo_anterior["pdf_projeto"]
+            pdf_etiquetas = preparo_anterior["pdf_etiquetas"]
+            etiquetas_disponiveis = preparo_anterior["etiquetas_disponiveis"]
+        else:
+            with st.spinner("Preparando Plotagem do Projeto (PDF) e Etiquetas de Identificação do QDC..."):
+                try:
+                    pdf_projeto = gerar_pdf_projeto(
+                        dxf_bytes=bytes(cad_salvo),
+                        nome_projeto=nome_seguro,
+                        versao=VERSAO_CAD,
+                    )
+                except Exception as exc:
+                    erro_pdf_projeto = str(exc)
 
-            try:
-                resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
-                circuitos_etiquetas = (
-                    resumo_dim.get("circuitos_dimensionados_finais")
-                    or resumo_dim.get("circuitos_corrigidos")
-                    or []
-                )
-                if circuitos_etiquetas:
-                    parametros_rede = normalizar_parametros_rede((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
-                    demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
-                    if not demanda:
-                        demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
-                    tipo_rede = str(parametros_rede.get("tipo_fornecimento", "") or "")
-                    polos_dg = 3 if "Trif" in tipo_rede else (2 if "Bif" in tipo_rede else 1)
-                    pdf_etiquetas = gerar_pdf_etiquetas_qdc(
-                        nome_projeto=st.session_state.projeto_ativo,
-                        circuitos=circuitos_etiquetas,
-                        disjuntor_geral_a=demanda.get("disjuntor_geral_a"),
-                        polos_geral=polos_dg,
-                        versao=VERSAO_SISTEMA,
-                        mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
-                        ambientes_projeto=[row.get("Ambiente", "") for row in tabela_editada],
+                try:
+                    resumo_dim = st.session_state.get("dimensionamento_rotas", {}) or {}
+                    circuitos_etiquetas = (
+                        resumo_dim.get("circuitos_dimensionados_finais")
+                        or resumo_dim.get("circuitos_corrigidos")
+                        or []
                     )
-                    etiquetas_disponiveis = True
-                else:
-                    erro_etiquetas = (
-                        "Consolidando os circuitos definitivos para preparar a identificação do QDC."
-                    )
-            except Exception as exc:
-                erro_etiquetas = str(exc)
+                    if circuitos_etiquetas:
+                        parametros_rede = normalizar_parametros_rede((config_interruptores_usuario or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+                        demanda = dict(parametros_rede.get("demanda_fechada", {}) or {})
+                        if not demanda:
+                            demanda = calcular_demanda_qdc(tabela_editada, parametros_rede)
+                        tipo_rede = str(parametros_rede.get("tipo_fornecimento", "") or "")
+                        polos_dg = 3 if "Trif" in tipo_rede else (2 if "Bif" in tipo_rede else 1)
+                        pdf_etiquetas = gerar_pdf_etiquetas_qdc(
+                            nome_projeto=st.session_state.projeto_ativo,
+                            circuitos=circuitos_etiquetas,
+                            disjuntor_geral_a=demanda.get("disjuntor_geral_a"),
+                            polos_geral=polos_dg,
+                            versao=VERSAO_SISTEMA,
+                            mapa_fisico=resumo_dim.get("mapa_fisico_qdc"),
+                            ambientes_projeto=[row.get("Ambiente", "") for row in tabela_editada],
+                        )
+                        etiquetas_disponiveis = True
+                    else:
+                        erro_etiquetas = (
+                            "Consolidando os circuitos definitivos para preparar a identificação do QDC."
+                        )
+                except Exception as exc:
+                    erro_etiquetas = str(exc)
+
+            # Falhas não são guardadas: uma nova execução poderá tentar novamente.
+            if pdf_projeto is not None and pdf_etiquetas is not None:
+                st.session_state["pdfs_projeto_preparados"] = {
+                    "chave": chave_preparo,
+                    "pdf_projeto": pdf_projeto,
+                    "pdf_etiquetas": pdf_etiquetas,
+                    "etiquetas_disponiveis": etiquetas_disponiveis,
+                }
 
         # Somente agora os dois blocos são inseridos na página, juntos.
         col_plotagem, col_qdc = st.columns(2, gap="large")
