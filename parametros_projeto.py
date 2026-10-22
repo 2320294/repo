@@ -281,7 +281,12 @@ def renderizar_parametros_projeto(
     from admin_normativos import usuario_e_admin
     from normativo_elektro import integracao_METODO as METODO_ELEKTRO
     admin_teste_elektro = usuario_e_admin(st.session_state.get("user_email", ""))
-    if admin_teste_elektro:
+    from normativo_elektro import perfil_eh_perfil_elektro
+    teste_elektro_disponivel = (
+        admin_teste_elektro
+        and perfil_eh_perfil_elektro(perfil_selecionado or {})
+    )
+    if teste_elektro_disponivel:
         metodos.append(METODO_ELEKTRO)
     perfil_elektro_teste_id = None
     contexto_elektro_teste = {}
@@ -302,11 +307,14 @@ def renderizar_parametros_projeto(
         perfil_selecionado
         and str(perfil_selecionado.get("id")) != str(perfil_salvo_id or "")
     )
+    chave_metodo = _widget_key("rede_metodo_demanda")
     if perfil_trocado:
         metodo_salvo = metodos[0]
-        chave_metodo = _widget_key("rede_metodo_demanda")
         if chave_metodo in st.session_state:
-            st.session_state[chave_metodo] = metodos[0]
+            st.session_state[chave_metodo] = metodo_salvo
+    elif (chave_metodo in st.session_state
+          and st.session_state[chave_metodo] not in metodos):
+        st.session_state[chave_metodo] = metodo_salvo
 
     # Rev.216 atualizada — interface simplificada da Etapa 1.
     # Mantém toda a lógica/persistência técnica, mas exibe apenas os campos
@@ -335,7 +343,7 @@ def renderizar_parametros_projeto(
             key=_widget_key("qdc_esquema_aterramento")
         )
 
-    if metodo_demanda == METODO_ELEKTRO and admin_teste_elektro:
+    if metodo_demanda == METODO_ELEKTRO and teste_elektro_disponivel:
         st.info("Teste administrativo integrado: usa as cargas atuais na etapa de demanda do QDC. Este modo não altera o status cadastrado do perfil e não libera corrente, DG ou alimentador.")
         from perfis_normativos import listar_perfis, perfil_atende_municipio
         from normativo_elektro import perfil_eh_perfil_elektro as eh_perfil_elektro, perfil_auditar_tabelas_demanda as auditar_tabelas_demanda
