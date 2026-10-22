@@ -46,7 +46,7 @@ def balancear_circuitos(circuitos, parametros_rede):
     rede = parametros_rede or {}
     tue_fase_neutro_paulista = (
         rede.get("tensao_fornecimento") == "220/380 V"
-        and str(rede.get("perfil_normativo_concessionaria") or rede.get("concessionaria") or "").strip().casefold() == "cpfl paulista"
+        and str(rede.get("perfil_normativo_concessionaria") or rede.get("concessionaria") or "").strip().casefold() in {"cpfl paulista", "rge"}
     )
     atribuicoes = {}
 

@@ -19,6 +19,7 @@ CONCESSIONARIAS_POR_UF = {
     "ES": ["EDP Espírito Santo"],
     "GO": ["Equatorial Goiás"],
     "MA": ["Equatorial Maranhão"],
+    "RS": ["RGE"],
     "MG": ["Cemig Distribuição", "CPFL Santa Cruz"],
     "PR": ["CPFL Santa Cruz"],
     "PA": ["Equatorial Pará"],

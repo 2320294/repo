@@ -1,3 +1,4 @@
+from normativo_cpfl import preparar_rascunho_rge, perfil_rge_ged13, perfil_ged13_380, pendencias_ativacao_rge
 from normativo_cpfl import preparar_rascunho_santa_cruz, perfil_santa_cruz_ged13, pendencias_ativacao_santa_cruz, MUNICIPIOS_SANTA_CRUZ
 from normativo_cpfl import _numero, _regras_base, _sincronizar_regras_ged13_residencial, _quase_igual, _validar_perfil_ged13, _resumo_auditoria_ged13
 import json
@@ -412,6 +413,18 @@ def renderizar_admin_normativos(email):
         return
 
     with st.expander("➕ Novo perfil normativo", expanded=not bool(perfis)):
+        st.caption("RGE — residencial 220/380 V: cadastro inicial dos 253 municípios confirmados na página oficial. As quatro exceções de tensão e os municípios ainda não conferidos ficam fora deste perfil.")
+        if st.button("Preparar perfil RGE (RS — 220/380 V)"):
+            try:
+                if any(perfil_rge_ged13(item) for item in perfis):
+                    st.info("Já existe um perfil RGE GED-13 v46.0. Nenhum registro foi alterado.")
+                else:
+                    salvar_perfil(preparar_rascunho_rge(email))
+                    st.success("Perfil RGE criado em RASCUNHO. Confira testes e fonte oficial abaixo.")
+                    st.rerun()
+            except Exception as exc:
+                st.error(f"Não foi possível preparar o perfil RGE: {exc}")
+
         with st.form("novo_perfil_normativo"):
             c1, c2, c3 = st.columns(3)
             concessionaria = c1.text_input("Concessionária")
@@ -540,6 +553,7 @@ def renderizar_admin_normativos(email):
             eh_ged13_cpfl = (
                 (str(p.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
                  or perfil_paulista_380(p)
+                 or perfil_rge_ged13(p)
                  or perfil_santa_cruz_ged13(p)
                  or (perfil_paulista_ged13(p)
                      and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_neutro_v") == 127
@@ -564,7 +578,7 @@ def renderizar_admin_normativos(email):
                 regras_atual = p.get("regras") or regras_atual
 
             # Auditoria sempre visível antes da longa edição do perfil.
-            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao, classe_380=perfil_paulista_380(p)) if eh_ged13_cpfl else (False, [])
+            validacao_resumo_ok, _ = _renderizar_resumo_auditoria(regras_validacao, classe_380=perfil_ged13_380(p)) if eh_ged13_cpfl else (False, [])
 
             with st.form(f"editar_perfil_{p.get('id')}"):
                 regras_editadas = _editor_regras(f"edit_{p.get('id')}", regras_atual)
@@ -590,7 +604,7 @@ def renderizar_admin_normativos(email):
                     except Exception as e:
                         st.error(f"Não foi possível atualizar: {e}")
 
-            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}", classe_380=perfil_paulista_380(p)) if eh_ged13_cpfl else False
+            validacao_ok = _renderizar_validador_ged13(regras_validacao, f"val_{p.get('id')}", classe_380=perfil_ged13_380(p)) if eh_ged13_cpfl else False
             eh_elektro = eh_perfil_elektro(p)
             if eh_elektro:
                 from normativo_elektro import resumo_renderizar as renderizar_resumo_elektro
@@ -724,6 +738,11 @@ def renderizar_admin_normativos(email):
                 pendencias_santa = pendencias_ativacao_santa_cruz(p)
                 pronto = pronto and not pendencias_santa
                 for pendencia in pendencias_santa:
+                    st.caption(pendencia)
+            if perfil_rge_ged13(p):
+                pendencias_rge = pendencias_ativacao_rge(p)
+                pronto = pronto and not pendencias_rge
+                for pendencia in pendencias_rge:
                     st.caption(pendencia)
             if not pronto:
                 st.info(

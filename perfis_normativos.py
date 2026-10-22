@@ -16,6 +16,10 @@ def perfil_atende_municipio(perfil, uf, municipio):
     if (str(perfil.get("concessionaria") or "").strip().casefold() == "cpfl santa cruz"
             and not santa_cruz_atende_localidade(uf, municipio)):
         return False
+    from normativo_cpfl import rge_atende_localidade
+    if (str(perfil.get("concessionaria") or "").strip().casefold() == "rge"
+            and not rge_atende_localidade(uf, municipio)):
+        return False
     cidades = perfil.get("municipios_atendidos")
     if cidades is not None:
         return bool(cidade and cidade in {
@@ -92,6 +96,11 @@ def atualizar_status(perfil_id, status, validado_por=""):
             pendencias = pendencias_ativacao_santa_cruz(perfil)
             if pendencias:
                 raise ValueError("Perfil Santa Cruz não pode ser publicado: " + " ".join(pendencias))
+        from normativo_cpfl import perfil_rge_ged13, pendencias_ativacao_rge
+        if perfil_rge_ged13(perfil):
+            pendencias = pendencias_ativacao_rge(perfil)
+            if pendencias:
+                raise ValueError("Perfil RGE não pode ser publicado: " + " ".join(pendencias))
         if perfil_eh_perfil_elektro(perfil):
             pendencias = ativacao_pendencias(perfil)
             if pendencias:

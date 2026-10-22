@@ -635,9 +635,9 @@ def conferir_entrada_trifasica_cpfl(perfil, detalhes, tipo, tensao, dados=None):
     """Consulta documental independente; não altera DG nem alimentador."""
     import re
     documento = str(perfil.get("documento", "")).upper()
-    if "CPFL" not in str(perfil.get("concessionaria", "")).upper() or not re.search(r"\bGED\s*[-–—]?\s*13\b", documento):
+    if ("CPFL" not in str(perfil.get("concessionaria", "")).upper() and not perfil_rge_ged13(perfil)) or not re.search(r"\bGED\s*[-–—]?\s*13\b", documento):
         return None
-    if tipo != "Trifásico" or (tensao != "127/220 V" and not (tensao == "220/380 V" and perfil_paulista_380(perfil))):
+    if tipo != "Trifásico" or (tensao != "127/220 V" and not (tensao == "220/380 V" and perfil_ged13_380(perfil))):
         return None
     fp_unidade = {"GED13_TABELA_3", "GED13_TABELA_4", "GED13_TABELA_5", "GED13_TABELA_6", "GED13_TABELA_6_CRITERIO_FUNCAO_SECAGEM", "GED13_TABELA_7", "GED13_TABELA_10_HIDROMASSAGEM"}
     parcial = 0.0
@@ -691,18 +691,21 @@ def exportacao_pendencias_cpfl(rede, demanda=None):
     demanda = demanda or {}
     identificacao = " ".join(str(rede.get(k) or "") for k in
         ("concessionaria", "perfil_normativo_concessionaria"))
-    if "cpfl" not in identificacao.lower():
+    rge = any(str(rede.get(k) or "").strip().casefold() == "rge"
+              for k in ("concessionaria", "perfil_normativo_concessionaria"))
+    if "cpfl" not in identificacao.lower() and not rge:
         return []
     auditoria = demanda.get("auditoria_entrada_cpfl") or {}
     tipo = demanda.get("tipo_fornecimento") or rede.get("tipo_fornecimento")
     tensao = demanda.get("tensao_fornecimento") or rede.get("tensao_fornecimento")
     if tipo != "Trifásico" or tensao not in ("127/220 V", "220/380 V"):
         return []
+    distribuidora = "RGE" if rge else "CPFL"
     if auditoria.get("status") == "referencia_documental" and auditoria.get("categoria"):
-        return [f"Entrada CPFL: referência documental {auditoria['categoria']} "
+        return [f"Entrada {distribuidora}: referência documental {auditoria['categoria']} "
                 f"({float(auditoria['demanda_kva']):.2f} kVA). Conferência técnica pendente.",
                 "DG e alimentador preliminares; a referência não constitui aprovação automática."]
-    return ["Entrada CPFL: categoria pendente de conferência em kVA.",
+    return [f"Entrada {distribuidora}: categoria pendente de conferência em kVA.",
             "Confirmar potência aparente (VA) ou fator de potência das cargas pendentes.",
             "DG e alimentador preliminares; entrada sem aprovação automática."]
 
@@ -832,6 +835,324 @@ def pendencias_ativacao_santa_cruz(perfil):
     if (not isinstance(cidades, list) or not cidades
             or any(not santa_cruz_atende_localidade(perfil.get("uf"), n) for n in cidades)):
         pendencias.append("Vincule somente municípios Santa Cruz da UF selecionada.")
+    if regras.get("tipo_instalacao") != "Residencial individual":
+        pendencias.append("Este perfil atende instalações residenciais individuais.")
+    return pendencias
+
+
+FONTE_MUNICIPIOS_RGE = "https://www.cpfl.com.br/rge/tensao-nominal"
+MUNICIPIOS_RGE_TENSAO_ESPECIAL = ["Canoas", "General Câmara", "Nova Santa Rita", "São Leopoldo"]
+MUNICIPIOS_RGE_220_380 = [
+    "Ajuricaba",
+    "Alecrim",
+    "Alegria",
+    "Alpestre",
+    "Ametista do Sul",
+    "André da Rocha",
+    "Anta Gorda",
+    "Antônio Prado",
+    "Aratiba",
+    "Arvorezinha",
+    "Augusto Pestana",
+    "Barra Funda",
+    "Barra do Guarita",
+    "Barra do Rio Azul",
+    "Barracão",
+    "Barros Cassal",
+    "Barão",
+    "Barão de Cotegipe",
+    "Benjamin Constant do Sul",
+    "Bento Gonçalves",
+    "Boa Vista das Missões",
+    "Boa Vista do Buricá",
+    "Boa Vista do Cadeado",
+    "Boa Vista do Sul",
+    "Bom Jesus",
+    "Bom Progresso",
+    "Braga",
+    "Cachoeirinha",
+    "Cacique Doble",
+    "Caiçara",
+    "Camargo",
+    "Cambará do Sul",
+    "Campestre da Serra",
+    "Campina das Missões",
+    "Campinas do Sul",
+    "Campo Novo",
+    "Canela",
+    "Capão Bonito do Sul",
+    "Carlos Barbosa",
+    "Carlos Gomes",
+    "Casca",
+    "Caseiros",
+    "Catuípe",
+    "Caxias do Sul",
+    "Centenário",
+    "Cerro Largo",
+    "Charrua",
+    "Chiapetta",
+    "Ciríaco",
+    "Constantina",
+    "Coronel Bicaco",
+    "Coronel Pilar",
+    "Cotiporã",
+    "Coxilha",
+    "Crissiumal",
+    "Cristal do Sul",
+    "Cruz Alta",
+    "Cruzaltense",
+    "Cândido Godói",
+    "David Canabarro",
+    "Derrubadas",
+    "Dezesseis de Novembro",
+    "Dois Irmãos das Missões",
+    "Dois Lajeados",
+    "Doutor Maurício Cardoso",
+    "Engenho Velho",
+    "Entre Rios do Sul",
+    "Entre-Ijuís",
+    "Erebango",
+    "Erechim",
+    "Ernestina",
+    "Erval Grande",
+    "Erval Seco",
+    "Esmeralda",
+    "Esperança do Sul",
+    "Espumoso",
+    "Estação",
+    "Eugênio de Castro",
+    "Fagundes Varela",
+    "Farroupilha",
+    "Faxinalzinho",
+    "Feliz",
+    "Flores da Cunha",
+    "Fortaleza dos Valos",
+    "Frederico Westphalen",
+    "Garibaldi",
+    "Gaurama",
+    "Gentil",
+    "Getúlio Vargas",
+    "Giruá",
+    "Glorinha",
+    "Gramado",
+    "Gramado dos Loureiros",
+    "Gravataí",
+    "Guabiju",
+    "Guaporé",
+    "Guarani das Missões",
+    "Horizontina",
+    "Humaitá",
+    "Ibiraiaras",
+    "Ibirapuitã",
+    "Ibirubá",
+    "Igrejinha",
+    "Ilópolis",
+    "Independência",
+    "Inhacorá",
+    "Ipiranga do Sul",
+    "Ipê",
+    "Iraí",
+    "Itapuca",
+    "Itatiba do Sul",
+    "Jacutinga",
+    "Jaquirana",
+    "Jari",
+    "Jóia",
+    "Júlio de Castilhos",
+    "Lagoa Vermelha",
+    "Lagoa dos Três Cantos",
+    "Lajeado do Bugre",
+    "Liberato Salzano",
+    "Linha Nova",
+    "Machadinho",
+    "Marau",
+    "Marcelino Ramos",
+    "Mariano Moro",
+    "Maximiliano de Almeida",
+    "Miraguaí",
+    "Montauri",
+    "Monte Alegre dos Campos",
+    "Monte Belo do Sul",
+    "Mormaço",
+    "Muitos Capões",
+    "Muliterno",
+    "Nonoai",
+    "Nova Alvorada",
+    "Nova Araçá",
+    "Nova Bassano",
+    "Nova Boa Vista",
+    "Nova Candelária",
+    "Nova Hartz",
+    "Nova Petrópolis",
+    "Nova Prata",
+    "Nova Pádua",
+    "Nova Roma do Sul",
+    "Novo Barreiro",
+    "Novo Machado",
+    "Novo Xingu",
+    "Não-Me-Toque",
+    "Paim Filho",
+    "Palmeira das Missões",
+    "Palmitinho",
+    "Paraí",
+    "Parobé",
+    "Passo Fundo",
+    "Paulo Bento",
+    "Pejuçara",
+    "Picada Café",
+    "Pinhal Grande",
+    "Pinhal da Serra",
+    "Pinheirinho do Vale",
+    "Pinto Bandeira",
+    "Pirapó",
+    "Planalto",
+    "Ponte Preta",
+    "Porto Lucena",
+    "Porto Mauá",
+    "Porto Vera Cruz",
+    "Porto Xavier",
+    "Protásio Alves",
+    "Putinga",
+    "Quatro Irmãos",
+    "Quinze de Novembro",
+    "Redentora",
+    "Rio dos Índios",
+    "Riozinho",
+    "Rolador",
+    "Rolante",
+    "Ronda Alta",
+    "Rondinha",
+    "Roque Gonzales",
+    "Sagrada Família",
+    "Saldanha Marinho",
+    "Salto do Jacuí",
+    "Salvador das Missões",
+    "Sananduva",
+    "Santa Bárbara do Sul",
+    "Santa Rosa",
+    "Santa Tereza",
+    "Santo Antônio da Patrulha",
+    "Santo Antônio do Palma",
+    "Santo Augusto",
+    "Santo Cristo",
+    "Santo Expedito do Sul",
+    "Santo Ângelo",
+    "Sarandi",
+    "Seberi",
+    "Sede Nova",
+    "Senador Salgado Filho",
+    "Serafina Corrêa",
+    "Sertão",
+    "Sete de Setembro",
+    "Severiano de Almeida",
+    "Soledade",
+    "São Domingos do Sul",
+    "São Francisco de Paula",
+    "São Jorge",
+    "São José das Missões",
+    "São José do Inhacorá",
+    "São José do Ouro",
+    "São José dos Ausentes",
+    "São João da Urtiga",
+    "São Luiz Gonzaga",
+    "São Marcos",
+    "São Martinho",
+    "São Nicolau",
+    "São Paulo das Missões",
+    "São Pedro das Missões",
+    "São Pedro do Butiá",
+    "São Valentim",
+    "São Valentim do Sul",
+    "São Valério do Sul",
+    "Tapera",
+    "Taquara",
+    "Taquaruçu do Sul",
+    "Tenente Portela",
+    "Tiradentes do Sul",
+    "Trindade do Sul",
+    "Três Arroios",
+    "Três Coroas",
+    "Três Palmeiras",
+    "Três Passos",
+    "Três de Maio",
+    "Tucunduva",
+    "Tupanci do Sul",
+    "Tupanciretã",
+    "Tuparendi",
+    "Ubiretama",
+    "União da Serra",
+    "Vacaria",
+    "Vale Real",
+    "Vanini",
+    "Veranópolis",
+    "Viadutos",
+    "Vicente Dutra",
+    "Victor Graeff",
+    "Vila Flores",
+    "Vila Maria",
+    "Vista Alegre",
+    "Vista Alegre do Prata",
+    "Vista Gaúcha",
+    "Vitória das Missões",
+    "Água Santa",
+    "Áurea"
+]
+
+
+def perfil_rge_ged13(perfil):
+    return (str(perfil.get("concessionaria") or "").strip().casefold() == "rge"
+            and str(perfil.get("documento") or "").strip().upper() == "GED-13"
+            and str(perfil.get("revisao") or "").strip() == "46.0")
+
+
+def perfil_rge_380(perfil):
+    f = ((perfil.get("regras") or {}).get("fornecimento") or {})
+    return (perfil_rge_ged13(perfil) and f.get("tensao_fase_neutro_v") == 220
+            and f.get("tensao_fase_fase_v") == 380)
+
+
+def perfil_ged13_380(perfil):
+    return perfil_paulista_380(perfil) or perfil_rge_380(perfil)
+
+
+def rge_atende_localidade(uf, municipio):
+    return (str(uf or "").strip().upper() == "RS"
+            and str(municipio or "").strip().casefold()
+            in {n.casefold() for n in MUNICIPIOS_RGE_220_380})
+
+
+def preparar_rascunho_rge(criado_por=""):
+    perfil = preparar_rascunho_paulista_380(criado_por)
+    perfil.update(concessionaria="RGE", uf="RS",
+                  municipios_atendidos=list(MUNICIPIOS_RGE_220_380))
+    perfil["regras"]["observacoes"] = (
+        "RGE, residencial individual, 220/380 V, GED-13 v46.0. "
+        "Cobertura inicial limitada aos 253 municípios distintos da página oficial: "
+        + FONTE_MUNICIPIOS_RGE + ". A relação consultada não cobre os 381 municípios "
+        "informados institucionalmente pela RGE. Não inferir atendimento nos demais. "
+        "Canoas, General Câmara, Nova Santa Rita e São Leopoldo excluídos: consultar "
+        "RGE sobre a tensão por endereço (item 6.3). "
+        "TUEs deste escopo residencial previstas em 220 V fase-neutro; equipamentos "
+        "380 V ou trifásicos exigem análise específica. Confirmar placa e tensão no imóvel. "
+        "Referência C7–C11 em kVA, sem aprovação automática de entrada, DG ou alimentador."
+    )
+    return perfil
+
+
+def pendencias_ativacao_rge(perfil):
+    regras = perfil.get("regras") or {}
+    pendencias = []
+    passou, _ = _validar_perfil_ged13(regras, classe_380=True)
+    if not perfil_rge_380(perfil) or not passou:
+        pendencias.append("Conclua os testes GED-13 do perfil RGE 220/380 V.")
+    if regras.get("fonte_conferida") is not True:
+        pendencias.append("Confirme a conferência da fonte oficial.")
+    if perfil.get("fonte_oficial") != "https://sites.cpfl.com.br/documentos-tecnicos/GED-13.pdf":
+        pendencias.append("Confirme a referência oficial GED-13 v46.0.")
+    cidades = perfil.get("municipios_atendidos")
+    if (not isinstance(cidades, list) or not cidades
+            or any(not rge_atende_localidade(perfil.get("uf"), n) for n in cidades)):
+        pendencias.append("Vincule somente municípios RS confirmados no escopo RGE 220/380 V.")
     if regras.get("tipo_instalacao") != "Residencial individual":
         pendencias.append("Este perfil atende instalações residenciais individuais.")
     return pendencias
