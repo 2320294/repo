@@ -362,7 +362,8 @@ def renderizar_salvar_e_gerar_cad(
                     "_Memorial_Descritivo.pdf"
                 ),
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                on_click="ignore"
             )
         elif erro_memorial:
             st.error(
