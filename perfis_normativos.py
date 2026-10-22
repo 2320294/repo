@@ -12,6 +12,10 @@ def perfil_atende_municipio(perfil, uf, municipio):
     from normativo_cpfl import perfil_eh_piratininga, piratininga_atende_localidade
     if perfil_eh_piratininga(perfil) and not piratininga_atende_localidade(uf, municipio):
         return False
+    from normativo_cpfl import santa_cruz_atende_localidade
+    if (str(perfil.get("concessionaria") or "").strip().casefold() == "cpfl santa cruz"
+            and not santa_cruz_atende_localidade(uf, municipio)):
+        return False
     cidades = perfil.get("municipios_atendidos")
     if cidades is not None:
         return bool(cidade and cidade in {
@@ -83,6 +87,11 @@ def atualizar_status(perfil_id, status, validado_por=""):
             pendencias = pendencias_ativacao_paulista(perfil)
             if pendencias:
                 raise ValueError("Perfil Paulista não pode ser publicado: " + " ".join(pendencias))
+        from normativo_cpfl import perfil_santa_cruz_ged13, pendencias_ativacao_santa_cruz
+        if perfil_santa_cruz_ged13(perfil):
+            pendencias = pendencias_ativacao_santa_cruz(perfil)
+            if pendencias:
+                raise ValueError("Perfil Santa Cruz não pode ser publicado: " + " ".join(pendencias))
         if perfil_eh_perfil_elektro(perfil):
             pendencias = ativacao_pendencias(perfil)
             if pendencias:

@@ -19,7 +19,8 @@ CONCESSIONARIAS_POR_UF = {
     "ES": ["EDP Espírito Santo"],
     "GO": ["Equatorial Goiás"],
     "MA": ["Equatorial Maranhão"],
-    "MG": ["Cemig Distribuição"],
+    "MG": ["Cemig Distribuição", "CPFL Santa Cruz"],
+    "PR": ["CPFL Santa Cruz"],
     "PA": ["Equatorial Pará"],
     "PE": ["Neoenergia Pernambuco"],
     "PI": ["Equatorial Piauí"],
@@ -28,6 +29,7 @@ CONCESSIONARIAS_POR_UF = {
     "SP": [
         "CPFL Paulista",
         "CPFL Piratininga",
+        "CPFL Santa Cruz",
         "Enel Distribuição São Paulo",
         "EDP São Paulo"
     ],

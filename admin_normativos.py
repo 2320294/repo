@@ -1,3 +1,4 @@
+from normativo_cpfl import preparar_rascunho_santa_cruz, perfil_santa_cruz_ged13, pendencias_ativacao_santa_cruz, MUNICIPIOS_SANTA_CRUZ
 from normativo_cpfl import _numero, _regras_base, _sincronizar_regras_ged13_residencial, _quase_igual, _validar_perfil_ged13, _resumo_auditoria_ged13
 import json
 from normativo_cpfl import preparar_rascunho_paulista_380, perfil_paulista_380
@@ -431,6 +432,24 @@ def renderizar_admin_normativos(email):
         except Exception as e:
             st.error(f"Não foi possível concluir o vínculo municipal: {e}")
 
+    st.markdown("#### CPFL Santa Cruz — preparação do cadastro")
+    st.caption("GED-13 v46.0, residencial individual, 127/220 V. Rascunhos separados: SP (39 municípios), PR (3) e MG (3). Confirmar atendimento e tensão no endereço, especialmente áreas rurais e distritos.")
+    if st.button("Criar rascunhos CPFL Santa Cruz (SP, PR e MG)"):
+        try:
+            existentes = {str(p.get("uf") or "").upper() for p in perfis if perfil_santa_cruz_ged13(p)}
+            criados = []
+            for uf_santa in MUNICIPIOS_SANTA_CRUZ:
+                if uf_santa not in existentes:
+                    salvar_perfil(preparar_rascunho_santa_cruz(uf_santa, email))
+                    criados.append(uf_santa)
+            if criados:
+                st.success("Rascunhos Santa Cruz criados: " + ", ".join(criados))
+                st.rerun()
+            else:
+                st.info("Os três perfis Santa Cruz já existem. Nenhum registro foi alterado.")
+        except Exception as e:
+            st.error(f"Não foi possível concluir os rascunhos Santa Cruz: {e}. Clique novamente para criar apenas as UFs que faltarem.")
+
     st.markdown("#### CPFL Paulista — preparação do cadastro")
     st.caption("GED-13 v46.0, residencial individual, 127/220 V. Lista de 232 municípios; Lins e Piratininga exigem outro perfil de tensão. O cadastro começa em RASCUNHO, sem alterar perfis existentes.")
     if st.button("Criar rascunho CPFL Paulista (127/220 V)"):
@@ -615,6 +634,7 @@ def renderizar_admin_normativos(email):
             eh_ged13_cpfl = (
                 (str(p.get("concessionaria") or "").strip().casefold() == "cpfl piratininga"
                  or perfil_paulista_380(p)
+                 or perfil_santa_cruz_ged13(p)
                  or (perfil_paulista_ged13(p)
                      and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_neutro_v") == 127
                      and (regras_validacao.get("fornecimento") or {}).get("tensao_fase_fase_v") == 220))
@@ -793,6 +813,11 @@ def renderizar_admin_normativos(email):
                 pendencias_paulista = pendencias_ativacao_paulista(p)
                 pronto = pronto and not pendencias_paulista
                 for pendencia in pendencias_paulista:
+                    st.caption(pendencia)
+            if perfil_santa_cruz_ged13(p):
+                pendencias_santa = pendencias_ativacao_santa_cruz(p)
+                pronto = pronto and not pendencias_santa
+                for pendencia in pendencias_santa:
                     st.caption(pendencia)
             if not pronto:
                 st.info(

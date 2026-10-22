@@ -758,3 +758,80 @@ def renderizar_dados_entrada_cpfl(perfil, resultado, salvos, salvar, chave):
                     st.error(f"Não foi possível salvar os dados: {erro}")
                 else:
                     st.rerun()
+
+
+# Fonte municipal oficial Santa Cruz, consultada em 22/10/2026.
+FONTE_MUNICIPIOS_SANTA_CRUZ = "https://www.cpfl.com.br/santacruz/tensao-nominal"
+MUNICIPIOS_SANTA_CRUZ = {
+    "SP": [
+        "Águas de Santa Bárbara", "Alambari", "Arandu", "Avaré",
+        "Bernardino de Campos", "Caconde", "Canitar", "Casa Branca",
+        "Cerqueira César", "Chavantes", "Divinolândia", "Espírito Santo do Turvo",
+        "Guareí", "Iaras", "Ipaussu", "Itaí", "Itapetininga", "Itobi",
+        "Jaguariúna", "Manduri", "Mococa", "Óleo", "Ourinhos", "Paranapanema",
+        "Pedreira", "Piraju", "Santa Cruz do Rio Pardo", "São José do Rio Pardo",
+        "São Miguel Arcanjo", "São Pedro do Turvo", "São Sebastião da Grama",
+        "Sarapuí", "Sarutaiá", "Taguaí", "Tapiratiba", "Taquarituba",
+        "Tejupá", "Timburi", "Ubirajara",
+    ],
+    "PR": ["Barra do Jacaré", "Jacarezinho", "Ribeirão Claro"],
+    "MG": ["Arceburgo", "Itamogi", "Monte Santo de Minas"],
+}
+
+
+def perfil_santa_cruz_ged13(perfil):
+    return (str(perfil.get("concessionaria") or "").strip().casefold() == "cpfl santa cruz"
+            and str(perfil.get("documento") or "").strip().upper() == "GED-13"
+            and str(perfil.get("revisao") or "").strip() == "46.0")
+
+
+def santa_cruz_atende_localidade(uf, municipio):
+    nomes = MUNICIPIOS_SANTA_CRUZ.get(str(uf or "").strip().upper(), [])
+    return str(municipio or "").strip().casefold() in {n.casefold() for n in nomes}
+
+
+def preparar_rascunho_santa_cruz(uf, criado_por=""):
+    uf = str(uf or "").strip().upper()
+    if uf not in MUNICIPIOS_SANTA_CRUZ:
+        raise ValueError("UF fora do escopo Santa Cruz cadastrado.")
+    perfil = preparar_rascunho_paulista(criado_por)
+    perfil.update(concessionaria="CPFL Santa Cruz", uf=uf,
+                  municipios_atendidos=list(MUNICIPIOS_SANTA_CRUZ[uf]))
+    perfil["regras"]["observacoes"] = (
+        "CPFL Santa Cruz, residencial individual, 127/220 V. Fonte municipal: "
+        + FONTE_MUNICIPIOS_SANTA_CRUZ + ". "
+        "Distritos e localidades não são municípios adicionais. A lista municipal "
+        "não comprova atendimento integral: confirmar distribuidora e tensão no endereço. "
+        "Perfis separados por UF; ativação exige testes e conferência documental."
+    )
+    return perfil
+
+
+def pendencias_ativacao_santa_cruz(perfil):
+    regras = perfil.get("regras") or {}
+    pendencias = []
+    passou, _ = _validar_perfil_ged13(regras)
+    if not passou:
+        pendencias.append("Conclua todos os testes GED-13 de 127/220 V.")
+    faixas = (regras.get("fornecimento") or {}).get("faixas_modalidade_kw") or []
+    esperadas = [("Monofásico", 0.0, 12.0, True),
+                 ("Bifásico", 12.0, 25.0, False),
+                 ("Trifásico", 25.0, 75.0, False)]
+    if (len(faixas) != 3 or any(
+            not isinstance(faixa, dict)
+            or (faixa.get("modalidade"), faixa.get("min_kw"), faixa.get("max_kw"),
+                faixa.get("inclui_min")) != (modalidade, minimo, maximo, inclui_min)
+            or faixa.get("inclui_max") is not True
+            for faixa, (modalidade, minimo, maximo, inclui_min) in zip(faixas, esperadas))):
+        pendencias.append("Confira os limites de modalidade 12/25/75 kW e suas fronteiras.")
+    if not regras.get("fonte_conferida"):
+        pendencias.append("Confirme a conferência da fonte oficial.")
+    if perfil.get("fonte_oficial") != "https://sites.cpfl.com.br/documentos-tecnicos/GED-13.pdf":
+        pendencias.append("Confirme a referência oficial GED-13 v46.0.")
+    cidades = perfil.get("municipios_atendidos")
+    if (not isinstance(cidades, list) or not cidades
+            or any(not santa_cruz_atende_localidade(perfil.get("uf"), n) for n in cidades)):
+        pendencias.append("Vincule somente municípios Santa Cruz da UF selecionada.")
+    if regras.get("tipo_instalacao") != "Residencial individual":
+        pendencias.append("Este perfil atende instalações residenciais individuais.")
+    return pendencias
