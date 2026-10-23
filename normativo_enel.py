@@ -52,7 +52,9 @@ def preparar_rascunho_enel_sp(criado_por=''):
 
 
 def pendencias_ativacao_enel_sp(perfil):
-    pendencias = ['Concluir a auditoria da metodologia de demanda Enel SP e a integração/testes no projeto antes de publicar.']
+    pendencias = ['Concluir a revisão para publicação do fluxo declaratório Enel SP: o ensaio administrativo não libera uso por usuários comuns nem cálculo automático de demanda.']
+    if not (perfil.get('regras') or {}).get('auditoria_enel_sp_integracao_v1'):
+        pendencias.append('Consolidar o registro administrativo dos testes integrados declaratórios.')
     if (perfil.get('regras') or {}).get(CHAVE_AUDITORIA) != registro_entrada_enel_sp():
         pendencias.append('Registrar a auditoria atual das modalidades e do Anexo B.')
     if not (perfil.get('regras') or {}).get('fonte_conferida'):
@@ -440,3 +442,42 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
     return dict(r,status='ok',potencia_demanda_w=kw*1000,corrente_demanda_a=corrente,
                 disjuntor_geral_a=ref['disjuntor_referencia_a'],observacao=obs+' '+' '.join(avisos),
                 enel_declaracao=dict(d),enel_referencia_entrada=ref,enel_avisos=avisos)
+
+
+CHAVE_INTEGRACAO = 'auditoria_enel_sp_integracao_v1'
+CASOS_INTEGRACAO = (
+    ('KW', '12,12 kW; 55 A; referência B4; DG 63 A bipolar.'),
+    ('KVA', '12 kVA e FP 0,90 resultam em 10,80 kW; corrente declarada preservada em 55 A.'),
+    ('MEMORIAL', 'Memorial identifica Enel, responsável, metodologia, unidade e valores declarados.'),
+    ('ALIMENTADOR', '20 m; fase/neutro/PE 16 mm²; queda registrada 2,41 V (1,09%), limite configurado 2%.'),
+    ('EXCESSO', 'Demanda 19798 kW bloqueia geração e downloads; retorno a dados válidos libera o fluxo.'),
+    ('FP_ZERO', 'FP zero deixa demanda, corrente e DG pendentes; FP 0,90 restaura os resultados.'),
+    ('PERSISTENCIA', '12 kVA, FP 0,90, 55 A e 20 m permanecem após salvar, trocar de projeto e retornar.'),
+)
+
+
+def consolidar_integracao_enel_sp(perfil, responsavel, confirmacao=False):
+    """Registra confirmação administrativa; não executa nem homologa ensaios."""
+    from copy import deepcopy
+    from datetime import datetime, timezone
+    if not perfil_enel_sp(perfil) or perfil.get('status') != 'RASCUNHO':
+        raise ValueError('A consolidação exige perfil Enel São Paulo em RASCUNHO.')
+    if confirmacao is not True or not str(responsavel or '').strip():
+        raise ValueError('Confirme os testes e identifique o administrador responsável pelo registro.')
+    regras = deepcopy(perfil.get('regras') or {})
+    if regras.get(CHAVE_AUDITORIA) != registro_entrada_enel_sp() or regras.get(CHAVE_MOTORES) != registro_motores_enel_sp():
+        raise ValueError('Registre primeiro as auditorias atuais de entrada e motores.')
+    regras[CHAVE_INTEGRACAO] = {
+        'schema': 1, 'versao_ensaiada': '13.6.335',
+        'registrado_em': datetime.now(timezone.utc).isoformat(),
+        'registrado_por': str(responsavel).strip(),
+        'origem': 'Testes de interface e PDFs conferidos pelo usuário; persistência e bloqueio por excesso confirmados por relato.',
+        'escopo': 'Ensaio administrativo; rede aérea urbana estrela 127/220 V; bifásico; Barueri/SP; carga instalada 19,798 kW; corrente 55 A.',
+        'casos': [{'id': codigo, 'resultado': 'CONFIRMADO PELO ADMINISTRADOR', 'descricao': texto} for codigo, texto in CASOS_INTEGRACAO],
+        'limites': ['Não equivale à aprovação técnica ou da distribuidora.',
+                    'FP zero conferido no QDC; botão e downloads nesse cenário não documentados nos prints.',
+                    'Não valida outros municípios, modalidades, tensões, correntes ou cargas especiais por este ensaio.',
+                    'Estimativa automática de demanda continua bloqueada; publicação permanece pendente.'],
+        'aprovacao_automatica': False,
+    }
+    return regras

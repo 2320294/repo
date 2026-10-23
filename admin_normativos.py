@@ -481,7 +481,7 @@ def renderizar_admin_normativos(email):
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             if perfil_enel_sp(p):
-                st.info("Cadastro documental inicial. Os testes abaixo verificam o cadastro, não o dimensionamento elétrico. A seção de entrada abaixo oferece testes isolados; demanda e integração ao projeto continuam pendentes, com ativação bloqueada.")
+                st.info("Auditorias de cadastro, entrada, motores e integração declaratória têm escopos distintos. O registro dos ensaios administrativos não ativa o perfil nem aprova a entrada.")
                 st.write("**Municípios vinculados:** " + ", ".join(p.get("municipios_atendidos") or []))
                 st.write((p.get("regras") or {}).get("observacoes", ""))
                 if st.button("Conferir cadastro Enel SP", key=f"auditar_enel_{p.get('id')}"):
@@ -556,6 +556,25 @@ def renderizar_admin_normativos(email):
                             resultado_motor = consultar_motor_enel_sp(categoria_motor, potencia_motor, ligacao_motor, partida_motor, quantidade=quantidade_motor, partida_simultanea={"Sim":True,"Não":False}.get(simult_motor), reducao_confirmada=reducao_motor, protecoes_confirmadas=protecao_motor)
                             st.write(resultado_motor["motivo"])
                             st.write({"Limite da Tabela 11 (cv)":resultado_motor["limite_cv"], "Potência verificada (cv)":resultado_motor["potencia_verificada_cv"]})
+                st.markdown("#### Consolidação dos testes integrados — demanda declarada")
+                from normativo_enel import CHAVE_INTEGRACAO, CASOS_INTEGRACAO, consolidar_integracao_enel_sp
+                st.dataframe([{"Teste": codigo, "Resultado observado": texto} for codigo, texto in CASOS_INTEGRACAO], hide_index=True, use_container_width=True)
+                st.caption("Rodada 13.6.335: ensaio fictício bifásico em Barueri/SP. Registro por confirmação administrativa; não executa os testes novamente.")
+                consolidado = (p.get("regras") or {}).get(CHAVE_INTEGRACAO)
+                if consolidado:
+                    st.success("Rodada de testes integrados registrada. Perfil permanece em RASCUNHO.")
+                    st.write({"Versão ensaiada": consolidado.get("versao_ensaiada"), "Registrado por": consolidado.get("registrado_por"), "Data UTC": consolidado.get("registrado_em")})
+                    for limite in consolidado.get("limites", []):
+                        st.caption(limite)
+                else:
+                    confirma_integracao = st.checkbox("Confirmo os resultados acima e seus limites de ensaio administrativo, sem aprovação técnica da entrada.", key=f"confirma_integracao_enel_{p.get('id')}")
+                    if st.button("Consolidar testes integrados Enel SP", disabled=not confirma_integracao, key=f"consolidar_integracao_enel_{p.get('id')}"):
+                        try:
+                            regras_consolidadas = consolidar_integracao_enel_sp(p, email, confirma_integracao)
+                            salvar_perfil({"regras": regras_consolidadas}, perfil_id=p.get("id"))
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Não foi possível consolidar: {exc}")
                 # Evita apresentar o editor genérico de fatores como regras Enel.
                 continue
             if eh_perfil_elektro(p):
