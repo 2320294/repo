@@ -100,6 +100,32 @@ def _quebrar_linhas(c, text, maxw, font='Helvetica', size=4.6, max_linhas=3, min
     if atual: linhas.append(atual.rstrip())
     return linhas[:max_linhas], fs
 
+def _centralizar_conteudo(c, centro_x, fundo, altura, linhas1, fs1, linhas2, fs2):
+    """Centraliza o bloco equipamento/ambiente na área branca da etiqueta."""
+    from reportlab.pdfbase.pdfmetrics import getAscentDescent
+    linhas = [(texto, 'Helvetica-Bold', fs1) for texto in linhas1]
+    linhas += [(texto, 'Helvetica', fs2) for texto in linhas2]
+    if not linhas:
+        return
+    intervalo = 0.25 * mm
+    escala = 1.0
+    def medidas():
+        return [getAscentDescent(fonte, tamanho * escala) for _, fonte, tamanho in linhas]
+    limites = medidas()
+    total = sum(a - d for a, d in limites) + intervalo * (len(linhas) - 1)
+    disponivel = altura - 1.2 * mm
+    if total > disponivel:
+        escala = (disponivel - intervalo * (len(linhas) - 1)) / sum(a - d for a, d in limites)
+        limites = medidas()
+        total = sum(a - d for a, d in limites) + intervalo * (len(linhas) - 1)
+    topo_texto = fundo + (altura + total) / 2
+    for (texto, fonte, tamanho), (ascendente, descendente) in zip(linhas, limites):
+        base = topo_texto - ascendente
+        c.setFont(fonte, tamanho * escala)
+        c.drawCentredString(centro_x, base, texto)
+        topo_texto = base + descendente - intervalo
+
+
 def _descricao(circ, tipo):
     nome = _nome_tipo(circ,tipo)
     amb = _txt(circ.get('ambiente')) or '-'
@@ -291,12 +317,9 @@ def gerar_pdf_etiquetas_qdc(nome_projeto, circuitos, disjuntor_geral_a=None, pol
             linhas2,fs2=_quebrar_linhas(c,item['linha2'],w-1.8*mm,'Helvetica',5.2,3,2.8)
             if item['tipo'] != 'GERAL':
                 linhas2,fs2=_ambientes_etiqueta(c,item['linha2'],w-1.8*mm)
-            if len(linhas1)==1:
-                c.setFont('Helvetica-Bold',fs1); c.drawCentredString(x+w/2,y-6.15*mm,linhas1[0]); base_y=y-8.45*mm
-            else:
-                c.setFont('Helvetica-Bold',fs1); c.drawCentredString(x+w/2,y-5.55*mm,linhas1[0]); c.drawCentredString(x+w/2,y-7.15*mm,linhas1[1]); base_y=y-8.75*mm
-            c.setFont('Helvetica',fs2)
-            for j,linha_txt in enumerate(linhas2): c.drawCentredString(x+w/2,base_y-j*1.45*mm,linha_txt)
+            _centralizar_conteudo(
+                c, x+w/2, y-h, h-topo, linhas1, fs1, linhas2, fs2,
+            )
             x+=w
         y-=18*mm
 
