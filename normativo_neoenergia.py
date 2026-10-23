@@ -62,7 +62,7 @@ def preparar_cargas_projeto_neoenergia(tabela):
             grupo='a' if tipo!='TUE' else ('Ausente' if quantidade==0 and w==0 else 'Pendente')
             itens.append({'ID':f'{i}:{tipo}','Ambiente':str(ambiente.get('Ambiente') or f'Linha {i+1}'),
                 'Tipo':tipo,'Equipamento':str(ambiente.get('Equipamento TUE') or '') if tipo=='TUE' else tipo,
-                'Quantidade original':q,'Total original (VA)':ambiente.get(chave_va),
+                'Quantidade original':q,'Previsão legada (VA)':ambiente.get(chave_va),
                 'Total original (W)':ambiente.get(chave_w),'Grupo':grupo,'Quantidade conferida':quantidade,
                 'Potência total conferida (W)':w,'FP para grupos d/f':None})
     return itens
@@ -142,7 +142,7 @@ def testar_preparacao_projeto_neoenergia():
     verifica('Nenhum dado original alterado pelo agrupamento',origem==antes)
     legado=deepcopy(origem);legado[0]['Carga Ilum. (VA)']=legado[0].pop('Carga Ilum. (W)')
     copias=preparar_cargas_projeto_neoenergia(legado)
-    verifica('VA legado não convertido em W',copias[0]['Potência total conferida (W)'] is None and copias[0]['Total original (VA)']==10000)
+    verifica('VA legado não convertido em W',copias[0]['Potência total conferida (W)'] is None and copias[0]['Previsão legada (VA)']==10000)
     verifica('W legado ausente bloqueia agrupamento',agrupar_cargas_projeto_neoenergia(legado,copias)['linhas'] is None)
     so_unit=deepcopy(origem);so_unit[0]['Pot. Unit. TUE (W)']=5500;so_unit[0].pop('Carga TUE (W)')
     verifica('Potência unitária W é multiplicada pela quantidade',next(r for r in preparar_cargas_projeto_neoenergia(so_unit) if r['ID']=='0:TUE')['Potência total conferida (W)']==11000)

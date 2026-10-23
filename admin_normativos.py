@@ -643,12 +643,12 @@ def renderizar_admin_normativos(email):
                                 st.write("**Projeto selecionado:** " + nome_projeto_bloco)
                                 st.caption("Origem: tabela de cargas da sessão deste projeto, incluindo alterações ainda não salvas. Abaixo é uma cópia: nada será gravado no projeto. Mudanças na origem reiniciam esta conferência.")
                                 st.caption("Classifique: a iluminação/TUG; b chuveiros/torneiras/passagem/ferros; c boiler; d secadoras/lavadoras/lava-louças/micro-ondas; e somente forno; f ar condicionado individual; i bombas/hidromassagem. Ausente exige quantidade e potência zero. Pendente ou Fora do escopo bloqueia o ensaio.")
-                                st.caption("VA originais são apenas exibidos; confira a potência ativa TOTAL em W. Para d, informe FP 0,92 normativo ou fabricante; para f, FP de placa/catálogo. TUEs não são classificadas automaticamente.")
+                                st.caption("VA legados são uma previsão anterior, preservada apenas para rastreabilidade; não são a potência aparente atual nem servem para deduzir FP. Os totais atuais em W vêm da etapa Cargas; confira a potência ativa TOTAL em W. Para d, informe FP 0,92 normativo ou fabricante; para f, FP de placa/catálogo. TUEs não são classificadas automaticamente.")
                                 df_preparacao_bloco = pd.DataFrame(copia_projeto_bloco)
                                 for coluna_preparacao in ['Quantidade conferida','Potência total conferida (W)','FP para grupos d/f']:
                                     df_preparacao_bloco[coluna_preparacao]=pd.to_numeric(df_preparacao_bloco[coluna_preparacao],errors='coerce')
                                 conferidas_projeto_bloco = st.data_editor(df_preparacao_bloco,
-                                    disabled=['ID','Ambiente','Tipo','Equipamento','Quantidade original','Total original (VA)','Total original (W)'],
+                                    disabled=['ID','Ambiente','Tipo','Equipamento','Quantidade original','Previsão legada (VA)','Total original (W)'],
                                     column_config={'Grupo':st.column_config.SelectboxColumn('Grupo',options=['Pendente','Ausente','a','b','c','d','e','f','i','Fora do escopo'])},
                                     num_rows='fixed',hide_index=True,use_container_width=True,key=chave_preparacao_bloco+'_cargas')
                                 tensao_projeto_teste_bloco = st.selectbox("Tensão FF/FN conferida para este projeto",tensoes_integracao_bloco,index=tensoes_integracao_bloco.index('380/220 V'),key=chave_preparacao_bloco+'_tensao')

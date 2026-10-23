@@ -63,6 +63,7 @@ def renderizar_edicao_cargas(dados_ambientes, auditoria_elektro=False):
 
     def renderizar_ambiente(row, indice):
         ambiente = row["Ambiente"]
+        chave_ambiente = f"{st.session_state.get('projeto_ativo', 'SEM_PROJETO')}_{ambiente}"
         with st.container(border=True):
             st.markdown(
                 f"**Ambiente: {ambiente}**  \n"
@@ -72,21 +73,25 @@ def renderizar_edicao_cargas(dados_ambientes, auditoria_elektro=False):
 
             c1, c2 = st.columns(2)
             with c1:
-                q_ilum = st.number_input("Qtd Ilum", min_value=0, value=int(row.get("Qtd Ilum.", 1)), key=f"ilum_{ambiente}")
+                q_ilum = st.number_input("Qtd Ilum", min_value=0, value=int(row.get("Qtd Ilum.", 1)), key=f"ilum_{chave_ambiente}")
             with c2:
-                p_ilum = st.number_input("Pot Ilum (W)", min_value=0, value=valor_w(row, "Pot. Unit. Ilum (W)", "Pot. Unit. Ilum (VA)", 100), key=f"pilum_{ambiente}")
+                p_ilum = st.number_input("Pot Ilum por ponto (W)", min_value=0, value=valor_w(row, "Pot. Unit. Ilum (W)", "Pot. Unit. Ilum (VA)", 100), key=f"pilum_{chave_ambiente}")
 
             c3, c4 = st.columns(2)
             with c3:
-                qtd_tugs = st.number_input("Qtd TUG", min_value=0, value=int(row.get("Qtd TUG", row.get("TUGs (Qtd)", 1))), key=f"tugs_{ambiente}")
+                qtd_tugs = st.number_input("Qtd TUG", min_value=0, value=int(row.get("Qtd TUG", row.get("TUGs (Qtd)", 1))), key=f"tugs_{chave_ambiente}")
             with c4:
-                pot_tug_unit = st.number_input("Pot TUG (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUG (W)", "Pot. Unit. TUG (VA)", 100), key=f"ptug_{ambiente}")
+                pot_tug_unit = st.number_input("Pot TUG por ponto (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUG (W)", "Pot. Unit. TUG (VA)", 100), key=f"ptug_{chave_ambiente}")
 
             c5, c6 = st.columns(2)
             with c5:
-                qtd_tue = st.number_input("Qtd TUE", min_value=0, value=int(row.get("Qtd TUE", 0)), key=f"tue_{ambiente}")
+                qtd_tue = st.number_input("Qtd TUE", min_value=0, value=int(row.get("Qtd TUE", 0)), key=f"tue_{chave_ambiente}")
             with c6:
-                pot_tue_unit = st.number_input("Pot TUE (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUE (W)", "Pot. Unit. TUE (VA)", 0), key=f"ptue_{ambiente}")
+                pot_tue_unit = st.number_input("Pot TUE por equipamento (W)", min_value=0, value=valor_w(row, "Pot. Unit. TUE (W)", "Pot. Unit. TUE (VA)", 0), key=f"ptue_{chave_ambiente}")
+
+            st.caption(f"Totais atuais: iluminação {q_ilum * p_ilum} W · TUG {qtd_tugs * pot_tug_unit} W · TUE {qtd_tue * pot_tue_unit} W.")
+            if any(c in row for c in ("Carga Ilum. (VA)", "Carga TUGs (VA)", "Carga TUE (VA)")):
+                st.caption("Os campos legados em VA pertencem à previsão anterior. Não são recalculados como W nem confirmam o fator de potência. Os totais atuais acima seguem os valores por ponto desta tela.")
 
             equipamento_tue_padrao = str(row.get("Equipamento TUE", "-"))
             equipamento_tue_padrao = equipamento_tue_padrao.replace("Ar-Condicionado", "Ar Condicionado")
@@ -95,7 +100,7 @@ def renderizar_edicao_cargas(dados_ambientes, auditoria_elektro=False):
             eq_tue = st.text_input(
                 f"Equipamento TUE ({ambiente})",
                 value=equipamento_tue_padrao,
-                key=f"eq_{ambiente}"
+                key=f"eq_{chave_ambiente}"
             )
             if auditoria_elektro and qtd_tue > 0 and "/" in eq_tue:
                 st.caption("Para a auditoria Elektro, substitua a descrição com '/' "
