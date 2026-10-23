@@ -451,6 +451,11 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
         perfil_enel = perfil_por_id(rede.get("perfil_normativo_id"))
     except Exception:
         perfil_enel = None
+    from normativo_neoenergia import perfil_bloco_neoenergia
+    if (perfil_bloco_neoenergia(perfil_enel or {}) or perfil_bloco_neoenergia({"concessionaria":rede.get("perfil_normativo_concessionaria")})):
+        return dict(pot, status="conferencia_tecnica", metodo=metodo,
+            potencia_demanda_w=None, corrente_demanda_a=None, disjuntor_geral_a=None,
+            observacao="Distribuidora do bloco Neoenergia em cadastro documental. Municípios, demanda e entrada ainda não auditados; enquadramento indisponível.")
     if (perfil_enel_sp(perfil_enel or {}) or metodo == METODO_DECLARADO
             or str(rede.get("perfil_normativo_concessionaria") or "").casefold() == "enel são paulo"):
         import streamlit as st

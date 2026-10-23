@@ -1,3 +1,4 @@
+from normativo_neoenergia import perfil_bloco_neoenergia, planejar_bloco_neoenergia, cadastrar_bloco_neoenergia, testar_bloco_neoenergia, pendencias_bloco_neoenergia, CHAVE_BLOCO
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -416,6 +417,22 @@ def renderizar_admin_normativos(email):
         return
 
     with st.expander("➕ Novo perfil normativo", expanded=not bool(perfis)):
+        st.markdown("#### Bloco Neoenergia — quatro distribuidoras")
+        st.caption("Coelba/BA, Pernambuco/PE, Cosern/RN e Brasília/DF. Cadastro documental em RASCUNHO; municípios e regras elétricas regionais pendentes. Perfis existentes serão preservados.")
+        plano_neoenergia = planejar_bloco_neoenergia(perfis, email)
+        st.dataframe([{"Distribuidora":i["perfil"]["concessionaria"], "UF":i["perfil"]["uf"], "Norma":i["perfil"]["documento"] + " Rev. " + i["perfil"]["revisao"], "Ação":i["acao"]} for i in plano_neoenergia], hide_index=True, use_container_width=True)
+        if st.button("Executar testes do cadastro em lote Neoenergia", key="testar_bloco_neoenergia"):
+            testes_bloco = testar_bloco_neoenergia()
+            st.dataframe(testes_bloco, hide_index=True, use_container_width=True)
+            st.write(f"Cadastro: {sum(t['Resultado']=='PASSOU' for t in testes_bloco)}/{len(testes_bloco)} testes. Não valida cálculos elétricos.")
+        if st.button("Cadastrar bloco Neoenergia — 4 rascunhos", key="cadastrar_bloco_neoenergia"):
+            resultados_bloco = cadastrar_bloco_neoenergia(lambda:listar_perfis(False, administrativo=True), salvar_perfil, email)
+            st.session_state["resultado_bloco_neoenergia"] = resultados_bloco
+            st.rerun()
+        if st.session_state.get("resultado_bloco_neoenergia"):
+            st.dataframe(st.session_state["resultado_bloco_neoenergia"], hide_index=True, use_container_width=True)
+            st.caption("O lote pode ser repetido para retomar erros: cadastros já existentes não são alterados. O banco confirma cada gravação individualmente.")
+
         st.caption("Enel São Paulo — 24 municípios: cadastro documental inicial, sem cálculo automático liberado.")
         if st.button("Preparar perfil Enel São Paulo (24 municípios)"):
             try:
@@ -477,9 +494,21 @@ def renderizar_admin_normativos(email):
     st.subheader("Perfis cadastrados")
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
+        if perfil_bloco_neoenergia(p):
+            alcance = "território pendente"
         titulo = f"{p.get('concessionaria','')} — {alcance}/{p.get('uf','')} — {p.get('documento') or 'Sem documento'} {p.get('revisao') or ''}"
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
+            if perfil_bloco_neoenergia(p):
+                st.info("Cadastro documental do bloco Neoenergia. Municípios e cálculos não liberados; mantenha em RASCUNHO.")
+                registro_bloco = (p.get("regras") or {}).get(CHAVE_BLOCO) or {}
+                st.write({"Documento":p.get("documento"), "Revisão":p.get("revisao"), "Aprovação do documento":registro_bloco.get("data_aprovacao"), "Vigência":p.get("vigencia") or "A conferir", "Etapa":registro_bloco.get("etapa", "Cadastro pendente de auditoria")})
+                if registro_bloco.get("portal"):
+                    st.markdown("Portal oficial de normas: " + registro_bloco["portal"])
+                for pendencia_bloco in pendencias_bloco_neoenergia(p):
+                    st.warning(pendencia_bloco)
+                st.caption("Este rascunho não aparece para usuários e não aplica regras da Elektro ou da CPFL. A auditoria regional será adicionada na próxima etapa.")
+                continue
             if perfil_enel_sp(p):
                 st.info("Auditorias de cadastro, entrada, motores e integração declaratória têm escopos distintos. O registro dos ensaios administrativos não ativa o perfil nem aprova a entrada.")
                 st.write("**Municípios vinculados:** " + ", ".join(p.get("municipios_atendidos") or []))

@@ -25,6 +25,9 @@ from concessionarias import CHAVE_PARAMETROS_REDE
 def pendencia_exportacao_enel(tabela, config):
     """Revalida o ensaio Enel sem reutilizar a demanda congelada."""
     rede = dict((config or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+    from normativo_neoenergia import perfil_bloco_neoenergia
+    if perfil_bloco_neoenergia({"concessionaria":rede.get("perfil_normativo_concessionaria")}):
+        return "Distribuidora Neoenergia em cadastro documental; cálculo e exportação ainda não liberados."
     from normativo_enel import METODO_DECLARADO
     enel = (str(rede.get("perfil_normativo_concessionaria") or "").casefold() == "enel são paulo"
             or rede.get("metodo_demanda") == METODO_DECLARADO
@@ -32,7 +35,10 @@ def pendencia_exportacao_enel(tabela, config):
     try:
         from perfis_normativos import perfil_por_id
         from normativo_enel import perfil_enel_sp
-        enel = enel or perfil_enel_sp(perfil_por_id(rede.get("perfil_normativo_id")))
+        perfil_atual_exportacao = perfil_por_id(rede.get("perfil_normativo_id"))
+        if perfil_bloco_neoenergia(perfil_atual_exportacao):
+            return "Distribuidora Neoenergia em cadastro documental; cálculo e exportação ainda não liberados."
+        enel = enel or perfil_enel_sp(perfil_atual_exportacao)
     except Exception:
         pass
     if not enel:

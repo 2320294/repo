@@ -5,6 +5,9 @@ STATUS_PUBLICADOS = {"ATIVO"}
 
 def perfil_atende_municipio(perfil, uf, municipio):
     """Respeita a lista explícita; mantém os perfis antigos de cidade/UF."""
+    from normativo_neoenergia import perfil_bloco_neoenergia
+    if perfil_bloco_neoenergia(perfil):
+        return False  # Cadastro documental ainda sem motor/território liberados.
     uf_perfil = str(perfil.get("uf") or "").strip().upper()
     if uf_perfil and uf_perfil != str(uf or "").strip().upper():
         return False
@@ -108,6 +111,10 @@ def atualizar_status(perfil_id, status, validado_por=""):
             pendencias = pendencias_ativacao_rge(perfil)
             if pendencias:
                 raise ValueError("Perfil RGE não pode ser publicado: " + " ".join(pendencias))
+        from normativo_neoenergia import pendencias_bloco_neoenergia
+        pendencias_bloco = pendencias_bloco_neoenergia(perfil)
+        if pendencias_bloco:
+            raise ValueError("Bloco Neoenergia não pode ser publicado: " + " ".join(pendencias_bloco))
         from normativo_enel import perfil_enel_sp, pendencias_ativacao_enel_sp
         if perfil_enel_sp(perfil):
             pendencias = pendencias_ativacao_enel_sp(perfil)
