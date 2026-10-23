@@ -1,3 +1,4 @@
+from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
 from normativo_cpfl import preparar_rascunho_rge, perfil_rge_ged13, perfil_ged13_380, pendencias_ativacao_rge
 from normativo_cpfl import preparar_rascunho_santa_cruz, perfil_santa_cruz_ged13, pendencias_ativacao_santa_cruz, MUNICIPIOS_SANTA_CRUZ
@@ -479,7 +480,7 @@ def renderizar_admin_normativos(email):
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             if perfil_enel_sp(p):
-                st.info("Cadastro documental inicial. Os testes abaixo verificam o cadastro, não o dimensionamento elétrico. A ativação permanece bloqueada até a auditoria normativa e a implementação do cálculo específico.")
+                st.info("Cadastro documental inicial. Os testes abaixo verificam o cadastro, não o dimensionamento elétrico. A seção de entrada abaixo oferece testes isolados; demanda e integração ao projeto continuam pendentes, com ativação bloqueada.")
                 st.write("**Municípios vinculados:** " + ", ".join(p.get("municipios_atendidos") or []))
                 st.write((p.get("regras") or {}).get("observacoes", ""))
                 if st.button("Conferir cadastro Enel SP", key=f"auditar_enel_{p.get('id')}"):
@@ -489,6 +490,36 @@ def renderizar_admin_normativos(email):
                     st.write(f"Cadastro: {passou}/{len(testes_enel)} verificações. Sem aprovação de cálculo ou entrada.")
                 for pendencia in pendencias_ativacao_enel_sp(p):
                     st.caption(pendencia)
+                st.markdown("#### Auditoria elétrica Enel SP — rede aérea estrela 127/220 V")
+                if st.button("Registrar auditoria de modalidades e Anexo B", key=f"registrar_entrada_enel_{p.get('id')}"):
+                    try:
+                        if p.get("status") != "RASCUNHO":
+                            raise ValueError("O registro desta auditoria inicial exige perfil em RASCUNHO.")
+                        salvar_perfil({"regras": registrar_auditoria_entrada_enel_sp(p)}, perfil_id=p.get("id"))
+                        st.success("Auditoria de entrada registrada. Perfil mantido em RASCUNHO.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Não foi possível registrar a auditoria: {exc}")
+                if (p.get("regras") or {}).get(CHAVE_AUDITORIA) == registro_entrada_enel_sp():
+                    registro_enel = registro_entrada_enel_sp()
+                    st.write("**Referências:** " + "; ".join(registro_enel["referencias"]))
+                    st.dataframe(registro_enel["entrada"], hide_index=True, use_container_width=True)
+                    for restricao in registro_enel["restricoes"]:
+                        st.caption(restricao)
+                    if st.button("Executar testes elétricos isolados Enel SP", key=f"testar_entrada_enel_{p.get('id')}"):
+                        casos_enel = testar_entrada_enel_sp()
+                        st.dataframe(casos_enel, hide_index=True, use_container_width=True)
+                        aprovados = sum(t["Resultado"] == "PASSOU" for t in casos_enel)
+                        st.write(f"Prévia isolada: {aprovados}/{len(casos_enel)} testes. Demanda e aprovação da entrada não incluídas.")
+                    with st.expander("Consultar prévia isolada de entrada Enel SP"):
+                        st.caption("Somente residencial urbano, estrela 127/220 V, rede aérea, sem cargas especiais. Corrente de demanda previamente determinada pelo responsável técnico. Esta consulta não modifica o projeto aberto.")
+                        carga_enel = st.number_input("Carga instalada (kW)", min_value=0.0, value=19.798, format="%.3f", key=f"carga_aud_enel_{p.get('id')}")
+                        corrente_enel = st.number_input("Corrente de demanda informada (A)", min_value=0.0, value=27.6, key=f"corrente_aud_enel_{p.get('id')}")
+                        if st.button("Consultar referência Enel", key=f"consultar_aud_enel_{p.get('id')}"):
+                            resultado_enel = previa_entrada_enel_sp(carga_enel, corrente_enel)
+                            st.write(resultado_enel["motivo"])
+                            if resultado_enel.get("referencia"):
+                                st.write(resultado_enel["referencia"])
                 # Evita apresentar o editor genérico de fatores como regras Enel.
                 continue
             if eh_perfil_elektro(p):
