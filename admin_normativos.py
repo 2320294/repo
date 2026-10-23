@@ -575,10 +575,10 @@ def renderizar_admin_normativos(email):
                             st.rerun()
                         except Exception as exc:
                             st.error(f"Não foi possível consolidar: {exc}")
-                st.markdown("#### Publicação restrita — Barueri/SP")
+                st.markdown("#### Preparação inicial — piloto Barueri/SP")
                 from normativo_enel import ESCOPO_PUBLICACAO, preparar_publicacao_enel_sp, publicacao_enel_registrada, testar_publicacao_enel_sp
                 st.write(ESCOPO_PUBLICACAO)
-                st.caption("A lista de concessão mantém 24 municípios; esta publicação disponibiliza o perfil somente em Barueri. Outros casos permanecem fora do fluxo publicado. Não é homologação da distribuidora.")
+                st.caption("A preparação inicial libera somente Barueri. A ampliação territorial pode ser registrada abaixo, preservando as restrições elétricas. Não é homologação da distribuidora.")
                 if st.button("Executar testes de publicação restrita", key=f"testar_pub_enel_{p.get('id')}"):
                     testes_publicacao = testar_publicacao_enel_sp()
                     st.dataframe(testes_publicacao, hide_index=True, use_container_width=True)
@@ -604,6 +604,29 @@ def renderizar_admin_normativos(email):
                     if p.get("status") in ("VALIDADO", "ATIVO") and st.button("Retornar a RASCUNHO", key=f"rascunho_pub_enel_{p.get('id')}"):
                         atualizar_status(p.get("id"), "RASCUNHO", validado_por=email)
                         st.rerun()
+                if p.get("status") == "ATIVO" and not pendencias_ativacao_enel_sp(p):
+                    st.markdown("#### Ampliação territorial — fluxo declaratório")
+                    from normativo_enel import MUNICIPIOS_ENEL_SP, FONTE_MUNICIPIOS, CHAVE_TERRITORIO, municipios_publicados_enel_sp, registrar_territorio_enel_sp, testar_territorio_enel_sp
+                    st.write("Municípios atualmente liberados: " + ", ".join(municipios_publicados_enel_sp(p)))
+                    st.markdown("Fonte territorial: " + FONTE_MUNICIPIOS)
+                    st.caption("Escolha as cidades a liberar. Confirme a tensão e a rede de cada instalação; a cidade não determina automaticamente a tensão. Os testes abaixo verificam o software, não instalações reais em cada município.")
+                    opcoes_territorio = [n for n in MUNICIPIOS_ENEL_SP if n in (p.get("municipios_atendidos") or [])]
+                    cidades_territorio = st.multiselect("Municípios para o fluxo declaratório restrito", opcoes_territorio, default=opcoes_territorio, key=f"cidades_territorio_enel_{p.get('id')}")
+                    if st.button("Executar testes territoriais Enel SP", key=f"testes_territorio_enel_{p.get('id')}"):
+                        testes_territorio = testar_territorio_enel_sp()
+                        st.dataframe(testes_territorio, hide_index=True, use_container_width=True)
+                        st.write(f"Software: {sum(t['Resultado']=='PASSOU' for t in testes_territorio)}/{len(testes_territorio)} casos territoriais.")
+                    confirma_territorio = st.checkbox("Conferi os municípios na fonte oficial e confirmo a ampliação apenas territorial, mantendo as restrições elétricas do fluxo declaratório.", key=f"confirmar_territorio_enel_{p.get('id')}")
+                    if st.button("Registrar municípios liberados Enel SP", disabled=not confirma_territorio, key=f"registrar_territorio_enel_{p.get('id')}"):
+                        try:
+                            regras_territorio = registrar_territorio_enel_sp(p, cidades_territorio, email, confirma_territorio)
+                            salvar_perfil({"regras": regras_territorio}, perfil_id=p.get("id"))
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Ampliação territorial não registrada: {exc}")
+                    registro_territorio = (p.get("regras") or {}).get(CHAVE_TERRITORIO)
+                    if registro_territorio:
+                        st.write({"Registrado por":registro_territorio.get("registrado_por"), "Data UTC":registro_territorio.get("registrado_em")})
                 # Evita apresentar o editor genérico de fatores como regras Enel.
                 continue
             if eh_perfil_elektro(p):

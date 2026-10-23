@@ -784,7 +784,8 @@ def gerar_memorial_pdf(
         story.append(Paragraph(escape("Perfil normativo: " + perfil_aplicado + "."), styles["Texto"]))
     if "enel" in perfil_aplicado.casefold():
         declaracao_enel = rede_memorial.get("enel_demanda_declarada") or {}
-        rotulo_enel = "FLUXO DECLARATÓRIO RESTRITO — Barueri/SP" if demanda_memorial.get("enel_fluxo_publicado") is True else "ENSAIO ADMINISTRATIVO"
+        municipio_enel = str(demanda_memorial.get("enel_municipio") or rede_memorial.get("municipio") or "Município não informado")
+        rotulo_enel = "FLUXO DECLARATÓRIO RESTRITO — " + municipio_enel + "/SP" if demanda_memorial.get("enel_fluxo_publicado") is True else "ENSAIO ADMINISTRATIVO"
         story.append(Paragraph(escape(rotulo_enel + " — demanda declarada; sem estimativa automática Enel SP."), styles["Texto"]))
         for titulo_enel, campo_enel in [("Responsável pela declaração", "responsavel"), ("Metodologia declarada", "metodologia")]:
             story.append(Paragraph(escape(titulo_enel + ": " + str(declaracao_enel.get(campo_enel) or "não informado")), styles["Texto"]))

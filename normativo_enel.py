@@ -368,9 +368,9 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
               and perfil.get('status') in ('RASCUNHO','VALIDADO'))
     if not publicado and not ensaio:
         return pendente('Perfil Enel não liberado para este usuário. Utilize o ensaio administrativo ou publique o fluxo restrito.')
-    if publicado and (str(rede.get('municipio') or '').strip().casefold() != 'barueri'
+    if publicado and (str(rede.get('municipio') or '').strip().casefold() not in {n.casefold() for n in municipios_publicados_enel_sp(perfil)}
                        or rede.get('tipo_fornecimento') != 'Bifásico'):
-        return pendente('Fluxo publicado restrito a Barueri/SP e fornecimento bifásico. Demais casos exigem análise técnica.')
+        return pendente('Fluxo publicado restrito aos municípios liberados e fornecimento bifásico. Demais casos exigem análise técnica.')
     regras=perfil.get('regras') or {}
     if (perfil.get('documento')!=DOCUMENTO or perfil.get('revisao')!='02'
             or regras.get(CHAVE_AUDITORIA)!=registro_entrada_enel_sp()
@@ -435,7 +435,7 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
     if instalada>38:avisos.append('Apresentar projeto de entrada para análise (7.8.1/Tabela 4).')
     if 50<instalada<=75:avisos.append('Nota 4 do item 7.4: eventual Grupo A depende de cargas perturbadoras e estudo da distribuidora; não é reenquadramento automático.')
     return dict(r,status='ok',potencia_demanda_w=kw*1000,corrente_demanda_a=corrente,
-                enel_fluxo_publicado=publicado,disjuntor_geral_a=ref['disjuntor_referencia_a'],observacao=obs+' '+' '.join(avisos),
+                enel_municipio=rede.get('municipio'),enel_fluxo_publicado=publicado,disjuntor_geral_a=ref['disjuntor_referencia_a'],observacao=obs+' '+' '.join(avisos),
                 enel_declaracao=dict(d),enel_referencia_entrada=ref,enel_avisos=avisos)
 
 
@@ -604,4 +604,95 @@ def testar_publicacao_enel_sp():
     caso('Escopo de publicação alterado',perfil=pp,esperado=False)
     pp=deepcopy(p);pp['regras'][CHAVE_INTEGRACAO]['registrado_por']='alterado'
     caso('Histórico alterado invalida preparação',perfil=pp,esperado=False)
+    return casos
+
+
+CHAVE_TERRITORIO = 'publicacao_enel_sp_territorio_v1'
+
+
+def _assinatura_publicacao(perfil):
+    import hashlib, json
+    return hashlib.sha256(json.dumps((perfil.get('regras') or {}).get(CHAVE_PUBLICACAO),
+        sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def municipios_publicados_enel_sp(perfil):
+    """Sem registro territorial válido, preserva somente o piloto de Barueri."""
+    if not publicacao_enel_registrada(perfil):
+        return []
+    reg = (perfil.get('regras') or {}).get(CHAVE_TERRITORIO) or {}
+    cidades = reg.get('municipios') if isinstance(reg, dict) else None
+    vinculadas = perfil.get('municipios_atendidos') or []
+    valido = (isinstance(cidades, list) and bool(cidades) and len(cidades) == len(set(cidades))
+        and all(n in MUNICIPIOS_ENEL_SP and n in vinculadas for n in cidades)
+        and 'Barueri' in cidades and reg.get('schema') == 1
+        and reg.get('fonte_municipios') == FONTE_MUNICIPIOS
+        and reg.get('fonte_conferida') is True
+        and reg.get('publicacao_assinatura') == _assinatura_publicacao(perfil)
+        and bool(reg.get('registrado_por')) and bool(reg.get('registrado_em'))
+        and reg.get('testes_software') == 'PASSOU')
+    return list(cidades) if valido else ['Barueri']
+
+
+def registrar_territorio_enel_sp(perfil, municipios, responsavel, fonte_confirmada=False, executar_testes=True):
+    from copy import deepcopy
+    from datetime import datetime, timezone
+    if (perfil.get('status') != 'ATIVO' or pendencias_ativacao_enel_sp(perfil)
+            or fonte_confirmada is not True or not str(responsavel or '').strip()):
+        raise ValueError('Exige perfil ATIVO com preparação válida, administrador identificado e fonte territorial conferida.')
+    if (not isinstance(municipios, list) or not municipios or 'Barueri' not in municipios
+            or len(municipios) != len(set(municipios))
+            or any(n not in MUNICIPIOS_ENEL_SP or n not in (perfil.get('municipios_atendidos') or []) for n in municipios)):
+        raise ValueError('Selecione municípios oficiais vinculados ao perfil, mantendo Barueri.')
+    if executar_testes and not all(t['Resultado'] == 'PASSOU' for t in testar_territorio_enel_sp()):
+        raise ValueError('Falha nos testes territoriais.')
+    regras = deepcopy(perfil.get('regras') or {})
+    regras[CHAVE_TERRITORIO] = {
+        'schema': 1, 'municipios': [n for n in MUNICIPIOS_ENEL_SP if n in municipios],
+        'fonte_municipios': FONTE_MUNICIPIOS, 'fonte_conferida': True,
+        'publicacao_assinatura': _assinatura_publicacao(perfil),
+        'registrado_por': str(responsavel).strip(), 'registrado_em': datetime.now(timezone.utc).isoformat(),
+        'versao_preparacao': '13.6.338', 'testes_software': 'PASSOU',
+        'limites': 'Ampliação territorial do fluxo declaratório; sem validação de tensão por município ou aprovação de instalações. Mantém bifásico aéreo urbano estrela 127/220 V, acima de 12 até 20 kW e até 100 A.',
+    }
+    regras['observacoes'] = 'Fluxo declaratório restrito aos municípios liberados na Administração; bifásico aéreo urbano estrela 127/220 V, acima de 12 até 20 kW, até 100 A. Tensão e condições da rede devem ser confirmadas para cada instalação pelo RT. Sem demanda automática ou aprovação da entrada.'
+    return regras
+
+
+def testar_territorio_enel_sp():
+    from copy import deepcopy
+    p = preparar_rascunho_enel_sp();p['id'] = 999
+    p['regras'] = registrar_auditoria_entrada_enel_sp(p)
+    p['regras'] = registrar_auditoria_motores_enel_sp(p)
+    p['regras'] = consolidar_integracao_enel_sp(p, 'TESTE AUTOMATIZADO', True)
+    p['regras'] = preparar_publicacao_enel_sp(p, 'TESTE AUTOMATIZADO', True, executar_testes=False)
+    p['status'] = 'ATIVO'
+    p['regras'] = registrar_territorio_enel_sp(p, list(MUNICIPIOS_ENEL_SP), 'TESTE AUTOMATIZADO', True, executar_testes=False)
+    rede = dict(uf='SP', municipio='Barueri', tipo_fornecimento='Bifásico', tensao_fornecimento='127/220 V',
+        metodo_demanda=METODO_DECLARADO, enel_demanda_declarada=dict(demanda=12,unidade='kVA',fator_potencia=.9,
+        corrente_max_a=55,responsavel='TESTE',metodologia='TESTE',confirmada_rt=True,escopo_confirmado=True,modalidade_confirmada=True))
+    casos = []
+    def caso(nome, cidade='Barueri', perfil=None, alteracoes=None, esperado=True):
+        r = deepcopy(rede);r['municipio']=cidade;r.update(alteracoes or {})
+        obtido = calcular_demanda_declarada_enel_sp([],r,perfil or p,{'total_w':19798},False)
+        ok = ((obtido['status']=='ok')==esperado and obtido['aprovacao_automatica'] is False)
+        casos.append({'Caso':nome,'Resultado':'PASSOU' if ok else 'FALHOU'})
+    for cidade in MUNICIPIOS_ENEL_SP:
+        caso('Município liberado: '+cidade,cidade)
+    for cidade in ['Santos','Guarujá','Campinas','']:
+        caso('Município não atendido: '+cidade,cidade,esperado=False)
+    for campo,valor in [('uf','RJ'),('tensao_fornecimento','220/380 V'),('tipo_fornecimento','Trifásico'),('metodo_demanda','Automático')]:
+        caso('Condições elétricas preservadas: '+campo,'São Paulo',alteracoes={campo:valor},esperado=False)
+    b=deepcopy(p);b['regras'].pop(CHAVE_TERRITORIO)
+    caso('Sem ampliação: Barueri preservada',perfil=b)
+    caso('Sem ampliação: São Paulo bloqueada','São Paulo',perfil=b,esperado=False)
+    b=deepcopy(p);b['regras'][CHAVE_TERRITORIO]['fonte_conferida']=False
+    caso('Fonte territorial não confirmada','São Paulo',perfil=b,esperado=False)
+    b=deepcopy(p);b['regras'][CHAVE_TERRITORIO]['publicacao_assinatura']='inválida'
+    caso('Registro territorial desatualizado','São Paulo',perfil=b,esperado=False)
+    b=deepcopy(p);b['regras'][CHAVE_TERRITORIO]['municipios'].append('Santos')
+    caso('Município indevido invalida expansão','São Paulo',perfil=b,esperado=False)
+    b=deepcopy(p);b['regras'][CHAVE_TERRITORIO]['municipios']=['Barueri','São Paulo']
+    caso('Subconjunto: São Paulo liberada','São Paulo',perfil=b)
+    caso('Subconjunto: Osasco bloqueada','Osasco',perfil=b,esperado=False)
     return casos

@@ -182,7 +182,9 @@ def renderizar_parametros_projeto(
         if perfil_enel_sp(p) and p.get("status") != "ATIVO":
             rotulo += " — ENSAIO ADMINISTRATIVO"
         elif perfil_enel_sp(p):
-            rotulo += " — declaratório restrito a Barueri/SP"
+            from normativo_enel import municipios_publicados_enel_sp
+            cidades_publicadas = municipios_publicados_enel_sp(p)
+            rotulo += " — declaratório restrito (" + str(len(cidades_publicadas)) + " município(s)/SP)"
         if p.get("municipio"):
             rotulo += f" — {p.get('municipio')}/{p.get('uf')}"
         rotulos_perfis.append(rotulo)
@@ -460,7 +462,7 @@ def renderizar_parametros_projeto(
     if enel_selecionada:
         enel_publicada = (perfil_selecionado or {}).get("status") == "ATIVO"
         if enel_publicada:
-            st.info("Enel SP — fluxo declaratório restrito a Barueri/SP: bifásico, rede aérea urbana estrela 127/220 V, até 100 A e carga instalada acima de 12 até 20 kW. Demanda e corrente exigem memorial do responsável técnico. Não aprova a entrada nem estima demanda automaticamente.")
+            st.info("Enel SP — fluxo declaratório restrito aos municípios liberados: bifásico, rede aérea urbana estrela 127/220 V, até 100 A e carga instalada acima de 12 até 20 kW. Demanda e corrente exigem memorial do responsável técnico. Não aprova a entrada nem estima demanda automaticamente.")
         else:
             st.info("Ensaio administrativo Enel SP: demanda declarada pelo responsável técnico; rede aérea estrela 127/220 V, até 100 A. Não utiliza fatores automáticos e não publica o perfil.")
         salvo_enel = rede.get(CHAVE_DECLARACAO) or {}

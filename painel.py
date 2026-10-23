@@ -1284,6 +1284,7 @@ def renderizar_painel_principal():
                 "detalhes_demanda": resultado_demanda.get("detalhes_demanda"),
                 "auditoria_entrada_cpfl": resultado_demanda.get("auditoria_entrada_cpfl"),
                 "enel_fluxo_publicado": resultado_demanda.get("enel_fluxo_publicado"),
+                "enel_municipio": resultado_demanda.get("enel_municipio"),
                 "origem": "QDC_DEMANDA_FECHADA_REV212",
             }
             rede_integrada["alimentador_geral"] = {
