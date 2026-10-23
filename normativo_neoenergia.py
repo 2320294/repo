@@ -2,11 +2,14 @@
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
-from urllib.request import Request, urlopen
+import hashlib
+from pathlib import Path
 
 CHAVE_TERRITORIO = 'territorio_bloco_neoenergia_v1'
 FONTE_TERRITORIO = 'https://www.neoenergia.com/distribuicao'
 FONTE_EXCLUSOES_BA = 'https://agrese.se.gov.br/distribuidorasepermissionarias/'
+FONTE_CATALOGO = 'https://github.com/kelvins/municipios-brasileiros'
+HASH_CATALOGO = '7c8a2882044fa649593ef0402375a25f8ed7e2c60a48280af6746a9d07c4c219'
 
 
 def referencias_regionais_neoenergia(perfil):
@@ -19,14 +22,26 @@ def referencias_regionais_neoenergia(perfil):
     return []
 
 
-def _baixar_municipios_neoenergia(uf):
-    url = f'https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios?orderBy=nome'
-    req = Request(url, headers={'User-Agent':'AutoEletrica/13.6.340', 'Accept':'application/json'})
-    with urlopen(req, timeout=12) as resposta:
-        dados = json.loads(resposta.read().decode('utf-8-sig'))
-    if not isinstance(dados, list):
-        raise ValueError('Resposta do IBGE inválida; vínculo não realizado.')
-    return [item['nome'] for item in dados if isinstance(item, dict) and isinstance(item.get('nome'), str)]
+def _validar_catalogo_neoenergia(conteudo, uf):
+    if hashlib.sha256(conteudo).hexdigest() != HASH_CATALOGO:
+        raise ValueError('Catálogo territorial divergente do pacote; reinstale o arquivo municipios_neoenergia.json.')
+    dados = json.loads(conteudo)
+    codigo_uf = {'BA':'29','PE':'26','RN':'24','DF':'53'}.get(uf)
+    if not codigo_uf or dados.get('schema') != 1 or dados.get('fonte_nomes') != FONTE_CATALOGO:
+        raise ValueError('Catálogo territorial incompatível.')
+    itens = dados.get('ufs', {}).get(uf, [])
+    codigos = [str(item.get('codigo_ibge','')) for item in itens]
+    if len(codigos) != len(set(codigos)) or any(len(c)!=7 or not c.isdigit() or not c.startswith(codigo_uf) for c in codigos):
+        raise ValueError('Códigos municipais inválidos para a UF.')
+    return [item['nome'] for item in itens]
+
+
+def _carregar_municipios_neoenergia(uf):
+    try:
+        conteudo = Path(__file__).with_name('municipios_neoenergia.json').read_bytes()
+    except OSError as exc:
+        raise ValueError('Catálogo territorial ausente. Inclua municipios_neoenergia.json junto aos arquivos do sistema.') from exc
+    return _validar_catalogo_neoenergia(conteudo, uf)
 
 
 def preparar_territorio_neoenergia(perfil, responsavel, buscar=None):
@@ -39,13 +54,13 @@ def preparar_territorio_neoenergia(perfil, responsavel, buscar=None):
     uf = empresa['uf']
     if str(perfil.get('uf') or '').upper() != uf:
         raise ValueError('UF divergente do rascunho; cadastro preservado.')
-    nomes = (buscar or _baixar_municipios_neoenergia)(uf)
+    nomes = (buscar or _carregar_municipios_neoenergia)(uf)
     quantidade = {'BA':417, 'PE':185, 'RN':167, 'DF':1}[uf]
     if not isinstance(nomes, list) or any(not isinstance(n, str) or not n.strip() for n in nomes):
         raise ValueError('Lista de municípios inválida; vínculo não realizado.')
     nomes = [n.strip() for n in nomes]
     if len(nomes) != quantidade or len(set(n.casefold() for n in nomes)) != quantidade:
-        raise ValueError(f'Lista IBGE incompleta ou duplicada para {uf}; esperados {quantidade} registros. Cadastro preservado.')
+        raise ValueError(f'Catálogo municipal incompleto ou duplicado para {uf}; esperados {quantidade} registros. Cadastro preservado.')
     obrigatorios = {'BA':{'Salvador','Jandaíra','Rio Real'}, 'PE':{'Recife','Fernando de Noronha'}, 'RN':{'Natal','Mossoró'}, 'DF':{'Brasília'}}[uf]
     if not obrigatorios.issubset(set(nomes)):
         raise ValueError('Lista incompatível com a UF; cadastro preservado.')
@@ -63,7 +78,8 @@ def preparar_territorio_neoenergia(perfil, responsavel, buscar=None):
     }[uf]
     regras[CHAVE_TERRITORIO] = dict(schema=1, concessionaria=empresa['concessionaria'], uf=uf,
         municipios=nomes, fonte_concessao=FONTE_TERRITORIO,
-        fonte_nomes=f'https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios?orderBy=nome',
+        fonte_nomes=FONTE_CATALOGO, origem_nomes='Catálogo local de contingência; não obtido da API IBGE nesta operação',
+        consulta_catalogo='23/10/2026', hash_catalogo=HASH_CATALOGO,
         fonte_exclusoes=FONTE_EXCLUSOES_BA if uf=='BA' else '', exclusoes=exclusoes,
         responsavel=str(responsavel).strip(), registrado_em=datetime.now(timezone.utc).isoformat(),
         observacao=observacao, libera_calculo=False)
@@ -278,4 +294,11 @@ def testar_territorios_neoenergia():
     r=vincular_territorios_neoenergia(lambda:duplicados,salvar,'TESTE',indisponivel)
     verifica('Cadastro duplicado não escolhido silenciosamente',r[0]['Resultado']=='PENDENTE' and 'único' in r[0]['Detalhe'])
     verifica('Elektro sem alteração territorial',not territorio_neoenergia_registrado({'concessionaria':'Neoenergia Elektro'}))
+    for p in modelos:
+        novo = preparar_territorio_neoenergia(p,'TESTE COM CATÁLOGO DO PACOTE')
+        verifica(p['concessionaria']+': catálogo real permite vínculo sem rede externa', territorio_neoenergia_registrado(novo))
+        verifica(p['concessionaria']+': procedência do catálogo registrada', novo['regras'][CHAVE_TERRITORIO]['fonte_nomes']==FONTE_CATALOGO and novo['regras'][CHAVE_TERRITORIO]['hash_catalogo']==HASH_CATALOGO)
+    conteudo = Path(__file__).with_name('municipios_neoenergia.json').read_bytes()
+    rejeita('Catálogo alterado recusado por integridade',lambda:_validar_catalogo_neoenergia(conteudo+b' ', 'RN'))
+    rejeita('UF fora do catálogo recusada',lambda:_validar_catalogo_neoenergia(conteudo, 'SP'))
     return casos

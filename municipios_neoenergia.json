@@ -1,0 +1,3098 @@
+{
+  "schema": 1,
+  "fonte_nomes": "https://github.com/kelvins/municipios-brasileiros",
+  "arquivo_origem": "https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/csv/municipios.csv",
+  "consulta": "23/10/2026",
+  "observacao": "Catálogo público de nomes e códigos municipais. Não é fonte de área de concessão nem de tensão. Concessão conferida separadamente nas fontes oficiais.",
+  "ufs": {
+    "BA": [
+      {
+        "codigo_ibge": "2900108",
+        "nome": "Abaíra"
+      },
+      {
+        "codigo_ibge": "2900207",
+        "nome": "Abaré"
+      },
+      {
+        "codigo_ibge": "2900306",
+        "nome": "Acajutiba"
+      },
+      {
+        "codigo_ibge": "2900355",
+        "nome": "Adustina"
+      },
+      {
+        "codigo_ibge": "2900405",
+        "nome": "Água Fria"
+      },
+      {
+        "codigo_ibge": "2900603",
+        "nome": "Aiquara"
+      },
+      {
+        "codigo_ibge": "2900702",
+        "nome": "Alagoinhas"
+      },
+      {
+        "codigo_ibge": "2900801",
+        "nome": "Alcobaça"
+      },
+      {
+        "codigo_ibge": "2900900",
+        "nome": "Almadina"
+      },
+      {
+        "codigo_ibge": "2901007",
+        "nome": "Amargosa"
+      },
+      {
+        "codigo_ibge": "2901106",
+        "nome": "Amélia Rodrigues"
+      },
+      {
+        "codigo_ibge": "2901155",
+        "nome": "América Dourada"
+      },
+      {
+        "codigo_ibge": "2901205",
+        "nome": "Anagé"
+      },
+      {
+        "codigo_ibge": "2901304",
+        "nome": "Andaraí"
+      },
+      {
+        "codigo_ibge": "2901353",
+        "nome": "Andorinha"
+      },
+      {
+        "codigo_ibge": "2901403",
+        "nome": "Angical"
+      },
+      {
+        "codigo_ibge": "2901502",
+        "nome": "Anguera"
+      },
+      {
+        "codigo_ibge": "2901601",
+        "nome": "Antas"
+      },
+      {
+        "codigo_ibge": "2901700",
+        "nome": "Antônio Cardoso"
+      },
+      {
+        "codigo_ibge": "2901809",
+        "nome": "Antônio Gonçalves"
+      },
+      {
+        "codigo_ibge": "2901908",
+        "nome": "Aporá"
+      },
+      {
+        "codigo_ibge": "2901957",
+        "nome": "Apuarema"
+      },
+      {
+        "codigo_ibge": "2902054",
+        "nome": "Araças"
+      },
+      {
+        "codigo_ibge": "2902005",
+        "nome": "Aracatu"
+      },
+      {
+        "codigo_ibge": "2902104",
+        "nome": "Araci"
+      },
+      {
+        "codigo_ibge": "2902203",
+        "nome": "Aramari"
+      },
+      {
+        "codigo_ibge": "2902252",
+        "nome": "Arataca"
+      },
+      {
+        "codigo_ibge": "2902302",
+        "nome": "Aratuípe"
+      },
+      {
+        "codigo_ibge": "2902401",
+        "nome": "Aurelino Leal"
+      },
+      {
+        "codigo_ibge": "2902500",
+        "nome": "Baianópolis"
+      },
+      {
+        "codigo_ibge": "2902609",
+        "nome": "Baixa Grande"
+      },
+      {
+        "codigo_ibge": "2902658",
+        "nome": "Banzaê"
+      },
+      {
+        "codigo_ibge": "2902708",
+        "nome": "Barra"
+      },
+      {
+        "codigo_ibge": "2902807",
+        "nome": "Barra da Estiva"
+      },
+      {
+        "codigo_ibge": "2902906",
+        "nome": "Barra do Choça"
+      },
+      {
+        "codigo_ibge": "2903003",
+        "nome": "Barra do Mendes"
+      },
+      {
+        "codigo_ibge": "2903102",
+        "nome": "Barra do Rocha"
+      },
+      {
+        "codigo_ibge": "2903201",
+        "nome": "Barreiras"
+      },
+      {
+        "codigo_ibge": "2903235",
+        "nome": "Barro Alto"
+      },
+      {
+        "codigo_ibge": "2903300",
+        "nome": "Barro Preto"
+      },
+      {
+        "codigo_ibge": "2903276",
+        "nome": "Barrocas"
+      },
+      {
+        "codigo_ibge": "2903409",
+        "nome": "Belmonte"
+      },
+      {
+        "codigo_ibge": "2903508",
+        "nome": "Belo Campo"
+      },
+      {
+        "codigo_ibge": "2903607",
+        "nome": "Biritinga"
+      },
+      {
+        "codigo_ibge": "2903706",
+        "nome": "Boa Nova"
+      },
+      {
+        "codigo_ibge": "2903805",
+        "nome": "Boa Vista do Tupim"
+      },
+      {
+        "codigo_ibge": "2903904",
+        "nome": "Bom Jesus da Lapa"
+      },
+      {
+        "codigo_ibge": "2903953",
+        "nome": "Bom Jesus da Serra"
+      },
+      {
+        "codigo_ibge": "2904001",
+        "nome": "Boninal"
+      },
+      {
+        "codigo_ibge": "2904050",
+        "nome": "Bonito"
+      },
+      {
+        "codigo_ibge": "2904100",
+        "nome": "Boquira"
+      },
+      {
+        "codigo_ibge": "2904209",
+        "nome": "Botuporã"
+      },
+      {
+        "codigo_ibge": "2904308",
+        "nome": "Brejões"
+      },
+      {
+        "codigo_ibge": "2904407",
+        "nome": "Brejolândia"
+      },
+      {
+        "codigo_ibge": "2904506",
+        "nome": "Brotas de Macaúbas"
+      },
+      {
+        "codigo_ibge": "2904605",
+        "nome": "Brumado"
+      },
+      {
+        "codigo_ibge": "2904704",
+        "nome": "Buerarema"
+      },
+      {
+        "codigo_ibge": "2904753",
+        "nome": "Buritirama"
+      },
+      {
+        "codigo_ibge": "2904803",
+        "nome": "Caatiba"
+      },
+      {
+        "codigo_ibge": "2904852",
+        "nome": "Cabaceiras do Paraguaçu"
+      },
+      {
+        "codigo_ibge": "2904902",
+        "nome": "Cachoeira"
+      },
+      {
+        "codigo_ibge": "2905008",
+        "nome": "Caculé"
+      },
+      {
+        "codigo_ibge": "2905107",
+        "nome": "Caém"
+      },
+      {
+        "codigo_ibge": "2905156",
+        "nome": "Caetanos"
+      },
+      {
+        "codigo_ibge": "2905206",
+        "nome": "Caetité"
+      },
+      {
+        "codigo_ibge": "2905305",
+        "nome": "Cafarnaum"
+      },
+      {
+        "codigo_ibge": "2905404",
+        "nome": "Cairu"
+      },
+      {
+        "codigo_ibge": "2905503",
+        "nome": "Caldeirão Grande"
+      },
+      {
+        "codigo_ibge": "2905602",
+        "nome": "Camacan"
+      },
+      {
+        "codigo_ibge": "2905701",
+        "nome": "Camaçari"
+      },
+      {
+        "codigo_ibge": "2905800",
+        "nome": "Camamu"
+      },
+      {
+        "codigo_ibge": "2905909",
+        "nome": "Campo Alegre de Lourdes"
+      },
+      {
+        "codigo_ibge": "2906006",
+        "nome": "Campo Formoso"
+      },
+      {
+        "codigo_ibge": "2906105",
+        "nome": "Canápolis"
+      },
+      {
+        "codigo_ibge": "2906204",
+        "nome": "Canarana"
+      },
+      {
+        "codigo_ibge": "2906303",
+        "nome": "Canavieiras"
+      },
+      {
+        "codigo_ibge": "2906402",
+        "nome": "Candeal"
+      },
+      {
+        "codigo_ibge": "2906501",
+        "nome": "Candeias"
+      },
+      {
+        "codigo_ibge": "2906600",
+        "nome": "Candiba"
+      },
+      {
+        "codigo_ibge": "2906709",
+        "nome": "Cândido Sales"
+      },
+      {
+        "codigo_ibge": "2906808",
+        "nome": "Cansanção"
+      },
+      {
+        "codigo_ibge": "2906824",
+        "nome": "Canudos"
+      },
+      {
+        "codigo_ibge": "2906857",
+        "nome": "Capela do Alto Alegre"
+      },
+      {
+        "codigo_ibge": "2906873",
+        "nome": "Capim Grosso"
+      },
+      {
+        "codigo_ibge": "2906899",
+        "nome": "Caraíbas"
+      },
+      {
+        "codigo_ibge": "2906907",
+        "nome": "Caravelas"
+      },
+      {
+        "codigo_ibge": "2907004",
+        "nome": "Cardeal da Silva"
+      },
+      {
+        "codigo_ibge": "2907103",
+        "nome": "Carinhanha"
+      },
+      {
+        "codigo_ibge": "2907202",
+        "nome": "Casa Nova"
+      },
+      {
+        "codigo_ibge": "2907301",
+        "nome": "Castro Alves"
+      },
+      {
+        "codigo_ibge": "2907400",
+        "nome": "Catolândia"
+      },
+      {
+        "codigo_ibge": "2907509",
+        "nome": "Catu"
+      },
+      {
+        "codigo_ibge": "2907558",
+        "nome": "Caturama"
+      },
+      {
+        "codigo_ibge": "2907608",
+        "nome": "Central"
+      },
+      {
+        "codigo_ibge": "2907707",
+        "nome": "Chorrochó"
+      },
+      {
+        "codigo_ibge": "2907806",
+        "nome": "Cícero Dantas"
+      },
+      {
+        "codigo_ibge": "2907905",
+        "nome": "Cipó"
+      },
+      {
+        "codigo_ibge": "2908002",
+        "nome": "Coaraci"
+      },
+      {
+        "codigo_ibge": "2908101",
+        "nome": "Cocos"
+      },
+      {
+        "codigo_ibge": "2908200",
+        "nome": "Conceição da Feira"
+      },
+      {
+        "codigo_ibge": "2908309",
+        "nome": "Conceição do Almeida"
+      },
+      {
+        "codigo_ibge": "2908408",
+        "nome": "Conceição do Coité"
+      },
+      {
+        "codigo_ibge": "2908507",
+        "nome": "Conceição do Jacuípe"
+      },
+      {
+        "codigo_ibge": "2908606",
+        "nome": "Conde"
+      },
+      {
+        "codigo_ibge": "2908705",
+        "nome": "Condeúba"
+      },
+      {
+        "codigo_ibge": "2908804",
+        "nome": "Contendas do Sincorá"
+      },
+      {
+        "codigo_ibge": "2908903",
+        "nome": "Coração de Maria"
+      },
+      {
+        "codigo_ibge": "2909000",
+        "nome": "Cordeiros"
+      },
+      {
+        "codigo_ibge": "2909109",
+        "nome": "Coribe"
+      },
+      {
+        "codigo_ibge": "2909208",
+        "nome": "Coronel João Sá"
+      },
+      {
+        "codigo_ibge": "2909307",
+        "nome": "Correntina"
+      },
+      {
+        "codigo_ibge": "2909406",
+        "nome": "Cotegipe"
+      },
+      {
+        "codigo_ibge": "2909505",
+        "nome": "Cravolândia"
+      },
+      {
+        "codigo_ibge": "2909604",
+        "nome": "Crisópolis"
+      },
+      {
+        "codigo_ibge": "2909703",
+        "nome": "Cristópolis"
+      },
+      {
+        "codigo_ibge": "2909802",
+        "nome": "Cruz das Almas"
+      },
+      {
+        "codigo_ibge": "2909901",
+        "nome": "Curaçá"
+      },
+      {
+        "codigo_ibge": "2910008",
+        "nome": "Dário Meira"
+      },
+      {
+        "codigo_ibge": "2910057",
+        "nome": "Dias d'Ávila"
+      },
+      {
+        "codigo_ibge": "2910107",
+        "nome": "Dom Basílio"
+      },
+      {
+        "codigo_ibge": "2910206",
+        "nome": "Dom Macedo Costa"
+      },
+      {
+        "codigo_ibge": "2910305",
+        "nome": "Elísio Medrado"
+      },
+      {
+        "codigo_ibge": "2910404",
+        "nome": "Encruzilhada"
+      },
+      {
+        "codigo_ibge": "2910503",
+        "nome": "Entre Rios"
+      },
+      {
+        "codigo_ibge": "2900504",
+        "nome": "Érico Cardoso"
+      },
+      {
+        "codigo_ibge": "2910602",
+        "nome": "Esplanada"
+      },
+      {
+        "codigo_ibge": "2910701",
+        "nome": "Euclides da Cunha"
+      },
+      {
+        "codigo_ibge": "2910727",
+        "nome": "Eunápolis"
+      },
+      {
+        "codigo_ibge": "2910750",
+        "nome": "Fátima"
+      },
+      {
+        "codigo_ibge": "2910776",
+        "nome": "Feira da Mata"
+      },
+      {
+        "codigo_ibge": "2910800",
+        "nome": "Feira de Santana"
+      },
+      {
+        "codigo_ibge": "2910859",
+        "nome": "Filadélfia"
+      },
+      {
+        "codigo_ibge": "2910909",
+        "nome": "Firmino Alves"
+      },
+      {
+        "codigo_ibge": "2911006",
+        "nome": "Floresta Azul"
+      },
+      {
+        "codigo_ibge": "2911105",
+        "nome": "Formosa do Rio Preto"
+      },
+      {
+        "codigo_ibge": "2911204",
+        "nome": "Gandu"
+      },
+      {
+        "codigo_ibge": "2911253",
+        "nome": "Gavião"
+      },
+      {
+        "codigo_ibge": "2911303",
+        "nome": "Gentio do Ouro"
+      },
+      {
+        "codigo_ibge": "2911402",
+        "nome": "Glória"
+      },
+      {
+        "codigo_ibge": "2911501",
+        "nome": "Gongogi"
+      },
+      {
+        "codigo_ibge": "2911600",
+        "nome": "Governador Mangabeira"
+      },
+      {
+        "codigo_ibge": "2911659",
+        "nome": "Guajeru"
+      },
+      {
+        "codigo_ibge": "2911709",
+        "nome": "Guanambi"
+      },
+      {
+        "codigo_ibge": "2911808",
+        "nome": "Guaratinga"
+      },
+      {
+        "codigo_ibge": "2911857",
+        "nome": "Heliópolis"
+      },
+      {
+        "codigo_ibge": "2911907",
+        "nome": "Iaçu"
+      },
+      {
+        "codigo_ibge": "2912004",
+        "nome": "Ibiassucê"
+      },
+      {
+        "codigo_ibge": "2912103",
+        "nome": "Ibicaraí"
+      },
+      {
+        "codigo_ibge": "2912202",
+        "nome": "Ibicoara"
+      },
+      {
+        "codigo_ibge": "2912301",
+        "nome": "Ibicuí"
+      },
+      {
+        "codigo_ibge": "2912400",
+        "nome": "Ibipeba"
+      },
+      {
+        "codigo_ibge": "2912509",
+        "nome": "Ibipitanga"
+      },
+      {
+        "codigo_ibge": "2912608",
+        "nome": "Ibiquera"
+      },
+      {
+        "codigo_ibge": "2912707",
+        "nome": "Ibirapitanga"
+      },
+      {
+        "codigo_ibge": "2912806",
+        "nome": "Ibirapuã"
+      },
+      {
+        "codigo_ibge": "2912905",
+        "nome": "Ibirataia"
+      },
+      {
+        "codigo_ibge": "2913002",
+        "nome": "Ibitiara"
+      },
+      {
+        "codigo_ibge": "2913101",
+        "nome": "Ibititá"
+      },
+      {
+        "codigo_ibge": "2913200",
+        "nome": "Ibotirama"
+      },
+      {
+        "codigo_ibge": "2913309",
+        "nome": "Ichu"
+      },
+      {
+        "codigo_ibge": "2913408",
+        "nome": "Igaporã"
+      },
+      {
+        "codigo_ibge": "2913457",
+        "nome": "Igrapiúna"
+      },
+      {
+        "codigo_ibge": "2913507",
+        "nome": "Iguaí"
+      },
+      {
+        "codigo_ibge": "2913606",
+        "nome": "Ilhéus"
+      },
+      {
+        "codigo_ibge": "2913705",
+        "nome": "Inhambupe"
+      },
+      {
+        "codigo_ibge": "2913804",
+        "nome": "Ipecaetá"
+      },
+      {
+        "codigo_ibge": "2913903",
+        "nome": "Ipiaú"
+      },
+      {
+        "codigo_ibge": "2914000",
+        "nome": "Ipirá"
+      },
+      {
+        "codigo_ibge": "2914109",
+        "nome": "Ipupiara"
+      },
+      {
+        "codigo_ibge": "2914208",
+        "nome": "Irajuba"
+      },
+      {
+        "codigo_ibge": "2914307",
+        "nome": "Iramaia"
+      },
+      {
+        "codigo_ibge": "2914406",
+        "nome": "Iraquara"
+      },
+      {
+        "codigo_ibge": "2914505",
+        "nome": "Irará"
+      },
+      {
+        "codigo_ibge": "2914604",
+        "nome": "Irecê"
+      },
+      {
+        "codigo_ibge": "2914653",
+        "nome": "Itabela"
+      },
+      {
+        "codigo_ibge": "2914703",
+        "nome": "Itaberaba"
+      },
+      {
+        "codigo_ibge": "2914802",
+        "nome": "Itabuna"
+      },
+      {
+        "codigo_ibge": "2914901",
+        "nome": "Itacaré"
+      },
+      {
+        "codigo_ibge": "2915007",
+        "nome": "Itaeté"
+      },
+      {
+        "codigo_ibge": "2915106",
+        "nome": "Itagi"
+      },
+      {
+        "codigo_ibge": "2915205",
+        "nome": "Itagibá"
+      },
+      {
+        "codigo_ibge": "2915304",
+        "nome": "Itagimirim"
+      },
+      {
+        "codigo_ibge": "2915353",
+        "nome": "Itaguaçu da Bahia"
+      },
+      {
+        "codigo_ibge": "2915403",
+        "nome": "Itaju do Colônia"
+      },
+      {
+        "codigo_ibge": "2915502",
+        "nome": "Itajuípe"
+      },
+      {
+        "codigo_ibge": "2915601",
+        "nome": "Itamaraju"
+      },
+      {
+        "codigo_ibge": "2915700",
+        "nome": "Itamari"
+      },
+      {
+        "codigo_ibge": "2915809",
+        "nome": "Itambé"
+      },
+      {
+        "codigo_ibge": "2915908",
+        "nome": "Itanagra"
+      },
+      {
+        "codigo_ibge": "2916005",
+        "nome": "Itanhém"
+      },
+      {
+        "codigo_ibge": "2916104",
+        "nome": "Itaparica"
+      },
+      {
+        "codigo_ibge": "2916203",
+        "nome": "Itapé"
+      },
+      {
+        "codigo_ibge": "2916302",
+        "nome": "Itapebi"
+      },
+      {
+        "codigo_ibge": "2916401",
+        "nome": "Itapetinga"
+      },
+      {
+        "codigo_ibge": "2916500",
+        "nome": "Itapicuru"
+      },
+      {
+        "codigo_ibge": "2916609",
+        "nome": "Itapitanga"
+      },
+      {
+        "codigo_ibge": "2916708",
+        "nome": "Itaquara"
+      },
+      {
+        "codigo_ibge": "2916807",
+        "nome": "Itarantim"
+      },
+      {
+        "codigo_ibge": "2916856",
+        "nome": "Itatim"
+      },
+      {
+        "codigo_ibge": "2916906",
+        "nome": "Itiruçu"
+      },
+      {
+        "codigo_ibge": "2917003",
+        "nome": "Itiúba"
+      },
+      {
+        "codigo_ibge": "2917102",
+        "nome": "Itororó"
+      },
+      {
+        "codigo_ibge": "2917201",
+        "nome": "Ituaçu"
+      },
+      {
+        "codigo_ibge": "2917300",
+        "nome": "Ituberá"
+      },
+      {
+        "codigo_ibge": "2917334",
+        "nome": "Iuiú"
+      },
+      {
+        "codigo_ibge": "2917359",
+        "nome": "Jaborandi"
+      },
+      {
+        "codigo_ibge": "2917409",
+        "nome": "Jacaraci"
+      },
+      {
+        "codigo_ibge": "2917508",
+        "nome": "Jacobina"
+      },
+      {
+        "codigo_ibge": "2917607",
+        "nome": "Jaguaquara"
+      },
+      {
+        "codigo_ibge": "2917706",
+        "nome": "Jaguarari"
+      },
+      {
+        "codigo_ibge": "2917805",
+        "nome": "Jaguaripe"
+      },
+      {
+        "codigo_ibge": "2917904",
+        "nome": "Jandaíra"
+      },
+      {
+        "codigo_ibge": "2918001",
+        "nome": "Jequié"
+      },
+      {
+        "codigo_ibge": "2918100",
+        "nome": "Jeremoabo"
+      },
+      {
+        "codigo_ibge": "2918209",
+        "nome": "Jiquiriçá"
+      },
+      {
+        "codigo_ibge": "2918308",
+        "nome": "Jitaúna"
+      },
+      {
+        "codigo_ibge": "2918357",
+        "nome": "João Dourado"
+      },
+      {
+        "codigo_ibge": "2918407",
+        "nome": "Juazeiro"
+      },
+      {
+        "codigo_ibge": "2918456",
+        "nome": "Jucuruçu"
+      },
+      {
+        "codigo_ibge": "2918506",
+        "nome": "Jussara"
+      },
+      {
+        "codigo_ibge": "2918555",
+        "nome": "Jussari"
+      },
+      {
+        "codigo_ibge": "2918605",
+        "nome": "Jussiape"
+      },
+      {
+        "codigo_ibge": "2918704",
+        "nome": "Lafaiete Coutinho"
+      },
+      {
+        "codigo_ibge": "2918753",
+        "nome": "Lagoa Real"
+      },
+      {
+        "codigo_ibge": "2918803",
+        "nome": "Laje"
+      },
+      {
+        "codigo_ibge": "2918902",
+        "nome": "Lajedão"
+      },
+      {
+        "codigo_ibge": "2919009",
+        "nome": "Lajedinho"
+      },
+      {
+        "codigo_ibge": "2919058",
+        "nome": "Lajedo do Tabocal"
+      },
+      {
+        "codigo_ibge": "2919108",
+        "nome": "Lamarão"
+      },
+      {
+        "codigo_ibge": "2919157",
+        "nome": "Lapão"
+      },
+      {
+        "codigo_ibge": "2919207",
+        "nome": "Lauro de Freitas"
+      },
+      {
+        "codigo_ibge": "2919306",
+        "nome": "Lençóis"
+      },
+      {
+        "codigo_ibge": "2919405",
+        "nome": "Licínio de Almeida"
+      },
+      {
+        "codigo_ibge": "2919504",
+        "nome": "Livramento de Nossa Senhora"
+      },
+      {
+        "codigo_ibge": "2919553",
+        "nome": "Luís Eduardo Magalhães"
+      },
+      {
+        "codigo_ibge": "2919603",
+        "nome": "Macajuba"
+      },
+      {
+        "codigo_ibge": "2919702",
+        "nome": "Macarani"
+      },
+      {
+        "codigo_ibge": "2919801",
+        "nome": "Macaúbas"
+      },
+      {
+        "codigo_ibge": "2919900",
+        "nome": "Macururé"
+      },
+      {
+        "codigo_ibge": "2919926",
+        "nome": "Madre de Deus"
+      },
+      {
+        "codigo_ibge": "2919959",
+        "nome": "Maetinga"
+      },
+      {
+        "codigo_ibge": "2920007",
+        "nome": "Maiquinique"
+      },
+      {
+        "codigo_ibge": "2920106",
+        "nome": "Mairi"
+      },
+      {
+        "codigo_ibge": "2920205",
+        "nome": "Malhada"
+      },
+      {
+        "codigo_ibge": "2920304",
+        "nome": "Malhada de Pedras"
+      },
+      {
+        "codigo_ibge": "2920403",
+        "nome": "Manoel Vitorino"
+      },
+      {
+        "codigo_ibge": "2920452",
+        "nome": "Mansidão"
+      },
+      {
+        "codigo_ibge": "2920502",
+        "nome": "Maracás"
+      },
+      {
+        "codigo_ibge": "2920601",
+        "nome": "Maragogipe"
+      },
+      {
+        "codigo_ibge": "2920700",
+        "nome": "Maraú"
+      },
+      {
+        "codigo_ibge": "2920809",
+        "nome": "Marcionílio Souza"
+      },
+      {
+        "codigo_ibge": "2920908",
+        "nome": "Mascote"
+      },
+      {
+        "codigo_ibge": "2921005",
+        "nome": "Mata de São João"
+      },
+      {
+        "codigo_ibge": "2921054",
+        "nome": "Matina"
+      },
+      {
+        "codigo_ibge": "2921104",
+        "nome": "Medeiros Neto"
+      },
+      {
+        "codigo_ibge": "2921203",
+        "nome": "Miguel Calmon"
+      },
+      {
+        "codigo_ibge": "2921302",
+        "nome": "Milagres"
+      },
+      {
+        "codigo_ibge": "2921401",
+        "nome": "Mirangaba"
+      },
+      {
+        "codigo_ibge": "2921450",
+        "nome": "Mirante"
+      },
+      {
+        "codigo_ibge": "2921500",
+        "nome": "Monte Santo"
+      },
+      {
+        "codigo_ibge": "2921609",
+        "nome": "Morpará"
+      },
+      {
+        "codigo_ibge": "2921708",
+        "nome": "Morro do Chapéu"
+      },
+      {
+        "codigo_ibge": "2921807",
+        "nome": "Mortugaba"
+      },
+      {
+        "codigo_ibge": "2921906",
+        "nome": "Mucugê"
+      },
+      {
+        "codigo_ibge": "2922003",
+        "nome": "Mucuri"
+      },
+      {
+        "codigo_ibge": "2922052",
+        "nome": "Mulungu do Morro"
+      },
+      {
+        "codigo_ibge": "2922102",
+        "nome": "Mundo Novo"
+      },
+      {
+        "codigo_ibge": "2922201",
+        "nome": "Muniz Ferreira"
+      },
+      {
+        "codigo_ibge": "2922250",
+        "nome": "Muquém de São Francisco"
+      },
+      {
+        "codigo_ibge": "2922300",
+        "nome": "Muritiba"
+      },
+      {
+        "codigo_ibge": "2922409",
+        "nome": "Mutuípe"
+      },
+      {
+        "codigo_ibge": "2922508",
+        "nome": "Nazaré"
+      },
+      {
+        "codigo_ibge": "2922607",
+        "nome": "Nilo Peçanha"
+      },
+      {
+        "codigo_ibge": "2922656",
+        "nome": "Nordestina"
+      },
+      {
+        "codigo_ibge": "2922706",
+        "nome": "Nova Canaã"
+      },
+      {
+        "codigo_ibge": "2922730",
+        "nome": "Nova Fátima"
+      },
+      {
+        "codigo_ibge": "2922755",
+        "nome": "Nova Ibiá"
+      },
+      {
+        "codigo_ibge": "2922805",
+        "nome": "Nova Itarana"
+      },
+      {
+        "codigo_ibge": "2922854",
+        "nome": "Nova Redenção"
+      },
+      {
+        "codigo_ibge": "2922904",
+        "nome": "Nova Soure"
+      },
+      {
+        "codigo_ibge": "2923001",
+        "nome": "Nova Viçosa"
+      },
+      {
+        "codigo_ibge": "2923035",
+        "nome": "Novo Horizonte"
+      },
+      {
+        "codigo_ibge": "2923050",
+        "nome": "Novo Triunfo"
+      },
+      {
+        "codigo_ibge": "2923100",
+        "nome": "Olindina"
+      },
+      {
+        "codigo_ibge": "2923209",
+        "nome": "Oliveira dos Brejinhos"
+      },
+      {
+        "codigo_ibge": "2923308",
+        "nome": "Ouriçangas"
+      },
+      {
+        "codigo_ibge": "2923357",
+        "nome": "Ourolândia"
+      },
+      {
+        "codigo_ibge": "2923407",
+        "nome": "Palmas de Monte Alto"
+      },
+      {
+        "codigo_ibge": "2923506",
+        "nome": "Palmeiras"
+      },
+      {
+        "codigo_ibge": "2923605",
+        "nome": "Paramirim"
+      },
+      {
+        "codigo_ibge": "2923704",
+        "nome": "Paratinga"
+      },
+      {
+        "codigo_ibge": "2923803",
+        "nome": "Paripiranga"
+      },
+      {
+        "codigo_ibge": "2923902",
+        "nome": "Pau Brasil"
+      },
+      {
+        "codigo_ibge": "2924009",
+        "nome": "Paulo Afonso"
+      },
+      {
+        "codigo_ibge": "2924058",
+        "nome": "Pé de Serra"
+      },
+      {
+        "codigo_ibge": "2924108",
+        "nome": "Pedrão"
+      },
+      {
+        "codigo_ibge": "2924207",
+        "nome": "Pedro Alexandre"
+      },
+      {
+        "codigo_ibge": "2924306",
+        "nome": "Piatã"
+      },
+      {
+        "codigo_ibge": "2924405",
+        "nome": "Pilão Arcado"
+      },
+      {
+        "codigo_ibge": "2924504",
+        "nome": "Pindaí"
+      },
+      {
+        "codigo_ibge": "2924603",
+        "nome": "Pindobaçu"
+      },
+      {
+        "codigo_ibge": "2924652",
+        "nome": "Pintadas"
+      },
+      {
+        "codigo_ibge": "2924678",
+        "nome": "Piraí do Norte"
+      },
+      {
+        "codigo_ibge": "2924702",
+        "nome": "Piripá"
+      },
+      {
+        "codigo_ibge": "2924801",
+        "nome": "Piritiba"
+      },
+      {
+        "codigo_ibge": "2924900",
+        "nome": "Planaltino"
+      },
+      {
+        "codigo_ibge": "2925006",
+        "nome": "Planalto"
+      },
+      {
+        "codigo_ibge": "2925105",
+        "nome": "Poções"
+      },
+      {
+        "codigo_ibge": "2925204",
+        "nome": "Pojuca"
+      },
+      {
+        "codigo_ibge": "2925253",
+        "nome": "Ponto Novo"
+      },
+      {
+        "codigo_ibge": "2925303",
+        "nome": "Porto Seguro"
+      },
+      {
+        "codigo_ibge": "2925402",
+        "nome": "Potiraguá"
+      },
+      {
+        "codigo_ibge": "2925501",
+        "nome": "Prado"
+      },
+      {
+        "codigo_ibge": "2925600",
+        "nome": "Presidente Dutra"
+      },
+      {
+        "codigo_ibge": "2925709",
+        "nome": "Presidente Jânio Quadros"
+      },
+      {
+        "codigo_ibge": "2925758",
+        "nome": "Presidente Tancredo Neves"
+      },
+      {
+        "codigo_ibge": "2925808",
+        "nome": "Queimadas"
+      },
+      {
+        "codigo_ibge": "2925907",
+        "nome": "Quijingue"
+      },
+      {
+        "codigo_ibge": "2925931",
+        "nome": "Quixabeira"
+      },
+      {
+        "codigo_ibge": "2925956",
+        "nome": "Rafael Jambeiro"
+      },
+      {
+        "codigo_ibge": "2926004",
+        "nome": "Remanso"
+      },
+      {
+        "codigo_ibge": "2926103",
+        "nome": "Retirolândia"
+      },
+      {
+        "codigo_ibge": "2926202",
+        "nome": "Riachão das Neves"
+      },
+      {
+        "codigo_ibge": "2926301",
+        "nome": "Riachão do Jacuípe"
+      },
+      {
+        "codigo_ibge": "2926400",
+        "nome": "Riacho de Santana"
+      },
+      {
+        "codigo_ibge": "2926509",
+        "nome": "Ribeira do Amparo"
+      },
+      {
+        "codigo_ibge": "2926608",
+        "nome": "Ribeira do Pombal"
+      },
+      {
+        "codigo_ibge": "2926657",
+        "nome": "Ribeirão do Largo"
+      },
+      {
+        "codigo_ibge": "2926707",
+        "nome": "Rio de Contas"
+      },
+      {
+        "codigo_ibge": "2926806",
+        "nome": "Rio do Antônio"
+      },
+      {
+        "codigo_ibge": "2926905",
+        "nome": "Rio do Pires"
+      },
+      {
+        "codigo_ibge": "2927002",
+        "nome": "Rio Real"
+      },
+      {
+        "codigo_ibge": "2927101",
+        "nome": "Rodelas"
+      },
+      {
+        "codigo_ibge": "2927200",
+        "nome": "Ruy Barbosa"
+      },
+      {
+        "codigo_ibge": "2927309",
+        "nome": "Salinas da Margarida"
+      },
+      {
+        "codigo_ibge": "2927408",
+        "nome": "Salvador"
+      },
+      {
+        "codigo_ibge": "2927507",
+        "nome": "Santa Bárbara"
+      },
+      {
+        "codigo_ibge": "2927606",
+        "nome": "Santa Brígida"
+      },
+      {
+        "codigo_ibge": "2927705",
+        "nome": "Santa Cruz Cabrália"
+      },
+      {
+        "codigo_ibge": "2927804",
+        "nome": "Santa Cruz da Vitória"
+      },
+      {
+        "codigo_ibge": "2927903",
+        "nome": "Santa Inês"
+      },
+      {
+        "codigo_ibge": "2928059",
+        "nome": "Santa Luzia"
+      },
+      {
+        "codigo_ibge": "2928109",
+        "nome": "Santa Maria da Vitória"
+      },
+      {
+        "codigo_ibge": "2928406",
+        "nome": "Santa Rita de Cássia"
+      },
+      {
+        "codigo_ibge": "2928505",
+        "nome": "Santa Teresinha"
+      },
+      {
+        "codigo_ibge": "2928000",
+        "nome": "Santaluz"
+      },
+      {
+        "codigo_ibge": "2928208",
+        "nome": "Santana"
+      },
+      {
+        "codigo_ibge": "2928307",
+        "nome": "Santanópolis"
+      },
+      {
+        "codigo_ibge": "2928604",
+        "nome": "Santo Amaro"
+      },
+      {
+        "codigo_ibge": "2928703",
+        "nome": "Santo Antônio de Jesus"
+      },
+      {
+        "codigo_ibge": "2928802",
+        "nome": "Santo Estêvão"
+      },
+      {
+        "codigo_ibge": "2928901",
+        "nome": "São Desidério"
+      },
+      {
+        "codigo_ibge": "2928950",
+        "nome": "São Domingos"
+      },
+      {
+        "codigo_ibge": "2929107",
+        "nome": "São Felipe"
+      },
+      {
+        "codigo_ibge": "2929008",
+        "nome": "São Félix"
+      },
+      {
+        "codigo_ibge": "2929057",
+        "nome": "São Félix do Coribe"
+      },
+      {
+        "codigo_ibge": "2929206",
+        "nome": "São Francisco do Conde"
+      },
+      {
+        "codigo_ibge": "2929255",
+        "nome": "São Gabriel"
+      },
+      {
+        "codigo_ibge": "2929305",
+        "nome": "São Gonçalo dos Campos"
+      },
+      {
+        "codigo_ibge": "2929354",
+        "nome": "São José da Vitória"
+      },
+      {
+        "codigo_ibge": "2929370",
+        "nome": "São José do Jacuípe"
+      },
+      {
+        "codigo_ibge": "2929404",
+        "nome": "São Miguel das Matas"
+      },
+      {
+        "codigo_ibge": "2929503",
+        "nome": "São Sebastião do Passé"
+      },
+      {
+        "codigo_ibge": "2929602",
+        "nome": "Sapeaçu"
+      },
+      {
+        "codigo_ibge": "2929701",
+        "nome": "Sátiro Dias"
+      },
+      {
+        "codigo_ibge": "2929750",
+        "nome": "Saubara"
+      },
+      {
+        "codigo_ibge": "2929800",
+        "nome": "Saúde"
+      },
+      {
+        "codigo_ibge": "2929909",
+        "nome": "Seabra"
+      },
+      {
+        "codigo_ibge": "2930006",
+        "nome": "Sebastião Laranjeiras"
+      },
+      {
+        "codigo_ibge": "2930105",
+        "nome": "Senhor do Bonfim"
+      },
+      {
+        "codigo_ibge": "2930204",
+        "nome": "Sento Sé"
+      },
+      {
+        "codigo_ibge": "2930154",
+        "nome": "Serra do Ramalho"
+      },
+      {
+        "codigo_ibge": "2930303",
+        "nome": "Serra Dourada"
+      },
+      {
+        "codigo_ibge": "2930402",
+        "nome": "Serra Preta"
+      },
+      {
+        "codigo_ibge": "2930501",
+        "nome": "Serrinha"
+      },
+      {
+        "codigo_ibge": "2930600",
+        "nome": "Serrolândia"
+      },
+      {
+        "codigo_ibge": "2930709",
+        "nome": "Simões Filho"
+      },
+      {
+        "codigo_ibge": "2930758",
+        "nome": "Sítio do Mato"
+      },
+      {
+        "codigo_ibge": "2930766",
+        "nome": "Sítio do Quinto"
+      },
+      {
+        "codigo_ibge": "2930774",
+        "nome": "Sobradinho"
+      },
+      {
+        "codigo_ibge": "2930808",
+        "nome": "Souto Soares"
+      },
+      {
+        "codigo_ibge": "2930907",
+        "nome": "Tabocas do Brejo Velho"
+      },
+      {
+        "codigo_ibge": "2931004",
+        "nome": "Tanhaçu"
+      },
+      {
+        "codigo_ibge": "2931053",
+        "nome": "Tanque Novo"
+      },
+      {
+        "codigo_ibge": "2931103",
+        "nome": "Tanquinho"
+      },
+      {
+        "codigo_ibge": "2931202",
+        "nome": "Taperoá"
+      },
+      {
+        "codigo_ibge": "2931301",
+        "nome": "Tapiramutá"
+      },
+      {
+        "codigo_ibge": "2931350",
+        "nome": "Teixeira de Freitas"
+      },
+      {
+        "codigo_ibge": "2931400",
+        "nome": "Teodoro Sampaio"
+      },
+      {
+        "codigo_ibge": "2931509",
+        "nome": "Teofilândia"
+      },
+      {
+        "codigo_ibge": "2931608",
+        "nome": "Teolândia"
+      },
+      {
+        "codigo_ibge": "2931707",
+        "nome": "Terra Nova"
+      },
+      {
+        "codigo_ibge": "2931806",
+        "nome": "Tremedal"
+      },
+      {
+        "codigo_ibge": "2931905",
+        "nome": "Tucano"
+      },
+      {
+        "codigo_ibge": "2932002",
+        "nome": "Uauá"
+      },
+      {
+        "codigo_ibge": "2932101",
+        "nome": "Ubaíra"
+      },
+      {
+        "codigo_ibge": "2932200",
+        "nome": "Ubaitaba"
+      },
+      {
+        "codigo_ibge": "2932309",
+        "nome": "Ubatã"
+      },
+      {
+        "codigo_ibge": "2932408",
+        "nome": "Uibaí"
+      },
+      {
+        "codigo_ibge": "2932457",
+        "nome": "Umburanas"
+      },
+      {
+        "codigo_ibge": "2932507",
+        "nome": "Una"
+      },
+      {
+        "codigo_ibge": "2932606",
+        "nome": "Urandi"
+      },
+      {
+        "codigo_ibge": "2932705",
+        "nome": "Uruçuca"
+      },
+      {
+        "codigo_ibge": "2932804",
+        "nome": "Utinga"
+      },
+      {
+        "codigo_ibge": "2932903",
+        "nome": "Valença"
+      },
+      {
+        "codigo_ibge": "2933000",
+        "nome": "Valente"
+      },
+      {
+        "codigo_ibge": "2933059",
+        "nome": "Várzea da Roça"
+      },
+      {
+        "codigo_ibge": "2933109",
+        "nome": "Várzea do Poço"
+      },
+      {
+        "codigo_ibge": "2933158",
+        "nome": "Várzea Nova"
+      },
+      {
+        "codigo_ibge": "2933174",
+        "nome": "Varzedo"
+      },
+      {
+        "codigo_ibge": "2933208",
+        "nome": "Vera Cruz"
+      },
+      {
+        "codigo_ibge": "2933257",
+        "nome": "Vereda"
+      },
+      {
+        "codigo_ibge": "2933307",
+        "nome": "Vitória da Conquista"
+      },
+      {
+        "codigo_ibge": "2933406",
+        "nome": "Wagner"
+      },
+      {
+        "codigo_ibge": "2933455",
+        "nome": "Wanderley"
+      },
+      {
+        "codigo_ibge": "2933505",
+        "nome": "Wenceslau Guimarães"
+      },
+      {
+        "codigo_ibge": "2933604",
+        "nome": "Xique-Xique"
+      }
+    ],
+    "PE": [
+      {
+        "codigo_ibge": "2600054",
+        "nome": "Abreu e Lima"
+      },
+      {
+        "codigo_ibge": "2600104",
+        "nome": "Afogados da Ingazeira"
+      },
+      {
+        "codigo_ibge": "2600203",
+        "nome": "Afrânio"
+      },
+      {
+        "codigo_ibge": "2600302",
+        "nome": "Agrestina"
+      },
+      {
+        "codigo_ibge": "2600401",
+        "nome": "Água Preta"
+      },
+      {
+        "codigo_ibge": "2600500",
+        "nome": "Águas Belas"
+      },
+      {
+        "codigo_ibge": "2600609",
+        "nome": "Alagoinha"
+      },
+      {
+        "codigo_ibge": "2600708",
+        "nome": "Aliança"
+      },
+      {
+        "codigo_ibge": "2600807",
+        "nome": "Altinho"
+      },
+      {
+        "codigo_ibge": "2600906",
+        "nome": "Amaraji"
+      },
+      {
+        "codigo_ibge": "2601003",
+        "nome": "Angelim"
+      },
+      {
+        "codigo_ibge": "2601052",
+        "nome": "Araçoiaba"
+      },
+      {
+        "codigo_ibge": "2601102",
+        "nome": "Araripina"
+      },
+      {
+        "codigo_ibge": "2601201",
+        "nome": "Arcoverde"
+      },
+      {
+        "codigo_ibge": "2601300",
+        "nome": "Barra de Guabiraba"
+      },
+      {
+        "codigo_ibge": "2601409",
+        "nome": "Barreiros"
+      },
+      {
+        "codigo_ibge": "2601508",
+        "nome": "Belém de Maria"
+      },
+      {
+        "codigo_ibge": "2601607",
+        "nome": "Belém do São Francisco"
+      },
+      {
+        "codigo_ibge": "2601706",
+        "nome": "Belo Jardim"
+      },
+      {
+        "codigo_ibge": "2601805",
+        "nome": "Betânia"
+      },
+      {
+        "codigo_ibge": "2601904",
+        "nome": "Bezerros"
+      },
+      {
+        "codigo_ibge": "2602001",
+        "nome": "Bodocó"
+      },
+      {
+        "codigo_ibge": "2602100",
+        "nome": "Bom Conselho"
+      },
+      {
+        "codigo_ibge": "2602209",
+        "nome": "Bom Jardim"
+      },
+      {
+        "codigo_ibge": "2602308",
+        "nome": "Bonito"
+      },
+      {
+        "codigo_ibge": "2602407",
+        "nome": "Brejão"
+      },
+      {
+        "codigo_ibge": "2602506",
+        "nome": "Brejinho"
+      },
+      {
+        "codigo_ibge": "2602605",
+        "nome": "Brejo da Madre de Deus"
+      },
+      {
+        "codigo_ibge": "2602704",
+        "nome": "Buenos Aires"
+      },
+      {
+        "codigo_ibge": "2602803",
+        "nome": "Buíque"
+      },
+      {
+        "codigo_ibge": "2602902",
+        "nome": "Cabo de Santo Agostinho"
+      },
+      {
+        "codigo_ibge": "2603009",
+        "nome": "Cabrobó"
+      },
+      {
+        "codigo_ibge": "2603108",
+        "nome": "Cachoeirinha"
+      },
+      {
+        "codigo_ibge": "2603207",
+        "nome": "Caetés"
+      },
+      {
+        "codigo_ibge": "2603306",
+        "nome": "Calçado"
+      },
+      {
+        "codigo_ibge": "2603405",
+        "nome": "Calumbi"
+      },
+      {
+        "codigo_ibge": "2603454",
+        "nome": "Camaragibe"
+      },
+      {
+        "codigo_ibge": "2603504",
+        "nome": "Camocim de São Félix"
+      },
+      {
+        "codigo_ibge": "2603603",
+        "nome": "Camutanga"
+      },
+      {
+        "codigo_ibge": "2603702",
+        "nome": "Canhotinho"
+      },
+      {
+        "codigo_ibge": "2603801",
+        "nome": "Capoeiras"
+      },
+      {
+        "codigo_ibge": "2603900",
+        "nome": "Carnaíba"
+      },
+      {
+        "codigo_ibge": "2603926",
+        "nome": "Carnaubeira da Penha"
+      },
+      {
+        "codigo_ibge": "2604007",
+        "nome": "Carpina"
+      },
+      {
+        "codigo_ibge": "2604106",
+        "nome": "Caruaru"
+      },
+      {
+        "codigo_ibge": "2604155",
+        "nome": "Casinhas"
+      },
+      {
+        "codigo_ibge": "2604205",
+        "nome": "Catende"
+      },
+      {
+        "codigo_ibge": "2604304",
+        "nome": "Cedro"
+      },
+      {
+        "codigo_ibge": "2604403",
+        "nome": "Chã de Alegria"
+      },
+      {
+        "codigo_ibge": "2604502",
+        "nome": "Chã Grande"
+      },
+      {
+        "codigo_ibge": "2604601",
+        "nome": "Condado"
+      },
+      {
+        "codigo_ibge": "2604700",
+        "nome": "Correntes"
+      },
+      {
+        "codigo_ibge": "2604809",
+        "nome": "Cortês"
+      },
+      {
+        "codigo_ibge": "2604908",
+        "nome": "Cumaru"
+      },
+      {
+        "codigo_ibge": "2605004",
+        "nome": "Cupira"
+      },
+      {
+        "codigo_ibge": "2605103",
+        "nome": "Custódia"
+      },
+      {
+        "codigo_ibge": "2605152",
+        "nome": "Dormentes"
+      },
+      {
+        "codigo_ibge": "2605202",
+        "nome": "Escada"
+      },
+      {
+        "codigo_ibge": "2605301",
+        "nome": "Exu"
+      },
+      {
+        "codigo_ibge": "2605400",
+        "nome": "Feira Nova"
+      },
+      {
+        "codigo_ibge": "2605459",
+        "nome": "Fernando de Noronha"
+      },
+      {
+        "codigo_ibge": "2605509",
+        "nome": "Ferreiros"
+      },
+      {
+        "codigo_ibge": "2605608",
+        "nome": "Flores"
+      },
+      {
+        "codigo_ibge": "2605707",
+        "nome": "Floresta"
+      },
+      {
+        "codigo_ibge": "2605806",
+        "nome": "Frei Miguelinho"
+      },
+      {
+        "codigo_ibge": "2605905",
+        "nome": "Gameleira"
+      },
+      {
+        "codigo_ibge": "2606002",
+        "nome": "Garanhuns"
+      },
+      {
+        "codigo_ibge": "2606101",
+        "nome": "Glória do Goitá"
+      },
+      {
+        "codigo_ibge": "2606200",
+        "nome": "Goiana"
+      },
+      {
+        "codigo_ibge": "2606309",
+        "nome": "Granito"
+      },
+      {
+        "codigo_ibge": "2606408",
+        "nome": "Gravatá"
+      },
+      {
+        "codigo_ibge": "2606507",
+        "nome": "Iati"
+      },
+      {
+        "codigo_ibge": "2606606",
+        "nome": "Ibimirim"
+      },
+      {
+        "codigo_ibge": "2606705",
+        "nome": "Ibirajuba"
+      },
+      {
+        "codigo_ibge": "2606804",
+        "nome": "Igarassu"
+      },
+      {
+        "codigo_ibge": "2606903",
+        "nome": "Iguaracy"
+      },
+      {
+        "codigo_ibge": "2607604",
+        "nome": "Ilha de Itamaracá"
+      },
+      {
+        "codigo_ibge": "2607000",
+        "nome": "Inajá"
+      },
+      {
+        "codigo_ibge": "2607109",
+        "nome": "Ingazeira"
+      },
+      {
+        "codigo_ibge": "2607208",
+        "nome": "Ipojuca"
+      },
+      {
+        "codigo_ibge": "2607307",
+        "nome": "Ipubi"
+      },
+      {
+        "codigo_ibge": "2607406",
+        "nome": "Itacuruba"
+      },
+      {
+        "codigo_ibge": "2607505",
+        "nome": "Itaíba"
+      },
+      {
+        "codigo_ibge": "2607653",
+        "nome": "Itambé"
+      },
+      {
+        "codigo_ibge": "2607703",
+        "nome": "Itapetim"
+      },
+      {
+        "codigo_ibge": "2607752",
+        "nome": "Itapissuma"
+      },
+      {
+        "codigo_ibge": "2607802",
+        "nome": "Itaquitinga"
+      },
+      {
+        "codigo_ibge": "2607901",
+        "nome": "Jaboatão dos Guararapes"
+      },
+      {
+        "codigo_ibge": "2607950",
+        "nome": "Jaqueira"
+      },
+      {
+        "codigo_ibge": "2608008",
+        "nome": "Jataúba"
+      },
+      {
+        "codigo_ibge": "2608057",
+        "nome": "Jatobá"
+      },
+      {
+        "codigo_ibge": "2608107",
+        "nome": "João Alfredo"
+      },
+      {
+        "codigo_ibge": "2608206",
+        "nome": "Joaquim Nabuco"
+      },
+      {
+        "codigo_ibge": "2608255",
+        "nome": "Jucati"
+      },
+      {
+        "codigo_ibge": "2608305",
+        "nome": "Jupi"
+      },
+      {
+        "codigo_ibge": "2608404",
+        "nome": "Jurema"
+      },
+      {
+        "codigo_ibge": "2608503",
+        "nome": "Lagoa de Itaenga"
+      },
+      {
+        "codigo_ibge": "2608453",
+        "nome": "Lagoa do Carro"
+      },
+      {
+        "codigo_ibge": "2608602",
+        "nome": "Lagoa do Ouro"
+      },
+      {
+        "codigo_ibge": "2608701",
+        "nome": "Lagoa dos Gatos"
+      },
+      {
+        "codigo_ibge": "2608750",
+        "nome": "Lagoa Grande"
+      },
+      {
+        "codigo_ibge": "2608800",
+        "nome": "Lajedo"
+      },
+      {
+        "codigo_ibge": "2608909",
+        "nome": "Limoeiro"
+      },
+      {
+        "codigo_ibge": "2609006",
+        "nome": "Macaparana"
+      },
+      {
+        "codigo_ibge": "2609105",
+        "nome": "Machados"
+      },
+      {
+        "codigo_ibge": "2609154",
+        "nome": "Manari"
+      },
+      {
+        "codigo_ibge": "2609204",
+        "nome": "Maraial"
+      },
+      {
+        "codigo_ibge": "2609303",
+        "nome": "Mirandiba"
+      },
+      {
+        "codigo_ibge": "2614303",
+        "nome": "Moreilândia"
+      },
+      {
+        "codigo_ibge": "2609402",
+        "nome": "Moreno"
+      },
+      {
+        "codigo_ibge": "2609501",
+        "nome": "Nazaré da Mata"
+      },
+      {
+        "codigo_ibge": "2609600",
+        "nome": "Olinda"
+      },
+      {
+        "codigo_ibge": "2609709",
+        "nome": "Orobó"
+      },
+      {
+        "codigo_ibge": "2609808",
+        "nome": "Orocó"
+      },
+      {
+        "codigo_ibge": "2609907",
+        "nome": "Ouricuri"
+      },
+      {
+        "codigo_ibge": "2610004",
+        "nome": "Palmares"
+      },
+      {
+        "codigo_ibge": "2610103",
+        "nome": "Palmeirina"
+      },
+      {
+        "codigo_ibge": "2610202",
+        "nome": "Panelas"
+      },
+      {
+        "codigo_ibge": "2610301",
+        "nome": "Paranatama"
+      },
+      {
+        "codigo_ibge": "2610400",
+        "nome": "Parnamirim"
+      },
+      {
+        "codigo_ibge": "2610509",
+        "nome": "Passira"
+      },
+      {
+        "codigo_ibge": "2610608",
+        "nome": "Paudalho"
+      },
+      {
+        "codigo_ibge": "2610707",
+        "nome": "Paulista"
+      },
+      {
+        "codigo_ibge": "2610806",
+        "nome": "Pedra"
+      },
+      {
+        "codigo_ibge": "2610905",
+        "nome": "Pesqueira"
+      },
+      {
+        "codigo_ibge": "2611002",
+        "nome": "Petrolândia"
+      },
+      {
+        "codigo_ibge": "2611101",
+        "nome": "Petrolina"
+      },
+      {
+        "codigo_ibge": "2611200",
+        "nome": "Poção"
+      },
+      {
+        "codigo_ibge": "2611309",
+        "nome": "Pombos"
+      },
+      {
+        "codigo_ibge": "2611408",
+        "nome": "Primavera"
+      },
+      {
+        "codigo_ibge": "2611507",
+        "nome": "Quipapá"
+      },
+      {
+        "codigo_ibge": "2611533",
+        "nome": "Quixaba"
+      },
+      {
+        "codigo_ibge": "2611606",
+        "nome": "Recife"
+      },
+      {
+        "codigo_ibge": "2611705",
+        "nome": "Riacho das Almas"
+      },
+      {
+        "codigo_ibge": "2611804",
+        "nome": "Ribeirão"
+      },
+      {
+        "codigo_ibge": "2611903",
+        "nome": "Rio Formoso"
+      },
+      {
+        "codigo_ibge": "2612000",
+        "nome": "Sairé"
+      },
+      {
+        "codigo_ibge": "2612109",
+        "nome": "Salgadinho"
+      },
+      {
+        "codigo_ibge": "2612208",
+        "nome": "Salgueiro"
+      },
+      {
+        "codigo_ibge": "2612307",
+        "nome": "Saloá"
+      },
+      {
+        "codigo_ibge": "2612406",
+        "nome": "Sanharó"
+      },
+      {
+        "codigo_ibge": "2612455",
+        "nome": "Santa Cruz"
+      },
+      {
+        "codigo_ibge": "2612471",
+        "nome": "Santa Cruz da Baixa Verde"
+      },
+      {
+        "codigo_ibge": "2612505",
+        "nome": "Santa Cruz do Capibaribe"
+      },
+      {
+        "codigo_ibge": "2612554",
+        "nome": "Santa Filomena"
+      },
+      {
+        "codigo_ibge": "2612604",
+        "nome": "Santa Maria da Boa Vista"
+      },
+      {
+        "codigo_ibge": "2612703",
+        "nome": "Santa Maria do Cambucá"
+      },
+      {
+        "codigo_ibge": "2612802",
+        "nome": "Santa Terezinha"
+      },
+      {
+        "codigo_ibge": "2612901",
+        "nome": "São Benedito do Sul"
+      },
+      {
+        "codigo_ibge": "2613008",
+        "nome": "São Bento do Una"
+      },
+      {
+        "codigo_ibge": "2613107",
+        "nome": "São Caetano"
+      },
+      {
+        "codigo_ibge": "2613206",
+        "nome": "São João"
+      },
+      {
+        "codigo_ibge": "2613305",
+        "nome": "São Joaquim do Monte"
+      },
+      {
+        "codigo_ibge": "2613404",
+        "nome": "São José da Coroa Grande"
+      },
+      {
+        "codigo_ibge": "2613503",
+        "nome": "São José do Belmonte"
+      },
+      {
+        "codigo_ibge": "2613602",
+        "nome": "São José do Egito"
+      },
+      {
+        "codigo_ibge": "2613701",
+        "nome": "São Lourenço da Mata"
+      },
+      {
+        "codigo_ibge": "2613800",
+        "nome": "São Vicente Ferrer"
+      },
+      {
+        "codigo_ibge": "2613909",
+        "nome": "Serra Talhada"
+      },
+      {
+        "codigo_ibge": "2614006",
+        "nome": "Serrita"
+      },
+      {
+        "codigo_ibge": "2614105",
+        "nome": "Sertânia"
+      },
+      {
+        "codigo_ibge": "2614204",
+        "nome": "Sirinhaém"
+      },
+      {
+        "codigo_ibge": "2614402",
+        "nome": "Solidão"
+      },
+      {
+        "codigo_ibge": "2614501",
+        "nome": "Surubim"
+      },
+      {
+        "codigo_ibge": "2614600",
+        "nome": "Tabira"
+      },
+      {
+        "codigo_ibge": "2614709",
+        "nome": "Tacaimbó"
+      },
+      {
+        "codigo_ibge": "2614808",
+        "nome": "Tacaratu"
+      },
+      {
+        "codigo_ibge": "2614857",
+        "nome": "Tamandaré"
+      },
+      {
+        "codigo_ibge": "2615003",
+        "nome": "Taquaritinga do Norte"
+      },
+      {
+        "codigo_ibge": "2615102",
+        "nome": "Terezinha"
+      },
+      {
+        "codigo_ibge": "2615201",
+        "nome": "Terra Nova"
+      },
+      {
+        "codigo_ibge": "2615300",
+        "nome": "Timbaúba"
+      },
+      {
+        "codigo_ibge": "2615409",
+        "nome": "Toritama"
+      },
+      {
+        "codigo_ibge": "2615508",
+        "nome": "Tracunhaém"
+      },
+      {
+        "codigo_ibge": "2615607",
+        "nome": "Trindade"
+      },
+      {
+        "codigo_ibge": "2615706",
+        "nome": "Triunfo"
+      },
+      {
+        "codigo_ibge": "2615805",
+        "nome": "Tupanatinga"
+      },
+      {
+        "codigo_ibge": "2615904",
+        "nome": "Tuparetama"
+      },
+      {
+        "codigo_ibge": "2616001",
+        "nome": "Venturosa"
+      },
+      {
+        "codigo_ibge": "2616100",
+        "nome": "Verdejante"
+      },
+      {
+        "codigo_ibge": "2616183",
+        "nome": "Vertente do Lério"
+      },
+      {
+        "codigo_ibge": "2616209",
+        "nome": "Vertentes"
+      },
+      {
+        "codigo_ibge": "2616308",
+        "nome": "Vicência"
+      },
+      {
+        "codigo_ibge": "2616407",
+        "nome": "Vitória de Santo Antão"
+      },
+      {
+        "codigo_ibge": "2616506",
+        "nome": "Xexéu"
+      }
+    ],
+    "RN": [
+      {
+        "codigo_ibge": "2400109",
+        "nome": "Acari"
+      },
+      {
+        "codigo_ibge": "2400208",
+        "nome": "Açu"
+      },
+      {
+        "codigo_ibge": "2400307",
+        "nome": "Afonso Bezerra"
+      },
+      {
+        "codigo_ibge": "2400406",
+        "nome": "Água Nova"
+      },
+      {
+        "codigo_ibge": "2400505",
+        "nome": "Alexandria"
+      },
+      {
+        "codigo_ibge": "2400604",
+        "nome": "Almino Afonso"
+      },
+      {
+        "codigo_ibge": "2400703",
+        "nome": "Alto do Rodrigues"
+      },
+      {
+        "codigo_ibge": "2400802",
+        "nome": "Angicos"
+      },
+      {
+        "codigo_ibge": "2400901",
+        "nome": "Antônio Martins"
+      },
+      {
+        "codigo_ibge": "2401008",
+        "nome": "Apodi"
+      },
+      {
+        "codigo_ibge": "2401107",
+        "nome": "Areia Branca"
+      },
+      {
+        "codigo_ibge": "2401206",
+        "nome": "Arês"
+      },
+      {
+        "codigo_ibge": "2401305",
+        "nome": "Augusto Severo (Campo Grande)"
+      },
+      {
+        "codigo_ibge": "2401404",
+        "nome": "Baía Formosa"
+      },
+      {
+        "codigo_ibge": "2401453",
+        "nome": "Baraúna"
+      },
+      {
+        "codigo_ibge": "2401503",
+        "nome": "Barcelona"
+      },
+      {
+        "codigo_ibge": "2401602",
+        "nome": "Bento Fernandes"
+      },
+      {
+        "codigo_ibge": "2401651",
+        "nome": "Bodó"
+      },
+      {
+        "codigo_ibge": "2401701",
+        "nome": "Bom Jesus"
+      },
+      {
+        "codigo_ibge": "2401800",
+        "nome": "Brejinho"
+      },
+      {
+        "codigo_ibge": "2401859",
+        "nome": "Caiçara do Norte"
+      },
+      {
+        "codigo_ibge": "2401909",
+        "nome": "Caiçara do Rio do Vento"
+      },
+      {
+        "codigo_ibge": "2402006",
+        "nome": "Caicó"
+      },
+      {
+        "codigo_ibge": "2402105",
+        "nome": "Campo Redondo"
+      },
+      {
+        "codigo_ibge": "2402204",
+        "nome": "Canguaretama"
+      },
+      {
+        "codigo_ibge": "2402303",
+        "nome": "Caraúbas"
+      },
+      {
+        "codigo_ibge": "2402402",
+        "nome": "Carnaúba dos Dantas"
+      },
+      {
+        "codigo_ibge": "2402501",
+        "nome": "Carnaubais"
+      },
+      {
+        "codigo_ibge": "2402600",
+        "nome": "Ceará-Mirim"
+      },
+      {
+        "codigo_ibge": "2402709",
+        "nome": "Cerro Corá"
+      },
+      {
+        "codigo_ibge": "2402808",
+        "nome": "Coronel Ezequiel"
+      },
+      {
+        "codigo_ibge": "2402907",
+        "nome": "Coronel João Pessoa"
+      },
+      {
+        "codigo_ibge": "2403004",
+        "nome": "Cruzeta"
+      },
+      {
+        "codigo_ibge": "2403103",
+        "nome": "Currais Novos"
+      },
+      {
+        "codigo_ibge": "2403202",
+        "nome": "Doutor Severiano"
+      },
+      {
+        "codigo_ibge": "2403301",
+        "nome": "Encanto"
+      },
+      {
+        "codigo_ibge": "2403400",
+        "nome": "Equador"
+      },
+      {
+        "codigo_ibge": "2403509",
+        "nome": "Espírito Santo"
+      },
+      {
+        "codigo_ibge": "2403608",
+        "nome": "Extremoz"
+      },
+      {
+        "codigo_ibge": "2403707",
+        "nome": "Felipe Guerra"
+      },
+      {
+        "codigo_ibge": "2403756",
+        "nome": "Fernando Pedroza"
+      },
+      {
+        "codigo_ibge": "2403806",
+        "nome": "Florânia"
+      },
+      {
+        "codigo_ibge": "2403905",
+        "nome": "Francisco Dantas"
+      },
+      {
+        "codigo_ibge": "2404002",
+        "nome": "Frutuoso Gomes"
+      },
+      {
+        "codigo_ibge": "2404101",
+        "nome": "Galinhos"
+      },
+      {
+        "codigo_ibge": "2404200",
+        "nome": "Goianinha"
+      },
+      {
+        "codigo_ibge": "2404309",
+        "nome": "Governador Dix-Sept Rosado"
+      },
+      {
+        "codigo_ibge": "2404408",
+        "nome": "Grossos"
+      },
+      {
+        "codigo_ibge": "2404507",
+        "nome": "Guamaré"
+      },
+      {
+        "codigo_ibge": "2404606",
+        "nome": "Ielmo Marinho"
+      },
+      {
+        "codigo_ibge": "2404705",
+        "nome": "Ipanguaçu"
+      },
+      {
+        "codigo_ibge": "2404804",
+        "nome": "Ipueira"
+      },
+      {
+        "codigo_ibge": "2404853",
+        "nome": "Itajá"
+      },
+      {
+        "codigo_ibge": "2404903",
+        "nome": "Itaú"
+      },
+      {
+        "codigo_ibge": "2405009",
+        "nome": "Jaçanã"
+      },
+      {
+        "codigo_ibge": "2405108",
+        "nome": "Jandaíra"
+      },
+      {
+        "codigo_ibge": "2405207",
+        "nome": "Janduís"
+      },
+      {
+        "codigo_ibge": "2405306",
+        "nome": "Januário Cicco (Boa Saúde)"
+      },
+      {
+        "codigo_ibge": "2405405",
+        "nome": "Japi"
+      },
+      {
+        "codigo_ibge": "2405504",
+        "nome": "Jardim de Angicos"
+      },
+      {
+        "codigo_ibge": "2405603",
+        "nome": "Jardim de Piranhas"
+      },
+      {
+        "codigo_ibge": "2405702",
+        "nome": "Jardim do Seridó"
+      },
+      {
+        "codigo_ibge": "2405801",
+        "nome": "João Câmara"
+      },
+      {
+        "codigo_ibge": "2405900",
+        "nome": "João Dias"
+      },
+      {
+        "codigo_ibge": "2406007",
+        "nome": "José da Penha"
+      },
+      {
+        "codigo_ibge": "2406106",
+        "nome": "Jucurutu"
+      },
+      {
+        "codigo_ibge": "2406155",
+        "nome": "Jundiá"
+      },
+      {
+        "codigo_ibge": "2406205",
+        "nome": "Lagoa d'Anta"
+      },
+      {
+        "codigo_ibge": "2406304",
+        "nome": "Lagoa de Pedras"
+      },
+      {
+        "codigo_ibge": "2406403",
+        "nome": "Lagoa de Velhos"
+      },
+      {
+        "codigo_ibge": "2406502",
+        "nome": "Lagoa Nova"
+      },
+      {
+        "codigo_ibge": "2406601",
+        "nome": "Lagoa Salgada"
+      },
+      {
+        "codigo_ibge": "2406700",
+        "nome": "Lajes"
+      },
+      {
+        "codigo_ibge": "2406809",
+        "nome": "Lajes Pintadas"
+      },
+      {
+        "codigo_ibge": "2406908",
+        "nome": "Lucrécia"
+      },
+      {
+        "codigo_ibge": "2407005",
+        "nome": "Luís Gomes"
+      },
+      {
+        "codigo_ibge": "2407104",
+        "nome": "Macaíba"
+      },
+      {
+        "codigo_ibge": "2407203",
+        "nome": "Macau"
+      },
+      {
+        "codigo_ibge": "2407252",
+        "nome": "Major Sales"
+      },
+      {
+        "codigo_ibge": "2407302",
+        "nome": "Marcelino Vieira"
+      },
+      {
+        "codigo_ibge": "2407401",
+        "nome": "Martins"
+      },
+      {
+        "codigo_ibge": "2407500",
+        "nome": "Maxaranguape"
+      },
+      {
+        "codigo_ibge": "2407609",
+        "nome": "Messias Targino"
+      },
+      {
+        "codigo_ibge": "2407708",
+        "nome": "Montanhas"
+      },
+      {
+        "codigo_ibge": "2407807",
+        "nome": "Monte Alegre"
+      },
+      {
+        "codigo_ibge": "2407906",
+        "nome": "Monte das Gameleiras"
+      },
+      {
+        "codigo_ibge": "2408003",
+        "nome": "Mossoró"
+      },
+      {
+        "codigo_ibge": "2408102",
+        "nome": "Natal"
+      },
+      {
+        "codigo_ibge": "2408201",
+        "nome": "Nísia Floresta"
+      },
+      {
+        "codigo_ibge": "2408300",
+        "nome": "Nova Cruz"
+      },
+      {
+        "codigo_ibge": "2408409",
+        "nome": "Olho-d'Água do Borges"
+      },
+      {
+        "codigo_ibge": "2408508",
+        "nome": "Ouro Branco"
+      },
+      {
+        "codigo_ibge": "2408607",
+        "nome": "Paraná"
+      },
+      {
+        "codigo_ibge": "2408706",
+        "nome": "Paraú"
+      },
+      {
+        "codigo_ibge": "2408805",
+        "nome": "Parazinho"
+      },
+      {
+        "codigo_ibge": "2408904",
+        "nome": "Parelhas"
+      },
+      {
+        "codigo_ibge": "2403251",
+        "nome": "Parnamirim"
+      },
+      {
+        "codigo_ibge": "2409100",
+        "nome": "Passa e Fica"
+      },
+      {
+        "codigo_ibge": "2409209",
+        "nome": "Passagem"
+      },
+      {
+        "codigo_ibge": "2409308",
+        "nome": "Patu"
+      },
+      {
+        "codigo_ibge": "2409407",
+        "nome": "Pau dos Ferros"
+      },
+      {
+        "codigo_ibge": "2409506",
+        "nome": "Pedra Grande"
+      },
+      {
+        "codigo_ibge": "2409605",
+        "nome": "Pedra Preta"
+      },
+      {
+        "codigo_ibge": "2409704",
+        "nome": "Pedro Avelino"
+      },
+      {
+        "codigo_ibge": "2409803",
+        "nome": "Pedro Velho"
+      },
+      {
+        "codigo_ibge": "2409902",
+        "nome": "Pendências"
+      },
+      {
+        "codigo_ibge": "2410009",
+        "nome": "Pilões"
+      },
+      {
+        "codigo_ibge": "2410108",
+        "nome": "Poço Branco"
+      },
+      {
+        "codigo_ibge": "2410207",
+        "nome": "Portalegre"
+      },
+      {
+        "codigo_ibge": "2410256",
+        "nome": "Porto do Mangue"
+      },
+      {
+        "codigo_ibge": "2410405",
+        "nome": "Pureza"
+      },
+      {
+        "codigo_ibge": "2410504",
+        "nome": "Rafael Fernandes"
+      },
+      {
+        "codigo_ibge": "2410603",
+        "nome": "Rafael Godeiro"
+      },
+      {
+        "codigo_ibge": "2410702",
+        "nome": "Riacho da Cruz"
+      },
+      {
+        "codigo_ibge": "2410801",
+        "nome": "Riacho de Santana"
+      },
+      {
+        "codigo_ibge": "2410900",
+        "nome": "Riachuelo"
+      },
+      {
+        "codigo_ibge": "2408953",
+        "nome": "Rio do Fogo"
+      },
+      {
+        "codigo_ibge": "2411007",
+        "nome": "Rodolfo Fernandes"
+      },
+      {
+        "codigo_ibge": "2411106",
+        "nome": "Ruy Barbosa"
+      },
+      {
+        "codigo_ibge": "2411205",
+        "nome": "Santa Cruz"
+      },
+      {
+        "codigo_ibge": "2409332",
+        "nome": "Santa Maria"
+      },
+      {
+        "codigo_ibge": "2411403",
+        "nome": "Santana do Matos"
+      },
+      {
+        "codigo_ibge": "2411429",
+        "nome": "Santana do Seridó"
+      },
+      {
+        "codigo_ibge": "2411502",
+        "nome": "Santo Antônio"
+      },
+      {
+        "codigo_ibge": "2411601",
+        "nome": "São Bento do Norte"
+      },
+      {
+        "codigo_ibge": "2411700",
+        "nome": "São Bento do Trairí"
+      },
+      {
+        "codigo_ibge": "2411809",
+        "nome": "São Fernando"
+      },
+      {
+        "codigo_ibge": "2411908",
+        "nome": "São Francisco do Oeste"
+      },
+      {
+        "codigo_ibge": "2412005",
+        "nome": "São Gonçalo do Amarante"
+      },
+      {
+        "codigo_ibge": "2412104",
+        "nome": "São João do Sabugi"
+      },
+      {
+        "codigo_ibge": "2412203",
+        "nome": "São José de Mipibu"
+      },
+      {
+        "codigo_ibge": "2412302",
+        "nome": "São José do Campestre"
+      },
+      {
+        "codigo_ibge": "2412401",
+        "nome": "São José do Seridó"
+      },
+      {
+        "codigo_ibge": "2412500",
+        "nome": "São Miguel"
+      },
+      {
+        "codigo_ibge": "2412559",
+        "nome": "São Miguel do Gostoso"
+      },
+      {
+        "codigo_ibge": "2412609",
+        "nome": "São Paulo do Potengi"
+      },
+      {
+        "codigo_ibge": "2412708",
+        "nome": "São Pedro"
+      },
+      {
+        "codigo_ibge": "2412807",
+        "nome": "São Rafael"
+      },
+      {
+        "codigo_ibge": "2412906",
+        "nome": "São Tomé"
+      },
+      {
+        "codigo_ibge": "2413003",
+        "nome": "São Vicente"
+      },
+      {
+        "codigo_ibge": "2413102",
+        "nome": "Senador Elói de Souza"
+      },
+      {
+        "codigo_ibge": "2413201",
+        "nome": "Senador Georgino Avelino"
+      },
+      {
+        "codigo_ibge": "2410306",
+        "nome": "Serra Caiada"
+      },
+      {
+        "codigo_ibge": "2413300",
+        "nome": "Serra de São Bento"
+      },
+      {
+        "codigo_ibge": "2413359",
+        "nome": "Serra do Mel"
+      },
+      {
+        "codigo_ibge": "2413409",
+        "nome": "Serra Negra do Norte"
+      },
+      {
+        "codigo_ibge": "2413508",
+        "nome": "Serrinha"
+      },
+      {
+        "codigo_ibge": "2413557",
+        "nome": "Serrinha dos Pintos"
+      },
+      {
+        "codigo_ibge": "2413607",
+        "nome": "Severiano Melo"
+      },
+      {
+        "codigo_ibge": "2413706",
+        "nome": "Sítio Novo"
+      },
+      {
+        "codigo_ibge": "2413805",
+        "nome": "Taboleiro Grande"
+      },
+      {
+        "codigo_ibge": "2413904",
+        "nome": "Taipu"
+      },
+      {
+        "codigo_ibge": "2414001",
+        "nome": "Tangará"
+      },
+      {
+        "codigo_ibge": "2414100",
+        "nome": "Tenente Ananias"
+      },
+      {
+        "codigo_ibge": "2414159",
+        "nome": "Tenente Laurentino Cruz"
+      },
+      {
+        "codigo_ibge": "2411056",
+        "nome": "Tibau"
+      },
+      {
+        "codigo_ibge": "2414209",
+        "nome": "Tibau do Sul"
+      },
+      {
+        "codigo_ibge": "2414308",
+        "nome": "Timbaúba dos Batistas"
+      },
+      {
+        "codigo_ibge": "2414407",
+        "nome": "Touros"
+      },
+      {
+        "codigo_ibge": "2414456",
+        "nome": "Triunfo Potiguar"
+      },
+      {
+        "codigo_ibge": "2414506",
+        "nome": "Umarizal"
+      },
+      {
+        "codigo_ibge": "2414605",
+        "nome": "Upanema"
+      },
+      {
+        "codigo_ibge": "2414704",
+        "nome": "Várzea"
+      },
+      {
+        "codigo_ibge": "2414753",
+        "nome": "Venha-Ver"
+      },
+      {
+        "codigo_ibge": "2414803",
+        "nome": "Vera Cruz"
+      },
+      {
+        "codigo_ibge": "2414902",
+        "nome": "Viçosa"
+      },
+      {
+        "codigo_ibge": "2415008",
+        "nome": "Vila Flor"
+      }
+    ],
+    "DF": [
+      {
+        "codigo_ibge": "5300108",
+        "nome": "Brasília"
+      }
+    ]
+  },
+  "licenca": "MIT License\n\nCopyright (c) 2016 Kelvin S. do Prado\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+}

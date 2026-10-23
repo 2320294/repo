@@ -495,19 +495,19 @@ def renderizar_admin_normativos(email):
     st.subheader("Perfis cadastrados")
     if any(perfil_bloco_neoenergia(p) for p in perfis):
         st.markdown("#### Vínculo territorial — bloco Neoenergia")
-        st.caption("Consulta os nomes oficiais no IBGE e vincula somente os rascunhos já cadastrados: Coelba/BA (415), Pernambuco/PE (185 registros, incluindo Fernando de Noronha), Cosern/RN (167) e Brasília/DF (1). Não ativa cálculos. Outras UFs citadas pelas distribuidoras exigem perfis separados.")
+        st.caption("Usa o catálogo municipal incluído no pacote, sem depender da disponibilidade do IBGE. Vincula somente os rascunhos já cadastrados: Coelba/BA (415), Pernambuco/PE (185 registros, incluindo Fernando de Noronha), Cosern/RN (167) e Brasília/DF (1). Área de concessão baseada nas fontes oficiais registradas; nomes e códigos provenientes do catálogo público identificado em cada perfil. Não ativa cálculos. Outras UFs exigem perfis separados.")
         if st.button("Executar testes do vínculo territorial Neoenergia"):
             testes_territorio = testar_territorios_neoenergia()
             st.dataframe(testes_territorio, hide_index=True, use_container_width=True)
             st.write(f"Vínculo territorial: {sum(t['Resultado']=='PASSOU' for t in testes_territorio)}/{len(testes_territorio)} testes de software. Não valida cálculos ou cobertura por endereço.")
         if st.button("Vincular municípios aos quatro rascunhos Neoenergia"):
-            with st.spinner("Consultando municípios oficiais e registrando os vínculos..."):
+            with st.spinner("Conferindo o catálogo municipal e registrando os vínculos..."):
                 st.session_state['resultado_territorio_neoenergia'] = vincular_territorios_neoenergia(
                     lambda: listar_perfis(ativos_apenas=False, administrativo=True), salvar_perfil, email)
             st.rerun()
         if st.session_state.get('resultado_territorio_neoenergia'):
             st.dataframe(st.session_state['resultado_territorio_neoenergia'], hide_index=True, use_container_width=True)
-            st.caption("Se houver pendência por indisponibilidade do IBGE, repita depois. Os vínculos já registrados são preservados.")
+            st.caption("Os vínculos já registrados são preservados. Se houver pendência, confira o detalhe; não é necessário aguardar a API do IBGE.")
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
         if perfil_bloco_neoenergia(p):
@@ -530,6 +530,8 @@ def renderizar_admin_normativos(email):
                         st.write(", ".join(p['municipios_atendidos']))
                         st.write(territorio['fonte_concessao'])
                         st.write(territorio['fonte_nomes'])
+                        if territorio.get('origem_nomes'):
+                            st.caption(territorio['origem_nomes'])
                         if territorio.get('fonte_exclusoes'):
                             st.write(territorio['fonte_exclusoes'])
                 for referencia_regional in referencias_regionais_neoenergia(p):
