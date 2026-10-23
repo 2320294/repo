@@ -159,10 +159,28 @@ def renderizar_parametros_projeto(
     except Exception:
         perfis_liberados = []
 
+    # Ensaio Enel restrito ao administrador; rascunhos nunca são publicados.
+    from admin_normativos import usuario_e_admin
+    from normativo_enel import perfil_enel_sp, CHAVE_AUDITORIA, registro_entrada_enel_sp, CHAVE_MOTORES, registro_motores_enel_sp, METODO_DECLARADO, CHAVE_DECLARACAO
+    admin_enel = usuario_e_admin(st.session_state.get("user_email", ""))
+    if admin_enel and uf and municipio:
+        try:
+            from perfis_normativos import listar_perfis, perfil_atende_municipio
+            ensaios_enel = [p for p in listar_perfis(administrativo=True)
+                if perfil_enel_sp(p) and p.get("status") in ("RASCUNHO", "VALIDADO")
+                and perfil_atende_municipio(p, uf, municipio)
+                and (p.get("regras") or {}).get(CHAVE_AUDITORIA) == registro_entrada_enel_sp()
+                and (p.get("regras") or {}).get(CHAVE_MOTORES) == registro_motores_enel_sp()]
+            perfis_liberados += ensaios_enel
+        except Exception:
+            pass
+
     rotulos_perfis = ["Selecione um Perfil Normativo..."]
     mapa_perfis = {}
     for p in perfis_liberados:
         rotulo = f"{p.get('concessionaria','')} — {p.get('documento') or 'Norma'} {p.get('revisao') or ''}".strip()
+        if perfil_enel_sp(p) and p.get("status") != "ATIVO":
+            rotulo += " — ENSAIO ADMINISTRATIVO"
         if p.get("municipio"):
             rotulo += f" — {p.get('municipio')}/{p.get('uf')}"
         rotulos_perfis.append(rotulo)
@@ -277,6 +295,10 @@ def renderizar_parametros_projeto(
         ),
         "Manual pelo responsável técnico"
     ]
+
+    enel_selecionada = perfil_enel_sp(perfil_selecionado or {})
+    if enel_selecionada:
+        metodos = [METODO_DECLARADO]
 
     from admin_normativos import usuario_e_admin
     from normativo_elektro import integracao_METODO as METODO_ELEKTRO
@@ -432,8 +454,32 @@ def renderizar_parametros_projeto(
         rede.get("requisitos_concessionaria_validados_rt", False)
     )
 
+    declaracao_enel = {}
+    if enel_selecionada:
+        st.info("Ensaio administrativo Enel SP: demanda declarada pelo responsável técnico; rede aérea estrela 127/220 V, até 100 A. Não utiliza fatores automáticos e não publica o perfil.")
+        salvo_enel = rede.get(CHAVE_DECLARACAO) or {}
+        vinculo_enel = str(rede.get("perfil_normativo_id")) == str(perfil_normativo_id) and rede.get("municipio") == municipio
+        if not vinculo_enel:
+            salvo_enel = {}
+        # Chaves por projeto/perfil/localidade impedem confirmação herdada de outro ensaio.
+        prefixo_enel = _widget_key(f"enel_decl_{perfil_normativo_id}_{uf}_{municipio}")
+        unidade_enel = st.selectbox("Unidade da demanda declarada", ["kW", "kVA"], index=1 if salvo_enel.get("unidade") == "kVA" else 0, key=prefixo_enel+"_unidade")
+        valor_enel = st.number_input("Demanda declarada pelo responsável técnico", min_value=0.0, value=float(salvo_enel.get("demanda") or 0), key=prefixo_enel+"_demanda")
+        fp_enel = None
+        if unidade_enel == "kVA":
+            fp_enel = st.number_input("Fator de potência declarado", min_value=0.0, max_value=1.0, value=float(salvo_enel.get("fator_potencia") or 0), key=prefixo_enel+"_fp")
+        corrente_enel = st.number_input("Corrente máxima de demanda declarada por fase (A)", min_value=0.0, value=float(salvo_enel.get("corrente_max_a") or 0), key=prefixo_enel+"_corrente")
+        responsavel_enel = st.text_input("Responsável técnico pela declaração", value=salvo_enel.get("responsavel", ""), key=prefixo_enel+"_rt")
+        metodologia_enel = st.text_area("Metodologia e referência do memorial de cálculo de demanda", value=salvo_enel.get("metodologia", ""), key=prefixo_enel+"_metodo")
+        escopo_enel = st.checkbox("Conferi rede aérea urbana estrela 127/220 V e ausência de cargas especiais ou motores com verificação pendente", value=bool(salvo_enel.get("escopo_confirmado")), key=prefixo_enel+"_escopo")
+        modalidade_enel = st.checkbox("Modalidade de fornecimento conferida tecnicamente, inclusive eventual sobreposição B/C entre 15,1 e 20 kW", value=bool(salvo_enel.get("modalidade_confirmada")), key=prefixo_enel+"_modalidade")
+        confirmado_enel = st.checkbox("Demanda, corrente e metodologia conferidas pelo responsável técnico", value=bool(salvo_enel.get("confirmada_rt")), key=prefixo_enel+"_confirmado")
+        declaracao_enel = dict(unidade=unidade_enel,demanda=valor_enel,fator_potencia=fp_enel,corrente_max_a=corrente_enel,responsavel=responsavel_enel,metodologia=metodologia_enel,escopo_confirmado=escopo_enel,modalidade_confirmada=modalidade_enel,confirmada_rt=confirmado_enel)
+
     parametros_rede = {
         **rede,  # Preserva alimentador e snapshots das outras etapas.
+        CHAVE_DECLARACAO: declaracao_enel,
+        "enel_ensaio_admin": bool(enel_selecionada and admin_enel),
         "uf": uf,
         "municipio": municipio,
         "concessionaria": concessionaria,

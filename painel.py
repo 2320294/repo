@@ -1193,6 +1193,9 @@ def renderizar_painel_principal():
 
         # REV.218 — dimensionamento do alimentador continua automático e persistido,
         # porém seus controles/memória deixam de ser exibidos na Etapa 3.
+        if resultado_demanda.get("enel_referencia_entrada"):
+            st.info(resultado_demanda.get("observacao", "Ensaio administrativo Enel SP."))
+
         if resultado_demanda.get("corrente_demanda_a") is not None and resultado_demanda.get("disjuntor_geral_a") is not None:
             alimentador_salvo = (config_atual.get(CHAVE_PARAMETROS_REDE, {}) or {}).get("alimentador_geral", {}) or {}
             def chave_alimentador(campo):

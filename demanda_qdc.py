@@ -446,6 +446,18 @@ def calcular_demanda_qdc(tabela_editada, parametros_rede):
     pot = potencia_instalada(tabela_editada)
     metodo = str(rede.get("metodo_demanda", ""))
 
+    from normativo_enel import perfil_enel_sp, calcular_demanda_declarada_enel_sp, METODO_DECLARADO
+    try:
+        perfil_enel = perfil_por_id(rede.get("perfil_normativo_id"))
+    except Exception:
+        perfil_enel = None
+    if (perfil_enel_sp(perfil_enel or {}) or metodo == METODO_DECLARADO
+            or str(rede.get("perfil_normativo_concessionaria") or "").casefold() == "enel são paulo"):
+        import streamlit as st
+        from admin_normativos import usuario_e_admin
+        return calcular_demanda_declarada_enel_sp(tabela_editada, rede, perfil_enel, pot,
+            ensaio_autorizado=usuario_e_admin(st.session_state.get("user_email", "")))
+
     if metodo == "Elektro — teste integrado de demanda (sem DG)":
         from normativo_elektro import integracao_calcular_integrada as calcular_integrada
         try:

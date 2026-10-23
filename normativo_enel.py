@@ -349,3 +349,94 @@ def testar_motores_enel_sp():
         ok=obtido['status']==esperado and not obtido['aprovacao_automatica'] and not obtido['demanda_calculada']
         resultados.append({'Caso':nome,'Esperado':esperado,'Obtido':obtido['status'],'Resultado':'PASSOU' if ok else 'FALHOU'})
     return resultados
+
+METODO_DECLARADO = 'Enel SP — demanda declarada pelo responsável técnico'
+CHAVE_DECLARACAO = 'enel_demanda_declarada'
+
+
+def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_autorizado=False):
+    """Ensaio integrado: dados declarados pelo RT; nenhum fator estimado."""
+    import math
+    r=dict(potencias, status='conferencia_tecnica', metodo=METODO_DECLARADO,
+           perfil_normativo_id=(perfil or {}).get('id'),
+           potencia_demanda_w=None,corrente_demanda_a=None,disjuntor_geral_a=None,
+           fator_demanda_pct=None,detalhes_demanda=[],pendencias=[],
+           tipo_fornecimento=rede.get('tipo_fornecimento'),
+           tensao_fornecimento=rede.get('tensao_fornecimento'),
+           perfil_normativo='Enel São Paulo — '+DOCUMENTO+' 02',
+           aprovacao_automatica=False)
+    def pendente(motivo):
+        return dict(r,observacao=motivo,pendencias=[motivo])
+    if not perfil_enel_sp(perfil or {}) or not enel_sp_atende_localidade(rede.get('uf'),rede.get('municipio')):
+        return pendente('Perfil ou município incompatível com Enel São Paulo.')
+    cidades={str(n).strip().casefold() for n in (perfil.get('municipios_atendidos') or [])}
+    if str(rede.get('municipio') or '').strip().casefold() not in cidades:
+        return pendente('Município não vinculado ao perfil selecionado.')
+    if (not ensaio_autorizado or rede.get('enel_ensaio_admin') is not True
+            or perfil.get('status') not in ('RASCUNHO','VALIDADO')):
+        return pendente('Fluxo Enel em ensaio administrativo; publicação ainda não liberada.')
+    regras=perfil.get('regras') or {}
+    if (perfil.get('documento')!=DOCUMENTO or perfil.get('revisao')!='02'
+            or regras.get(CHAVE_AUDITORIA)!=registro_entrada_enel_sp()
+            or regras.get(CHAVE_MOTORES)!=registro_motores_enel_sp()):
+        return pendente('Registre as auditorias atuais de entrada e motores no perfil Enel.')
+    if rede.get('metodo_demanda')!=METODO_DECLARADO:
+        return pendente('Estimativa automática de demanda Enel SP bloqueada. Use a demanda declarada pelo responsável técnico.')
+    d=rede.get(CHAVE_DECLARACAO) or {}
+    if not isinstance(d,dict):return pendente('Declaração de demanda ausente.')
+    if (not str(d.get('metodologia') or '').strip() or not str(d.get('responsavel') or '').strip()
+            or d.get('confirmada_rt') is not True):
+        return pendente('Informe responsável, metodologia e confirme a declaração técnica de demanda.')
+    if d.get('escopo_confirmado') is not True or rede.get('tensao_fornecimento')!='127/220 V':
+        return pendente('Confirme rede aérea urbana estrela 127/220 V e enquadramento sem cargas especiais pendentes.')
+    if d.get('modalidade_confirmada') is not True:
+        return pendente('Confirme tecnicamente a modalidade de fornecimento, inclusive eventual sobreposição B/C.')
+    try:
+        def positivo(v):
+            if isinstance(v,bool):raise ValueError()
+            f=float(v)
+            if not math.isfinite(f) or f<=0:raise ValueError()
+            return f
+        valor=positivo(d.get('demanda'));corrente=positivo(d.get('corrente_max_a'))
+        instalada=positivo(potencias.get('total_w'))/1000
+        if d.get('unidade')=='kW':kw=valor
+        elif d.get('unidade')=='kVA':
+            fp=positivo(d.get('fator_potencia'))
+            if fp>1:raise ValueError()
+            kw=valor*fp
+        else:raise ValueError()
+    except (TypeError,ValueError,OverflowError):
+        return pendente('Informe demanda/corrente positivas; para kVA, informe fator de potência maior que zero e até 1.')
+    if corrente>100:
+        return pendente('Ensaio integrado inicial limitado a 100 A; medição e atendimento acima desse valor exigem análise específica.')
+    if kw>instalada+1e-6:
+        return pendente('Demanda ativa declarada excede a carga instalada cadastrada. Confira cargas e metodologia.')
+    if instalada>75:
+        return pendente('Acima de 75 kW: fora do escopo deste ensaio; análise específica da distribuidora, sem direcionar automaticamente à média tensão.')
+    modalidades=[]
+    if instalada<=12:modalidades.append('Monofásico')
+    if 12<instalada<=20:modalidades.append('Bifásico')
+    if 15.1<=instalada<=75:modalidades.append('Trifásico')
+    tipo=rede.get('tipo_fornecimento')
+    if tipo not in modalidades:
+        return pendente('Modalidade informada fora das faixas da Tabela 2 para este escopo.')
+    n={'Monofásico':1,'Bifásico':2,'Trifásico':3}[tipo]
+    # Limite físico conservador: I máxima declarada não pode ser inferior à
+    # média mínima P/(n*Vfn). 1% apenas para arredondamento de dados declarados.
+    if corrente*n*127*1.01<kw*1000:
+        return pendente('Corrente máxima declarada incompatível com a demanda ativa e o número de fases. Confira o memorial de cálculo.')
+    letra={'Monofásico':'A','Bifásico':'B','Trifásico':'C'}[tipo]
+    refs=[x for x in registro_entrada_enel_sp()['entrada'] if x['categoria'].startswith(letra) and corrente<=x['disjuntor_referencia_a']]
+    if not refs:return pendente('Corrente declarada acima das referências disponíveis da modalidade. Conferência técnica necessária.')
+    ref=refs[0]
+    obs=('ENSAIO ADMINISTRATIVO Enel SP: demanda e corrente declaradas pelo responsável técnico; '
+         'sem estimativa automática. Categoria '+ref['categoria']+' é referência do Anexo B; '
+         'não aprova padrão de entrada, proteção ou ligação. Ramal de entrada e alimentador do QDC são verificações distintas.')
+    avisos=[]
+    if instalada>15:avisos.append('Viabilidade da rede: carga acima de 15 kW (7.10.2).')
+    else:avisos.append('Carga até 15 kW não implica dispensa automática de viabilidade; conferir rede próxima e impacto no transformador (7.10.2).')
+    if instalada>38:avisos.append('Apresentar projeto de entrada para análise (7.8.1/Tabela 4).')
+    if 50<instalada<=75:avisos.append('Nota 4 do item 7.4: eventual Grupo A depende de cargas perturbadoras e estudo da distribuidora; não é reenquadramento automático.')
+    return dict(r,status='ok',potencia_demanda_w=kw*1000,corrente_demanda_a=corrente,
+                disjuntor_geral_a=ref['disjuntor_referencia_a'],observacao=obs+' '+' '.join(avisos),
+                enel_declaracao=dict(d),enel_referencia_entrada=ref,enel_avisos=avisos)

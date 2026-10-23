@@ -96,7 +96,7 @@ def contexto_resultados_rede(rede):
     campos = ("uf", "municipio", "concessionaria", "perfil_normativo_id",
               "perfil_normativo_documento", "perfil_normativo_revisao",
               "metodo_demanda", "fator_demanda_manual", "tipo_fornecimento",
-              "tensao_fornecimento", "perfil_elektro_teste_id", "contexto_elektro_teste")
+              "tensao_fornecimento", "perfil_elektro_teste_id", "contexto_elektro_teste", "enel_demanda_declarada", "enel_ensaio_admin")
     from copy import deepcopy
     return deepcopy({k: (rede or {}).get(k) for k in campos})
 
