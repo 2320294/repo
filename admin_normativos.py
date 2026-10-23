@@ -1,6 +1,7 @@
 from normativo_neoenergia import perfil_bloco_neoenergia, planejar_bloco_neoenergia, cadastrar_bloco_neoenergia, testar_bloco_neoenergia, pendencias_bloco_neoenergia, CHAVE_BLOCO
 from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neoenergia_registrado, referencias_regionais_neoenergia, CHAVE_TERRITORIO as CHAVE_TERRITORIO_NEOENERGIA, testar_territorios_neoenergia
 from normativo_neoenergia import CHAVE_ENTRADA as CHAVE_ENTRADA_NEOENERGIA, cadastrar_auditorias_entrada_neoenergia, auditoria_entrada_neoenergia_registrada, testar_entrada_bloco_neoenergia, consultar_entrada_neoenergia
+from normativo_neoenergia import CHAVE_DEMANDA as CHAVE_DEMANDA_NEOENERGIA, cadastrar_auditorias_demanda_neoenergia, auditoria_demanda_neoenergia_registrada, testar_demanda_bloco_neoenergia, dados_ensaio_demanda_neoenergia, calcular_ensaio_demanda_neoenergia
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -521,6 +522,18 @@ def renderizar_admin_normativos(email):
             st.rerun()
         if st.session_state.get('resultado_entrada_bloco_neoenergia'):
             st.dataframe(st.session_state['resultado_entrada_bloco_neoenergia'], hide_index=True, use_container_width=True)
+        st.markdown("#### Auditoria de demanda — ensaio isolado Neoenergia")
+        st.caption("Fatores residenciais trifásicos das Tabelas 6/7/8/9/12/16. Sem integração aos projetos. Fogões, motores, cargas especiais, recarga veicular, climatização central e usos coletivos/comerciais ficam fora deste ensaio.")
+        if st.button("Executar testes de demanda isolada Neoenergia"):
+            testes_demanda_bloco = testar_demanda_bloco_neoenergia()
+            st.dataframe(testes_demanda_bloco, hide_index=True, use_container_width=True)
+            st.write(f"Demanda isolada: {sum(t['Resultado']=='PASSOU' for t in testes_demanda_bloco)}/{len(testes_demanda_bloco)} testes de software. Não libera o perfil nem aprova instalações.")
+        if st.button("Registrar demanda isolada nos quatro rascunhos Neoenergia"):
+            st.session_state['resultado_demanda_bloco_neoenergia'] = cadastrar_auditorias_demanda_neoenergia(
+                lambda:listar_perfis(False,administrativo=True),salvar_perfil,email)
+            st.rerun()
+        if st.session_state.get('resultado_demanda_bloco_neoenergia'):
+            st.dataframe(st.session_state['resultado_demanda_bloco_neoenergia'],hide_index=True,use_container_width=True)
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
         if perfil_bloco_neoenergia(p):
@@ -549,6 +562,27 @@ def renderizar_admin_normativos(email):
                             st.write(territorio['fonte_exclusoes'])
                 for referencia_regional in referencias_regionais_neoenergia(p):
                     st.write(referencia_regional)
+                if auditoria_demanda_neoenergia_registrada(p):
+                    registro_demanda_bloco = p['regras'][CHAVE_DEMANDA_NEOENERGIA]
+                    st.success("Demanda residencial trifásica disponível para ensaio administrativo isolado.")
+                    with st.expander("Ensaio isolado de demanda — Neoenergia"):
+                        import pandas as pd
+                        for restricao_demanda in registro_demanda_bloco['referencia']['restricoes']:
+                            st.caption(restricao_demanda)
+                        st.info("Os valores iniciais são fictícios: resultado esperado de 19,500 kVA. Esta tabela não lê nem altera o projeto aberto.")
+                        st.caption("Informe a potência TOTAL de cada grupo, e não a potência por aparelho. Grupo f: total em VA; demais grupos: total em W. Grupo ausente: quantidade e potência iguais a zero.")
+                        dados_demanda_bloco = st.data_editor(pd.DataFrame(dados_ensaio_demanda_neoenergia()),
+                            disabled=['Grupo','Descrição','Unidade'], num_rows='fixed',hide_index=True,use_container_width=True,
+                            key=f"editor_demanda_neo_{p.get('id')}")
+                        fp_d_bloco = st.number_input("FP do grupo d — norma 0,92 ou fabricante",min_value=0.0,max_value=1.0,value=0.92,step=0.01,key=f"fp_d_demanda_neo_{p.get('id')}")
+                        excluidas_demanda_bloco = st.checkbox("Há fogões, motores, soldas, cargas especiais, recarga veicular, climatização central, vestiários ou uso coletivo/comercial.",key=f"excluidas_demanda_neo_{p.get('id')}")
+                        confirma_demanda_bloco = st.checkbox("Confirmo ensaio residencial individual trifásico; conferi cargas mínimas do item 6.25.7, classificação, quantidades e potências elétricas dos sete grupos, com dados de placa/catálogo quando aplicáveis.",key=f"confirma_demanda_neo_{p.get('id')}")
+                        if st.button("Calcular ensaio isolado de demanda",key=f"calcular_demanda_neo_{p.get('id')}"):
+                            resultado_demanda_bloco = calcular_ensaio_demanda_neoenergia(p,dados_demanda_bloco.to_dict('records'),fp_d_bloco,confirma_demanda_bloco,excluidas_demanda_bloco)
+                            st.write(resultado_demanda_bloco['motivo'])
+                            if resultado_demanda_bloco['demanda_total_kva'] is not None:
+                                st.write(f"Demanda do ensaio: {resultado_demanda_bloco['demanda_total_kva']:.3f} kVA")
+                                st.dataframe(resultado_demanda_bloco['memoria'],hide_index=True,use_container_width=True)
                 if auditoria_entrada_neoenergia_registrada(p):
                     registro_entrada_bloco = p['regras'][CHAVE_ENTRADA_NEOENERGIA]
                     referencia_entrada_bloco = registro_entrada_bloco['referencia']

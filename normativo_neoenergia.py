@@ -7,6 +7,182 @@ from pathlib import Path
 import math
 
 CHAVE_ENTRADA = 'auditoria_entrada_bloco_neoenergia_v1'
+CHAVE_DEMANDA = 'auditoria_demanda_bloco_neoenergia_v1'
+
+
+def registro_demanda_neoenergia(perfil):
+    if not perfil_bloco_neoenergia(perfil):raise ValueError('Distribuidora fora do bloco.')
+    empresa=next(e for e in EMPRESAS if e['concessionaria'].casefold()==str(perfil['concessionaria']).strip().casefold())
+    return dict(schema=1,concessionaria=empresa['concessionaria'],uf=empresa['uf'],
+        documento=DOCUMENTO,revisao=REVISAO,fonte=empresa['pdf'],
+        escopo='Ensaio isolado residencial individual trifásico; cargas mínimas previamente conferidas pelo responsável.',
+        grupos=['a','b','c','d','e','f','i'],
+        fatores=dict(
+            tabela6=[.86,.75,.66,.59,.52,.45,.40,.35,.31,.27,.24],
+            tabela7=[1,1,.84,.76,.70,.65,.60,.57,.54,.52,.49,.48,.46,.45,.44,.43,.42,.41,.40,.40,.39,.39,.39,.38,.38],
+            tabela8=[1,.72,.62],
+            tabela9=[{'ate':1,'fd':1},{'ate':4,'fd':.70},{'ate':6,'fd':.60},{'ate':None,'fd':.50}],
+            tabela12_residencial=[{'ate':10,'fd':1},{'ate':20,'fd':.86},{'ate':30,'fd':.80},{'ate':40,'fd':.78},{'ate':50,'fd':.75},{'ate':75,'fd':.70},{'ate':100,'fd':.65},{'ate':None,'fd':.60}],
+            tabela16=[1,.56,.47,.39]),
+        referencias=['6.27, páginas 47–49: demanda em kVA e FP por grupo',
+            'Tabela 6, página 65: FD sobre a carga total do grupo a; acima de 10 kW, 0,24',
+            'Tabelas 7/8/9, página 66; Tabela 11, página 67, nota 1; Tabelas 12/16, página 68'],
+        restricoes=[
+            'Sem integração com projetos, enquadramento de entrada, corrente, disjuntor ou aprovação de instalação.',
+            'Potência total do grupo: W para a/b/c/d/e/i; VA para f. Informar potência elétrica, não capacidade térmica em BTU/h.',
+            'Grupo b reúne chuveiros, torneiras, aquecedores de passagem e ferros; somar quantidades e potências antes de aplicar o FD.',
+            'Grupo d: secadoras/lavadoras/lava-louças/micro-ondas, FP 0,92 ou fabricante; grupo e neste ensaio: somente fornos elétricos, FP 1,00.',
+            'Fogões bloqueados: item 6.27.5 remete à Tabela 9, mas a Tabela 10 é específica para fogões. Não resolver a divergência silenciosamente.',
+            'Motores, soldas, equipamentos especiais, recarga veicular, climatização central, vestiários e usos coletivos/comerciais exigem outra análise.',
+            'Dados mínimos do item 6.25.7 devem estar conferidos. Quantidade zero exige potência zero; dados ausentes não são assumidos como ausência de carga.',
+            'Dados de placa/catálogo do ar condicionado prevalecem sobre estimativas da Tabela 11. Neste ensaio o total em VA deve estar previamente determinado.',
+        ],libera_calculo=False)
+
+
+def auditoria_demanda_neoenergia_registrada(perfil):
+    if not perfil_bloco_neoenergia(perfil):return False
+    r=((perfil or {}).get('regras') or {}).get(CHAVE_DEMANDA) or {}
+    return r.get('referencia')==registro_demanda_neoenergia(perfil) and bool(r.get('responsavel')) and bool(r.get('registrado_em'))
+
+
+def registrar_demanda_neoenergia(perfil,responsavel):
+    # Reutiliza as validações documentais, sem alterar o registro de entrada salvo.
+    registrar_entrada_neoenergia(perfil,responsavel)
+    if not auditoria_entrada_neoenergia_registrada(perfil):raise ValueError('Registre primeiro as referências de entrada.')
+    regras=deepcopy(perfil['regras'])
+    if regras.get(CHAVE_DEMANDA):
+        if not auditoria_demanda_neoenergia_registrada(perfil):raise ValueError('Auditoria de demanda divergente; preservada para conferência.')
+        return regras
+    regras[CHAVE_DEMANDA]=dict(referencia=registro_demanda_neoenergia(perfil),responsavel=str(responsavel).strip(),registrado_em=datetime.now(timezone.utc).isoformat())
+    return regras
+
+
+def cadastrar_auditorias_demanda_neoenergia(listar,salvar,responsavel):
+    resultados=[]
+    for empresa in EMPRESAS:
+        try:
+            encontrados=[p for p in listar() if str(p.get('concessionaria') or '').strip().casefold()==empresa['concessionaria'].casefold() and p.get('uf')==empresa['uf']]
+            if len(encontrados)!=1 or not encontrados[0].get('id'):raise ValueError('Necessário um único perfil salvo por distribuidora/UF.')
+            p=encontrados[0];regras=registrar_demanda_neoenergia(p,responsavel)
+            if auditoria_demanda_neoenergia_registrada(p):resultado='JÁ REGISTRADA — PRESERVADA'
+            else:
+                if not salvar({'regras':regras},perfil_id=p['id']):raise ValueError('Banco não confirmou a gravação.')
+                resultado='DEMANDA ISOLADA REGISTRADA EM RASCUNHO'
+            resultados.append({'Distribuidora':empresa['concessionaria'],'Resultado':resultado})
+        except Exception as exc:resultados.append({'Distribuidora':empresa['concessionaria'],'Resultado':'PENDENTE','Detalhe':str(exc)})
+    return resultados
+
+
+def dados_ensaio_demanda_neoenergia():
+    return [
+        {'Grupo':'a','Descrição':'Iluminação e tomadas','Quantidade':1,'Potência total':10000.0,'Unidade':'W'},
+        {'Grupo':'b','Descrição':'Chuveiros, torneiras, passagem e ferros','Quantidade':2,'Potência total':11000.0,'Unidade':'W'},
+        {'Grupo':'c','Descrição':'Boiler','Quantidade':0,'Potência total':0.0,'Unidade':'W'},
+        {'Grupo':'d','Descrição':'Secadoras, lavadoras, lava-louças e micro-ondas','Quantidade':0,'Potência total':0.0,'Unidade':'W'},
+        {'Grupo':'e','Descrição':'Somente forno elétrico','Quantidade':1,'Potência total':2000.0,'Unidade':'W'},
+        {'Grupo':'f','Descrição':'Ar condicionado individual — potência elétrica aparente','Quantidade':2,'Potência total':3800.0,'Unidade':'VA'},
+        {'Grupo':'i','Descrição':'Bombas e hidromassagem','Quantidade':0,'Potência total':0.0,'Unidade':'W'},
+    ]
+
+
+def calcular_ensaio_demanda_neoenergia(perfil,linhas,fp_d=.92,escopo_confirmado=False,cargas_fora_escopo=False):
+    saida=dict(status='conferencia_tecnica',demanda_total_kva=None,memoria=[],aprovacao_automatica=False,motivo='')
+    def pendencia(msg):saida['motivo']=msg;return saida
+    if not auditoria_demanda_neoenergia_registrada(perfil):return pendencia('Referências de demanda ainda não registradas ou divergentes.')
+    if escopo_confirmado is not True or cargas_fora_escopo is not False:return pendencia('Confirme o escopo residencial individual trifásico e a ausência das cargas excluídas.')
+    if not isinstance(linhas,list) or len(linhas)!=7 or any(not isinstance(r,dict) for r in linhas):return pendencia('Informe os sete grupos; declare explicitamente zero para os ausentes.')
+    grupos=[r.get('Grupo') for r in linhas]
+    if any(not isinstance(g,str) for g in grupos) or sorted(grupos)!=['a','b','c','d','e','f','i']:return pendencia('Grupos ausentes, duplicados ou fora do escopo.')
+    def numero(valor):
+        if isinstance(valor,bool):return None
+        try:valor=float(valor)
+        except (TypeError,ValueError,OverflowError):return None
+        return valor if math.isfinite(valor) and valor>=0 else None
+    fatores=registro_demanda_neoenergia(perfil)['fatores'];memoria=[]
+    def faixa(tabela,n):return next(r['fd'] for r in tabela if r['ate'] is None or n<=r['ate'])
+    for r in sorted(linhas,key=lambda r:r['Grupo']):
+        g=r['Grupo'];q=numero(r.get('Quantidade'));pot=numero(r.get('Potência total'))
+        if q is None or not q.is_integer() or q>100000 or pot is None:return pendencia(f'Grupo {g}: quantidade inteira e potência finitas são obrigatórias.')
+        q=int(q)
+        if (q==0)!=(pot==0):return pendencia(f'Grupo {g}: quantidade e potência devem ser ambas zero ou ambas positivas.')
+        unidade='VA' if g=='f' else 'W'
+        if r.get('Unidade')!=unidade:return pendencia(f'Grupo {g}: unidade obrigatória {unidade}. Não informar BTU/h.')
+        if g=='a' and q not in (0,1):return pendencia('Grupo a: use uma carga total agregada, com quantidade 1 ou zero se ausente.')
+        fd=0.0;fp=None if g=='f' else 1.0
+        if q:
+            if g=='a':fd=fatores['tabela6'][min(10,max(0,math.ceil(pot/1000)-1))]
+            elif g=='b':fd=fatores['tabela7'][min(q,25)-1]
+            elif g=='c':fd=fatores['tabela8'][min(q,3)-1]
+            elif g in ('d','e'):fd=faixa(fatores['tabela9'],q)
+            elif g=='f':fd=faixa(fatores['tabela12_residencial'],q)
+            elif g=='i':fd=fatores['tabela16'][min(q,4)-1]
+            if g=='d':
+                fp=numero(fp_d)
+                if fp is None or not 0<fp<=1:return pendencia('Grupo d: FP deve ser positivo e até 1,00, conforme norma ou fabricante.')
+        parcela=pot*fd/(fp if fp is not None else 1)/1000
+        if not math.isfinite(parcela):return pendencia('Valor excede a capacidade numérica do ensaio.')
+        memoria.append({'Grupo':g,'Quantidade':q,'Potência total':pot,'Unidade':unidade,'FD':fd,'FP':fp,'Demanda (kVA)':parcela})
+    total=sum(r['Demanda (kVA)'] for r in memoria)
+    if not math.isfinite(total) or total<=0:return pendencia('Demanda total deve ser positiva e finita.')
+    saida.update(status='ensaio_isolado',demanda_total_kva=total,memoria=memoria,motivo='Ensaio dos grupos a+b+c+d+e+f+i. Grupos g/h/j e cargas excluídas não abrangidos. Não altera o projeto nem seleciona proteção ou categoria de entrada.')
+    return saida
+
+
+def testar_demanda_bloco_neoenergia():
+    casos=[]
+    def verifica(nome,ok):casos.append({'Caso':nome,'Resultado':'PASSOU' if ok else 'FALHOU'})
+    def perto(a,b):return a is not None and math.isclose(a,b,rel_tol=1e-10,abs_tol=1e-10)
+    def isolado(g,q,pot):
+        linhas=dados_ensaio_demanda_neoenergia()
+        for r in linhas:r.update(Quantidade=0,**{'Potência total':0.0})
+        next(r for r in linhas if r['Grupo']==g).update(Quantidade=q,**{'Potência total':pot})
+        return linhas
+    perfis=[]
+    for i,p in enumerate(preparar_bloco_neoenergia('TESTE')):
+        p['id']=str(i+1);p=preparar_territorio_neoenergia(p,'TESTE');p['regras']=registrar_entrada_neoenergia(p,'TESTE');antes=deepcopy(p)
+        p['regras']=registrar_demanda_neoenergia(p,'TESTE');perfis.append(p)
+        nome=p['concessionaria']+': '
+        verifica(nome+'registro canônico',auditoria_demanda_neoenergia_registrada(p))
+        verifica(nome+'entrada e território preservados',p['regras'][CHAVE_ENTRADA]==antes['regras'][CHAVE_ENTRADA] and p['regras'][CHAVE_TERRITORIO]==antes['regras'][CHAVE_TERRITORIO])
+        verifica(nome+'continua rascunho sem motor de projeto',p['status']=='RASCUNHO' and not p['regras']['demanda'] and not p['regras']['fornecimento'] and p['regras']['fonte_conferida'] is False)
+        verifica(nome+'registro repetido preservado',registrar_demanda_neoenergia(p,'OUTRO')==p['regras'])
+        r=calcular_ensaio_demanda_neoenergia(p,dados_ensaio_demanda_neoenergia(),escopo_confirmado=True)
+        verifica(nome+'ensaio de referência 19,5 kVA',r['status']=='ensaio_isolado' and perto(r['demanda_total_kva'],19.5) and r['aprovacao_automatica'] is False)
+        for kw,fd in [(1,.86),(1.001,.75),(2,.75),(2.001,.66),(3,.66),(3.001,.59),(4,.59),(4.001,.52),(5,.52),(5.001,.45),(6,.45),(6.001,.40),(7,.40),(7.001,.35),(8,.35),(8.001,.31),(9,.31),(9.001,.27),(10,.27),(10.001,.24)]:
+            r=calcular_ensaio_demanda_neoenergia(p,isolado('a',1,kw*1000),escopo_confirmado=True)
+            verifica(nome+f'Tabela 6: {kw} kW FD {fd}',perto(r['demanda_total_kva'],kw*fd))
+        for g,q,pot,esperado in [('b',7,29000,17.4),('b',26,26000,9.88),('c',2,2000,1.44),('c',4,4000,2.48),('d',1,1000,1/.92),('d',4,4000,2.8/.92),('d',5,5000,3/.92),('d',7,7000,3.5/.92),('e',2,4000,2.8),('f',11,11000,9.46),('f',21,21000,16.8),('f',31,31000,24.18),('f',41,41000,30.75),('f',51,51000,35.7),('f',76,76000,49.4),('f',101,101000,60.6),('i',2,2000,1.12),('i',3,3000,1.41),('i',4,4000,1.56)]:
+            r=calcular_ensaio_demanda_neoenergia(p,isolado(g,q,pot),escopo_confirmado=True)
+            verifica(nome+f'grupo {g}, {q} aparelhos',perto(r['demanda_total_kva'],esperado))
+        r=calcular_ensaio_demanda_neoenergia(p,isolado('d',1,1000),fp_d=.8,escopo_confirmado=True)
+        verifica(nome+'FP fabricante prevalece no grupo d',perto(r['demanda_total_kva'],1.25))
+        for q,pot in [(None,1000),(1.5,1000),(True,1000),(-1,1000),(1,float('nan')),(1,float('inf')),(0,1000),(1,0),(1,None)]:
+            r=calcular_ensaio_demanda_neoenergia(p,isolado('b',q,pot),escopo_confirmado=True)
+            verifica(nome+f'dados inválidos {q}/{pot}',r['demanda_total_kva'] is None)
+        for fp in [0,-1,1.01,None,True,float('nan')]:
+            verifica(nome+f'FP inválido {fp}',calcular_ensaio_demanda_neoenergia(p,isolado('d',1,1000),fp_d=fp,escopo_confirmado=True)['demanda_total_kva'] is None)
+        verifica(nome+'escopo não confirmado bloqueado',calcular_ensaio_demanda_neoenergia(p,dados_ensaio_demanda_neoenergia())['demanda_total_kva'] is None)
+        verifica(nome+'cargas excluídas bloqueadas',calcular_ensaio_demanda_neoenergia(p,dados_ensaio_demanda_neoenergia(),escopo_confirmado=True,cargas_fora_escopo=True)['demanda_total_kva'] is None)
+        linhas=dados_ensaio_demanda_neoenergia();linhas[5]['Unidade']='BTU/h'
+        verifica(nome+'BTU não tratado como potência elétrica',calcular_ensaio_demanda_neoenergia(p,linhas,escopo_confirmado=True)['demanda_total_kva'] is None)
+        linhas=dados_ensaio_demanda_neoenergia();linhas[1]['Grupo']='a'
+        verifica(nome+'grupo duplicado bloqueado',calcular_ensaio_demanda_neoenergia(p,linhas,escopo_confirmado=True)['demanda_total_kva'] is None)
+        verifica(nome+'grupo ausente bloqueado',calcular_ensaio_demanda_neoenergia(p,dados_ensaio_demanda_neoenergia()[:-1],escopo_confirmado=True)['demanda_total_kva'] is None)
+        linhas=isolado('a',0,0)
+        verifica(nome+'todos zero não liberam ensaio',calcular_ensaio_demanda_neoenergia(p,linhas,escopo_confirmado=True)['demanda_total_kva'] is None)
+        adulterado=deepcopy(p);adulterado['regras'][CHAVE_DEMANDA]['referencia']['fatores']['tabela6'][0]=1
+        verifica(nome+'referência alterada bloqueada',calcular_ensaio_demanda_neoenergia(adulterado,dados_ensaio_demanda_neoenergia(),escopo_confirmado=True)['demanda_total_kva'] is None)
+    db=deepcopy(perfis)
+    for p in db:p['regras'].pop(CHAVE_DEMANDA)
+    chamadas=[]
+    def salvar(dados,perfil_id):
+        chamadas.append(perfil_id);p=next(r for r in db if r['id']==perfil_id);p.update(deepcopy(dados));return [p]
+    r=cadastrar_auditorias_demanda_neoenergia(lambda:db,salvar,'TESTE')
+    verifica('Lote registra demanda isolada nos quatro',len(chamadas)==4 and all(x['Resultado']=='DEMANDA ISOLADA REGISTRADA EM RASCUNHO' for x in r))
+    antes=deepcopy(db);r=cadastrar_auditorias_demanda_neoenergia(lambda:db,salvar,'OUTRO')
+    verifica('Lote repetido não regrava',len(chamadas)==4 and db==antes)
+    verifica('Elektro fora deste ensaio',calcular_ensaio_demanda_neoenergia({'concessionaria':'Neoenergia Elektro'},dados_ensaio_demanda_neoenergia(),escopo_confirmado=True)['demanda_total_kva'] is None)
+    return casos
 
 
 def tabela_entrada_neoenergia(perfil):
