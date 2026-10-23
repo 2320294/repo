@@ -562,7 +562,7 @@ def renderizar_admin_normativos(email):
                 st.caption("Rodada 13.6.335: ensaio fictício bifásico em Barueri/SP. Registro por confirmação administrativa; não executa os testes novamente.")
                 consolidado = (p.get("regras") or {}).get(CHAVE_INTEGRACAO)
                 if consolidado:
-                    st.success("Rodada de testes integrados registrada. Perfil permanece em RASCUNHO.")
+                    st.success("Rodada de testes integrados registrada. Status atual: " + str(p.get("status", "RASCUNHO")))
                     st.write({"Versão ensaiada": consolidado.get("versao_ensaiada"), "Registrado por": consolidado.get("registrado_por"), "Data UTC": consolidado.get("registrado_em")})
                     for limite in consolidado.get("limites", []):
                         st.caption(limite)
@@ -575,6 +575,35 @@ def renderizar_admin_normativos(email):
                             st.rerun()
                         except Exception as exc:
                             st.error(f"Não foi possível consolidar: {exc}")
+                st.markdown("#### Publicação restrita — Barueri/SP")
+                from normativo_enel import ESCOPO_PUBLICACAO, preparar_publicacao_enel_sp, publicacao_enel_registrada, testar_publicacao_enel_sp
+                st.write(ESCOPO_PUBLICACAO)
+                st.caption("A lista de concessão mantém 24 municípios; esta publicação disponibiliza o perfil somente em Barueri. Outros casos permanecem fora do fluxo publicado. Não é homologação da distribuidora.")
+                if st.button("Executar testes de publicação restrita", key=f"testar_pub_enel_{p.get('id')}"):
+                    testes_publicacao = testar_publicacao_enel_sp()
+                    st.dataframe(testes_publicacao, hide_index=True, use_container_width=True)
+                    st.write(f"Software: {sum(t['Resultado'] == 'PASSOU' for t in testes_publicacao)}/{len(testes_publicacao)} casos. Não substitui validação técnica.")
+                if p.get("status") == "RASCUNHO":
+                    fonte_publicacao = st.checkbox("Conferi no documento oficial a revisão 02, vigência 06/03/2025 e as referências deste escopo declaratório.", key=f"fonte_pub_enel_{p.get('id')}")
+                    if st.button("Preparar publicação declaratória restrita", disabled=not fonte_publicacao, key=f"preparar_pub_enel_{p.get('id')}"):
+                        try:
+                            regras_publicacao = preparar_publicacao_enel_sp(p, email, fonte_publicacao)
+                            salvar_perfil({"regras": regras_publicacao}, perfil_id=p.get("id"))
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Publicação não preparada: {exc}")
+                if publicacao_enel_registrada(p):
+                    st.success("Preparação registrada para o fluxo declaratório restrito. Estimativa automática permanece bloqueada.")
+                    destino_enel = "VALIDADO" if p.get("status") == "RASCUNHO" else ("ATIVO" if p.get("status") == "VALIDADO" else None)
+                    if destino_enel and st.button("Marcar como " + destino_enel + " — fluxo restrito", key=f"status_pub_enel_{p.get('id')}"):
+                        try:
+                            atualizar_status(p.get("id"), destino_enel, validado_por=email)
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Não foi possível alterar o status: {exc}")
+                    if p.get("status") in ("VALIDADO", "ATIVO") and st.button("Retornar a RASCUNHO", key=f"rascunho_pub_enel_{p.get('id')}"):
+                        atualizar_status(p.get("id"), "RASCUNHO", validado_por=email)
+                        st.rerun()
                 # Evita apresentar o editor genérico de fatores como regras Enel.
                 continue
             if eh_perfil_elektro(p):

@@ -52,20 +52,9 @@ def preparar_rascunho_enel_sp(criado_por=''):
 
 
 def pendencias_ativacao_enel_sp(perfil):
-    pendencias = ['Concluir a revisão para publicação do fluxo declaratório Enel SP: o ensaio administrativo não libera uso por usuários comuns nem cálculo automático de demanda.']
-    if not (perfil.get('regras') or {}).get('auditoria_enel_sp_integracao_v1'):
-        pendencias.append('Consolidar o registro administrativo dos testes integrados declaratórios.')
-    if (perfil.get('regras') or {}).get(CHAVE_AUDITORIA) != registro_entrada_enel_sp():
-        pendencias.append('Registrar a auditoria atual das modalidades e do Anexo B.')
-    if not (perfil.get('regras') or {}).get('fonte_conferida'):
-        pendencias.append('Conferir a fonte oficial versão 02 de 06/03/2025.')
-    if (perfil.get('documento') != DOCUMENTO or perfil.get('revisao') != '02'
-            or perfil.get('fonte_oficial') != FONTE_OFICIAL):
-        pendencias.append('Confirmar documento, revisão e URL atuais do portal oficial.')
-    cidades = perfil.get('municipios_atendidos')
-    if (not isinstance(cidades, list) or not cidades or
-            any(not enel_sp_atende_localidade(perfil.get('uf'), n) for n in cidades)):
-        pendencias.append('Restringir a lista aos municípios confirmados da Enel São Paulo.')
+    pendencias = pendencias_base_publicacao_enel_sp(perfil)
+    if not publicacao_enel_registrada(perfil):
+        pendencias.append('Preparar a publicação restrita do fluxo declaratório após conferir a fonte e os testes.')
     return pendencias
 
 
@@ -374,9 +363,14 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
     cidades={str(n).strip().casefold() for n in (perfil.get('municipios_atendidos') or [])}
     if str(rede.get('municipio') or '').strip().casefold() not in cidades:
         return pendente('Município não vinculado ao perfil selecionado.')
-    if (not ensaio_autorizado or rede.get('enel_ensaio_admin') is not True
-            or perfil.get('status') not in ('RASCUNHO','VALIDADO')):
-        return pendente('Fluxo Enel em ensaio administrativo; publicação ainda não liberada.')
+    publicado = perfil.get('status') == 'ATIVO' and not pendencias_ativacao_enel_sp(perfil)
+    ensaio = (ensaio_autorizado and rede.get('enel_ensaio_admin') is True
+              and perfil.get('status') in ('RASCUNHO','VALIDADO'))
+    if not publicado and not ensaio:
+        return pendente('Perfil Enel não liberado para este usuário. Utilize o ensaio administrativo ou publique o fluxo restrito.')
+    if publicado and (str(rede.get('municipio') or '').strip().casefold() != 'barueri'
+                       or rede.get('tipo_fornecimento') != 'Bifásico'):
+        return pendente('Fluxo publicado restrito a Barueri/SP e fornecimento bifásico. Demais casos exigem análise técnica.')
     regras=perfil.get('regras') or {}
     if (perfil.get('documento')!=DOCUMENTO or perfil.get('revisao')!='02'
             or regras.get(CHAVE_AUDITORIA)!=registro_entrada_enel_sp()
@@ -410,7 +404,7 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
     except (TypeError,ValueError,OverflowError):
         return pendente('Informe demanda/corrente positivas; para kVA, informe fator de potência maior que zero e até 1.')
     if corrente>100:
-        return pendente('Ensaio integrado inicial limitado a 100 A; medição e atendimento acima desse valor exigem análise específica.')
+        return pendente('Fluxo declaratório limitado a 100 A; medição e atendimento acima desse valor exigem análise específica.')
     if kw>instalada+1e-6:
         return pendente('Demanda ativa declarada excede a carga instalada cadastrada. Confira cargas e metodologia.')
     if instalada>75:
@@ -425,13 +419,14 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
     n={'Monofásico':1,'Bifásico':2,'Trifásico':3}[tipo]
     # Limite físico conservador: I máxima declarada não pode ser inferior à
     # média mínima P/(n*Vfn). 1% apenas para arredondamento de dados declarados.
-    if corrente*n*127*1.01<kw*1000:
+    potencia_minima_corrente = valor*1000 if d.get('unidade') == 'kVA' else kw*1000
+    if corrente*n*127*1.01<potencia_minima_corrente:
         return pendente('Corrente máxima declarada incompatível com a demanda ativa e o número de fases. Confira o memorial de cálculo.')
     letra={'Monofásico':'A','Bifásico':'B','Trifásico':'C'}[tipo]
     refs=[x for x in registro_entrada_enel_sp()['entrada'] if x['categoria'].startswith(letra) and corrente<=x['disjuntor_referencia_a']]
     if not refs:return pendente('Corrente declarada acima das referências disponíveis da modalidade. Conferência técnica necessária.')
     ref=refs[0]
-    obs=('ENSAIO ADMINISTRATIVO Enel SP: demanda e corrente declaradas pelo responsável técnico; '
+    obs=(('FLUXO DECLARATÓRIO RESTRITO Enel SP: ' if publicado else 'ENSAIO ADMINISTRATIVO Enel SP: ') + 'demanda e corrente declaradas pelo responsável técnico; '
          'sem estimativa automática. Categoria '+ref['categoria']+' é referência do Anexo B; '
          'não aprova padrão de entrada, proteção ou ligação. Ramal de entrada e alimentador do QDC são verificações distintas.')
     avisos=[]
@@ -440,7 +435,7 @@ def calcular_demanda_declarada_enel_sp(tabela, rede, perfil, potencias, ensaio_a
     if instalada>38:avisos.append('Apresentar projeto de entrada para análise (7.8.1/Tabela 4).')
     if 50<instalada<=75:avisos.append('Nota 4 do item 7.4: eventual Grupo A depende de cargas perturbadoras e estudo da distribuidora; não é reenquadramento automático.')
     return dict(r,status='ok',potencia_demanda_w=kw*1000,corrente_demanda_a=corrente,
-                disjuntor_geral_a=ref['disjuntor_referencia_a'],observacao=obs+' '+' '.join(avisos),
+                enel_fluxo_publicado=publicado,disjuntor_geral_a=ref['disjuntor_referencia_a'],observacao=obs+' '+' '.join(avisos),
                 enel_declaracao=dict(d),enel_referencia_entrada=ref,enel_avisos=avisos)
 
 
@@ -481,3 +476,132 @@ def consolidar_integracao_enel_sp(perfil, responsavel, confirmacao=False):
         'aprovacao_automatica': False,
     }
     return regras
+
+
+CHAVE_PUBLICACAO = 'publicacao_enel_sp_declaratoria_v1'
+ESCOPO_PUBLICACAO = {
+    'uf': 'SP', 'municipios': ['Barueri'], 'tipo_fornecimento': 'Bifásico',
+    'tensao': '127/220 V', 'rede': 'Aérea urbana estrela',
+    'corrente_max_a': 100, 'carga_instalada_min_exclusiva_kw': 12,
+    'carga_instalada_max_kw': 20, 'metodo': METODO_DECLARADO,
+    'demanda_automatica': False, 'cargas_especiais': False,
+}
+
+
+def _assinatura_integracao(perfil):
+    import hashlib, json
+    return hashlib.sha256(json.dumps((perfil.get('regras') or {}).get(CHAVE_INTEGRACAO),
+        sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def pendencias_base_publicacao_enel_sp(perfil):
+    regras = perfil.get('regras') or {}
+    pendencias = []
+    if not perfil_enel_sp(perfil) or perfil.get('uf') != 'SP':
+        pendencias.append('Perfil deve corresponder à Enel São Paulo/SP.')
+    if (perfil.get('documento') != DOCUMENTO or perfil.get('revisao') != '02'
+            or perfil.get('vigencia') != '06/03/2025' or perfil.get('fonte_oficial') != FONTE_OFICIAL):
+        pendencias.append('Conferir documento, revisão, vigência e fonte oficial cadastrados.')
+    if regras.get('fonte_conferida') is not True:
+        pendencias.append('Confirmar a leitura da fonte oficial.')
+    if regras.get(CHAVE_AUDITORIA) != registro_entrada_enel_sp():
+        pendencias.append('Registrar a auditoria atual de modalidades e Anexo B.')
+    if regras.get(CHAVE_MOTORES) != registro_motores_enel_sp():
+        pendencias.append('Registrar a auditoria atual de motores.')
+    cidades = perfil.get('municipios_atendidos')
+    if (not isinstance(cidades, list) or 'Barueri' not in cidades
+            or any(not enel_sp_atende_localidade('SP', n) for n in cidades)):
+        pendencias.append('Conferir municípios de concessão, incluindo Barueri.')
+    reg = regras.get(CHAVE_INTEGRACAO) or {}
+    if (not isinstance(reg, dict) or reg.get('schema') != 1
+            or reg.get('versao_ensaiada') != '13.6.335' or not reg.get('registrado_por')
+            or not reg.get('registrado_em') or reg.get('aprovacao_automatica') is not False
+            or reg.get('casos') != [{'id': codigo, 'resultado': 'CONFIRMADO PELO ADMINISTRADOR', 'descricao': texto}
+                                    for codigo, texto in CASOS_INTEGRACAO]):
+        pendencias.append('Consolidar a rodada completa de testes integrados declaratórios.')
+    return pendencias
+
+
+def publicacao_enel_registrada(perfil):
+    reg = (perfil.get('regras') or {}).get(CHAVE_PUBLICACAO) or {}
+    return (isinstance(reg, dict) and reg.get('schema') == 1
+            and reg.get('escopo') == ESCOPO_PUBLICACAO
+            and reg.get('integracao_assinatura') == _assinatura_integracao(perfil)
+            and bool(reg.get('registrado_por')) and bool(reg.get('registrado_em'))
+            and reg.get('testes_software') == 'PASSOU')
+
+
+def preparar_publicacao_enel_sp(perfil, responsavel, fonte_confirmada=False, executar_testes=True):
+    from copy import deepcopy
+    from datetime import datetime, timezone
+    if perfil.get('status') != 'RASCUNHO' or fonte_confirmada is not True or not str(responsavel or '').strip():
+        raise ValueError('Exige RASCUNHO, administrador identificado e fonte oficial conferida.')
+    novo = deepcopy(perfil)
+    novo.setdefault('regras', {})['fonte_conferida'] = True
+    pendencias = pendencias_base_publicacao_enel_sp(novo)
+    if pendencias:
+        raise ValueError(' '.join(pendencias))
+    if executar_testes:
+        resultados = testar_publicacao_enel_sp()
+        if not all(t['Resultado'] == 'PASSOU' for t in resultados):
+            raise ValueError('Falha nos testes de publicação restrita.')
+    novo['regras']['observacoes'] = 'Fluxo declaratório restrito a Barueri/SP, bifásico 127/220 V aéreo urbano estrela, até 100 A, carga instalada acima de 12 até 20 kW. Demanda e corrente sob responsabilidade do RT; sem estimativa automática ou aprovação da entrada.'
+    novo['regras'][CHAVE_PUBLICACAO] = {
+        'schema': 1, 'escopo': deepcopy(ESCOPO_PUBLICACAO),
+        'integracao_assinatura': _assinatura_integracao(novo),
+        'registrado_por': str(responsavel).strip(),
+        'registrado_em': datetime.now(timezone.utc).isoformat(),
+        'testes_software': 'PASSOU', 'versao_preparacao': '13.6.337',
+    }
+    return novo['regras']
+
+
+def testar_publicacao_enel_sp():
+    """Casos sintéticos de acesso e limites; não são homologação elétrica."""
+    from copy import deepcopy
+    p = preparar_rascunho_enel_sp(); p['id'] = 999
+    p['regras'] = registrar_auditoria_entrada_enel_sp(p)
+    p['regras'] = registrar_auditoria_motores_enel_sp(p)
+    p['regras'] = consolidar_integracao_enel_sp(p, 'TESTE AUTOMATIZADO', True)
+    p['regras'] = preparar_publicacao_enel_sp(p, 'TESTE AUTOMATIZADO', True, executar_testes=False)
+    p['status'] = 'ATIVO'
+    rede = dict(uf='SP', municipio='Barueri', tipo_fornecimento='Bifásico',
+        tensao_fornecimento='127/220 V', metodo_demanda=METODO_DECLARADO,
+        enel_demanda_declarada=dict(demanda=12.12, unidade='kW', corrente_max_a=55,
+        responsavel='TESTE', metodologia='TESTE', confirmada_rt=True,
+        escopo_confirmado=True, modalidade_confirmada=True))
+    casos = []
+    def caso(nome, perfil=None, dados=None, total=19798, esperado=True):
+        r = calcular_demanda_declarada_enel_sp([], dados or rede, perfil or p, {'total_w':total}, False)
+        passou = ((r['status']=='ok') == esperado and r['aprovacao_automatica'] is False)
+        casos.append({'Caso':nome, 'Resultado':'PASSOU' if passou else 'FALHOU'})
+    caso('Usuário comum com perfil ativo e escopo válido')
+    for campo, valor in [('municipio','São Paulo'),('uf','RJ'),('tipo_fornecimento','Trifásico'),
+                         ('tensao_fornecimento','220/380 V'),('metodo_demanda','Automático')]:
+        r=deepcopy(rede); r[campo]=valor; caso('Bloqueio: '+campo, dados=r, esperado=False)
+    for campo, valor in [('corrente_max_a',0),('corrente_max_a',100.001),('demanda',19798),
+                         ('confirmada_rt',False),('escopo_confirmado',False),('modalidade_confirmada',False)]:
+        r=deepcopy(rede);r[CHAVE_DECLARACAO][campo]=valor;caso('Declaração inválida: '+campo, dados=r, esperado=False)
+    for status in ['RASCUNHO','VALIDADO','INATIVO']:
+        pp=deepcopy(p);pp['status']=status;caso('Status '+status, perfil=pp, esperado=False)
+    for chave in [CHAVE_PUBLICACAO,CHAVE_INTEGRACAO,CHAVE_AUDITORIA,CHAVE_MOTORES,'fonte_conferida']:
+        pp=deepcopy(p);pp['regras'].pop(chave);caso('Registro ausente: '+chave, perfil=pp, esperado=False)
+    for total in [12000,20001,75001]:caso('Carga fora da faixa '+str(total),total=total,esperado=False)
+    for corrente in [50,63,80,100]:
+        r=deepcopy(rede);r[CHAVE_DECLARACAO]['corrente_max_a']=corrente
+        caso('Referência de corrente '+str(corrente),dados=r)
+    r=deepcopy(rede);r[CHAVE_DECLARACAO].update(unidade='kVA',demanda=12,fator_potencia=.9)
+    caso('kVA válido',dados=r)
+    r[CHAVE_DECLARACAO]['fator_potencia']=0;caso('FP zero',dados=r,esperado=False)
+    for total in [12001,20000]:
+        r=deepcopy(rede);r[CHAVE_DECLARACAO]['demanda']=10.8
+        caso('Limite válido de carga '+str(total),dados=r,total=total)
+    r=deepcopy(rede);r[CHAVE_DECLARACAO].update(unidade='kVA',demanda=20,fator_potencia=.5,corrente_max_a=50)
+    caso('kVA incompatível com a corrente declarada',dados=r,esperado=False)
+    r=deepcopy(rede);r[CHAVE_DECLARACAO].update(unidade='kVA',demanda=12,fator_potencia=1.01)
+    caso('FP acima de um',dados=r,esperado=False)
+    pp=deepcopy(p);pp['regras'][CHAVE_PUBLICACAO]['escopo']['municipios']=['São Paulo']
+    caso('Escopo de publicação alterado',perfil=pp,esperado=False)
+    pp=deepcopy(p);pp['regras'][CHAVE_INTEGRACAO]['registrado_por']='alterado'
+    caso('Histórico alterado invalida preparação',perfil=pp,esperado=False)
+    return casos

@@ -181,6 +181,8 @@ def renderizar_parametros_projeto(
         rotulo = f"{p.get('concessionaria','')} — {p.get('documento') or 'Norma'} {p.get('revisao') or ''}".strip()
         if perfil_enel_sp(p) and p.get("status") != "ATIVO":
             rotulo += " — ENSAIO ADMINISTRATIVO"
+        elif perfil_enel_sp(p):
+            rotulo += " — declaratório restrito a Barueri/SP"
         if p.get("municipio"):
             rotulo += f" — {p.get('municipio')}/{p.get('uf')}"
         rotulos_perfis.append(rotulo)
@@ -456,7 +458,11 @@ def renderizar_parametros_projeto(
 
     declaracao_enel = {}
     if enel_selecionada:
-        st.info("Ensaio administrativo Enel SP: demanda declarada pelo responsável técnico; rede aérea estrela 127/220 V, até 100 A. Não utiliza fatores automáticos e não publica o perfil.")
+        enel_publicada = (perfil_selecionado or {}).get("status") == "ATIVO"
+        if enel_publicada:
+            st.info("Enel SP — fluxo declaratório restrito a Barueri/SP: bifásico, rede aérea urbana estrela 127/220 V, até 100 A e carga instalada acima de 12 até 20 kW. Demanda e corrente exigem memorial do responsável técnico. Não aprova a entrada nem estima demanda automaticamente.")
+        else:
+            st.info("Ensaio administrativo Enel SP: demanda declarada pelo responsável técnico; rede aérea estrela 127/220 V, até 100 A. Não utiliza fatores automáticos e não publica o perfil.")
         salvo_enel = rede.get(CHAVE_DECLARACAO) or {}
         vinculo_enel = str(rede.get("perfil_normativo_id")) == str(perfil_normativo_id) and rede.get("municipio") == municipio
         if not vinculo_enel:
@@ -479,7 +485,7 @@ def renderizar_parametros_projeto(
     parametros_rede = {
         **rede,  # Preserva alimentador e snapshots das outras etapas.
         CHAVE_DECLARACAO: declaracao_enel,
-        "enel_ensaio_admin": bool(enel_selecionada and admin_enel),
+        "enel_ensaio_admin": bool(enel_selecionada and admin_enel and (perfil_selecionado or {}).get("status") != "ATIVO"),
         "uf": uf,
         "municipio": municipio,
         "concessionaria": concessionaria,

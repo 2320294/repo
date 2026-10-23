@@ -784,7 +784,8 @@ def gerar_memorial_pdf(
         story.append(Paragraph(escape("Perfil normativo: " + perfil_aplicado + "."), styles["Texto"]))
     if "enel" in perfil_aplicado.casefold():
         declaracao_enel = rede_memorial.get("enel_demanda_declarada") or {}
-        story.append(Paragraph(escape("ENSAIO ADMINISTRATIVO — demanda declarada; sem estimativa automática Enel SP."), styles["Texto"]))
+        rotulo_enel = "FLUXO DECLARATÓRIO RESTRITO — Barueri/SP" if demanda_memorial.get("enel_fluxo_publicado") is True else "ENSAIO ADMINISTRATIVO"
+        story.append(Paragraph(escape(rotulo_enel + " — demanda declarada; sem estimativa automática Enel SP."), styles["Texto"]))
         for titulo_enel, campo_enel in [("Responsável pela declaração", "responsavel"), ("Metodologia declarada", "metodologia")]:
             story.append(Paragraph(escape(titulo_enel + ": " + str(declaracao_enel.get(campo_enel) or "não informado")), styles["Texto"]))
         story.append(Paragraph(escape("Demanda informada: " + str(declaracao_enel.get("demanda") or "—") + " " + str(declaracao_enel.get("unidade") or "") + "; corrente máxima por fase: " + str(declaracao_enel.get("corrente_max_a") or "—") + " A. Referência do Anexo B sem aprovação automática da entrada; ramal de entrada e alimentador do QDC são verificações distintas."), styles["Texto"]))

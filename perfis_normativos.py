@@ -23,6 +23,10 @@ def perfil_atende_municipio(perfil, uf, municipio):
     from normativo_enel import perfil_enel_sp, enel_sp_atende_localidade
     if perfil_enel_sp(perfil) and not enel_sp_atende_localidade(uf, municipio):
         return False
+    if perfil_enel_sp(perfil) and perfil.get("status") == "ATIVO":
+        from normativo_enel import pendencias_ativacao_enel_sp
+        if cidade != "barueri" or pendencias_ativacao_enel_sp(perfil):
+            return False
     cidades = perfil.get("municipios_atendidos")
     if cidades is not None:
         return bool(cidade and cidade in {
