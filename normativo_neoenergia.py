@@ -8,6 +8,177 @@ import math
 
 CHAVE_ENTRADA = 'auditoria_entrada_bloco_neoenergia_v1'
 CHAVE_DEMANDA = 'auditoria_demanda_bloco_neoenergia_v1'
+CHAVE_CONSOLIDACAO = 'consolidacao_ensaios_bloco_neoenergia_v1'
+
+
+def consolidar_ensaio_neoenergia(perfil,responsavel,confirmacao=False):
+    if confirmacao is not True:raise ValueError('Confirme somente os ensaios executados neste perfil.')
+    registrar_demanda_neoenergia(perfil,responsavel)
+    if not auditoria_demanda_neoenergia_registrada(perfil):raise ValueError('Demanda isolada não registrada.')
+    regras=deepcopy(perfil['regras'])
+    if regras.get(CHAVE_CONSOLIDACAO):return regras
+    casos=testar_integracao_bloco_neoenergia()
+    if any(r['Resultado']!='PASSOU' for r in casos):raise ValueError('Testes de integração não passaram.')
+    referencia=dict(entrada=registro_entrada_neoenergia(perfil),demanda=registro_demanda_neoenergia(perfil))
+    assinatura=hashlib.sha256(json.dumps(referencia,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    regras[CHAVE_CONSOLIDACAO]=dict(schema=1,responsavel=str(responsavel).strip(),
+        registrado_em=datetime.now(timezone.utc).isoformat(),versao_ensaiada='13.6.345',
+        origem='Confirmação administrativa dos ensaios de interface; não é homologação técnica.',
+        assinatura_referencias=assinatura,testes_software=len(casos),
+        casos_confirmados=[
+            'Demanda fictícia de 19,500 kVA recuperada após bloqueio por cargas excluídas.',
+            'Quantidade zero com 11.000 W no grupo b bloqueada; quantidade 2 restaurou 19,500 kVA.',
+            'Integração 380/220 V: 26,420 kW, 19,500 kVA, corrente informada 31 A, T6 / 32 A.',
+            'Corrente de 33 A bloqueou a referência; retorno a 31 A restaurou T6 / 32 A.'
+        ],limites=['Somente os dados fictícios e o perfil em que os ensaios foram confirmados.',
+            'Não registra teste com projeto real nem libera status VALIDADO/ATIVO.',
+            'Fogões, motores, cargas especiais e demais exclusões continuam pendentes.'],
+        libera_calculo=False)
+    return regras
+
+
+def preparar_cargas_projeto_neoenergia(tabela):
+    """Cópia para conferência: mantém os VA originais e não os converte em W."""
+    if not isinstance(tabela,list) or not tabela or any(not isinstance(r,dict) for r in tabela):
+        raise ValueError('Abra um projeto com tabela de cargas válida antes desta conferência.')
+    itens=[]
+    def numero(x):
+        if isinstance(x,bool):return None
+        try:x=float(x)
+        except (ValueError,TypeError,OverflowError):return None
+        return x if math.isfinite(x) and x>=0 else None
+    campos=[('Iluminação',['Qtd Ilum.'],'Carga Ilum. (W)','Pot. Unit. Ilum (W)','Carga Ilum. (VA)'),
+        ('TUG',['Qtd TUG','TUGs (Qtd)'],'Carga TUGs (W)','Pot. Unit. TUG (W)','Carga TUGs (VA)'),
+        ('TUE',['Qtd TUE'],'Carga TUE (W)','Pot. Unit. TUE (W)','Carga TUE (VA)')]
+    for i,ambiente in enumerate(tabela):
+        for tipo,chaves_q,chave_w,chave_unit,chave_va in campos:
+            q=next((ambiente[k] for k in chaves_q if k in ambiente),None)
+            quantidade=numero(q)
+            # Se um total W existe mas é inválido, não esconder o problema com outro campo.
+            w=numero(ambiente[chave_w]) if chave_w in ambiente else None
+            if chave_w not in ambiente and chave_unit in ambiente:
+                unit=numero(ambiente[chave_unit])
+                if unit is not None and quantidade is not None:w=unit*quantidade
+            grupo='a' if tipo!='TUE' else ('Ausente' if quantidade==0 and w==0 else 'Pendente')
+            itens.append({'ID':f'{i}:{tipo}','Ambiente':str(ambiente.get('Ambiente') or f'Linha {i+1}'),
+                'Tipo':tipo,'Equipamento':str(ambiente.get('Equipamento TUE') or '') if tipo=='TUE' else tipo,
+                'Quantidade original':q,'Total original (VA)':ambiente.get(chave_va),
+                'Total original (W)':ambiente.get(chave_w),'Grupo':grupo,'Quantidade conferida':quantidade,
+                'Potência total conferida (W)':w,'FP para grupos d/f':None})
+    return itens
+
+
+def agrupar_cargas_projeto_neoenergia(tabela,itens):
+    """Agrupa cópia explicitamente classificada pelo administrador; não escreve projeto."""
+    saida=dict(status='conferencia_tecnica',motivo='',linhas=None,fp_d=None,fp_f=None,carga_conferida_kw=None)
+    def pendencia(msg):saida['motivo']=msg;return saida
+    try:originais=preparar_cargas_projeto_neoenergia(tabela)
+    except ValueError as exc:return pendencia(str(exc))
+    if not isinstance(itens,list) or any(not isinstance(r,dict) for r in itens):return pendencia('Tabela de conferência inválida.')
+    ids=[r.get('ID') for r in itens]
+    if any(not isinstance(i,str) for i in ids) or len(ids)!=len(set(ids)) or set(ids)!={r['ID'] for r in originais}:
+        return pendencia('Linhas ausentes, duplicadas ou divergentes do projeto atual. Recarregue a conferência.')
+    def numero(x):
+        if isinstance(x,bool):return None
+        try:x=float(x)
+        except (ValueError,TypeError,OverflowError):return None
+        return x if math.isfinite(x) and x>=0 else None
+    acumulados={g:dict(q=0,p=0.0,s=0.0) for g in ['a','b','c','d','e','f','i']}
+    for r in itens:
+        g=r.get('Grupo');local=f"{r.get('Ambiente','')} / {r.get('Tipo','')}"
+        if g not in list(acumulados)+['Ausente']:return pendencia(local+': classifique o equipamento. Cargas fora do escopo não podem ser ignoradas.')
+        q=numero(r.get('Quantidade conferida'));pot=numero(r.get('Potência total conferida (W)'))
+        if q is None or not q.is_integer() or q>100000 or pot is None:return pendencia(local+': confira quantidade inteira e potência ativa em W; VA não foi convertido automaticamente.')
+        if (q==0)!=(pot==0):return pendencia(local+': quantidade e potência devem ser ambas zero ou ambas positivas.')
+        if g=='Ausente':
+            if q!=0 or pot!=0:return pendencia(local+': carga positiva não pode ser declarada ausente.')
+            continue
+        if not q:continue
+        fp=1.0
+        if g in ('d','f'):
+            fp=numero(r.get('FP para grupos d/f'))
+            if fp is None or not 0<fp<=1:return pendencia(local+': informe FP positivo até 1,00; grupo d usa 0,92 normativo ou fabricante, grupo f exige placa/catálogo.')
+        s=pot/fp
+        if not math.isfinite(s):return pendencia(local+': potência aparente excede a capacidade numérica.')
+        acumulados[g]['q']+=int(q);acumulados[g]['p']+=pot;acumulados[g]['s']+=s
+    linhas=dados_ensaio_demanda_neoenergia()
+    for r in linhas:
+        g=r['Grupo'];a=acumulados[g]
+        r['Quantidade']=(1 if a['p'] else 0) if g=='a' else a['q']
+        r['Potência total']=a['s'] if g=='f' else a['p']
+    carga=sum(a['p'] for a in acumulados.values())/1000
+    if not math.isfinite(carga) or carga<=0:return pendencia('A soma das cargas conferidas deve ser positiva e finita.')
+    saida.update(status='conferencia_preparada',motivo='Cópia agrupada para ensaio; classificação e dados elétricos são declarados pelo administrador.',linhas=linhas,
+        fp_d=acumulados['d']['p']/acumulados['d']['s'] if acumulados['d']['s'] else .92,
+        fp_f=acumulados['f']['p']/acumulados['f']['s'] if acumulados['f']['s'] else None,
+        carga_conferida_kw=carga)
+    return saida
+
+
+def testar_preparacao_projeto_neoenergia():
+    casos=[]
+    def verifica(nome,ok):casos.append({'Caso':nome,'Resultado':'PASSOU' if ok else 'FALHOU'})
+    def rejeita(nome,fn):
+        try:fn()
+        except ValueError:verifica(nome,True)
+        else:verifica(nome,False)
+    def ambiente(nome,q,w,equip,ilum=0):
+        return {'Ambiente':nome,'Qtd Ilum.':1 if ilum else 0,'Carga Ilum. (W)':ilum,'Qtd TUG':0,'Carga TUGs (W)':0,
+            'Qtd TUE':q,'Carga TUE (W)':w,'Equipamento TUE':equip}
+    origem=[ambiente('Banheiro',2,11000,'Chuveiro',10000),ambiente('Cozinha',1,2000,'Forno Elétrico'),ambiente('Quarto',2,3420,'Ar Condicionado')]
+    antes=deepcopy(origem);itens=preparar_cargas_projeto_neoenergia(origem)
+    verifica('Preparação preserva origem',origem==antes)
+    verifica('TUEs positivas ficam pendentes',all(r['Grupo']=='Pendente' for r in itens if r['Tipo']=='TUE'))
+    verifica('Sem classificação não calcula',agrupar_cargas_projeto_neoenergia(origem,itens)['linhas'] is None)
+    conferidos=deepcopy(itens)
+    for r in conferidos:
+        if r['ID']=='0:TUE':r['Grupo']='b'
+        if r['ID']=='1:TUE':r['Grupo']='e'
+        if r['ID']=='2:TUE':r['Grupo']='f';r['FP para grupos d/f']=.9
+    resultado=agrupar_cargas_projeto_neoenergia(origem,conferidos)
+    verifica('Cargas conferidas preparam sete grupos',resultado['status']=='conferencia_preparada' and len(resultado['linhas'])==7)
+    verifica('Ar 3420 W / 0,9 produz 3800 VA',math.isclose(next(r['Potência total'] for r in resultado['linhas'] if r['Grupo']=='f'),3800))
+    verifica('Carga ativa preservada 26,42 kW',math.isclose(resultado['carga_conferida_kw'],26.42))
+    verifica('Nenhum dado original alterado pelo agrupamento',origem==antes)
+    legado=deepcopy(origem);legado[0]['Carga Ilum. (VA)']=legado[0].pop('Carga Ilum. (W)')
+    copias=preparar_cargas_projeto_neoenergia(legado)
+    verifica('VA legado não convertido em W',copias[0]['Potência total conferida (W)'] is None and copias[0]['Total original (VA)']==10000)
+    verifica('W legado ausente bloqueia agrupamento',agrupar_cargas_projeto_neoenergia(legado,copias)['linhas'] is None)
+    so_unit=deepcopy(origem);so_unit[0]['Pot. Unit. TUE (W)']=5500;so_unit[0].pop('Carga TUE (W)')
+    verifica('Potência unitária W é multiplicada pela quantidade',next(r for r in preparar_cargas_projeto_neoenergia(so_unit) if r['ID']=='0:TUE')['Potência total conferida (W)']==11000)
+    for nome,mutacao in [
+        ('Quantidade fracionária',{'Quantidade conferida':1.5}),('Quantidade negativa',{'Quantidade conferida':-1}),
+        ('Potência ausente',{'Potência total conferida (W)':None}),('Potência NaN',{'Potência total conferida (W)':float('nan')}),
+        ('Potência infinita',{'Potência total conferida (W)':float('inf')}),('Quantidade zero com potência',{'Quantidade conferida':0}),
+        ('Carga positiva como ausente',{'Grupo':'Ausente'}),('Classificação excluída',{'Grupo':'Fora do escopo'}),
+        ('FP f ausente',{'FP para grupos d/f':None}),('FP f zero',{'FP para grupos d/f':0}),('FP f acima de 1',{'FP para grupos d/f':1.01}),
+    ]:
+        x=deepcopy(conferidos);next(r for r in x if r['ID']=='2:TUE').update(mutacao)
+        verifica(nome+' bloqueia',agrupar_cargas_projeto_neoenergia(origem,x)['linhas'] is None)
+    verifica('Linha omitida bloqueia',agrupar_cargas_projeto_neoenergia(origem,conferidos[:-1])['linhas'] is None)
+    verifica('Linha duplicada bloqueia',agrupar_cargas_projeto_neoenergia(origem,conferidos+[conferidos[0]])['linhas'] is None)
+    outra=deepcopy(origem)+[ambiente('Outro',1,1000,'Lavadora')]
+    verifica('Conferência antiga não vale após mudança do projeto',agrupar_cargas_projeto_neoenergia(outra,conferidos)['linhas'] is None)
+    dados_d=[ambiente('Serviço',1,1000,'Lavadora'),ambiente('Serviço 2',1,1000,'Secadora')]
+    itens_d=preparar_cargas_projeto_neoenergia(dados_d)
+    for r in itens_d:
+        if r['Tipo']=='TUE':r['Grupo']='d';r['FP para grupos d/f']=.92 if r['ID']=='0:TUE' else .8
+    grupo_d=agrupar_cargas_projeto_neoenergia(dados_d,itens_d)
+    verifica('FP efetivo do grupo d respeita soma W/FP',math.isclose(2000/grupo_d['fp_d'],1000/.92+1000/.8))
+    for i,p in enumerate(preparar_bloco_neoenergia('TESTE')):
+        p['id']=str(i+1);p=preparar_territorio_neoenergia(p,'TESTE');p['regras']=registrar_entrada_neoenergia(p,'TESTE');p['regras']=registrar_demanda_neoenergia(p,'TESTE');original=deepcopy(p)
+        r=calcular_ensaio_integrado_neoenergia(p,resultado['linhas'],'380/220 V',resultado['fp_d'],resultado['fp_f'],31,True,False,True)
+        verifica(p['concessionaria']+': cópia do projeto reproduz 19,5 kVA / T6',r['status']=='ensaio_integrado' and math.isclose(r['demanda_total_kva'],19.5) and r['referencia']['categoria']=='T6')
+        rejeita(p['concessionaria']+': consolidação sem confirmação recusada',lambda:consolidar_ensaio_neoenergia(p,'TESTE'))
+        regras=consolidar_ensaio_neoenergia(p,'TESTE',True)
+        verifica(p['concessionaria']+': consolidação não altera original',p==original)
+        verifica(p['concessionaria']+': entradas preservadas',regras[CHAVE_ENTRADA]==p['regras'][CHAVE_ENTRADA] and regras[CHAVE_DEMANDA]==p['regras'][CHAVE_DEMANDA])
+        verifica(p['concessionaria']+': sem ativação/cálculo liberados',regras[CHAVE_CONSOLIDACAO]['libera_calculo'] is False and p['status']=='RASCUNHO' and not regras['demanda'] and not regras['fornecimento'])
+        consolidado=deepcopy(p);consolidado['regras']=regras
+        verifica(p['concessionaria']+': repetir preserva consolidação',consolidar_ensaio_neoenergia(consolidado,'OUTRO',True)==regras)
+        rejeita(p['concessionaria']+': ativo preservado',lambda:consolidar_ensaio_neoenergia(dict(p,status='ATIVO'),'TESTE',True))
+    rejeita('Elektro fora da consolidação',lambda:consolidar_ensaio_neoenergia({'concessionaria':'Neoenergia Elektro'},'TESTE',True))
+    return casos
 
 
 def registro_demanda_neoenergia(perfil):

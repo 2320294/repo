@@ -3,6 +3,7 @@ from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neo
 from normativo_neoenergia import CHAVE_ENTRADA as CHAVE_ENTRADA_NEOENERGIA, cadastrar_auditorias_entrada_neoenergia, auditoria_entrada_neoenergia_registrada, testar_entrada_bloco_neoenergia, consultar_entrada_neoenergia
 from normativo_neoenergia import CHAVE_DEMANDA as CHAVE_DEMANDA_NEOENERGIA, cadastrar_auditorias_demanda_neoenergia, auditoria_demanda_neoenergia_registrada, testar_demanda_bloco_neoenergia, dados_ensaio_demanda_neoenergia, calcular_ensaio_demanda_neoenergia
 from normativo_neoenergia import calcular_ensaio_integrado_neoenergia, testar_integracao_bloco_neoenergia, tabela_entrada_neoenergia
+from normativo_neoenergia import CHAVE_CONSOLIDACAO as CHAVE_CONSOLIDACAO_NEOENERGIA, consolidar_ensaio_neoenergia, preparar_cargas_projeto_neoenergia, agrupar_cargas_projeto_neoenergia, testar_preparacao_projeto_neoenergia
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -541,6 +542,10 @@ def renderizar_admin_normativos(email):
             testes_integracao_bloco = testar_integracao_bloco_neoenergia()
             st.dataframe(testes_integracao_bloco,hide_index=True,use_container_width=True)
             st.write(f"Integração administrativa: {sum(t['Resultado']=='PASSOU' for t in testes_integracao_bloco)}/{len(testes_integracao_bloco)} testes de software. Sem homologação elétrica ou ativação de perfil.")
+        if st.button("Executar testes da preparação de cargas do projeto Neoenergia"):
+            testes_projeto_bloco = testar_preparacao_projeto_neoenergia()
+            st.dataframe(testes_projeto_bloco,hide_index=True,use_container_width=True)
+            st.write(f"Preparação de cargas: {sum(t['Resultado']=='PASSOU' for t in testes_projeto_bloco)}/{len(testes_projeto_bloco)} testes de software. Não valida projeto real.")
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
         if perfil_bloco_neoenergia(p):
@@ -572,6 +577,21 @@ def renderizar_admin_normativos(email):
                 if auditoria_demanda_neoenergia_registrada(p):
                     registro_demanda_bloco = p['regras'][CHAVE_DEMANDA_NEOENERGIA]
                     st.success("Demanda residencial trifásica disponível para ensaio administrativo isolado.")
+                    consolidacao_bloco = p['regras'].get(CHAVE_CONSOLIDACAO_NEOENERGIA)
+                    with st.expander("Consolidar rodada de ensaios administrativos Neoenergia"):
+                        if consolidacao_bloco:
+                            st.write({"Responsável":consolidacao_bloco.get('responsavel'),"Data UTC":consolidacao_bloco.get('registrado_em'),"Versão ensaiada":consolidacao_bloco.get('versao_ensaiada')})
+                            for caso_consolidado in consolidacao_bloco.get('casos_confirmados',[]):st.caption(caso_consolidado)
+                            for limite_consolidado in consolidacao_bloco.get('limites',[]):st.caption(limite_consolidado)
+                        else:
+                            st.caption("Registra a confirmação dos ensaios fictícios 19,500 kVA, bloqueios por cargas excluídas e quantidade inconsistente, T6/32 A em 380/220 V e bloqueio em 33 A com recuperação em 31 A. Confirme apenas no perfil em que esses testes foram executados.")
+                            confirmar_rodada_bloco = st.checkbox("Executei e conferi estes ensaios neste perfil, sem aprovação técnica de instalação ou teste com projeto real.",key=f"confirmar_rodada_neo_{p.get('id')}")
+                            if st.button("Consolidar ensaios observados neste perfil",disabled=not confirmar_rodada_bloco,key=f"consolidar_rodada_neo_{p.get('id')}"):
+                                try:
+                                    regras_consolidadas_bloco = consolidar_ensaio_neoenergia(p,email,confirmar_rodada_bloco)
+                                    salvar_perfil({'regras':regras_consolidadas_bloco},perfil_id=p.get('id'))
+                                    st.rerun()
+                                except Exception as exc:st.error(f"Não foi possível consolidar: {exc}")
                     with st.expander("Ensaio isolado de demanda — Neoenergia"):
                         import pandas as pd
                         for restricao_demanda in registro_demanda_bloco['referencia']['restricoes']:
@@ -607,6 +627,45 @@ def renderizar_admin_normativos(email):
                                 st.write({"Carga instalada (kW)":integrado_bloco['carga_instalada_kw'],"Demanda (kVA)":integrado_bloco['demanda_total_kva'],
                                     "Corrente equivalente balanceada (A)":integrado_bloco['corrente_equivalente_balanceada_a'],"Maior corrente informada (A)":integrado_bloco['corrente_max_informada_a']})
                                 st.write(integrado_bloco['referencia'])
+                    with st.expander("Conferir cargas do projeto selecionado — ensaio Neoenergia"):
+                        nome_projeto_bloco = str(st.session_state.get('projeto_ativo') or '')
+                        tabela_projeto_bloco = st.session_state.get(f"fase8_16_{nome_projeto_bloco}_tabela_editada")
+                        if not nome_projeto_bloco or nome_projeto_bloco=='Selecione um projeto...':
+                            st.info("Selecione um projeto na barra lateral. Abra Cargas com a Administração desligada e depois retorne aqui.")
+                        elif not isinstance(tabela_projeto_bloco,list) or not tabela_projeto_bloco:
+                            st.info("Abra a etapa Cargas deste projeto com a Administração desligada e depois retorne. Nenhum dado foi carregado de outro projeto.")
+                        else:
+                            import hashlib
+                            contexto_projeto_bloco = hashlib.sha256(json.dumps([nome_projeto_bloco,tabela_projeto_bloco],sort_keys=True,ensure_ascii=False,default=str).encode()).hexdigest()[:16]
+                            chave_preparacao_bloco = f"projeto_neo_{p.get('id')}_{contexto_projeto_bloco}"
+                            try:
+                                copia_projeto_bloco = preparar_cargas_projeto_neoenergia(tabela_projeto_bloco)
+                                st.write("**Projeto selecionado:** " + nome_projeto_bloco)
+                                st.caption("Origem: tabela de cargas da sessão deste projeto, incluindo alterações ainda não salvas. Abaixo é uma cópia: nada será gravado no projeto. Mudanças na origem reiniciam esta conferência.")
+                                st.caption("Classifique: a iluminação/TUG; b chuveiros/torneiras/passagem/ferros; c boiler; d secadoras/lavadoras/lava-louças/micro-ondas; e somente forno; f ar condicionado individual; i bombas/hidromassagem. Ausente exige quantidade e potência zero. Pendente ou Fora do escopo bloqueia o ensaio.")
+                                st.caption("VA originais são apenas exibidos; confira a potência ativa TOTAL em W. Para d, informe FP 0,92 normativo ou fabricante; para f, FP de placa/catálogo. TUEs não são classificadas automaticamente.")
+                                df_preparacao_bloco = pd.DataFrame(copia_projeto_bloco)
+                                for coluna_preparacao in ['Quantidade conferida','Potência total conferida (W)','FP para grupos d/f']:
+                                    df_preparacao_bloco[coluna_preparacao]=pd.to_numeric(df_preparacao_bloco[coluna_preparacao],errors='coerce')
+                                conferidas_projeto_bloco = st.data_editor(df_preparacao_bloco,
+                                    disabled=['ID','Ambiente','Tipo','Equipamento','Quantidade original','Total original (VA)','Total original (W)'],
+                                    column_config={'Grupo':st.column_config.SelectboxColumn('Grupo',options=['Pendente','Ausente','a','b','c','d','e','f','i','Fora do escopo'])},
+                                    num_rows='fixed',hide_index=True,use_container_width=True,key=chave_preparacao_bloco+'_cargas')
+                                tensao_projeto_teste_bloco = st.selectbox("Tensão FF/FN conferida para este projeto",tensoes_integracao_bloco,index=tensoes_integracao_bloco.index('380/220 V'),key=chave_preparacao_bloco+'_tensao')
+                                corrente_projeto_teste_bloco = st.number_input("Maior corrente de fase deste projeto, previamente conferida (A)",min_value=0.0,value=0.0,format="%.3f",key=chave_preparacao_bloco+'_corrente')
+                                excluidas_projeto_bloco = st.checkbox("Este projeto contém fogões, motores, soldas, cargas especiais, recarga, climatização central, vestiários ou uso coletivo/comercial.",key=chave_preparacao_bloco+'_excluidas')
+                                confirmar_projeto_bloco = st.checkbox("Conferi todas as linhas, cargas mínimas e dados elétricos; confirmo escopo residencial individual trifásico, tensão e maior corrente de fase. Este é um ensaio administrativo sem aprovação de instalação.",key=chave_preparacao_bloco+'_confirmar')
+                                if st.button("Conferir demanda e entrada com estas cargas",key=chave_preparacao_bloco+'_calcular'):
+                                    agrupado_projeto_bloco=agrupar_cargas_projeto_neoenergia(tabela_projeto_bloco,conferidas_projeto_bloco.to_dict('records'))
+                                    if agrupado_projeto_bloco['linhas'] is None:st.warning(agrupado_projeto_bloco['motivo'])
+                                    else:
+                                        teste_projeto_bloco=calcular_ensaio_integrado_neoenergia(p,agrupado_projeto_bloco['linhas'],tensao_projeto_teste_bloco,
+                                            agrupado_projeto_bloco['fp_d'],agrupado_projeto_bloco['fp_f'],corrente_projeto_teste_bloco,confirmar_projeto_bloco,excluidas_projeto_bloco,confirmar_projeto_bloco)
+                                        st.write(teste_projeto_bloco['motivo'])
+                                        if teste_projeto_bloco['referencia'] is not None:
+                                            st.write({"Projeto":nome_projeto_bloco,"Carga instalada (kW)":teste_projeto_bloco['carga_instalada_kw'],"Demanda (kVA)":teste_projeto_bloco['demanda_total_kva'],"Maior corrente informada (A)":teste_projeto_bloco['corrente_max_informada_a']})
+                                            st.write(teste_projeto_bloco['referencia'])
+                            except ValueError as exc:st.warning(str(exc))
                 if auditoria_entrada_neoenergia_registrada(p):
                     registro_entrada_bloco = p['regras'][CHAVE_ENTRADA_NEOENERGIA]
                     referencia_entrada_bloco = registro_entrada_bloco['referencia']
