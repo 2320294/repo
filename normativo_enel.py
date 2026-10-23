@@ -212,3 +212,140 @@ def testar_entrada_enel_sp():
                        'Obtido':r['categoria'] or 'Conferência técnica',
                        'Resultado':'PASSOU' if ok else 'FALHOU'})
     return testes
+
+CHAVE_MOTORES = 'auditoria_enel_sp_motores_v1'
+# Tabela 11 p179: células mescladas conferidas no PDF renderizado.
+# Valores em cv, por ligação FN / FF / FFF; não são potências elétricas em kW.
+MOTORES_ESTRELA = {
+    'A1': (1, None, None), 'A2': (2, None, None),
+    '3': (1, 2, 5), '4': (2, 3, 10), '5': (2, 5, 15),
+    '6': (3, 7.5, 20), '7': (5, 7.5, 25), '8': (7.5, 10, 30),
+    '9': (7.5, 10, 30), '10': (7.5, 10, 40),
+    '11': (7.5, 10, 50), '12': (7.5, 10, 60),
+}
+MOTORES_DELTA = {
+    'A1': (1, None, None), 'A2': (2, None, None),
+    '3': (1, 2, 5), '4': (1, 3, 7.5), '5': (1, 3, 10),
+    '6': (1, 3, 15), '7': (1, 3, 20), '8': (1, 3, 25),
+    '9': (1, 3, 30), '10': (1, 3, 40), '11': (1, 3, 40), '12': (1, 3, 40),
+}
+
+
+def registro_motores_enel_sp():
+    tabelas=[]
+    for sistema, tensao, tabela in [('Estrela','127/220 V',MOTORES_ESTRELA),
+                                    ('Delta','120/240 V',MOTORES_DELTA)]:
+        for categoria, _, _, _ in REFERENCIAS_ENTRADA:
+            valores = tabela.get(categoria) or tabela[categoria[1:]]
+            tabelas.append(dict(sistema=sistema, tensao=tensao, categoria=categoria,
+                                FN_cv=valores[0], FF_cv=valores[1], FFF_cv=valores[2]))
+    return {
+        'documento':DOCUMENTO, 'revisao':'02', 'fonte':FONTE_OFICIAL,
+        'referencias':['Item 7.4.4 — p.24–25', 'Tabela 11 — p.179', 'Tabela 2, nota 2 — p.22'],
+        'tabela':tabelas,
+        'restricoes':[
+            'Potência nominal do motor em cv; não converter diretamente carga elétrica em W para cv.',
+            'Trifásico até 5 cv: partida direta permitida; acima de 5 cv: redução da corrente de partida obrigatória.',
+            'Verificar o maior motor ou a soma das potências dos motores com partidas simultâneas.',
+            'Consulta implementada: estrela 127/220 V, rede aérea; um motor ou grupo de motores idênticos. Delta permanece para análise específica.',
+            'FFF requer fornecimento trifásico no escopo estrela; a tabela não autoriza ligação FFF em entrada bifásica.',
+            'Redução de partida e proteções precisam de verificação técnica conforme placa, ABNT e item 7.4.4.',
+            'A exceção Enel SP do item 7.4.4 admite referências acima de 30 cv; não direcionar automaticamente para média tensão.',
+            'A vedação de partida simultânea do item 7.4.3 pertence ao atendimento rural daquele item; não generalizar.',
+            'Consulta de limites não dimensiona proteção do motor, partida, demanda ou padrão de entrada.',
+        ],
+    }
+
+
+def registrar_auditoria_motores_enel_sp(perfil):
+    from copy import deepcopy
+    regras=deepcopy(perfil.get('regras') or {})
+    regras[CHAVE_MOTORES]=registro_motores_enel_sp()
+    return regras
+
+
+def consultar_motor_enel_sp(categoria, potencia_cv, ligacao, partida,
+                           quantidade=1, partida_simultanea=None,
+                           reducao_confirmada=None, protecoes_confirmadas=None,
+                           sistema='Estrela', fn=127, ff=220, rede='Aérea',
+                           uf='SP', municipio='São Paulo'):
+    import math
+    r=dict(status='pendente', limite_cv=None, potencia_verificada_cv=None,
+           aprovacao_automatica=False, demanda_calculada=False)
+    if not enel_sp_atende_localidade(uf,municipio):
+        return dict(r,motivo='Localidade fora do escopo Enel SP.')
+    if sistema!='Estrela' or fn!=127 or ff!=220 or rede!='Aérea':
+        return dict(r,motivo='Consulta implementada somente para rede aérea estrela 127/220 V; demais sistemas exigem análise específica.')
+    categoria=str(categoria or '').strip().upper()
+    if categoria not in {a[0] for a in REFERENCIAS_ENTRADA} or ligacao not in ('FN','FF','FFF'):
+        return dict(r,motivo='Categoria ou ligação do motor desconhecida.')
+    try:
+        if isinstance(potencia_cv,bool) or isinstance(quantidade,bool):raise ValueError()
+        potencia=float(potencia_cv); n=float(quantidade)
+        if not math.isfinite(potencia) or potencia<=0 or not math.isfinite(n) or n<1 or not n.is_integer():raise ValueError()
+        n=int(n)
+    except (TypeError,ValueError,OverflowError):
+        return dict(r,motivo='Informe potência nominal positiva em cv e quantidade inteira positiva.')
+    if categoria.startswith('A') and ligacao!='FN' or categoria.startswith('B') and ligacao=='FFF':
+        return dict(r,motivo='Ligação do motor incompatível com a modalidade de fornecimento estrela.')
+    if n>1 and partida_simultanea is not True and partida_simultanea is not False:
+        return dict(r,motivo='Confirme a simultaneidade de partida do grupo de motores idênticos.')
+    valores=MOTORES_ESTRELA.get(categoria) or MOTORES_ESTRELA[categoria[1:]]
+    limite=valores[('FN','FF','FFF').index(ligacao)]
+    verificada=potencia*n if n>1 and partida_simultanea is True else potencia
+    r.update(limite_cv=limite,potencia_verificada_cv=verificada)
+    if limite is None or verificada>limite:
+        return dict(r,motivo='Potência do maior motor ou do grupo simultâneo excede a referência da Tabela 11; conferir tecnicamente, sem elevar categoria automaticamente.')
+    if partida not in ('Direta','Redução de corrente'):
+        return dict(r,motivo='Tipo de partida não confirmado.')
+    # Limite de 5 cv é por motor; a soma simultânea verifica a capacidade da categoria.
+    if ligacao=='FFF' and potencia>5 and partida!='Redução de corrente':
+        return dict(r,motivo='Motor trifásico acima de 5 cv exige redução de corrente de partida (7.4.4).')
+    if partida=='Redução de corrente' and reducao_confirmada is not True:
+        return dict(r,motivo='Confirmar tecnicamente o dispositivo de redução de partida conforme fabricante e ABNT.')
+    if protecoes_confirmadas is not True:
+        return dict(r,motivo='Confirmar proteções e condições de comando exigidas no item 7.4.4.')
+    return dict(r,status='compativel_referencia',motivo='Compatível apenas com os limites de potência e as condições de partida declaradas nesta consulta; não aprova demanda, proteção ou entrada.')
+
+
+def testar_motores_enel_sp():
+    casos=[]
+    # Verificação das células mescladas e dos limites exatos/estritamente superiores.
+    for categoria,_,_,_ in REFERENCIAS_ENTRADA:
+        limites=MOTORES_ESTRELA.get(categoria) or MOTORES_ESTRELA[categoria[1:]]
+        for ligacao,limite in zip(('FN','FF','FFF'),limites):
+            if limite is None or (categoria.startswith('B') and ligacao=='FFF'):continue
+            partida='Redução de corrente' if ligacao=='FFF' and limite>5 else 'Direta'
+            for delta,status in [(0,'compativel_referencia'),(.001,'pendente')]:
+                casos.append((f'{categoria} {ligacao}: {limite+delta} cv',
+                              dict(categoria=categoria,potencia_cv=limite+delta,ligacao=ligacao,partida=partida,
+                                   reducao_confirmada=True,protecoes_confirmadas=True),status))
+    base=dict(categoria='C4',potencia_cv=5,ligacao='FFF',partida='Direta',protecoes_confirmadas=True)
+    for nome,alteracoes,status in [
+        ('5 cv: direta',{},'compativel_referencia'),
+        ('5,001 cv: direta',{'potencia_cv':5.001},'pendente'),
+        ('5,001 cv: redução confirmada',{'potencia_cv':5.001,'partida':'Redução de corrente','reducao_confirmada':True},'compativel_referencia'),
+        ('Redução sem confirmação',{'potencia_cv':5.001,'partida':'Redução de corrente'},'pendente'),
+        ('Proteções desconhecidas',{'protecoes_confirmadas':None},'pendente'),
+        ('B4 não admite FFF',{'categoria':'B4'},'pendente'),
+        ('A2 não admite FF',{'categoria':'A2','ligacao':'FF','potencia_cv':1},'pendente'),
+        ('2x5 cv simultâneos C4',{'quantidade':2,'partida_simultanea':True},'compativel_referencia'),
+        ('3x5 cv simultâneos C4',{'quantidade':3,'partida_simultanea':True},'pendente'),
+        ('3x5 cv não simultâneos C4',{'quantidade':3,'partida_simultanea':False},'compativel_referencia'),
+        ('Simultaneidade desconhecida',{'quantidade':2},'pendente'),
+        ('Delta encaminhado',{'sistema':'Delta','fn':120,'ff':240},'pendente'),
+        ('Subterrânea encaminhada',{'rede':'Subterrânea'},'pendente'),
+        ('Localidade fora',{'municipio':'Santos'},'pendente'),
+        ('Potência desconhecida',{'potencia_cv':None},'pendente'),
+        ('Potência infinita',{'potencia_cv':float('inf')},'pendente'),
+        ('Quantidade fracionária',{'quantidade':1.5},'pendente'),
+        ('Categoria desconhecida',{'categoria':'C0'},'pendente'),
+        ('C10 40 cv: exceção SP',{'categoria':'C10','potencia_cv':40,'partida':'Redução de corrente','reducao_confirmada':True},'compativel_referencia'),
+    ]:
+        casos.append((nome,dict(base,**alteracoes),status))
+    resultados=[]
+    for nome,args,esperado in casos:
+        obtido=consultar_motor_enel_sp(**args)
+        ok=obtido['status']==esperado and not obtido['aprovacao_automatica'] and not obtido['demanda_calculada']
+        resultados.append({'Caso':nome,'Esperado':esperado,'Obtido':obtido['status'],'Resultado':'PASSOU' if ok else 'FALHOU'})
+    return resultados

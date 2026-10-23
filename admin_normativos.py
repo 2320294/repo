@@ -1,3 +1,4 @@
+from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
 from normativo_cpfl import preparar_rascunho_rge, perfil_rge_ged13, perfil_ged13_380, pendencias_ativacao_rge
@@ -520,6 +521,41 @@ def renderizar_admin_normativos(email):
                             st.write(resultado_enel["motivo"])
                             if resultado_enel.get("referencia"):
                                 st.write(resultado_enel["referencia"])
+                st.markdown("#### Auditoria de motores Enel SP — Tabela 11")
+                if st.button("Registrar auditoria de motores Enel SP", key=f"registrar_motores_enel_{p.get('id')}"):
+                    try:
+                        if p.get("status") != "RASCUNHO":
+                            raise ValueError("Esta auditoria inicial exige perfil em RASCUNHO.")
+                        salvar_perfil({"regras": registrar_auditoria_motores_enel_sp(p)}, perfil_id=p.get("id"))
+                        st.success("Referências de motores registradas; perfil mantido em RASCUNHO.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Não foi possível registrar: {exc}")
+                if (p.get("regras") or {}).get(CHAVE_MOTORES) == registro_motores_enel_sp():
+                    registro_motor = registro_motores_enel_sp()
+                    st.write("**Referências:** " + "; ".join(registro_motor["referencias"]))
+                    st.dataframe(registro_motor["tabela"], hide_index=True, use_container_width=True)
+                    for nota in registro_motor["restricoes"]:
+                        st.caption(nota)
+                    if st.button("Executar testes de motores Enel SP", key=f"testar_motores_enel_{p.get('id')}"):
+                        testes_motor = testar_motores_enel_sp()
+                        st.dataframe(testes_motor, hide_index=True, use_container_width=True)
+                        passou_motor = sum(t["Resultado"] == "PASSOU" for t in testes_motor)
+                        st.write(f"Motores: {passou_motor}/{len(testes_motor)} testes isolados. Sem aprovação do padrão de entrada.")
+                    with st.expander("Consultar motor — estrela 127/220 V, rede aérea"):
+                        st.caption("Um motor ou grupo de motores idênticos. Grupos diferentes e delta exigem análise específica. Nenhum dado do projeto é alterado por esta consulta.")
+                        categoria_motor = st.selectbox("Categoria de entrada", [r["categoria"] for r in registro_motor["tabela"] if r["sistema"] == "Estrela"], key=f"cat_motor_enel_{p.get('id')}")
+                        potencia_motor = st.number_input("Potência nominal de cada motor (cv)", min_value=0.0, value=1.0, step=0.1, key=f"cv_motor_enel_{p.get('id')}")
+                        ligacao_motor = st.selectbox("Ligação do motor", ["FN", "FF", "FFF"], key=f"lig_motor_enel_{p.get('id')}")
+                        partida_motor = st.selectbox("Partida", ["Não informada", "Direta", "Redução de corrente"], key=f"part_motor_enel_{p.get('id')}")
+                        quantidade_motor = st.number_input("Quantidade de motores idênticos", min_value=1, value=1, step=1, key=f"qtd_motor_enel_{p.get('id')}")
+                        simult_motor = st.selectbox("Partidas simultâneas no grupo", ["Não confirmado", "Sim", "Não"], key=f"sim_motor_enel_{p.get('id')}")
+                        reducao_motor = st.checkbox("Dispositivo de redução de partida tecnicamente conferido", key=f"red_motor_enel_{p.get('id')}")
+                        protecao_motor = st.checkbox("Proteções e condições de comando do item 7.4.4 tecnicamente conferidas", key=f"prot_motor_enel_{p.get('id')}")
+                        if st.button("Conferir motor", key=f"consulta_motor_enel_{p.get('id')}"):
+                            resultado_motor = consultar_motor_enel_sp(categoria_motor, potencia_motor, ligacao_motor, partida_motor, quantidade=quantidade_motor, partida_simultanea={"Sim":True,"Não":False}.get(simult_motor), reducao_confirmada=reducao_motor, protecoes_confirmadas=protecao_motor)
+                            st.write(resultado_motor["motivo"])
+                            st.write({"Limite da Tabela 11 (cv)":resultado_motor["limite_cv"], "Potência verificada (cv)":resultado_motor["potencia_verificada_cv"]})
                 # Evita apresentar o editor genérico de fatores como regras Enel.
                 continue
             if eh_perfil_elektro(p):
