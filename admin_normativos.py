@@ -1,4 +1,5 @@
 from normativo_neoenergia import perfil_bloco_neoenergia, planejar_bloco_neoenergia, cadastrar_bloco_neoenergia, testar_bloco_neoenergia, pendencias_bloco_neoenergia, CHAVE_BLOCO
+from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neoenergia_registrado, referencias_regionais_neoenergia, CHAVE_TERRITORIO, testar_territorios_neoenergia
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -492,22 +493,50 @@ def renderizar_admin_normativos(email):
         return
 
     st.subheader("Perfis cadastrados")
+    if any(perfil_bloco_neoenergia(p) for p in perfis):
+        st.markdown("#### Vínculo territorial — bloco Neoenergia")
+        st.caption("Consulta os nomes oficiais no IBGE e vincula somente os rascunhos já cadastrados: Coelba/BA (415), Pernambuco/PE (185 registros, incluindo Fernando de Noronha), Cosern/RN (167) e Brasília/DF (1). Não ativa cálculos. Outras UFs citadas pelas distribuidoras exigem perfis separados.")
+        if st.button("Executar testes do vínculo territorial Neoenergia"):
+            testes_territorio = testar_territorios_neoenergia()
+            st.dataframe(testes_territorio, hide_index=True, use_container_width=True)
+            st.write(f"Vínculo territorial: {sum(t['Resultado']=='PASSOU' for t in testes_territorio)}/{len(testes_territorio)} testes de software. Não valida cálculos ou cobertura por endereço.")
+        if st.button("Vincular municípios aos quatro rascunhos Neoenergia"):
+            with st.spinner("Consultando municípios oficiais e registrando os vínculos..."):
+                st.session_state['resultado_territorio_neoenergia'] = vincular_territorios_neoenergia(
+                    lambda: listar_perfis(ativos_apenas=False, administrativo=True), salvar_perfil, email)
+            st.rerun()
+        if st.session_state.get('resultado_territorio_neoenergia'):
+            st.dataframe(st.session_state['resultado_territorio_neoenergia'], hide_index=True, use_container_width=True)
+            st.caption("Se houver pendência por indisponibilidade do IBGE, repita depois. Os vínculos já registrados são preservados.")
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
         if perfil_bloco_neoenergia(p):
-            alcance = "território pendente"
+            alcance = f"{len(p.get('municipios_atendidos') or [])} registros territoriais" if territorio_neoenergia_registrado(p) else "território pendente"
         titulo = f"{p.get('concessionaria','')} — {alcance}/{p.get('uf','')} — {p.get('documento') or 'Sem documento'} {p.get('revisao') or ''}"
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
             if perfil_bloco_neoenergia(p):
-                st.info("Cadastro documental do bloco Neoenergia. Municípios e cálculos não liberados; mantenha em RASCUNHO.")
+                st.info("Cadastro documental do bloco Neoenergia. O vínculo territorial não libera cálculos; mantenha em RASCUNHO.")
                 registro_bloco = (p.get("regras") or {}).get(CHAVE_BLOCO) or {}
                 st.write({"Documento":p.get("documento"), "Revisão":p.get("revisao"), "Aprovação do documento":registro_bloco.get("data_aprovacao"), "Vigência":p.get("vigencia") or "A conferir", "Etapa":registro_bloco.get("etapa", "Cadastro pendente de auditoria")})
                 if registro_bloco.get("portal"):
                     st.markdown("Portal oficial de normas: " + registro_bloco["portal"])
+                if territorio_neoenergia_registrado(p):
+                    territorio = p['regras'][CHAVE_TERRITORIO]
+                    st.success("Vínculo territorial registrado. Cálculos continuam pendentes de auditoria.")
+                    st.caption(territorio['observacao'])
+                    st.write({"Responsável":territorio['responsavel'], "Registrado em":territorio['registrado_em']})
+                    with st.expander("Municípios e fontes do vínculo territorial"):
+                        st.write(", ".join(p['municipios_atendidos']))
+                        st.write(territorio['fonte_concessao'])
+                        st.write(territorio['fonte_nomes'])
+                        if territorio.get('fonte_exclusoes'):
+                            st.write(territorio['fonte_exclusoes'])
+                for referencia_regional in referencias_regionais_neoenergia(p):
+                    st.write(referencia_regional)
                 for pendencia_bloco in pendencias_bloco_neoenergia(p):
                     st.warning(pendencia_bloco)
-                st.caption("Este rascunho não aparece para usuários e não aplica regras da Elektro ou da CPFL. A auditoria regional será adicionada na próxima etapa.")
+                st.caption("Este rascunho não aparece para usuários e não aplica regras da Elektro ou da CPFL. As tabelas regionais e a demanda ainda precisam de auditoria elétrica.")
                 continue
             if perfil_enel_sp(p):
                 st.info("Auditorias de cadastro, entrada, motores e integração declaratória têm escopos distintos. O registro dos ensaios administrativos não ativa o perfil nem aprova a entrada.")
