@@ -1,5 +1,5 @@
 from normativo_neoenergia import perfil_bloco_neoenergia, planejar_bloco_neoenergia, cadastrar_bloco_neoenergia, testar_bloco_neoenergia, pendencias_bloco_neoenergia, CHAVE_BLOCO
-from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neoenergia_registrado, referencias_regionais_neoenergia, CHAVE_TERRITORIO, testar_territorios_neoenergia
+from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neoenergia_registrado, referencias_regionais_neoenergia, CHAVE_TERRITORIO as CHAVE_TERRITORIO_NEOENERGIA, testar_territorios_neoenergia
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -522,7 +522,7 @@ def renderizar_admin_normativos(email):
                 if registro_bloco.get("portal"):
                     st.markdown("Portal oficial de normas: " + registro_bloco["portal"])
                 if territorio_neoenergia_registrado(p):
-                    territorio = p['regras'][CHAVE_TERRITORIO]
+                    territorio = p['regras'][CHAVE_TERRITORIO_NEOENERGIA]
                     st.success("Vínculo territorial registrado. Cálculos continuam pendentes de auditoria.")
                     st.caption(territorio['observacao'])
                     st.write({"Responsável":territorio['responsavel'], "Registrado em":territorio['registrado_em']})
@@ -666,7 +666,7 @@ def renderizar_admin_normativos(email):
                         st.rerun()
                 if p.get("status") == "ATIVO" and not pendencias_ativacao_enel_sp(p):
                     st.markdown("#### Ampliação territorial — fluxo declaratório")
-                    from normativo_enel import MUNICIPIOS_ENEL_SP, FONTE_MUNICIPIOS, CHAVE_TERRITORIO, municipios_publicados_enel_sp, registrar_territorio_enel_sp, testar_territorio_enel_sp
+                    from normativo_enel import MUNICIPIOS_ENEL_SP, FONTE_MUNICIPIOS, CHAVE_TERRITORIO as CHAVE_TERRITORIO_ENEL, municipios_publicados_enel_sp, registrar_territorio_enel_sp, testar_territorio_enel_sp
                     st.write("Municípios atualmente liberados: " + ", ".join(municipios_publicados_enel_sp(p)))
                     st.markdown("Fonte territorial: " + FONTE_MUNICIPIOS)
                     st.caption("Escolha as cidades a liberar. Confirme a tensão e a rede de cada instalação; a cidade não determina automaticamente a tensão. Os testes abaixo verificam o software, não instalações reais em cada município.")
@@ -684,7 +684,7 @@ def renderizar_admin_normativos(email):
                             st.rerun()
                         except Exception as exc:
                             st.error(f"Ampliação territorial não registrada: {exc}")
-                    registro_territorio = (p.get("regras") or {}).get(CHAVE_TERRITORIO)
+                    registro_territorio = (p.get("regras") or {}).get(CHAVE_TERRITORIO_ENEL)
                     if registro_territorio:
                         st.write({"Registrado por":registro_territorio.get("registrado_por"), "Data UTC":registro_territorio.get("registrado_em")})
                 # Evita apresentar o editor genérico de fatores como regras Enel.
