@@ -1,3 +1,4 @@
+from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
 from normativo_cpfl import preparar_rascunho_rge, perfil_rge_ged13, perfil_ged13_380, pendencias_ativacao_rge
 from normativo_cpfl import preparar_rascunho_santa_cruz, perfil_santa_cruz_ged13, pendencias_ativacao_santa_cruz, MUNICIPIOS_SANTA_CRUZ
 from normativo_cpfl import _numero, _regras_base, _sincronizar_regras_ged13_residencial, _quase_igual, _validar_perfil_ged13, _resumo_auditoria_ged13
@@ -413,6 +414,18 @@ def renderizar_admin_normativos(email):
         return
 
     with st.expander("➕ Novo perfil normativo", expanded=not bool(perfis)):
+        st.caption("Enel São Paulo — 24 municípios: cadastro documental inicial, sem cálculo automático liberado.")
+        if st.button("Preparar perfil Enel São Paulo (24 municípios)"):
+            try:
+                if any(perfil_enel_sp(item) for item in perfis):
+                    st.info("Já existe um perfil Enel São Paulo. Nenhum registro foi alterado.")
+                else:
+                    salvar_perfil(preparar_rascunho_enel_sp(email))
+                    st.success("Enel São Paulo cadastrada em RASCUNHO para auditoria documental.")
+                    st.rerun()
+            except Exception as exc:
+                st.error(f"Não foi possível preparar o perfil Enel São Paulo: {exc}")
+
         st.caption("RGE — residencial 220/380 V: cadastro inicial dos 253 municípios confirmados na página oficial. As quatro exceções de tensão e os municípios ainda não conferidos ficam fora deste perfil.")
         if st.button("Preparar perfil RGE (RS — 220/380 V)"):
             try:
@@ -465,6 +478,19 @@ def renderizar_admin_normativos(email):
         titulo = f"{p.get('concessionaria','')} — {alcance}/{p.get('uf','')} — {p.get('documento') or 'Sem documento'} {p.get('revisao') or ''}"
         with st.expander(f"{titulo} · {p.get('status','RASCUNHO')}"):
             st.write(f"**Fonte:** {p.get('fonte_oficial') or '—'}")
+            if perfil_enel_sp(p):
+                st.info("Cadastro documental inicial. Os testes abaixo verificam o cadastro, não o dimensionamento elétrico. A ativação permanece bloqueada até a auditoria normativa e a implementação do cálculo específico.")
+                st.write("**Municípios vinculados:** " + ", ".join(p.get("municipios_atendidos") or []))
+                st.write((p.get("regras") or {}).get("observacoes", ""))
+                if st.button("Conferir cadastro Enel SP", key=f"auditar_enel_{p.get('id')}"):
+                    testes_enel = auditar_cadastro_enel_sp(p)
+                    st.dataframe(testes_enel, hide_index=True, use_container_width=True)
+                    passou = sum(t["Resultado"] == "PASSOU" for t in testes_enel)
+                    st.write(f"Cadastro: {passou}/{len(testes_enel)} verificações. Sem aprovação de cálculo ou entrada.")
+                for pendencia in pendencias_ativacao_enel_sp(p):
+                    st.caption(pendencia)
+                # Evita apresentar o editor genérico de fatores como regras Enel.
+                continue
             if eh_perfil_elektro(p):
                 st.info("Fornecimento 220/127 V preparado por faixas sem conflito. "
                         "Cargas acima de 10 e abaixo de 11,1 kW, e acima de 13 até 18 kW, "

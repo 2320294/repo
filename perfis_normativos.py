@@ -20,6 +20,9 @@ def perfil_atende_municipio(perfil, uf, municipio):
     if (str(perfil.get("concessionaria") or "").strip().casefold() == "rge"
             and not rge_atende_localidade(uf, municipio)):
         return False
+    from normativo_enel import perfil_enel_sp, enel_sp_atende_localidade
+    if perfil_enel_sp(perfil) and not enel_sp_atende_localidade(uf, municipio):
+        return False
     cidades = perfil.get("municipios_atendidos")
     if cidades is not None:
         return bool(cidade and cidade in {
@@ -101,6 +104,11 @@ def atualizar_status(perfil_id, status, validado_por=""):
             pendencias = pendencias_ativacao_rge(perfil)
             if pendencias:
                 raise ValueError("Perfil RGE não pode ser publicado: " + " ".join(pendencias))
+        from normativo_enel import perfil_enel_sp, pendencias_ativacao_enel_sp
+        if perfil_enel_sp(perfil):
+            pendencias = pendencias_ativacao_enel_sp(perfil)
+            if pendencias:
+                raise ValueError("Perfil Enel SP não pode ser publicado: " + " ".join(pendencias))
         if perfil_eh_perfil_elektro(perfil):
             pendencias = ativacao_pendencias(perfil)
             if pendencias:
