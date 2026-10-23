@@ -4,6 +4,190 @@ from datetime import datetime, timezone
 import json
 import hashlib
 from pathlib import Path
+import math
+
+CHAVE_ENTRADA = 'auditoria_entrada_bloco_neoenergia_v1'
+
+
+def tabela_entrada_neoenergia(perfil):
+    """Recorte das Tabelas 1/2: não é dimensionamento do alimentador do QDC."""
+    if not perfil_bloco_neoenergia(perfil):
+        return []
+    coelba = str(perfil.get('concessionaria') or '').strip().casefold() == 'neoenergia coelba'
+    # Categoria, FF/FN, modalidade, carga mínima/máxima kW, demanda mínima/máxima
+    # kVA, proteção A, entrada subterrânea Cu XLPE/HEPR fase/neutro mm²,
+    # eletroduto mínimo fases/neutro em polegadas, medição.
+    dados = [
+        ('M2','380/220 V','Monofásico',0,10,None,None,40,6,'1 1/4','Direta'),
+        ('M3','380/220 V','Monofásico',10.1,15,None,None,63,16,'1 1/4','Direta'),
+        ('T6','380/220 V','Trifásico',0,75,0,21,32,6,'1 1/4','Direta'),
+        ('T7','380/220 V','Trifásico',0,75,21.2,26,40,6,'1 1/4','Direta'),
+        ('T8','380/220 V','Trifásico',0,75,26.1,33,50,10,'1 1/4','Direta'),
+        ('T9','380/220 V','Trifásico',0,75,33.1,40,63,16,'1 1/4','Direta'),
+        ('T10','380/220 V','Trifásico',0,75,40.1,52,80,25,'2','Direta'),
+        ('T11','380/220 V','Trifásico',0,75,52.1,66,100,35,'2','Direta'),
+        ('T12','380/220 V','Trifásico',0,75,66.1,75,125,50,'2','Direta'),
+    ]
+    if coelba:
+        dados = [
+            ('M0','220/127 V','Monofásico',0,5,None,None,40,None,'1 1/4','Direta'),
+            ('M1','220/127 V','Monofásico',5.1,10,None,None,63,10,'1 1/4','Direta'),
+            ('B0','220/127 V','Bifásico',0,11,None,None,50,10,'1 1/4','Direta'),
+            ('B2','220/127 V','Bifásico',11.1,15,None,None,70,16,'2','Direta'),
+            ('T0','220/127 V','Trifásico',0,75,0,19,50,10,'1 1/4','Direta'),
+            ('T1','220/127 V','Trifásico',0,75,19.1,24,63,16,'1 1/4','Direta'),
+            ('T2','220/127 V','Trifásico',0,75,24.1,38,100,35,'2','Direta'),
+            ('T3','220/127 V','Trifásico',0,75,38.1,47,125,50,'2','Direta'),
+            ('T4','220/127 V','Trifásico',0,75,47.1,57,150,70,'2','Direta'),
+            ('T5','220/127 V','Trifásico',0,75,57.1,75,200,95,'2 1/2','Indireta'),
+        ] + dados
+    return [dict(categoria=c,tensao_ff_fn=v,modalidade=m,carga_min_kw=lo,carga_max_kw=hi,
+        demanda_min_kva=dlo,demanda_max_kva=dhi,disjuntor_referencia_a=dg,
+        entrada_subterranea_cu_xlpe_hepr_fase_mm2=s,entrada_subterranea_cu_xlpe_hepr_neutro_mm2=s,
+        eletroduto_fases_neutro_min_pol=t,medicao=med,tabela=1 if coelba else 2,
+        pagina=61 if coelba else 62) for c,v,m,lo,hi,dlo,dhi,dg,s,t,med in dados]
+
+
+def registro_entrada_neoenergia(perfil):
+    if not perfil_bloco_neoenergia(perfil):
+        raise ValueError('Distribuidora fora do bloco Neoenergia.')
+    empresa = next(e for e in EMPRESAS if e['concessionaria'].casefold()==str(perfil['concessionaria']).strip().casefold())
+    return dict(schema=1, concessionaria=empresa['concessionaria'], uf=empresa['uf'],
+        documento=DOCUMENTO,revisao=REVISAO,fonte=empresa['pdf'],
+        entrada=tabela_entrada_neoenergia(perfil),
+        referencias=['6.2.4–6.2.8: tensão local e modalidades, páginas 11–13',
+            '6.27: demanda trifásica, páginas 47–49; 6.28: enquadramento, página 50',
+            'Anexo I, notas 1–18, páginas 59–60'],
+        demanda_documental=[
+            'Método 6.27: D em kVA; residencial trifásico a: Tabela 6 e FP 1,00.',
+            'b: Tabela 7, FP 1,00; c: Tabela 8, FP 1,00; d: Tabela 9, FP 0,92 ou fabricante; e: Tabela 9, FP 1,00.',
+            'f: Tabelas 11/12; g: Tabelas 18/14; h: Tabela 15 e FP de placa; i: Tabela 16, FP 1,00.',
+            'Recarga j consta no item 6.27.10, mas não na soma impressa a–i: manter fora do escopo automático até análise específica.',
+            'Fatores e classificações TUE ainda não auditados neste bloco; cálculo de demanda e integração permanecem bloqueados.'
+        ],
+        limites=[
+            'Consulta isolada de tabela. Não libera o perfil nem aprova entrada, rede ou instalação.',
+            'Tensão em ordem FF/FN. Município não confirma tensão disponível no endereço.',
+            'Condutores mostrados apenas do ramal de entrada subterrâneo Cu XLPE/HEPR; não representam PVC, PE, aterramento ou alimentador do QDC. M0 não possui valor nesta coluna.',
+            'Faixas literais: lacunas decimais não são interpoladas. Coelba bifásico acima de 15 até 18 kW exige esclarecimento entre item geral e Tabela 1.',
+            'B0 depende da condição de diferença de medição da nota 14. Ligações abaixo da carga usual não são autorização de modalidade.',
+            'Motores, soldas, cargas especiais, simultaneidade, caixas homologadas e demais notas exigem conferência adicional. Brasília: DIS-ETE-145 e NDB-PTC-001 enquanto vigente.',
+        ],libera_calculo=False)
+
+
+def auditoria_entrada_neoenergia_registrada(perfil):
+    if not perfil_bloco_neoenergia(perfil):return False
+    r=((perfil or {}).get('regras') or {}).get(CHAVE_ENTRADA) or {}
+    return r.get('referencia')==registro_entrada_neoenergia(perfil) and bool(r.get('responsavel')) and bool(r.get('registrado_em'))
+
+
+def registrar_entrada_neoenergia(perfil,responsavel):
+    if not territorio_neoenergia_registrado(perfil) or perfil.get('status')!='RASCUNHO':
+        raise ValueError('Requer perfil RASCUNHO com vínculo territorial registrado.')
+    if not str(responsavel or '').strip():raise ValueError('Responsável ausente.')
+    empresa=next(e for e in EMPRESAS if e['uf']==perfil['uf'])
+    if perfil.get('documento')!=DOCUMENTO or perfil.get('revisao')!=REVISAO or perfil.get('fonte_oficial')!=empresa['pdf']:
+        raise ValueError('Documento, revisão ou fonte regional divergente.')
+    regras=deepcopy(perfil.get('regras') or {})
+    existente=regras.get(CHAVE_ENTRADA)
+    if existente:
+        if not auditoria_entrada_neoenergia_registrada(perfil):raise ValueError('Auditoria existente divergente; preservada para conferência.')
+        return regras
+    regras[CHAVE_ENTRADA]=dict(referencia=registro_entrada_neoenergia(perfil),responsavel=str(responsavel).strip(),registrado_em=datetime.now(timezone.utc).isoformat())
+    return regras
+
+
+def cadastrar_auditorias_entrada_neoenergia(listar,salvar,responsavel):
+    saida=[]
+    for empresa in EMPRESAS:
+        try:
+            perfis=[p for p in listar() if str(p.get('concessionaria') or '').strip().casefold()==empresa['concessionaria'].casefold() and p.get('uf')==empresa['uf']]
+            if len(perfis)!=1 or not perfis[0].get('id'):raise ValueError('Necessário um único perfil salvo por distribuidora/UF.')
+            p=perfis[0]
+            if p.get('status')!='RASCUNHO':raise ValueError('Perfil fora de RASCUNHO; preservado.')
+            regras=registrar_entrada_neoenergia(p,responsavel)
+            if auditoria_entrada_neoenergia_registrada(p):resultado='JÁ REGISTRADA — PRESERVADA'
+            else:
+                if not salvar({'regras':regras},perfil_id=p['id']):raise ValueError('Gravação não confirmada pelo banco.')
+                resultado='REFERÊNCIA REGISTRADA EM RASCUNHO'
+            saida.append({'Distribuidora':empresa['concessionaria'],'Resultado':resultado})
+        except Exception as exc:saida.append({'Distribuidora':empresa['concessionaria'],'Resultado':'PENDENTE','Detalhe':str(exc)})
+    return saida
+
+
+def consultar_entrada_neoenergia(perfil,tensao,modalidade,carga_kw,demanda_kva=None):
+    saida=dict(status='conferencia_tecnica',motivo='',referencia=None,aprovacao_automatica=False)
+    def pendencia(texto):saida['motivo']=texto;return saida
+    if not auditoria_entrada_neoenergia_registrada(perfil):return pendencia('Referência regional ainda não registrada ou divergente.')
+    def numero(n):
+        if isinstance(n,bool):return None
+        try:x=float(n)
+        except (TypeError,ValueError):return None
+        return x if math.isfinite(x) and x>0 else None
+    carga=numero(carga_kw)
+    if carga is None or carga>75:return pendencia('Carga deve ser positiva e até 75 kW; demais casos exigem análise específica.')
+    linhas=[r for r in tabela_entrada_neoenergia(perfil) if r['tensao_ff_fn']==tensao and r['modalidade']==modalidade]
+    if not linhas:return pendencia('Tensão ou modalidade não mapeada nesta tabela regional.')
+    if modalidade=='Bifásico' and 15<carga<=18:return pendencia('Faixa conflitante da Coelba: limite geral de 18 kW versus Tabela 1 até 15 kW. Conferência técnica obrigatória.')
+    demanda=numero(demanda_kva) if modalidade=='Trifásico' else None
+    if modalidade=='Trifásico' and (demanda is None or demanda>75):return pendencia('Informe demanda previamente calculada, positiva e até 75 kVA. Esta consulta não calcula demanda.')
+    candidatas=[r for r in linhas if r['carga_min_kw']<=carga<=r['carga_max_kw'] and (modalidade!='Trifásico' or r['demanda_min_kva']<=demanda<=r['demanda_max_kva'])]
+    if len(candidatas)!=1:return pendencia('Valor em lacuna ou fora das faixas literais; não arredondar para enquadrar.')
+    saida.update(status='referencia_isolada',referencia=deepcopy(candidatas[0]),motivo='Referência de tabela localizada. Não verifica motores, cargas especiais, viabilidade, cálculo de demanda nem dimensionamento do QDC; sem aprovação da entrada.')
+    return saida
+
+
+def testar_entrada_bloco_neoenergia():
+    casos=[]
+    def verifica(nome,ok):casos.append({'Caso':nome,'Resultado':'PASSOU' if ok else 'FALHOU'})
+    def rejeita(nome,fn):
+        try:fn()
+        except ValueError:verifica(nome,True)
+        else:verifica(nome,False)
+    perfis=[]
+    for i,p in enumerate(preparar_bloco_neoenergia('TESTE')):
+        p['id']=str(i+1);p=preparar_territorio_neoenergia(p,'TESTE');antes=deepcopy(p)
+        p['regras']=registrar_entrada_neoenergia(p,'TESTE')
+        perfis.append(p)
+        prefixo=p['concessionaria']+': '
+        verifica(prefixo+'referência registrada',auditoria_entrada_neoenergia_registrada(p))
+        verifica(prefixo+'território e status preservados',p['municipios_atendidos']==antes['municipios_atendidos'] and p['status']=='RASCUNHO')
+        verifica(prefixo+'cálculos e fonte geral não liberados',p['regras']['demanda']=={} and p['regras']['fornecimento']=={} and p['regras']['fonte_conferida'] is False and bool(pendencias_bloco_neoenergia(p)))
+        verifica(prefixo+'repetição preserva registro',registrar_entrada_neoenergia(p,'OUTRO')==p['regras'])
+        for valor,cat,dg,secao in [(21,'T6',32,6),(21.2,'T7',40,6),(26,'T7',40,6),(26.1,'T8',50,10),(33.1,'T9',63,16),(40.1,'T10',80,25),(52.1,'T11',100,35),(66.1,'T12',125,50),(75,'T12',125,50)]:
+            r=consultar_entrada_neoenergia(p,'380/220 V','Trifásico',60,valor);ref=r.get('referencia') or {}
+            verifica(prefixo+f'{valor} kVA → {cat}',r['status']=='referencia_isolada' and ref.get('categoria')==cat and ref.get('disjuntor_referencia_a')==dg and ref.get('entrada_subterranea_cu_xlpe_hepr_fase_mm2')==secao and r['aprovacao_automatica'] is False)
+        for valor in [21.001,21.1,21.199,26.001,33.01,40.01,52.01,66.01,75.001,None,0,-1,float('nan'),float('inf'),True]:
+            verifica(prefixo+f'demanda {valor} pendente',consultar_entrada_neoenergia(p,'380/220 V','Trifásico',60,valor)['referencia'] is None)
+        for valor in [None,0,-1,75.001,float('nan'),True]:
+            verifica(prefixo+f'carga {valor} recusada',consultar_entrada_neoenergia(p,'380/220 V','Trifásico',valor,20)['referencia'] is None)
+        verifica(prefixo+'monofásico M2 por carga',consultar_entrada_neoenergia(p,'380/220 V','Monofásico',10)['referencia']['categoria']=='M2')
+        verifica(prefixo+'lacuna monofásica',consultar_entrada_neoenergia(p,'380/220 V','Monofásico',10.001)['referencia'] is None)
+        verifica(prefixo+'monofásico M3 por carga',consultar_entrada_neoenergia(p,'380/220 V','Monofásico',10.1)['referencia']['categoria']=='M3')
+        verifica(prefixo+'bifásico 380 não presumido',consultar_entrada_neoenergia(p,'380/220 V','Bifásico',20)['referencia'] is None)
+        rejeita(prefixo+'ativo não alterado',lambda:registrar_entrada_neoenergia(dict(p,status='ATIVO'),'TESTE'))
+        adulterado=deepcopy(p);adulterado['regras'][CHAVE_ENTRADA]['referencia']['entrada'][0]['disjuntor_referencia_a']=999
+        verifica(prefixo+'referência adulterada bloqueada',consultar_entrada_neoenergia(adulterado,'380/220 V','Trifásico',60,20)['referencia'] is None)
+    ba=perfis[0]
+    for valor,cat,dg in [(19,'T0',50),(19.1,'T1',63),(24.1,'T2',100),(38.1,'T3',125),(47.1,'T4',150),(57.1,'T5',200)]:
+        r=consultar_entrada_neoenergia(ba,'220/127 V','Trifásico',60,valor)['referencia']
+        verifica(f'Coelba 220: {valor} kVA → {cat}',r['categoria']==cat and r['disjuntor_referencia_a']==dg)
+    r=consultar_entrada_neoenergia(ba,'220/127 V','Bifásico',12)['referencia']
+    verifica('Coelba B2 é 70 A; não copiar B1 Elektro',r['categoria']=='B2' and r['disjuntor_referencia_a']==70)
+    verifica('Coelba M0 sem seção subterrânea presumida',consultar_entrada_neoenergia(ba,'220/127 V','Monofásico',5)['referencia']['entrada_subterranea_cu_xlpe_hepr_fase_mm2'] is None)
+    for carga in [11.001,15.001,18]:verifica(f'Coelba bifásico {carga} bloqueado',consultar_entrada_neoenergia(ba,'220/127 V','Bifásico',carga)['referencia'] is None)
+    for p in perfis[1:]:verifica(p['concessionaria']+': 220/127 não copiado da Coelba',consultar_entrada_neoenergia(p,'220/127 V','Trifásico',60,20)['referencia'] is None)
+    db=[preparar_territorio_neoenergia(p,'TESTE') for p in preparar_bloco_neoenergia('TESTE')]
+    for i,p in enumerate(db):p['id']=str(i+1)
+    chamadas=[]
+    def salvar(dados,perfil_id):
+        chamadas.append(perfil_id);p=next(x for x in db if x['id']==perfil_id);p.update(deepcopy(dados));return [p]
+    r=cadastrar_auditorias_entrada_neoenergia(lambda:db,salvar,'TESTE')
+    verifica('Lote registra quatro referências',len(chamadas)==4 and all(t['Resultado']=='REFERÊNCIA REGISTRADA EM RASCUNHO' for t in r))
+    antes=deepcopy(db);r=cadastrar_auditorias_entrada_neoenergia(lambda:db,salvar,'OUTRO')
+    verifica('Lote repetido preserva registros',db==antes and len(chamadas)==4 and all(t['Resultado']=='JÁ REGISTRADA — PRESERVADA' for t in r))
+    verifica('Elektro fora desta auditoria',not auditoria_entrada_neoenergia_registrada({'concessionaria':'Neoenergia Elektro'}))
+    return casos
 
 CHAVE_TERRITORIO = 'territorio_bloco_neoenergia_v1'
 FONTE_TERRITORIO = 'https://www.neoenergia.com/distribuicao'
@@ -147,7 +331,7 @@ def pendencias_bloco_neoenergia(perfil):
     return ([] if territorio_neoenergia_registrado(perfil) else [
         'Conferir e vincular municípios atendidos com fonte territorial específica; não presumir toda a UF.',
     ]) + [
-        'Auditar tensões, modalidades, tabelas de entrada, demanda e exceções da distribuidora.',
+        ('Concluir auditoria de demanda, motores, cargas especiais e condições de aplicação; entrada registrada apenas como referência isolada.' if auditoria_entrada_neoenergia_registrada(perfil) else 'Auditar tensões, modalidades, tabelas de entrada, demanda e exceções da distribuidora.'),
         'Executar testes elétricos e integrados próprios antes de validar ou ativar.',
         'Conferir a aplicabilidade e eventuais documentos regionais complementares.',
     ]

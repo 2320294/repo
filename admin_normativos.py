@@ -1,5 +1,6 @@
 from normativo_neoenergia import perfil_bloco_neoenergia, planejar_bloco_neoenergia, cadastrar_bloco_neoenergia, testar_bloco_neoenergia, pendencias_bloco_neoenergia, CHAVE_BLOCO
 from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neoenergia_registrado, referencias_regionais_neoenergia, CHAVE_TERRITORIO as CHAVE_TERRITORIO_NEOENERGIA, testar_territorios_neoenergia
+from normativo_neoenergia import CHAVE_ENTRADA as CHAVE_ENTRADA_NEOENERGIA, cadastrar_auditorias_entrada_neoenergia, auditoria_entrada_neoenergia_registrada, testar_entrada_bloco_neoenergia, consultar_entrada_neoenergia
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -508,6 +509,18 @@ def renderizar_admin_normativos(email):
         if st.session_state.get('resultado_territorio_neoenergia'):
             st.dataframe(st.session_state['resultado_territorio_neoenergia'], hide_index=True, use_container_width=True)
             st.caption("Os vínculos já registrados são preservados. Se houver pendência, confira o detalhe; não é necessário aguardar a API do IBGE.")
+        st.markdown("#### Auditoria de entrada — quatro perfis Neoenergia")
+        st.caption("Tabela 1 da Coelba e Tabela 2 de Pernambuco/Cosern/Brasília. Referências isoladas; a demanda e a ativação dos perfis continuam pendentes. Condutores deste recorte: entrada subterrânea Cu XLPE/HEPR, separados do alimentador do QDC.")
+        if st.button("Executar testes das tabelas de entrada Neoenergia"):
+            testes_entrada_bloco = testar_entrada_bloco_neoenergia()
+            st.dataframe(testes_entrada_bloco, hide_index=True, use_container_width=True)
+            st.write(f"Tabelas de entrada: {sum(t['Resultado']=='PASSOU' for t in testes_entrada_bloco)}/{len(testes_entrada_bloco)} testes de software. Sem homologação elétrica.")
+        if st.button("Registrar referências de entrada nos quatro rascunhos Neoenergia"):
+            st.session_state['resultado_entrada_bloco_neoenergia'] = cadastrar_auditorias_entrada_neoenergia(
+                lambda:listar_perfis(False, administrativo=True), salvar_perfil, email)
+            st.rerun()
+        if st.session_state.get('resultado_entrada_bloco_neoenergia'):
+            st.dataframe(st.session_state['resultado_entrada_bloco_neoenergia'], hide_index=True, use_container_width=True)
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
         if perfil_bloco_neoenergia(p):
@@ -536,9 +549,34 @@ def renderizar_admin_normativos(email):
                             st.write(territorio['fonte_exclusoes'])
                 for referencia_regional in referencias_regionais_neoenergia(p):
                     st.write(referencia_regional)
+                if auditoria_entrada_neoenergia_registrada(p):
+                    registro_entrada_bloco = p['regras'][CHAVE_ENTRADA_NEOENERGIA]
+                    referencia_entrada_bloco = registro_entrada_bloco['referencia']
+                    st.success("Referências regionais de entrada registradas. Perfil mantido em RASCUNHO.")
+                    st.caption("Responsável: " + registro_entrada_bloco['responsavel'] + " · Data UTC: " + registro_entrada_bloco['registrado_em'])
+                    with st.expander("Tabela de referência de entrada e limites da auditoria"):
+                        st.dataframe(referencia_entrada_bloco['entrada'], hide_index=True, use_container_width=True)
+                        for limite_bloco in referencia_entrada_bloco['limites']:
+                            st.caption(limite_bloco)
+                        st.write("**Demanda — mapeamento documental, cálculo ainda pendente:**")
+                        for nota_demanda_bloco in referencia_entrada_bloco['demanda_documental']:
+                            st.caption(nota_demanda_bloco)
+                    with st.expander("Consultar entrada — ensaio isolado Neoenergia"):
+                        tensoes_bloco = sorted({r['tensao_ff_fn'] for r in referencia_entrada_bloco['entrada']})
+                        tensao_bloco = st.selectbox("Tensão FF/FN da consulta", tensoes_bloco, key=f"tensao_entrada_neo_{p.get('id')}")
+                        modalidade_bloco = st.selectbox("Modalidade da consulta", ['Monofásico','Bifásico','Trifásico'], key=f"modo_entrada_neo_{p.get('id')}")
+                        carga_bloco = st.number_input("Carga instalada da consulta (kW)", min_value=0.0, value=20.0, format="%.3f", key=f"carga_entrada_neo_{p.get('id')}")
+                        demanda_bloco = None
+                        if modalidade_bloco == 'Trifásico':
+                            demanda_bloco = st.number_input("Demanda previamente calculada (kVA)", min_value=0.0, value=20.0, format="%.3f", key=f"demanda_entrada_neo_{p.get('id')}")
+                        if st.button("Consultar referência de entrada Neoenergia", key=f"consultar_entrada_neo_{p.get('id')}"):
+                            resultado_entrada_bloco = consultar_entrada_neoenergia(p,tensao_bloco,modalidade_bloco,carga_bloco,demanda_bloco)
+                            st.write(resultado_entrada_bloco['motivo'])
+                            if resultado_entrada_bloco.get('referencia'):
+                                st.write(resultado_entrada_bloco['referencia'])
                 for pendencia_bloco in pendencias_bloco_neoenergia(p):
                     st.warning(pendencia_bloco)
-                st.caption("Este rascunho não aparece para usuários e não aplica regras da Elektro ou da CPFL. As tabelas regionais e a demanda ainda precisam de auditoria elétrica.")
+                st.caption("Este rascunho não aparece para usuários e não aplica regras da Elektro ou da CPFL. As referências de entrada são isoladas; a demanda, cargas especiais e a integração ainda precisam de auditoria elétrica.")
                 continue
             if perfil_enel_sp(p):
                 st.info("Auditorias de cadastro, entrada, motores e integração declaratória têm escopos distintos. O registro dos ensaios administrativos não ativa o perfil nem aprova a entrada.")
