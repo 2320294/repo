@@ -776,8 +776,13 @@ def gerar_memorial_pdf(
     from normativo_cpfl import exportacao_pendencias_cpfl
     from xml.sax.saxutils import escape
     perfil_aplicado = str(demanda_memorial.get("perfil_normativo") or "").strip()
-    if "cpfl" in perfil_aplicado.casefold():
-        story.append(Paragraph(escape("Perfil aplicado ao cálculo: " + perfil_aplicado + "."), styles["Texto"]))
+    if not perfil_aplicado:
+        perfil_aplicado = " — ".join(str(rede_memorial.get(k) or "").strip() for k in (
+            "perfil_normativo_concessionaria", "perfil_normativo_documento",
+            "perfil_normativo_revisao") if str(rede_memorial.get(k) or "").strip())
+    if perfil_aplicado:
+        story.append(Paragraph(escape("Perfil normativo: " + perfil_aplicado + "."), styles["Texto"]))
+    if "cpfl" in perfil_aplicado.casefold() or "rge" in perfil_aplicado.casefold():
         metodo_aplicado = demanda_memorial.get("metodo")
         if not metodo_aplicado:
             metodo_aplicado = (rede_memorial.get("contexto_resultados_rede") or {}).get("metodo_demanda")

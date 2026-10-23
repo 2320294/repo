@@ -22,6 +22,21 @@ from demanda_qdc import calcular_demanda_qdc
 from concessionarias import CHAVE_PARAMETROS_REDE
 
 
+def assinatura_arquivos_projeto(dxf_bytes, tabela, local_qdc, config, tensao, pe_direito):
+    """Vincula os downloads aos dados usados na geração concluída."""
+    import hashlib
+    import json
+    origem = (
+        hashlib.sha256(bytes(dxf_bytes or b"" )).hexdigest(),
+        st.session_state.get("projeto_ativo"), VERSAO_SISTEMA,
+        tabela, local_qdc, config, tensao, pe_direito,
+        st.session_state.get("fase12_1_metodo_instalacao_rotulo", "B1"),
+        st.session_state.get("fase12_1_temperatura_ambiente", 30),
+    )
+    return hashlib.sha256(json.dumps(origem, sort_keys=True, default=str,
+                                    ensure_ascii=False).encode()).hexdigest()
+
+
 def calcular_rotas_antes_do_dxf(
     dxf_bytes, tabela_editada, local_qdc,
     config_interruptores_usuario, tensao_projeto=220, pe_direito=2.80,
@@ -303,71 +318,27 @@ def renderizar_salvar_e_gerar_cad(
             unsafe_allow_html=True,
         )
 
-    # Memorial é preparado antes da renderização dos dois botões para que
-    # Salvar Projeto e Memorial permaneçam alinhados lado a lado.
-    pdf_bytes = None
-    erro_memorial = None
-    try:
-        pdf_bytes = gerar_memorial_pdf(
-            nome_projeto=st.session_state.projeto_ativo,
-            tabela_editada=tabela_editada,
-            config_interruptores_usuario=config_interruptores_usuario,
-            local_qdc=local_qdc,
-            tensao_projeto=tensao_projeto,
-            pe_direito=pe_direito,
-            resumo_rotas=resumo_rotas,
-            materiais_snapshot=(
-                st.session_state.get("materiais_quantitativo_final")
-                if st.session_state.get("materiais_quantitativo_projeto") == st.session_state.get("projeto_ativo")
-                and st.session_state.get("materiais_quantitativo_versao") == VERSAO_SISTEMA
-                else None
+    if st.button(
+        "💾 Salvar Alterações do Projeto",
+        use_container_width=True
+    ):
+        try:
+            salvar_dados_projeto(
+                st.session_state.user_email,
+                st.session_state.projeto_ativo,
+                tabela_editada=tabela_editada,
+                local_qdc=local_qdc,
+                config_interruptores=config_interruptores_usuario,
+                tensao_projeto=tensao_projeto,
+                pe_direito=pe_direito
             )
-        )
-    except Exception as e:
-        erro_memorial = str(e)
-
-    col_salvar, col_memorial = st.columns(2, gap="large")
-
-    with col_salvar:
-        if st.button(
-            "💾 Salvar Alterações do Projeto",
-            use_container_width=True
-        ):
-            try:
-                salvar_dados_projeto(
-                    st.session_state.user_email,
-                    st.session_state.projeto_ativo,
-                    tabela_editada=tabela_editada,
-                    local_qdc=local_qdc,
-                    config_interruptores=config_interruptores_usuario,
-                    tensao_projeto=tensao_projeto,
-                    pe_direito=pe_direito
-                )
-                # A mensagem é exibida no ciclo seguinte para não desaparecer
-                # imediatamente quando o Streamlit executa o rerun.
-                st.session_state["mostrar_sucesso_salvar_projeto"] = True
-                st.rerun()
-            except Exception as e:
-                st.error(
-                    f"❌ Erro ao salvar alterações: {e}"
-                )
-
-    with col_memorial:
-        if pdf_bytes is not None:
-            st.download_button(
-                label="📄 Baixar Memorial Descritivo (PDF)",
-                data=pdf_bytes,
-                file_name=(
-                    f"{st.session_state.projeto_ativo}"
-                    "_Memorial_Descritivo.pdf"
-                ),
-                mime="application/pdf",
-                use_container_width=True,
-                on_click="ignore"
-            )
-        elif erro_memorial:
+            # A mensagem é exibida no ciclo seguinte para não desaparecer
+            # imediatamente quando o Streamlit executa o rerun.
+            st.session_state["mostrar_sucesso_salvar_projeto"] = True
+            st.rerun()
+        except Exception as e:
             st.error(
-                f"❌ Erro ao preparar memorial PDF: {erro_memorial}"
+                f"❌ Erro ao salvar alterações: {e}"
             )
 
     st.markdown(
@@ -375,6 +346,13 @@ def renderizar_salvar_e_gerar_cad(
     )
 
     VERSAO_CAD = VERSAO_SISTEMA
+
+    def assinatura_atual():
+        return assinatura_arquivos_projeto(
+            dxf_bytes, tabela_editada, local_qdc, config_interruptores_usuario,
+            tensao_projeto, pe_direito,
+        )
+
 
     # Nunca reaproveita CAD de uma fase anterior. Ao detectar mudança de
     # versão, descarta o arquivo persistido e exige uma nova geração.
@@ -530,6 +508,7 @@ def renderizar_salvar_e_gerar_cad(
                         "dimensionamento_rotas_versao"
                     ] = VERSAO_CAD
 
+                st.session_state["cad_gerado_assinatura"] = assinatura_atual()
                 st.session_state.pop("cad_gerado_erro", None)
                 cad_gerado_neste_ciclo = True
 
@@ -564,6 +543,7 @@ def renderizar_salvar_e_gerar_cad(
         cad_salvo
         and projeto_cad == st.session_state.projeto_ativo
         and st.session_state.get("cad_gerado_versao") == VERSAO_CAD
+        and st.session_state.get("cad_gerado_assinatura") == assinatura_atual()
     ):
         nome_seguro = str(
             st.session_state.projeto_ativo
@@ -602,6 +582,8 @@ def renderizar_salvar_e_gerar_cad(
         # se a Plotagem fosse renderizada antes do preparo das etiquetas, ela
         # apareceria sozinha durante alguns instantes. Agora a interface só é
         # montada depois que ambos os estados foram consolidados.
+        pdf_bytes = None
+        erro_memorial = None
         pdf_projeto = None
         erro_pdf_projeto = None
         pdf_etiquetas = None
@@ -615,14 +597,16 @@ def renderizar_salvar_e_gerar_cad(
             bytes(cad_salvo), nome_seguro, VERSAO_CAD, VERSAO_SISTEMA,
             config_interruptores_usuario, tabela_editada,
             st.session_state.get("dimensionamento_rotas", {}),
+            assinatura_atual(),
         ), protocol=4)).hexdigest()
         preparo_anterior = st.session_state.get("pdfs_projeto_preparados", {})
         if preparo_anterior.get("chave") == chave_preparo:
+            pdf_bytes = preparo_anterior["pdf_memorial"]
             pdf_projeto = preparo_anterior["pdf_projeto"]
             pdf_etiquetas = preparo_anterior["pdf_etiquetas"]
             etiquetas_disponiveis = preparo_anterior["etiquetas_disponiveis"]
         else:
-            with st.spinner("Preparando Plotagem do Projeto (PDF) e Etiquetas de Identificação do QDC..."):
+            with st.spinner("Preparando PDFs do Projeto, Memorial Descritivo e Etiquetas do QDC..."):
                 try:
                     pdf_projeto = gerar_pdf_projeto(
                         dxf_bytes=bytes(cad_salvo),
@@ -663,14 +647,49 @@ def renderizar_salvar_e_gerar_cad(
                 except Exception as exc:
                     erro_etiquetas = str(exc)
 
+            # O memorial usa o resumo definitivo do mesmo DXF concluído.
+            try:
+                pdf_bytes = gerar_memorial_pdf(
+                    nome_projeto=nome_seguro,
+                    tabela_editada=tabela_editada,
+                    config_interruptores_usuario=config_interruptores_usuario,
+                    local_qdc=local_qdc,
+                    tensao_projeto=tensao_projeto,
+                    pe_direito=pe_direito,
+                    resumo_rotas=st.session_state.get("dimensionamento_rotas", {}) or {},
+                    materiais_snapshot=(
+                        st.session_state.get("materiais_quantitativo_final")
+                        if st.session_state.get("materiais_quantitativo_projeto") == st.session_state.get("projeto_ativo")
+                        and st.session_state.get("materiais_quantitativo_versao") == VERSAO_SISTEMA
+                        else None
+                    ),
+                )
+            except Exception as exc:
+                erro_memorial = str(exc)
+
             # Falhas não são guardadas: uma nova execução poderá tentar novamente.
-            if pdf_projeto is not None and pdf_etiquetas is not None:
+            if pdf_projeto is not None and pdf_etiquetas is not None and pdf_bytes is not None:
                 st.session_state["pdfs_projeto_preparados"] = {
                     "chave": chave_preparo,
+                    "pdf_memorial": pdf_bytes,
                     "pdf_projeto": pdf_projeto,
                     "pdf_etiquetas": pdf_etiquetas,
                     "etiquetas_disponiveis": etiquetas_disponiveis,
                 }
+
+        st.markdown("### 📄 Memorial Descritivo (PDF)")
+        if pdf_bytes is not None:
+            st.download_button(
+                label="📄 Baixar Memorial Descritivo (PDF)",
+                data=pdf_bytes,
+                file_name=f"{nome_seguro}_Memorial_Descritivo.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_memorial_projeto",
+                on_click="ignore",
+            )
+        else:
+            st.error(f"Erro ao preparar memorial PDF: {erro_memorial or 'erro não identificado'}")
 
         # Somente agora os dois blocos são inseridos na página, juntos.
         col_plotagem, col_qdc = st.columns(2, gap="large")
@@ -719,6 +738,6 @@ def renderizar_salvar_e_gerar_cad(
                 )
     else:
         st.info(
-            "⌛ Aguardando a geração do projeto DXF para liberar a Plotagem do Projeto (PDF) "
-            "e Etiquetas de Identificação do QDC"
+            "⌛ Gere o projeto DXF com os dados atuais para liberar os downloads do projeto, "
+            "Memorial Descritivo, Plotagem PDF e Etiquetas do QDC."
         )
