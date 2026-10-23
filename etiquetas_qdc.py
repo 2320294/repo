@@ -1,6 +1,7 @@
 from balanceamento_fases import rotulo_fase
 from pdf_rodape import texto_rodape_pdf
 from io import BytesIO
+import re
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
@@ -44,7 +45,7 @@ def _nome_tipo(c, tipo):
     for k in ('equipamento','descricao_tue','carga','descricao'):
         v = _txt(c.get(k))
         if v and v not in ('-', '—') and not v.upper().startswith('C0') and v.upper() != 'TUE':
-            return v
+            return re.sub(r"\bar\s*-\s*condicionado\b", "Ar Condicionado", v, flags=re.IGNORECASE)
     if tipo == 'CHUVEIRO': return 'Chuveiro'
     return 'TUE'
 
