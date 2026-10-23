@@ -2,6 +2,7 @@ from normativo_neoenergia import perfil_bloco_neoenergia, planejar_bloco_neoener
 from normativo_neoenergia import vincular_territorios_neoenergia, territorio_neoenergia_registrado, referencias_regionais_neoenergia, CHAVE_TERRITORIO as CHAVE_TERRITORIO_NEOENERGIA, testar_territorios_neoenergia
 from normativo_neoenergia import CHAVE_ENTRADA as CHAVE_ENTRADA_NEOENERGIA, cadastrar_auditorias_entrada_neoenergia, auditoria_entrada_neoenergia_registrada, testar_entrada_bloco_neoenergia, consultar_entrada_neoenergia
 from normativo_neoenergia import CHAVE_DEMANDA as CHAVE_DEMANDA_NEOENERGIA, cadastrar_auditorias_demanda_neoenergia, auditoria_demanda_neoenergia_registrada, testar_demanda_bloco_neoenergia, dados_ensaio_demanda_neoenergia, calcular_ensaio_demanda_neoenergia
+from normativo_neoenergia import calcular_ensaio_integrado_neoenergia, testar_integracao_bloco_neoenergia, tabela_entrada_neoenergia
 from normativo_enel import CHAVE_MOTORES, registro_motores_enel_sp, registrar_auditoria_motores_enel_sp, testar_motores_enel_sp, consultar_motor_enel_sp
 from normativo_enel import CHAVE_AUDITORIA, registrar_auditoria_entrada_enel_sp, registro_entrada_enel_sp, testar_entrada_enel_sp, previa_entrada_enel_sp
 from normativo_enel import preparar_rascunho_enel_sp, perfil_enel_sp, auditar_cadastro_enel_sp, pendencias_ativacao_enel_sp
@@ -534,6 +535,12 @@ def renderizar_admin_normativos(email):
             st.rerun()
         if st.session_state.get('resultado_demanda_bloco_neoenergia'):
             st.dataframe(st.session_state['resultado_demanda_bloco_neoenergia'],hide_index=True,use_container_width=True)
+        st.markdown("#### Integração de auditoria — demanda e entrada Neoenergia")
+        st.caption("Ensaio residencial individual trifásico dos grupos já auditados. Cruza demanda, carga instalada, tensão e corrente máxima de fase declarada com a tabela regional; não integra nem libera projetos dos usuários.")
+        if st.button("Executar testes da integração demanda e entrada Neoenergia"):
+            testes_integracao_bloco = testar_integracao_bloco_neoenergia()
+            st.dataframe(testes_integracao_bloco,hide_index=True,use_container_width=True)
+            st.write(f"Integração administrativa: {sum(t['Resultado']=='PASSOU' for t in testes_integracao_bloco)}/{len(testes_integracao_bloco)} testes de software. Sem homologação elétrica ou ativação de perfil.")
     for p in perfis:
         alcance = (f"{len(p.get('municipios_atendidos') or [])} municípios" if p.get("municipios_atendidos") is not None else (p.get("municipio") or "Toda a UF"))
         if perfil_bloco_neoenergia(p):
@@ -583,6 +590,23 @@ def renderizar_admin_normativos(email):
                             if resultado_demanda_bloco['demanda_total_kva'] is not None:
                                 st.write(f"Demanda do ensaio: {resultado_demanda_bloco['demanda_total_kva']:.3f} kVA")
                                 st.dataframe(resultado_demanda_bloco['memoria'],hide_index=True,use_container_width=True)
+                    with st.expander("Ensaio integrado — demanda e entrada Neoenergia"):
+                        st.caption("Usa a tabela editável do ensaio de demanda acima e recalcula os dados atuais a cada clique. Somente auditoria; não lê nem modifica o projeto aberto.")
+                        st.info("Teste fictício inicial: escolha 380/220 V, FP do ar 0,90 e corrente máxima 31 A. Esperado: 26,420 kW instalados, 19,500 kVA, categoria T6 e disjuntor de referência 32 A. Os cabos exibidos são da entrada subterrânea Cu XLPE/HEPR, não do alimentador do QDC.")
+                        tensoes_integracao_bloco = sorted({r['tensao_ff_fn'] for r in tabela_entrada_neoenergia(p)})
+                        tensao_integracao_bloco = st.selectbox("Tensão FF/FN do ensaio integrado",tensoes_integracao_bloco,index=tensoes_integracao_bloco.index('380/220 V'),key=f"tensao_integracao_neo_{p.get('id')}")
+                        fp_f_integracao_bloco = st.number_input("FP do ar condicionado — placa/catálogo (0,90 apenas no exemplo fictício)",min_value=0.0,max_value=1.0,value=0.9,step=0.01,key=f"fp_f_integracao_neo_{p.get('id')}")
+                        corrente_integracao_bloco = st.number_input("Maior corrente de fase conferida (A) — 31 A apenas no exemplo fictício",min_value=0.0,value=31.0,format="%.3f",key=f"corrente_integracao_neo_{p.get('id')}")
+                        confirma_entrada_bloco = st.checkbox("Confirmo a tensão FF/FN, o FP elétrico do ar e a maior corrente de fase deste ensaio; a corrente média balanceada não substitui as correntes de fase.",key=f"confirma_integracao_neo_{p.get('id')}")
+                        st.caption("Também são respeitadas a confirmação do escopo e a marcação de cargas excluídas no ensaio de demanda acima.")
+                        if st.button("Calcular ensaio integrado de demanda e entrada",key=f"calcular_integracao_neo_{p.get('id')}"):
+                            integrado_bloco = calcular_ensaio_integrado_neoenergia(p,dados_demanda_bloco.to_dict('records'),tensao_integracao_bloco,
+                                fp_d_bloco,fp_f_integracao_bloco,corrente_integracao_bloco,confirma_demanda_bloco,excluidas_demanda_bloco,confirma_entrada_bloco)
+                            st.write(integrado_bloco['motivo'])
+                            if integrado_bloco['referencia'] is not None:
+                                st.write({"Carga instalada (kW)":integrado_bloco['carga_instalada_kw'],"Demanda (kVA)":integrado_bloco['demanda_total_kva'],
+                                    "Corrente equivalente balanceada (A)":integrado_bloco['corrente_equivalente_balanceada_a'],"Maior corrente informada (A)":integrado_bloco['corrente_max_informada_a']})
+                                st.write(integrado_bloco['referencia'])
                 if auditoria_entrada_neoenergia_registrada(p):
                     registro_entrada_bloco = p['regras'][CHAVE_ENTRADA_NEOENERGIA]
                     referencia_entrada_bloco = registro_entrada_bloco['referencia']

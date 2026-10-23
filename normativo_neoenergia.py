@@ -185,6 +185,102 @@ def testar_demanda_bloco_neoenergia():
     return casos
 
 
+def calcular_ensaio_integrado_neoenergia(perfil,linhas,tensao,fp_d=.92,fp_f=None,corrente_max_a=None,
+        escopo_confirmado=False,cargas_fora_escopo=False,dados_entrada_confirmados=False):
+    """Demanda → faixa trifásica → comparação com corrente de fase declarada.
+
+    O quociente S/(sqrt(3)*Vff) é apenas corrente equivalente balanceada;
+    não substitui a corrente máxima das fases informada pelo responsável.
+    Não altera configurações, projeto ou registros de auditoria.
+    """
+    saida=dict(status='conferencia_tecnica',demanda_total_kva=None,carga_instalada_kw=None,
+        corrente_equivalente_balanceada_a=None,corrente_max_informada_a=None,
+        referencia=None,memoria=[],aprovacao_automatica=False,motivo='')
+    def pendencia(msg):saida['motivo']=msg;return saida
+    if not territorio_neoenergia_registrado(perfil) or not auditoria_entrada_neoenergia_registrada(perfil):
+        return pendencia('Vínculo territorial ou referência de entrada ausente/divergente.')
+    if dados_entrada_confirmados is not True:
+        return pendencia('Confirme a tensão FF/FN, os dados de potência elétrica e a corrente máxima de fase do ensaio.')
+    tensoes={r['tensao_ff_fn'] for r in tabela_entrada_neoenergia(perfil)}
+    if tensao not in tensoes:return pendencia('Tensão fora da tabela regional; não inferir pelo município.')
+    demanda=calcular_ensaio_demanda_neoenergia(perfil,linhas,fp_d,escopo_confirmado,cargas_fora_escopo)
+    if demanda['status']!='ensaio_isolado':return pendencia(demanda['motivo'])
+    def positivo(x):
+        if isinstance(x,bool):return None
+        try:x=float(x)
+        except (TypeError,ValueError,OverflowError):return None
+        return x if math.isfinite(x) and x>0 else None
+    corrente=positivo(corrente_max_a)
+    if corrente is None:return pendencia('Informe corrente máxima de fase positiva e finita, previamente conferida. Não usar a média das fases.')
+    memoria=demanda['memoria']
+    total_va_f=next(r['Potência total'] for r in memoria if r['Grupo']=='f')
+    fator_f=positivo(fp_f) if total_va_f>0 else 1.0
+    if fator_f is None or fator_f>1:return pendencia('Ar condicionado em VA: informe FP de placa/catálogo, positivo e até 1,00, para apurar carga instalada em kW.')
+    carga=(sum(r['Potência total'] for r in memoria if r['Unidade']=='W')+total_va_f*fator_f)/1000
+    if not math.isfinite(carga) or not 0<carga<=75:return pendencia('Carga instalada fora do escopo positivo até 75 kW; análise específica necessária.')
+    kva=demanda['demanda_total_kva']
+    entrada=consultar_entrada_neoenergia(perfil,tensao,'Trifásico',carga,kva)
+    if entrada['status']!='referencia_isolada':return pendencia(entrada['motivo'])
+    referencia=entrada['referencia']
+    vff={'220/127 V':220.0,'380/220 V':380.0}[tensao]
+    equivalente=kva*1000/(math.sqrt(3)*vff)
+    if corrente+0.005<equivalente:
+        return pendencia('Corrente máxima informada inferior à equivalente balanceada da demanda. Confira unidade, tensão, demanda e correntes de fase (arredondamento admitido: 0,005 A).')
+    if corrente>referencia['disjuntor_referencia_a']:
+        return pendencia('Corrente máxima informada supera o disjuntor da categoria por demanda. Não subir categoria automaticamente; conferir distribuição das fases e condições de atendimento.')
+    saida.update(status='ensaio_integrado',demanda_total_kva=kva,carga_instalada_kw=carga,
+        corrente_equivalente_balanceada_a=equivalente,corrente_max_informada_a=corrente,
+        referencia=deepcopy(referencia),memoria=deepcopy(memoria),
+        motivo='Ensaio demanda → tabela de entrada concluído, com comparação da corrente máxima de fase declarada. Não verifica viabilidade, partida de motores, caixa homologada, alimentador do QDC, queda de tensão ou instalação; não libera perfil ou projeto.')
+    return saida
+
+
+def testar_integracao_bloco_neoenergia():
+    casos=[]
+    def verifica(nome,ok):casos.append({'Caso':nome,'Resultado':'PASSOU' if ok else 'FALHOU'})
+    for i,p in enumerate(preparar_bloco_neoenergia('TESTE')):
+        p['id']=str(i+1);p=preparar_territorio_neoenergia(p,'TESTE')
+        p['regras']=registrar_entrada_neoenergia(p,'TESTE');p['regras']=registrar_demanda_neoenergia(p,'TESTE')
+        nome=p['concessionaria']+': ';linhas=dados_ensaio_demanda_neoenergia();antes=deepcopy(p);antes_linhas=deepcopy(linhas)
+        def calcular(**alteracoes):
+            args=dict(perfil=p,linhas=linhas,tensao='380/220 V',fp_f=.9,corrente_max_a=31,escopo_confirmado=True,dados_entrada_confirmados=True)
+            args.update(alteracoes);return calcular_ensaio_integrado_neoenergia(**args)
+        r=calcular()
+        verifica(nome+'demanda 19,5 kVA / T6 / 32 A',r['status']=='ensaio_integrado' and math.isclose(r['demanda_total_kva'],19.5) and r['referencia']['categoria']=='T6' and r['referencia']['disjuntor_referencia_a']==32)
+        verifica(nome+'carga ativa 26,42 kW sem somar VA como W',math.isclose(r['carga_instalada_kw'],26.42))
+        verifica(nome+'corrente equivalente separada da máxima',math.isclose(r['corrente_equivalente_balanceada_a'],19500/(math.sqrt(3)*380)) and r['corrente_max_informada_a']==31)
+        verifica(nome+'entrada subterrânea 6 mm², sem alimentador QDC',r['referencia']['entrada_subterranea_cu_xlpe_hepr_fase_mm2']==6 and 'alimentador_qdc' not in r)
+        verifica(nome+'sem alteração de dados/registro',p==antes and linhas==antes_linhas and r['aprovacao_automatica'] is False)
+        for corrente in [0,-1,None,True,float('nan'),float('inf'),20,32.001,55]:
+            falha=calcular(corrente_max_a=corrente)
+            verifica(nome+f'corrente {corrente} bloqueia referência',falha['referencia'] is None and falha['demanda_total_kva'] is None)
+        verifica(nome+'corrente no limite 32 A',calcular(corrente_max_a=32)['status']=='ensaio_integrado')
+        for fp in [None,0,-1,1.01,True,float('nan')]:
+            verifica(nome+f'FP do ar {fp} pendente',calcular(fp_f=fp)['referencia'] is None)
+        for chave,valor in [('escopo_confirmado',False),('dados_entrada_confirmados',False),('cargas_fora_escopo',True),('tensao','127/220 V')]:
+            verifica(nome+chave+' divergente bloqueado',calcular(**{chave:valor})['referencia'] is None)
+        alteradas=deepcopy(linhas);alteradas[1]['Quantidade']=0
+        verifica(nome+'inconsistência não reutiliza referência anterior',calcular(linhas=alteradas)['referencia'] is None)
+        verifica(nome+'restauração recupera T6',calcular()['referencia']['categoria']=='T6')
+        alteradas=deepcopy(linhas);alteradas[1]['Potência total']=80000
+        verifica(nome+'carga acima de 75 kW bloqueada',calcular(linhas=alteradas)['referencia'] is None)
+        sem_entrada=deepcopy(p);sem_entrada['regras'].pop(CHAVE_ENTRADA)
+        verifica(nome+'auditoria de entrada ausente',calcular(perfil=sem_entrada)['referencia'] is None)
+        sem_demanda=deepcopy(p);sem_demanda['regras'].pop(CHAVE_DEMANDA)
+        verifica(nome+'auditoria de demanda ausente',calcular(perfil=sem_demanda)['referencia'] is None)
+        sem_territorio=deepcopy(p);sem_territorio['municipios_atendidos']=[]
+        verifica(nome+'território divergente',calcular(perfil=sem_territorio)['referencia'] is None)
+        # Demanda 21,1 kVA cai na lacuna T6/T7; não arredondar.
+        lacuna=deepcopy(linhas);lacuna[4]['Potência total']=3600
+        verifica(nome+'lacuna 21,1 kVA bloqueada',calcular(linhas=lacuna,corrente_max_a=33)['referencia'] is None)
+        if p['uf']=='BA':
+            r220=calcular(tensao='220/127 V',corrente_max_a=55)
+            verifica(nome+'220/127 usa T1 / 63 A / 16 mm²',r220['status']=='ensaio_integrado' and r220['referencia']['categoria']=='T1' and r220['referencia']['disjuntor_referencia_a']==63 and r220['referencia']['entrada_subterranea_cu_xlpe_hepr_fase_mm2']==16)
+        else:verifica(nome+'220/127 fora da tabela bloqueado',calcular(tensao='220/127 V',corrente_max_a=55)['referencia'] is None)
+    verifica('Elektro permanece fora deste ensaio',calcular_ensaio_integrado_neoenergia({'concessionaria':'Neoenergia Elektro'},[],'380/220 V')['referencia'] is None)
+    return casos
+
+
 def tabela_entrada_neoenergia(perfil):
     """Recorte das Tabelas 1/2: não é dimensionamento do alimentador do QDC."""
     if not perfil_bloco_neoenergia(perfil):
