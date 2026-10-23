@@ -22,6 +22,35 @@ from demanda_qdc import calcular_demanda_qdc
 from concessionarias import CHAVE_PARAMETROS_REDE
 
 
+def pendencia_exportacao_enel(tabela, config):
+    """Revalida o ensaio Enel sem reutilizar a demanda congelada."""
+    rede = dict((config or {}).get(CHAVE_PARAMETROS_REDE, {}) or {})
+    from normativo_enel import METODO_DECLARADO
+    enel = (str(rede.get("perfil_normativo_concessionaria") or "").casefold() == "enel são paulo"
+            or rede.get("metodo_demanda") == METODO_DECLARADO
+            or bool(rede.get("enel_ensaio_admin")))
+    try:
+        from perfis_normativos import perfil_por_id
+        from normativo_enel import perfil_enel_sp
+        enel = enel or perfil_enel_sp(perfil_por_id(rede.get("perfil_normativo_id")))
+    except Exception:
+        pass
+    if not enel:
+        return None
+    try:
+        import math
+        demanda = calcular_demanda_qdc(tabela, rede)
+        valores = [demanda.get(k) for k in ("potencia_demanda_w", "corrente_demanda_a", "disjuntor_geral_a")]
+        if demanda.get("status") == "ok" and all(
+            not isinstance(v, bool) and v is not None and math.isfinite(float(v)) and float(v) > 0
+            for v in valores
+        ):
+            return None
+        return demanda.get("observacao") or "Demanda ou disjuntor geral pendente de conferência."
+    except Exception:
+        return "Não foi possível validar a demanda e o disjuntor geral da Enel. Confira os parâmetros."
+
+
 def assinatura_arquivos_projeto(dxf_bytes, tabela, local_qdc, config, tensao, pe_direito):
     """Vincula os downloads aos dados usados na geração concluída."""
     import hashlib
@@ -382,11 +411,18 @@ def renderizar_salvar_e_gerar_cad(
     )
     erro_cad_neste_ciclo = None
 
+    pendencia_enel = pendencia_exportacao_enel(tabela_editada, config_interruptores_usuario)
+    if pendencia_enel:
+        st.warning(f"Geração e downloads indisponíveis: {pendencia_enel} Você pode salvar o projeto e continuar depois.")
+        st.session_state["solicitar_geracao_cad"] = False
+        cad_gerado_neste_ciclo = False
+
     if st.button(
         "🚀 Gerar CAD (Atualizado)",
         type="primary",
         use_container_width=True,
         key="btn_gerar_cad_atualizado",
+        disabled=bool(pendencia_enel),
     ):
         st.session_state["solicitar_geracao_cad"] = True
         st.session_state.pop("cad_gerado_erro", None)
@@ -394,7 +430,7 @@ def renderizar_salvar_e_gerar_cad(
     # A geração acontece fora do bloco do botão, usando o estado
     # persistente. Dessa forma, mesmo que haja rerun, a solicitação
     # continua verdadeira até o processamento terminar.
-    if st.session_state.get("solicitar_geracao_cad", False):
+    if not pendencia_enel and st.session_state.get("solicitar_geracao_cad", False):
         if not dxf_bytes:
             st.session_state["solicitar_geracao_cad"] = False
             erro_cad_neste_ciclo = (
@@ -541,6 +577,7 @@ def renderizar_salvar_e_gerar_cad(
 
     if (
         cad_salvo
+        and not pendencia_enel
         and projeto_cad == st.session_state.projeto_ativo
         and st.session_state.get("cad_gerado_versao") == VERSAO_CAD
         and st.session_state.get("cad_gerado_assinatura") == assinatura_atual()
