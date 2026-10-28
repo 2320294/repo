@@ -1693,16 +1693,10 @@ def renderizar_painel_principal():
         return
 
 
-
-# --- VISUALIZAÇÃO 3D DA INSTALAÇÃO ELÉTRICA ---
 def renderizar_secao_3d():
-    st.markdown("### 🌐 Visualização 3D da Instalação")
-    st.caption("Maquete interativa em 3D baseada nos ambientes, pé-direito, alturas normativas e QDC.")
+    st.markdown('### 🌐 Visualização 3D da Instalação')
     try:
-        tabela = st.session_state.get("tabela_editada", [])
-        pe = float(st.session_state.get("pe_direito", 2.80) or 2.80)
-        qdc = st.session_state.get("local_qdc", None)
-        fig_3d = gerar_visualizacao_3d(tabela, pe, qdc)
-        st.plotly_chart(fig_3d, use_container_width=True)
-    except Exception as exc:
-        st.info("Preencha os dados de cargas e ambiente para habilitar a visualização 3D.")
+        fig = gerar_visualizacao_3d(st.session_state.get('tabela_editada', []), float(st.session_state.get('pe_direito', 2.80) or 2.80), st.session_state.get('local_qdc', None))
+        st.plotly_chart(fig, use_container_width=True)
+    except Exception:
+        st.info('Preencha os dados de cargas para exibir o 3D.')
