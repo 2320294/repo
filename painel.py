@@ -187,11 +187,6 @@ def _navegacao_etapas():
         "📦 Materiais",
         "📐 Gerar Projeto"
     ]
-    
-    # Verifica se o CAD foi gerado para liberar a visualização 3D logo ao lado
-    cad_pronto = bool(st.session_state.get("dimensionamento_rotas") or st.session_state.get("cad_gerado_versao") or st.session_state.get("projeto_cad_gerado"))
-    if cad_pronto:
-        etapas.append("🌐 Visualização 3D")
 
     chave = _chave_projeto(
         "etapa_ativa"
@@ -1701,7 +1696,7 @@ def renderizar_painel_principal():
 
     if etapa == "🌐 Visualização 3D":
         st.subheader("🌐 Visualização 3D da Instalação Elétrica")
-        st.caption("Maquete tridimensional interativa baseada nos elementos do projeto elétrico e DXF.")
+        st.caption("Maquete tridimensional interativa baseada nas coordenadas reais da planta DXF e do projeto.")
         
         col_c1, col_c2, col_c3, col_c4 = st.columns(4)
         exibir_paredes = col_c1.checkbox("Exibir Paredes", value=True, key="3d_paredes")
@@ -1721,7 +1716,8 @@ def renderizar_painel_principal():
                 tabela_editada=tabela_editada,
                 pe_direito=float(pe_direito_salvo if pe_direito_salvo is not None else 2.80),
                 local_qdc=local_qdc,
-                camadas=camadas_sel
+                camadas=camadas_sel,
+                dados_ambientes=st.session_state.get("dados_ambientes")
             )
             st.plotly_chart(fig_3d, use_container_width=True)
         except Exception as exc:
