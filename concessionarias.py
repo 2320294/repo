@@ -10,7 +10,31 @@ UFS = [
 # Cadastro inicial para a arquitetura da Fase 13.6 Rev.124.
 # A cobertura municipal e os critérios de demanda serão ampliados
 # gradualmente, sem espalhar regras pelo restante do sistema.
-CONCESSIONARIAS_POR_UF = {'AC': ['Energisa Acre'], 'AL': ['Equatorial Alagoas'], 'AP': ['CEA Equatorial'], 'AM': ['Amazonas Energia'], 'BA': ['Neoenergia Coelba'], 'CE': ['Enel Distribuição Ceará'], 'DF': ['Neoenergia Brasília'], 'ES': ['EDP Espírito Santo', 'ES Gás / Concessionária local'], 'GO': ['Equatorial Goiás'], 'MA': ['Equatorial Maranhão'], 'MT': ['Energisa Mato Grosso'], 'MS': ['Energisa Mato Grosso do Sul'], 'MG': ['Cemig Distribuição', 'CPFL Santa Cruz', 'Energisa Minas Gerais'], 'PA': ['Equatorial Pará'], 'PB': ['Energisa Paraíba'], 'PR': ['Copel Distribuição', 'CPFL Santa Cruz'], 'PE': ['Neoenergia Pernambuco'], 'PI': ['Equatorial Piauí'], 'RJ': ['Enel Distribuição Rio', 'Light', 'Energisa Nova Friburgo'], 'RN': ['Neoenergia Cosern'], 'RS': ['RGE', 'CEEE Equatorial'], 'RO': ['Energisa Rondônia'], 'RR': ['Roraima Energia'], 'SC': ['Celesc Distribuição', 'EFLUL'], 'SP': ['CPFL Paulista', 'CPFL Piratininga', 'CPFL Santa Cruz', 'Enel Distribuição São Paulo', 'EDP São Paulo', 'Energisa Sul-Sudeste'], 'SE': ['Energisa Sergipe'], 'TO': ['Energisa Tocantins']}
+CONCESSIONARIAS_POR_UF = {
+    "AL": ["Equatorial Alagoas"],
+    "AP": ["CEA Equatorial"],
+    "BA": ["Neoenergia Coelba"],
+    "CE": ["Enel Distribuição Ceará"],
+    "DF": ["Neoenergia Brasília"],
+    "ES": ["EDP Espírito Santo"],
+    "GO": ["Equatorial Goiás"],
+    "MA": ["Equatorial Maranhão"],
+    "RS": ["RGE"],
+    "MG": ["Cemig Distribuição", "CPFL Santa Cruz"],
+    "PR": ["CPFL Santa Cruz"],
+    "PA": ["Equatorial Pará"],
+    "PE": ["Neoenergia Pernambuco"],
+    "PI": ["Equatorial Piauí"],
+    "RJ": ["Enel Distribuição Rio", "Light"],
+    "RN": ["Neoenergia Cosern"],
+    "SP": [
+        "CPFL Paulista",
+        "CPFL Piratininga",
+        "CPFL Santa Cruz",
+        "Enel Distribuição São Paulo",
+        "EDP São Paulo"
+    ],
+}
 
 OUTRA_CONCESSIONARIA = "Outra / Não cadastrada"
 
