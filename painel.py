@@ -185,7 +185,8 @@ def _navegacao_etapas():
         "💡 Interruptores",
         "🔌 Tomadas Altas",
         "📦 Materiais",
-        "📐 Gerar Projeto"
+        "📐 Gerar Projeto",
+        "🌐 Visualização 3D"
     ]
 
     chave = _chave_projeto(
@@ -1693,10 +1694,16 @@ def renderizar_painel_principal():
         return
 
 
-def renderizar_secao_3d():
-    st.markdown('### 🌐 Visualização 3D da Instalação')
-    try:
-        fig = gerar_visualizacao_3d(st.session_state.get('tabela_editada', []), float(st.session_state.get('pe_direito', 2.80) or 2.80), st.session_state.get('local_qdc', None))
-        st.plotly_chart(fig, use_container_width=True)
-    except Exception:
-        st.info('Preencha os dados de cargas para exibir o 3D.')
+
+    if etapa == "🌐 Visualização 3D":
+        st.subheader("🌐 Visualização 3D da Instalação Elétrica")
+        st.caption("Maquete interativa em 3D baseada nos ambientes, alturas normativas e QDC.")
+        try:
+            fig_3d = gerar_visualizacao_3d(
+                tabela_editada=tabela_editada,
+                pe_direito=float(pe_direito_salvo if pe_direito_salvo is not None else 2.80),
+                local_qdc=local_qdc
+            )
+            st.plotly_chart(fig_3d, use_container_width=True)
+        except Exception as exc:
+            st.info("Preencha os dados de projeto e cargas na etapa Cargas para gerar a visualização 3D.")

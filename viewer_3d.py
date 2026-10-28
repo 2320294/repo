@@ -11,7 +11,7 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
         qx = float(local_qdc.get("x", 0.0) or 0.0)
         qy = float(local_qdc.get("y", 0.0) or 0.0)
     
-    px.append(qx); py.append(qy); pz.append(ALTURAS["QDC"]); textos.append("QDC"); cores.append("red")
+    px.append(qx); py.append(qy); pz.append(ALTURAS["QDC"]); textos.append("Quadro de Distribuição (QDC)"); cores.append("red")
     
     for idx, row in enumerate(tabela_editada or []):
         amb = row.get("Ambiente", f"Cômodo {idx+1}")
