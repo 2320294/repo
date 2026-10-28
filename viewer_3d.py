@@ -104,16 +104,13 @@ def _extrair_geometria_direto_dxf(dxf_bytes, pe_direito=2.80):
             except Exception:
                 pass
 
-def gerar_visualizacao_3d_pro(
-    tabela_editada=None,
-    pe_direito=2.80,
-    local_qdc=None,
-    camadas=None,
-    dados_ambientes=None,
-    resumo_rotas=None,
-    dxf_bytes=None,
-    **kwargs
-):
+def gerar_visualizacao_3d_pro(*args, **kwargs):
+    tabela_editada = kwargs.get("tabela_editada") or (args[0] if len(args) > 0 else None)
+    pe_direito = kwargs.get("pe_direito") or (args[1] if len(args) > 1 else 2.80)
+    local_qdc = kwargs.get("local_qdc") or (args[2] if len(args) > 2 else None)
+    camadas = kwargs.get("camadas") or (args[3] if len(args) > 3 else None)
+    dxf_bytes = kwargs.get("dxf_bytes") or kwargs.get("dxf") or (args[4] if len(args) > 4 else None)
+
     if camadas is None:
         camadas = {"paredes": True, "eletrodutos": True, "caixas": True, "qdc": True}
 

@@ -1,4 +1,4 @@
-from viewer_3d import gerar_visualizacao_3d
+from viewer_3d import gerar_visualizacao_3d, gerar_visualizacao_3d_pro
 import streamlit as st
 
 from versao import VERSAO_SISTEMA
@@ -187,6 +187,13 @@ def _navegacao_etapas():
         "📦 Materiais",
         "📐 Gerar Projeto"
     ]
+    if (
+        st.session_state.get("cad_gerado_bytes")
+        or st.session_state.get("dimensionamento_rotas")
+        or st.session_state.get("projeto_cad_gerado")
+    ):
+        if "🌐 Visualização 3D" not in etapas:
+            etapas.append("🌐 Visualização 3D")
     # Liberação automática e blindada da etapa 3D ao gerar o CAD
     if (
         st.session_state.get("cad_gerado_bytes")
