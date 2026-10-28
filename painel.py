@@ -1,4 +1,5 @@
 from viewer_3d import gerar_visualizacao_3d_pro
+from viewer_3d import gerar_visualizacao_3d
 import streamlit as st
 
 from versao import VERSAO_SISTEMA
@@ -187,6 +188,8 @@ def _navegacao_etapas():
         "📦 Materiais",
         "📐 Gerar Projeto"
     ]
+    if st.session_state.get("projeto_cad_gerado") or st.session_state.get("dimensionamento_rotas"):
+        etapas.append("🌐 Visualização 3D")
 
     chave = _chave_projeto(
         "etapa_ativa"
@@ -1670,6 +1673,10 @@ def renderizar_painel_principal():
                 # os dados que estiverem efetivamente calculados.
                 resumo_rotas_memorial = st.session_state.get("dimensionamento_rotas")
 
+        
+        if dxf_bytes and local_qdc:
+            st.session_state["projeto_cad_gerado"] = True
+
         renderizar_salvar_e_gerar_cad(
             dxf_bytes=dxf_bytes,
             tabela_editada=tabela_editada,
@@ -1691,6 +1698,21 @@ def renderizar_painel_principal():
         )
 
         return
+
+
+
+# --- VISUALIZAÇÃO 3D DA INSTALAÇÃO ELÉTRICA ---
+def renderizar_secao_3d():
+    st.markdown("### 🌐 Visualização 3D da Instalação")
+    st.caption("Maquete interativa em 3D baseada nos ambientes, pé-direito, alturas normativas e QDC.")
+    try:
+        tabela = st.session_state.get("tabela_editada", [])
+        pe = float(st.session_state.get("pe_direito", 2.80) or 2.80)
+        qdc = st.session_state.get("local_qdc", None)
+        fig_3d = gerar_visualizacao_3d(tabela, pe, qdc)
+        st.plotly_chart(fig_3d, use_container_width=True)
+    except Exception as exc:
+        st.info("Preencha os dados de cargas e ambiente para habilitar a visualização 3D.")
 
 
 

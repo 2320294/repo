@@ -8,13 +8,11 @@ def gerar_visualizacao_3d_pro(tabela_editada, pe_direito=2.80, local_qdc=None, c
     fig = go.Figure()
     ALTURAS = {"Tomada Baixa": 0.30, "Interruptor": 1.10, "Chuveiro": 2.20, "QDC": 1.50}
     
-    # Centro de referência padrão ou calculado pelos dados reais
     qx, qy = 0.0, 0.0
     if isinstance(local_qdc, dict):
         qx = float(local_qdc.get("x", 0.0) or 0.0)
         qy = float(local_qdc.get("y", 0.0) or 0.0)
 
-    # Coletar pontos reais do projeto se disponíveis
     ambientes_coords = {}
     if isinstance(dados_ambientes, list):
         for amb in dados_ambientes:
@@ -23,7 +21,6 @@ def gerar_visualizacao_3d_pro(tabela_editada, pe_direito=2.80, local_qdc=None, c
             if centro and len(centro) >= 2:
                 ambientes_coords[nome.casefold()] = (float(centro[0]), float(centro[1]))
 
-    # 1. Paredes translúcidas (baseadas nos limites reais do DXF ou bounding box dos ambientes)
     if camadas.get("paredes", True):
         all_x = [qx]
         all_y = [qy]
@@ -59,7 +56,6 @@ def gerar_visualizacao_3d_pro(tabela_editada, pe_direito=2.80, local_qdc=None, c
     for idx, row in enumerate(tabela_editada or []):
         amb_nome = str(row.get("Ambiente", f"Cômodo {idx+1}")).strip()
         
-        # Usa coordenadas reais do DXF se encontradas, senão usa disposição proporcional
         if amb_nome.casefold() in ambientes_coords:
             x, y = ambientes_coords[amb_nome.casefold()]
         else:
