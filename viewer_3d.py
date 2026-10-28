@@ -58,7 +58,6 @@ def _extrair_geometria_direto_dxf(dxf_bytes, pe_direito=2.80):
                 if pts:
                     cx = sum(p[0] for p in pts) / len(pts)
                     cy = sum(p[1] for p in pts) / len(pts)
-                    # Classifica altura com base na camada ou posição padrão
                     tomadas.append({"x": cx, "y": cy, "z": ALTURAS_PADRAO["BAIXA"], "rotulo": "Tomada 4x2"})
 
             elif layer == "PROJ_ELETRICA_QDC" and tipo in ("LWPOLYLINE", "POLYLINE"):
@@ -105,15 +104,13 @@ def _extrair_geometria_direto_dxf(dxf_bytes, pe_direito=2.80):
             except Exception:
                 pass
 
-def gerar_visualizacao_3d_pro(
-    tabela_editada=None,
-    pe_direito=2.80,
-    local_qdc=None,
-    camadas=None,
-    dados_ambientes=None,
-    resumo_rotas=None,
-    dxf_bytes=None,
-):
+def gerar_visualizacao_3d_pro(*args, **kwargs):
+    tabela_editada = kwargs.get("tabela_editada") or (args[0] if len(args) > 0 else None)
+    pe_direito = kwargs.get("pe_direito") or (args[1] if len(args) > 1 else 2.80)
+    local_qdc = kwargs.get("local_qdc") or (args[2] if len(args) > 2 else None)
+    camadas = kwargs.get("camadas") or (args[3] if len(args) > 3 else None)
+    dxf_bytes = kwargs.get("dxf_bytes") or kwargs.get("dxf") or (args[4] if len(args) > 4 else None)
+
     if camadas is None:
         camadas = {"paredes": True, "eletrodutos": True, "caixas": True, "qdc": True}
 
@@ -154,7 +151,7 @@ def gerar_visualizacao_3d_pro(
                 showlegend=False,
             ))
 
-    # 2. Eletrodutos encostando perfeitamente nas caixas octogonais do teto (sem textos de metragem)
+    # 2. Eletrodutos
     if camadas.get("eletrodutos", True) and geo_dxf:
         rotas_2d = geo_dxf.get("eletrodutos") or []
         el_x, el_y, el_z = [], [], []
@@ -167,7 +164,6 @@ def gerar_visualizacao_3d_pro(
             el_y.append(None)
             el_z.append(None)
 
-        # Prumadas verticais encostando exatamente na altura de cada caixa
         for item in (geo_dxf.get("tomadas") or []) + (geo_dxf.get("interruptores") or []):
             el_x.extend([item["x"], item["x"], None])
             el_y.extend([item["y"], item["y"], None])
@@ -189,7 +185,7 @@ def gerar_visualizacao_3d_pro(
                 showlegend=False,
             ))
 
-    # 3. Caixas e Alturas Normativas Corretas
+    # 3. Caixas
     if camadas.get("caixas", True) and geo_dxf:
         lums = geo_dxf.get("luminarias") or []
         if lums:
@@ -271,11 +267,5 @@ def gerar_visualizacao_3d_pro(
     )
     return fig
 
-def gerar_visualizacao_3d(tabela_editada=None, pe_direito=2.80, local_qdc=None, dados_ambientes=None, dxf_bytes=None):
-    return gerar_visualizacao_3d_pro(
-        tabela_editada=tabela_editada,
-        pe_direito=pe_direito,
-        local_qdc=local_qdc,
-        dados_ambientes=dados_ambientes,
-        dxf_bytes=dxf_bytes,
-    )
+def gerar_visualizacao_3d(*args, **kwargs):
+    return gerar_visualizacao_3d_pro(*args, **kwargs)
