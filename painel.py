@@ -187,6 +187,11 @@ def _navegacao_etapas():
         "📦 Materiais",
         "📐 Gerar Projeto"
     ]
+    
+    # Verifica se o CAD foi gerado para liberar a visualização 3D logo ao lado
+    cad_pronto = bool(st.session_state.get("dimensionamento_rotas") or st.session_state.get("cad_gerado_versao") or st.session_state.get("projeto_cad_gerado"))
+    if cad_pronto:
+        etapas.append("🌐 Visualização 3D")
 
     chave = _chave_projeto(
         "etapa_ativa"
@@ -1696,37 +1701,28 @@ def renderizar_painel_principal():
 
     if etapa == "🌐 Visualização 3D":
         st.subheader("🌐 Visualização 3D da Instalação Elétrica")
+        st.caption("Maquete tridimensional interativa baseada nos elementos do projeto elétrico e DXF.")
         
-        # Verifica se o CAD foi gerado (verificando se existe dxf_bytes ou dimensionamento_rotas no session_state)
-        cad_gerado = bool(st.session_state.get("dimensionamento_rotas") or st.session_state.get("cad_gerado_versao"))
+        col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+        exibir_paredes = col_c1.checkbox("Exibir Paredes", value=True, key="3d_paredes")
+        exibir_eletrodutos = col_c2.checkbox("Exibir Eletrodutos", value=True, key="3d_eletrodutos")
+        exibir_caixas = col_c3.checkbox("Exibir Caixas (4x2 / Oct.)", value=True, key="3d_caixas")
+        exibir_qdc = col_c4.checkbox("Exibir QDC", value=True, key="3d_qdc")
         
-        if not cad_gerado:
-            st.warning("🔒 **Visualização 3D bloqueada.** Esta etapa só pode ser acessada após a geração bem-sucedida do CAD e do projeto elétrico na etapa **📐 Gerar Projeto**.")
-            st.info("👈 Conclua os cálculos e clique em **Gerar CAD** na última etapa para desbloquear o modelo tridimensional profissional.")
-        else:
-            st.success("✨ **Projeto CAD gerado com sucesso!** Maquete 3D interativa baseada na geometria extraída:")
-            
-            # Controles de Camadas profissionais inspirados na referência
-            col_c1, col_c2, col_c3, col_c4 = st.columns(4)
-            exibir_paredes = col_c1.checkbox("Exibir Paredes", value=True)
-            exibir_eletrodutos = col_c2.checkbox("Exibir Eletrodutos", value=True)
-            exibir_caixas = col_c3.checkbox("Exibir Caixas (4x2 / Oct.)", value=True)
-            exibir_qdc = col_c4.checkbox("Exibir QDC", value=True)
-            
-            camadas_sel = {
-                "paredes": exibir_paredes,
-                "eletrodutos": exibir_eletrodutos,
-                "caixas": exibir_caixas,
-                "qdc": exibir_qdc
-            }
-            
-            try:
-                fig_3d = gerar_visualizacao_3d_pro(
-                    tabela_editada=tabela_editada,
-                    pe_direito=float(pe_direito_salvo if pe_direito_salvo is not None else 2.80),
-                    local_qdc=local_qdc,
-                    camadas=camadas_sel
-                )
-                st.plotly_chart(fig_3d, use_container_width=True)
-            except Exception as exc:
-                st.error(f"Erro ao renderizar o modelo 3D: {exc}")
+        camadas_sel = {
+            "paredes": exibir_paredes,
+            "eletrodutos": exibir_eletrodutos,
+            "caixas": exibir_caixas,
+            "qdc": exibir_qdc
+        }
+        
+        try:
+            fig_3d = gerar_visualizacao_3d_pro(
+                tabela_editada=tabela_editada,
+                pe_direito=float(pe_direito_salvo if pe_direito_salvo is not None else 2.80),
+                local_qdc=local_qdc,
+                camadas=camadas_sel
+            )
+            st.plotly_chart(fig_3d, use_container_width=True)
+        except Exception as exc:
+            st.error(f"Erro ao renderizar o modelo 3D: {exc}")
