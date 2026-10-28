@@ -8,7 +8,6 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
     """
     fig = go.Figure()
 
-    # Alturas normativas padrão (NBR 5410 / prática de projeto)
     ALTURAS = {
         "Tomada Baixa": 0.30,
         "Tomada Média": 0.60,
@@ -18,15 +17,12 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
         "QDC": 1.50
     }
 
-    # Coordenadas simuladas/distribuídas para demonstração espacial dos pontos
-    # (No sistema, isso usará as coordenadas reais extraídas do DXF quando disponíveis)
     pontos_x = []
     pontos_y = []
     pontos_z = []
     textos = []
     cores = []
 
-    # Adicionar QDC se definido
     qdc_x, qdc_y = 0.0, 0.0
     if isinstance(local_qdc, dict):
         qdc_x = float(local_qdc.get("x", 0.0) or 0.0)
@@ -38,17 +34,14 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
     textos.append("Quadro de Distribuição de Cargas (QDC)")
     cores.append("red")
 
-    # Distribuir os pontos dos ambientes da tabela editada em 3D
     idx = 0
     for row in tabela_editada or []:
         ambiente = row.get("Ambiente", f"Cômodo {idx+1}")
-        # Simula uma disposição em malha ao redor da origem com base no índice
         angulo = idx * (2 * math.pi / max(1, len(tabela_editada)))
         raio = 3.0 + (idx % 2) * 1.5
         x = raio * math.cos(angulo)
         y = raio * math.sin(angulo)
 
-        # Adicionar Iluminação (no teto)
         qtd_ilum = int(row.get("Qtd Ilum.", 1) or 1)
         for i in range(qtd_ilum):
             pontos_x.append(x + (i * 0.5))
@@ -57,7 +50,6 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
             textos.append(f"Luminária ({ambiente})")
             cores.append("yellow")
 
-        # Adicionar TUGs
         qtd_tugs = int(row.get("TUGs (Qtd)", 0) or 0)
         for i in range(min(qtd_tugs, 4)):
             tx = x + (1.0 if i < 2 else -1.0)
@@ -68,7 +60,6 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
             textos.append(f"TUG 30cm ({ambiente})")
             cores.append("blue")
 
-        # Adicionar TUE se houver
         tue_nome = row.get("Equipamento TUE", "-")
         if tue_nome and tue_nome != "-":
             pontos_x.append(x)
@@ -80,7 +71,6 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
 
         idx += 1
 
-    # Renderizar os pontos (Caixas, Dispositivos e QDC)
     fig.add_trace(go.Scatter3d(
         x=pontos_x,
         y=pontos_y,
@@ -92,8 +82,6 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
         name="Dispositivos Elétricos"
     ))
 
-    # Linhas simulando os eletrodutos subindo do piso/paredes até os pontos
-    # (Conectando alguns pontos de exemplo ao QDC)
     for i in range(1, len(pontos_x)):
         fig.add_trace(go.Scatter3d(
             x=[qdc_x, pontos_x[i]],
@@ -104,7 +92,6 @@ def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None):
             showlegend=False
         ))
 
-    # Configurações de layout do ambiente 3D
     fig.update_layout(
         title="<b>Visualização 3D da Instalação Elétrica</b>",
         scene=dict(
