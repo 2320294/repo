@@ -5,6 +5,8 @@ import io
 import json
 import math
 import re
+import os
+import tempfile
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -46,16 +48,40 @@ def _nome_ambiente(poly, textos):
     return "Ambiente"
 
 
+def _ler_documento_dxf(dxf_bytes):
+    """Lê DXF textual ou binário sem decodificar bytes binários como texto.
+
+    ezdxf.readfile detecta automaticamente o formato DXF. Como o sistema recebe
+    o arquivo em memória, gravamos temporariamente os bytes e removemos o arquivo
+    após a leitura. O caminho temporário nunca é usado para exportação do projeto.
+    """
+    if isinstance(dxf_bytes, str):
+        # String de conteúdo DXF textual já decodificado.
+        return ezdxf.read(io.StringIO(dxf_bytes))
+    if isinstance(dxf_bytes, (bytes, bytearray, memoryview)):
+        data = bytes(dxf_bytes)
+        if not data:
+            raise ValueError("O arquivo DXF está vazio.")
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".dxf", delete=False) as tmp:
+                tmp.write(data)
+                temp_path = tmp.name
+            return ezdxf.readfile(temp_path)
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError:
+                    pass
+    # Mantém compatibilidade com objetos de arquivo textual já usados internamente.
+    return ezdxf.read(dxf_bytes)
+
+
 def _extrair_modelo(dxf_bytes):
     if not dxf_bytes:
         return None
-    if isinstance(dxf_bytes, bytes):
-        stream = io.StringIO(dxf_bytes.decode("utf-8", errors="ignore"))
-    elif isinstance(dxf_bytes, str):
-        stream = io.StringIO(dxf_bytes)
-    else:
-        stream = dxf_bytes
-    doc = ezdxf.read(stream)
+    doc = _ler_documento_dxf(dxf_bytes)
     msp = doc.modelspace()
     polys, doors, texts, markers = [], [], [], []
     for e in msp:

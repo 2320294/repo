@@ -1642,7 +1642,7 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # VISUALIZAÇÃO 3D — MÓDULO ISOLADO (REV.348)
+    # VISUALIZAÇÃO 3D — MÓDULO ISOLADO (REV.349)
     # --------------------------------------------------------
     if etapa == "🧊 Visualização 3D":
         renderizar_visualizacao_3d(
