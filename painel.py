@@ -1,5 +1,4 @@
-from viewer_3d import gerar_visualizacao_3d_pro
-from viewer_3d import gerar_visualizacao_3d
+from viewer_3d import gerar_visualizacao_3d, gerar_visualizacao_3d_pro
 import streamlit as st
 
 from versao import VERSAO_SISTEMA

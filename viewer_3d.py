@@ -1,6 +1,9 @@
 import plotly.graph_objects as go
 import math
 
+def gerar_visualizacao_3d(tabela_editada, pe_direito=2.80, local_qdc=None, dados_ambientes=None):
+    return gerar_visualizacao_3d_pro(tabela_editada, pe_direito, local_qdc, None, dados_ambientes)
+
 def gerar_visualizacao_3d_pro(tabela_editada, pe_direito=2.80, local_qdc=None, camadas=None, dados_ambientes=None):
     if camadas is None:
         camadas = {"paredes": True, "eletrodutos": True, "caixas": True, "qdc": True}
