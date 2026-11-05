@@ -1,0 +1,150 @@
+from config import obter_supabase, obter_supabase_admin
+
+STATUS_PUBLICADOS = {"ATIVO"}
+
+
+def perfil_atende_municipio(perfil, uf, municipio):
+    """Respeita a lista explícita; mantém os perfis antigos de cidade/UF."""
+    from normativo_neoenergia import perfil_bloco_neoenergia
+    if perfil_bloco_neoenergia(perfil):
+        return False  # Cadastro documental ainda sem motor/território liberados.
+    uf_perfil = str(perfil.get("uf") or "").strip().upper()
+    if uf_perfil and uf_perfil != str(uf or "").strip().upper():
+        return False
+    cidade = str(municipio or "").strip().casefold()
+    from normativo_cpfl import perfil_eh_piratininga, piratininga_atende_localidade
+    if perfil_eh_piratininga(perfil) and not piratininga_atende_localidade(uf, municipio):
+        return False
+    from normativo_cpfl import santa_cruz_atende_localidade
+    if (str(perfil.get("concessionaria") or "").strip().casefold() == "cpfl santa cruz"
+            and not santa_cruz_atende_localidade(uf, municipio)):
+        return False
+    from normativo_cpfl import rge_atende_localidade
+    if (str(perfil.get("concessionaria") or "").strip().casefold() == "rge"
+            and not rge_atende_localidade(uf, municipio)):
+        return False
+    from normativo_enel import perfil_enel_sp, enel_sp_atende_localidade
+    if perfil_enel_sp(perfil) and not enel_sp_atende_localidade(uf, municipio):
+        return False
+    if perfil_enel_sp(perfil) and perfil.get("status") == "ATIVO":
+        from normativo_enel import pendencias_ativacao_enel_sp, municipios_publicados_enel_sp
+        if cidade not in {n.casefold() for n in municipios_publicados_enel_sp(perfil)} or pendencias_ativacao_enel_sp(perfil):
+            return False
+    cidades = perfil.get("municipios_atendidos")
+    if cidades is not None:
+        return bool(cidade and cidade in {
+            str(nome).strip().casefold() for nome in cidades if str(nome).strip()
+        })
+    cidade_antiga = str(perfil.get("municipio") or "").strip().casefold()
+    return not cidade_antiga or cidade_antiga == cidade
+
+
+def _db():
+    return obter_supabase()
+
+
+def listar_perfis(ativos_apenas=False, administrativo=False):
+    db = obter_supabase_admin() if administrativo else _db()
+    q = db.table("perfis_normativos").select("*")
+    if ativos_apenas:
+        q = q.eq("status", "ATIVO")
+    r = q.order("concessionaria").order("uf").order("municipio").execute()
+    return r.data or []
+
+
+def listar_perfis_liberados(uf="", municipio=""):
+    """Lista somente perfis ATIVOS aplicáveis à localidade do projeto.
+
+    Rev.203 — a leitura dos perfis publicados é feita no servidor com o cliente
+    administrativo. O cliente público pode estar sujeito ao RLS e retornar uma
+    lista vazia mesmo quando o perfil foi corretamente marcado como ATIVO.
+
+    Abrangência:
+    - perfil com município igual ao projeto: específico da cidade;
+    - perfil com município vazio: válido para toda a UF.
+    Perfis específicos são apresentados antes dos estaduais.
+    """
+    q = obter_supabase_admin().table("perfis_normativos").select("*").eq("status", "ATIVO")
+    uf_norm = str(uf or "").upper().strip()
+    if uf_norm:
+        q = q.eq("uf", uf_norm)
+    r = q.order("concessionaria").order("revisao", desc=True).execute()
+    itens = r.data or []
+
+    mun = str(municipio or "").strip().casefold()
+    if mun:
+        itens = [p for p in itens if perfil_atende_municipio(p, uf_norm, mun)]
+        itens.sort(
+            key=lambda p: (
+                0 if str(p.get("municipio") or "").strip().casefold() == mun else 1,
+                str(p.get("concessionaria") or "").casefold(),
+            )
+        )
+    return itens
+
+
+def salvar_perfil(dados, perfil_id=None):
+    payload = dict(dados)
+    db = obter_supabase_admin()
+    if perfil_id:
+        return db.table("perfis_normativos").update(payload).eq("id", perfil_id).execute().data
+    return db.table("perfis_normativos").insert(payload).execute().data
+
+
+def atualizar_status(perfil_id, status, validado_por=""):
+    db = obter_supabase_admin()
+    if status in ("VALIDADO", "ATIVO"):
+        from normativo_elektro import perfil_eh_perfil_elektro, ativacao_pendencias
+        perfil = perfil_por_id(perfil_id) or {}
+        from normativo_cpfl import perfil_paulista_ged13, pendencias_ativacao_paulista
+        if perfil_paulista_ged13(perfil):
+            pendencias = pendencias_ativacao_paulista(perfil)
+            if pendencias:
+                raise ValueError("Perfil Paulista não pode ser publicado: " + " ".join(pendencias))
+        from normativo_cpfl import perfil_santa_cruz_ged13, pendencias_ativacao_santa_cruz
+        if perfil_santa_cruz_ged13(perfil):
+            pendencias = pendencias_ativacao_santa_cruz(perfil)
+            if pendencias:
+                raise ValueError("Perfil Santa Cruz não pode ser publicado: " + " ".join(pendencias))
+        from normativo_cpfl import perfil_rge_ged13, pendencias_ativacao_rge
+        if perfil_rge_ged13(perfil):
+            pendencias = pendencias_ativacao_rge(perfil)
+            if pendencias:
+                raise ValueError("Perfil RGE não pode ser publicado: " + " ".join(pendencias))
+        from normativo_neoenergia import pendencias_bloco_neoenergia
+        pendencias_bloco = pendencias_bloco_neoenergia(perfil)
+        if pendencias_bloco:
+            raise ValueError("Bloco Neoenergia não pode ser publicado: " + " ".join(pendencias_bloco))
+        from normativo_enel import perfil_enel_sp, pendencias_ativacao_enel_sp
+        if perfil_enel_sp(perfil):
+            pendencias = pendencias_ativacao_enel_sp(perfil)
+            if pendencias:
+                raise ValueError("Perfil Enel SP não pode ser publicado: " + " ".join(pendencias))
+        if perfil_eh_perfil_elektro(perfil):
+            pendencias = ativacao_pendencias(perfil)
+            if pendencias:
+                raise ValueError("Perfil Elektro não pode ser publicado: " + " ".join(pendencias))
+    payload = {"status": status}
+    if status in ("VALIDADO", "ATIVO"):
+        payload["validado_por"] = validado_por
+    return db.table("perfis_normativos").update(payload).eq("id", perfil_id).execute().data
+
+
+def perfil_por_id(perfil_id):
+    """Carrega um perfil pelo ID para uso interno do motor normativo.
+
+    Rev.204 — leitura server-side para evitar que RLS do cliente público faça o
+    perfil ATIVO selecionado desaparecer no momento do cálculo. A função apenas
+    lê o registro; alterações continuam restritas às rotinas administrativas.
+    """
+    if not perfil_id:
+        return None
+    r = (
+        obter_supabase_admin()
+        .table("perfis_normativos")
+        .select("*")
+        .eq("id", perfil_id)
+        .limit(1)
+        .execute()
+    )
+    return r.data[0] if r.data else None
