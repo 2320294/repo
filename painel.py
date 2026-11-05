@@ -184,7 +184,8 @@ def _navegacao_etapas():
         "💡 Interruptores",
         "🔌 Tomadas Altas",
         "📦 Materiais",
-        "📐 Gerar Projeto"
+        "📐 Gerar Projeto",
+        "🏗️ Visualização 3D"
     ]
 
     chave = _chave_projeto(
@@ -440,6 +441,15 @@ def renderizar_painel_principal():
     )
 
     etapa = _navegacao_etapas()
+
+    # Fase 13.6 Rev.348 — visualização tridimensional isolada.
+    if etapa == "🏗️ Visualização 3D":
+        from visualizacao_3d import renderizar_visualizacao_3d
+        renderizar_visualizacao_3d(
+            dxf_bytes=dxf_bytes,
+            pe_direito=pe_direito_salvo or 2.80,
+        )
+        return
 
     # --------------------------------------------------------
     # ETAPA 1 — PARÂMETROS E PLANTA
