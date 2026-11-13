@@ -1,110 +1,131 @@
-"""Visualização 3D inicial da planta DXF (Fase 13.6 Rev.349)."""
-import io
-import math
-import os
+"""Visualização 3D inicial da arquitetura a partir do DXF (AutoElétrica 13.6.350)."""
+from io import StringIO
 
-import ezdxf
-import plotly.graph_objects as go
 import streamlit as st
 
 
-def _abrir_dxf(dxf_origem):
-    """Aceita bytes, arquivo-like ou caminho DXF (o painel pode fornecer str)."""
-    if isinstance(dxf_origem, (bytes, bytearray, memoryview)):
-        return ezdxf.read(io.BytesIO(bytes(dxf_origem)))
-    if isinstance(dxf_origem, str):
-        if os.path.isfile(dxf_origem):
-            return ezdxf.readfile(dxf_origem)
-        # Se for conteúdo textual DXF, tenta codificação compatível.
-        return ezdxf.read(io.StringIO(dxf_origem))
-    if hasattr(dxf_origem, "read"):
-        return ezdxf.read(dxf_origem)
-    raise TypeError(f"Origem DXF não suportada: {type(dxf_origem).__name__}")
+def _normalizar_dxf_bytes(dxf_data):
+    """Converte entradas compatíveis em bytes sem passar strings ao ezdxf."""
+    if dxf_data is None:
+        raise ValueError("O projeto não possui DXF armazenado.")
+    if isinstance(dxf_data, bytes):
+        raw = dxf_data
+    elif isinstance(dxf_data, bytearray):
+        raw = bytes(dxf_data)
+    elif isinstance(dxf_data, memoryview):
+        raw = dxf_data.tobytes()
+    elif isinstance(dxf_data, list):
+        try:
+            raw = bytes(dxf_data)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("O DXF armazenado em lista não contém bytes válidos.") from exc
+    elif isinstance(dxf_data, str):
+        # Compatibilidade com serializações hex do Supabase.
+        txt = dxf_data.strip()
+        if txt.startswith("\\x"):
+            txt = txt[2:]
+        try:
+            raw = bytes.fromhex(txt)
+        except ValueError as exc:
+            raise ValueError("O DXF foi recebido como texto, mas não está em formato hexadecimal válido.") from exc
+    else:
+        raise TypeError(f"Tipo de DXF não suportado: {type(dxf_data).__name__}.")
+    if not raw:
+        raise ValueError("O conteúdo DXF está vazio.")
+    return raw
 
 
-def _coords_entidade(ent):
-    tipo = ent.dxftype()
+def _carregar_documento(dxf_data):
+    import ezdxf
+    raw = _normalizar_dxf_bytes(dxf_data)
+    # ezdxf.read espera um stream de texto (não BytesIO). O DXF é um formato
+    # textual; decodificamos o conteúdo antes de entregá-lo ao parser.
     try:
-        if tipo == "LINE":
-            return [tuple(ent.dxf.start[:2]), tuple(ent.dxf.end[:2])], False
-        if tipo == "LWPOLYLINE":
-            pts = [(float(p[0]), float(p[1])) for p in ent.get_points()]
-            return pts, bool(ent.closed)
-        if tipo == "POLYLINE":
-            pts = [(float(v.dxf.location.x), float(v.dxf.location.y)) for v in ent.vertices]
-            return pts, bool(ent.is_closed)
-        if tipo == "CIRCLE":
-            c = ent.dxf.center
-            r = float(ent.dxf.radius)
-            pts = [(c.x+r*math.cos(2*math.pi*i/48), c.y+r*math.sin(2*math.pi*i/48)) for i in range(49)]
-            return pts, True
-        if tipo == "ARC":
-            c=ent.dxf.center; r=float(ent.dxf.radius)
-            a=float(ent.dxf.start_angle); b=float(ent.dxf.end_angle)
-            while b<a: b+=360
-            n=max(8,int((b-a)/7.5))
-            pts=[(c.x+r*math.cos(math.radians(a+(b-a)*i/n)),
-                  c.y+r*math.sin(math.radians(a+(b-a)*i/n))) for i in range(n+1)]
-            return pts, False
-    except Exception:
-        return [], False
-    return [], False
+        texto = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        texto = raw.decode("cp1252", errors="replace")
+    return ezdxf.read(StringIO(texto))
 
 
-def renderizar_visualizacao_3d(dxf_bytes, pe_direito=2.80):
+def _extrair_segmentos(modelspace):
+    """Extrai segmentos XY de entidades lineares usuais do modelspace."""
+    segmentos = []
+    for ent in modelspace:
+        kind = ent.dxftype()
+        try:
+            if kind == "LINE":
+                a, b = ent.dxf.start, ent.dxf.end
+                segmentos.append(((float(a.x), float(a.y)), (float(b.x), float(b.y))))
+            elif kind == "LWPOLYLINE":
+                pts = [(float(p[0]), float(p[1])) for p in ent.get_points("xy")]
+                if len(pts) >= 2:
+                    for i in range(len(pts) - 1):
+                        segmentos.append((pts[i], pts[i + 1]))
+                    if ent.closed:
+                        segmentos.append((pts[-1], pts[0]))
+            elif kind == "POLYLINE":
+                pts = [(float(v.dxf.location.x), float(v.dxf.location.y)) for v in ent.vertices]
+                if len(pts) >= 2:
+                    for i in range(len(pts) - 1):
+                        segmentos.append((pts[i], pts[i + 1]))
+                    if ent.is_closed:
+                        segmentos.append((pts[-1], pts[0]))
+        except (AttributeError, TypeError, ValueError):
+            # Ignora entidades com coordenadas incompatíveis, sem abortar o desenho inteiro.
+            continue
+    return segmentos
+
+
+def renderizar_visualizacao_3d(dxf_data, pe_direito):
     st.subheader("🏗️ Visualização 3D da planta")
-    st.caption("Prévia tridimensional da arquitetura extraída do DXF. A altura é a mesma definida em Parâmetros (Etapa 1); a planta original permanece intacta.")
-    if dxf_bytes is None or dxf_bytes == b"" or dxf_bytes == "":
-        st.info("Processe/import uma planta DXF na etapa Parâmetros para visualizar em 3D.")
-        return
+    st.caption(
+        "Prévia tridimensional da arquitetura extraída do DXF. "
+        "O pé-direito é o configurado em Parâmetros (Etapa 1); "
+        "esta visualização não altera a planta original."
+    )
+    col_a, col_b = st.columns(2)
+    with col_a:
+        mostrar_piso = st.checkbox("Mostrar contornos no piso", value=True, key="ae350_3d_floor")
+    with col_b:
+        mostrar_topo = st.checkbox("Mostrar contornos superiores", value=True, key="ae350_3d_top")
 
-    # Altura fixa conforme Etapa 1 — sem controle independente nesta tela.
     try:
-        altura = float(pe_direito or 2.80)
-    except (TypeError, ValueError):
-        altura = 2.80
-    c1,c2=st.columns(2)
-    mostrar_piso=c1.checkbox("Mostrar contornos no piso",True,key="ae3d_piso")
-    mostrar_topo=c2.checkbox("Mostrar contornos superiores",True,key="ae3d_topo")
-    try:
-        doc=_abrir_dxf(dxf_bytes)
-        msp=doc.modelspace()
-        fig=go.Figure()
-        layers={}
-        entidades=0
-        for ent in msp:
-            pts,closed=_coords_entidade(ent)
-            if len(pts)<2: continue
-            layer=str(ent.dxf.layer or "0")
-            layers.setdefault(layer,[]).append((pts,closed))
-            entidades+=1
-
-        for layer,items in layers.items():
-            xs=[];ys=[];zs=[]
-            for pts,closed in items:
-                sequencia=pts+([pts[0]] if closed and pts[-1]!=pts[0] else [])
-                if mostrar_piso:
-                    xs.extend([p[0] for p in sequencia]+[None])
-                    ys.extend([p[1] for p in sequencia]+[None])
-                    zs.extend([0.0]*len(sequencia)+[None])
-                if closed and len(pts)>=3:
-                    for x,y in pts:
-                        xs.extend([x,x,None]); ys.extend([y,y,None]); zs.extend([0.0,altura,None])
-                    if mostrar_topo:
-                        xs.extend([p[0] for p in sequencia]+[None])
-                        ys.extend([p[1] for p in sequencia]+[None])
-                        zs.extend([altura]*len(sequencia)+[None])
-            if xs:
-                fig.add_trace(go.Scatter3d(x=xs,y=ys,z=zs,mode="lines",name=layer,
-                    line=dict(width=2),hovertemplate=f"Layer: {layer}<extra></extra>"))
-        if not entidades:
-            st.warning("Não foram encontradas entidades lineares/circulares compatíveis no DXF.")
+        doc = _carregar_documento(dxf_data)
+        segmentos = _extrair_segmentos(doc.modelspace())
+        if not segmentos:
+            st.warning("Não foram encontradas entidades LINE ou polilinhas no modelspace do DXF.")
             return
-        fig.update_layout(height=680,margin=dict(l=0,r=0,t=25,b=0),
-            scene=dict(xaxis_title="X (unidade DXF)",yaxis_title="Y (unidade DXF)",zaxis_title="Altura (m)",
-                      aspectmode="data",camera=dict(eye=dict(x=1.55,y=1.55,z=1.15))),
-            legend=dict(orientation="h",y=1.02))
-        st.plotly_chart(fig,use_container_width=True,config={"scrollZoom":True,"displaylogo":False})
-        st.caption(f"Prévia gerada a partir de {entidades} entidades DXF. Altura: {altura:.2f} m (Parâmetros/Etapa 1). Gire e aproxime com o mouse.")
-    except Exception as e:
-        st.error(f"Falha ao montar a visualização 3D: {e}")
+
+        import plotly.graph_objects as go
+        fig = go.Figure()
+        xs, ys = [], []
+        for p1, p2 in segmentos:
+            xs.extend([p1[0], p2[0], None])
+            ys.extend([p1[1], p2[1], None])
+        z_height = float(pe_direito)
+        if z_height <= 0:
+            raise ValueError("O pé-direito configurado em Parâmetros deve ser maior que zero.")
+
+        if mostrar_piso:
+            fig.add_trace(go.Scatter3d(x=xs, y=ys, z=[0 if v is not None else None for v in xs],
+                                      mode="lines", name="Contornos do piso", line=dict(width=2)))
+        if mostrar_topo:
+            fig.add_trace(go.Scatter3d(x=xs, y=ys, z=[z_height if v is not None else None for v in xs],
+                                      mode="lines", name="Contornos superiores", line=dict(width=2)))
+        # Montantes verticais nas extremidades de cada segmento, formando wireframe.
+        if mostrar_piso and mostrar_topo:
+            vx, vy, vz = [], [], []
+            for p1, p2 in segmentos:
+                for p in (p1, p2):
+                    vx.extend([p[0], p[0], None]); vy.extend([p[1], p[1], None]); vz.extend([0, z_height, None])
+            fig.add_trace(go.Scatter3d(x=vx, y=vy, z=vz, mode="lines", name="Altura das paredes", line=dict(width=1)))
+
+        fig.update_layout(
+            height=680, margin=dict(l=0, r=0, t=30, b=0),
+            scene=dict(aspectmode="data", xaxis_title="X", yaxis_title="Y", zaxis_title="Z (m)"),
+            legend=dict(orientation="h"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"Pé-direito aplicado: {z_height:.2f} m | Segmentos geométricos: {len(segmentos)}")
+    except Exception as exc:
+        st.error(f"Falha ao montar a visualização 3D: {exc}")

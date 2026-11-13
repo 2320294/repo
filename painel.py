@@ -58,6 +58,7 @@ from exportacoes import (
 
 
 from guia_importacao import renderizar_guia_preparacao_planta
+from visualizacao_3d import renderizar_visualizacao_3d
 
 def _chave_projeto(
     sufixo
@@ -441,15 +442,6 @@ def renderizar_painel_principal():
     )
 
     etapa = _navegacao_etapas()
-
-    # Fase 13.6 Rev.348 — visualização tridimensional isolada.
-    if etapa == "🏗️ Visualização 3D":
-        from visualizacao_3d import renderizar_visualizacao_3d
-        renderizar_visualizacao_3d(
-            dxf_bytes=dxf_bytes,
-            pe_direito=pe_direito_salvo or 2.80,
-        )
-        return
 
     # --------------------------------------------------------
     # ETAPA 1 — PARÂMETROS E PLANTA
@@ -1646,6 +1638,16 @@ def renderizar_painel_principal():
             tensao_projeto=parametros_projeto["tensao_projeto"],
             pe_direito=parametros_projeto["pe_direito"],
             pagina="materiais"
+        )
+        return
+
+    # --------------------------------------------------------
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.350)
+    # --------------------------------------------------------
+    if etapa == "🏗️ Visualização 3D":
+        renderizar_visualizacao_3d(
+            dxf_data=dxf_bytes,
+            pe_direito=parametros_projeto["pe_direito"]
         )
         return
 
