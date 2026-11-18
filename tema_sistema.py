@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.358).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.359).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -185,6 +185,43 @@ _CSS_OBRAS = """
         }
 """
 
+# Confirmação de exclusão: "Sim, apagar" (vermelho) e "Cancelar" (neutro),
+# no mesmo padrão ghost do menu (as chaves começam com esses prefixos).
+_CSS_CONFIRMAR = """
+        section[data-testid="stSidebar"] [class*="st-key-confirmar_apagar_"] [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] [class*="st-key-cancelar_apagar_"] [data-testid="stButton"] button {
+            width: 100% !important;
+            padding: 10px 8px !important;
+            background: transparent !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+            font-weight: 500 !important;
+        }
+        section[data-testid="stSidebar"] [class*="st-key-confirmar_apagar_"] [data-testid="stButton"] button {
+            border: 1px solid var(--ae-danger) !important;
+        }
+        section[data-testid="stSidebar"] [class*="st-key-confirmar_apagar_"] [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] [class*="st-key-confirmar_apagar_"] [data-testid="stButton"] button * {
+            color: var(--ae-danger) !important;
+        }
+        section[data-testid="stSidebar"] [class*="st-key-confirmar_apagar_"] [data-testid="stButton"] button:hover {
+            background: var(--ae-danger-bg) !important;
+        }
+        section[data-testid="stSidebar"] [class*="st-key-cancelar_apagar_"] [data-testid="stButton"] button {
+            border: 1px solid var(--ae-line) !important;
+        }
+        section[data-testid="stSidebar"] [class*="st-key-cancelar_apagar_"] [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] [class*="st-key-cancelar_apagar_"] [data-testid="stButton"] button * {
+            color: var(--ae-text) !important;
+        }
+        section[data-testid="stSidebar"] [class*="st-key-cancelar_apagar_"] [data-testid="stButton"] button:hover {
+            background: var(--ae-surface) !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_obras [data-testid="stFormSubmitButton"] {
+            width: 100% !important;
+        }
+"""
+
 # Ícones sólidos, de uma cor só (herdam a cor do texto do botão).
 _CSS_ICONES = """
         section[data-testid="stSidebar"] [data-testid="stIconMaterial"] {
@@ -252,7 +289,7 @@ def aplicar_tema_sistema():
         .replace("__VARS__", variaveis)
         .replace("__NAVCSS__", _regras_navegacao())
         .replace("__SAIRCSS__", _CSS_SAIR)
-        .replace("__ICONCSS__", _CSS_ICONES + _CSS_OBRAS)
+        .replace("__ICONCSS__", _CSS_ICONES + _CSS_OBRAS + _CSS_CONFIRMAR)
     )
     if menu_recolhido():
         css = css.replace("</style>", _CSS_RECOLHIDO + "\n        </style>")
@@ -370,21 +407,25 @@ __VARS__
         __NAVCSS__
 
         /* ---------- campos e botões ---------- */
-        section[data-testid="stSidebar"] [data-baseweb="input"],
-        section[data-testid="stSidebar"] [data-baseweb="base-input"],
-        section[data-testid="stSidebar"] [data-baseweb="textarea"],
-        section[data-testid="stSidebar"] [data-baseweb="select"],
-        section[data-testid="stSidebar"] [data-baseweb="select"] > div,
-        section[data-testid="stSidebar"] [data-baseweb="select"] > div > div {
+        section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"],
+        section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"],
+        section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"],
+        section[data-testid="stSidebar"] [data-baseweb="textarea"] {
             background: var(--ae-surface) !important;
-            color: var(--ae-text) !important;
-            box-shadow: none !important;
-        }
-        section[data-testid="stSidebar"] [data-baseweb="input"],
-        section[data-testid="stSidebar"] [data-baseweb="textarea"],
-        section[data-testid="stSidebar"] [data-baseweb="select"] > div {
             border: 1px solid var(--ae-line) !important;
             border-radius: 10px !important;
+            box-shadow: none !important;
+            color: var(--ae-text) !important;
+        }
+        /* tudo dentro da caixa fica transparente: sem anel branco duplo */
+        section[data-testid="stSidebar"] [data-testid="stTextInputRootElement"] *,
+        section[data-testid="stSidebar"] [data-testid="stNumberInputContainer"] *,
+        section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] *,
+        section[data-testid="stSidebar"] [data-baseweb="textarea"] * {
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+            color: var(--ae-text) !important;
         }
         section[data-testid="stSidebar"] input,
         section[data-testid="stSidebar"] textarea {
@@ -417,13 +458,21 @@ __VARS__
             border-radius: 10px !important;
             font-weight: 600;
         }
-        section[data-testid="stSidebar"] [data-testid="stAlert"] {
+        section[data-testid="stSidebar"] [data-testid="stAlert"],
+        section[data-testid="stSidebar"] [data-testid="stAlertContainer"],
+        section[data-testid="stSidebar"] [data-testid="stAlert"] > div {
             background: var(--ae-alert-bg) !important;
-            border: 1px solid var(--ae-line) !important;
+            border: 0 !important;
             border-radius: 10px !important;
+            box-shadow: none !important;
+        }
+        section[data-testid="stSidebar"] [data-testid="stAlert"] {
+            border: 1px solid var(--ae-line) !important;
+            box-shadow: inset 3px 0 0 var(--ae-danger) !important;
         }
         section[data-testid="stSidebar"] [data-testid="stAlert"] * {
             color: var(--ae-text) !important;
+            font-size: .85rem !important;
         }
 
         __SAIRCSS__
