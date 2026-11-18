@@ -219,7 +219,7 @@ def _navegacao_etapas():
     ):
         st.session_state[chave] = etapas[0]
 
-    # 13.6.357 — a navegação por etapas fica no menu lateral
+    # 13.6.358 — a navegação por etapas fica no menu lateral
     # (container reservado em app.py), com um botão por etapa. A etapa
     # ativa continua guardada na mesma chave de estado. Sem o container,
     # mantém o comportamento anterior (radio horizontal na página).
@@ -245,6 +245,12 @@ def _navegacao_etapas():
                         rotulo_etapa(nome_etapa),
                         icon=icone_etapa(nome_etapa),
                         key=f"ae_nav_btn_{i}",
+                        # balão (dica) somente com o menu recolhido
+                        help=(
+                            rotulo_etapa(nome_etapa)
+                            if recolhido
+                            else None
+                        ),
                         use_container_width=True,
                         type=(
                             "primary"
@@ -1703,7 +1709,7 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.357)
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.358)
     # Liberada somente com o DXF efetivamente gerado nesta versão.
     # --------------------------------------------------------
     if etapa == "🧊 Visualização 3D":

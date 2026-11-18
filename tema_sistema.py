@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.357).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.358).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -490,6 +490,7 @@ def renderizar_botao_recolher():
             "Recolher menu" if not recolhido else "Expandir menu",
             icon=":material/chevron_right:" if recolhido else ":material/chevron_left:",
             key="ae_btn_recolher",
+            help="Expandir menu" if recolhido else None,
             use_container_width=True,
             on_click=_alternar_menu,
         )
@@ -504,6 +505,7 @@ def renderizar_botao_obras_recolhido():
             "Obras",
             icon=":material/folder_open:",
             key="ae_btn_obras_ic",
+            help="Obras (expandir menu)",
             use_container_width=True,
             on_click=_expandir_menu,
         )
@@ -516,6 +518,11 @@ def renderizar_botao_tema():
             "Tema escuro" if claro else "Tema claro",
             icon=":material/dark_mode:" if claro else ":material/light_mode:",
             key="ae_btn_tema",
+            help=(
+                ("Tema escuro" if claro else "Tema claro")
+                if menu_recolhido()
+                else None
+            ),
             use_container_width=True,
             on_click=_alternar_tema,
         )

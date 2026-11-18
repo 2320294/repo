@@ -25,6 +25,7 @@ from tema_sistema import (
     renderizar_botao_recolher,
     renderizar_botao_obras_recolhido,
     renderizar_botao_tema,
+    menu_recolhido,
     container_obras,
     container_admin,
 )
@@ -101,6 +102,7 @@ with st.sidebar:
         if st.button(
             "Sair / Logout",
             icon=":material/logout:",
+            help="Sair / Logout" if menu_recolhido() else None,
             use_container_width=True,
         ):
             fazer_logout()
