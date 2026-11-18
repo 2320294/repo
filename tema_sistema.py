@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.355).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.357).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -144,7 +144,7 @@ def _regras_navegacao():
     return "\n".join(css)
 
 
-_CSS_SAIR = """
+_CSS_SAIR_BASE = """
         section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button {
             background: transparent !important;
             border: 0 !important;
@@ -158,6 +158,30 @@ _CSS_SAIR = """
         }
         section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button:hover {
             background: var(--ae-danger-bg) !important;
+        }
+"""
+
+_CSS_SAIR = _CSS_SAIR_BASE + _CSS_SAIR_BASE.replace("ae_logout", "ae_apagar")
+
+# Botão "Cadastrar projeto" (formulário do Gerenciador de Obras): discreto,
+# no mesmo estilo dos itens do menu.
+_CSS_OBRAS = """
+        section[data-testid="stSidebar"] .st-key-ae_obras [data-testid="stFormSubmitButton"] button {
+            width: 100% !important;
+            justify-content: flex-start !important;
+            padding: 10px 14px !important;
+            background: transparent !important;
+            border: 1px solid var(--ae-line) !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+            font-weight: 500 !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_obras [data-testid="stFormSubmitButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_obras [data-testid="stFormSubmitButton"] button * {
+            color: var(--ae-text) !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_obras [data-testid="stFormSubmitButton"] button:hover {
+            background: var(--ae-surface) !important;
         }
 """
 
@@ -228,7 +252,7 @@ def aplicar_tema_sistema():
         .replace("__VARS__", variaveis)
         .replace("__NAVCSS__", _regras_navegacao())
         .replace("__SAIRCSS__", _CSS_SAIR)
-        .replace("__ICONCSS__", _CSS_ICONES)
+        .replace("__ICONCSS__", _CSS_ICONES + _CSS_OBRAS)
     )
     if menu_recolhido():
         css = css.replace("</style>", _CSS_RECOLHIDO + "\n        </style>")
@@ -278,6 +302,12 @@ __VARS__
             font-weight: 600 !important;
             margin: 0 0 .4rem 0 !important;
             padding: 0 !important;
+        }
+
+        /* ---------- sem o "<<" nativo (o recolhimento é pelo botão do menu) ---------- */
+        section[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+        section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+            display: none !important;
         }
 
         /* ---------- cartão de usuário ---------- */
@@ -340,13 +370,28 @@ __VARS__
         __NAVCSS__
 
         /* ---------- campos e botões ---------- */
-        section[data-testid="stSidebar"] input,
-        section[data-testid="stSidebar"] textarea,
-        section[data-testid="stSidebar"] [data-baseweb="select"] > div {
+        section[data-testid="stSidebar"] [data-baseweb="input"],
+        section[data-testid="stSidebar"] [data-baseweb="base-input"],
+        section[data-testid="stSidebar"] [data-baseweb="textarea"],
+        section[data-testid="stSidebar"] [data-baseweb="select"],
+        section[data-testid="stSidebar"] [data-baseweb="select"] > div,
+        section[data-testid="stSidebar"] [data-baseweb="select"] > div > div {
             background: var(--ae-surface) !important;
             color: var(--ae-text) !important;
+            box-shadow: none !important;
+        }
+        section[data-testid="stSidebar"] [data-baseweb="input"],
+        section[data-testid="stSidebar"] [data-baseweb="textarea"],
+        section[data-testid="stSidebar"] [data-baseweb="select"] > div {
             border: 1px solid var(--ae-line) !important;
             border-radius: 10px !important;
+        }
+        section[data-testid="stSidebar"] input,
+        section[data-testid="stSidebar"] textarea {
+            background: transparent !important;
+            color: var(--ae-text) !important;
+            border: 0 !important;
+            -webkit-text-fill-color: var(--ae-text) !important;
         }
         section[data-testid="stSidebar"] input::placeholder,
         section[data-testid="stSidebar"] textarea::placeholder {
@@ -355,10 +400,14 @@ __VARS__
         section[data-testid="stSidebar"] [data-baseweb="select"] svg {
             fill: var(--ae-muted) !important;
         }
+        section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+            font-size: .8rem !important;
+            color: var(--ae-muted) !important;
+        }
         section[data-testid="stSidebar"] [data-testid="stForm"] {
-            border: 1px solid var(--ae-line) !important;
-            border-radius: 12px !important;
-            background: var(--ae-form-bg);
+            border: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
         }
         section[data-testid="stSidebar"] [data-testid="stButton"] button,
         section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button {
@@ -441,7 +490,6 @@ def renderizar_botao_recolher():
             "Recolher menu" if not recolhido else "Expandir menu",
             icon=":material/chevron_right:" if recolhido else ":material/chevron_left:",
             key="ae_btn_recolher",
-            help="Expandir menu" if recolhido else "Recolher menu",
             use_container_width=True,
             on_click=_alternar_menu,
         )
@@ -456,7 +504,6 @@ def renderizar_botao_obras_recolhido():
             "Obras",
             icon=":material/folder_open:",
             key="ae_btn_obras_ic",
-            help="Obras (expandir menu)",
             use_container_width=True,
             on_click=_expandir_menu,
         )
@@ -469,7 +516,6 @@ def renderizar_botao_tema():
             "Tema escuro" if claro else "Tema claro",
             icon=":material/dark_mode:" if claro else ":material/light_mode:",
             key="ae_btn_tema",
-            help="Alternar entre o menu claro e o escuro",
             use_container_width=True,
             on_click=_alternar_tema,
         )

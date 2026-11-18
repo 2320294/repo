@@ -1,5 +1,7 @@
 import streamlit as st
 
+from tema_sistema import _container
+
 from database import (
     listar_projetos,
     criar_projeto,
@@ -98,12 +100,7 @@ def _ativar_projeto_selecionado():
 
 
 def renderizar_gerenciador_projetos():
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    st.markdown(
-        "### 📂 Gerenciador de Obras"
-    )
-
+    # 13.6.356 — o título "Obras" é exibido pelo menu lateral (app.py).
     with st.form(
         "form_novo_projeto",
         clear_on_submit=True
@@ -114,7 +111,8 @@ def renderizar_gerenciador_projetos():
 
         btn_criar_proj = (
             st.form_submit_button(
-                "➕ Cadastrar Projeto"
+                "Cadastrar projeto",
+                icon=":material/add:"
             )
         )
 
@@ -156,7 +154,8 @@ def renderizar_gerenciador_projetos():
         projetos_usuario = []
 
     st.markdown(
-        "### 📋 Seus Projetos Salvos:"
+        '<div class="ae-secao">Projetos salvos</div>',
+        unsafe_allow_html=True
     )
 
     if not projetos_usuario:
@@ -209,11 +208,15 @@ def renderizar_gerenciador_projetos():
                 chave_confirmacao
             ] = None
 
-        if st.button(
-            "🗑️ Apagar Projeto Selecionado",
-            type="secondary",
-            use_container_width=True
-        ):
+        with _container("ae_apagar"):
+            apagar_clicado = st.button(
+                "Apagar projeto selecionado",
+                icon=":material/delete:",
+                type="secondary",
+                use_container_width=True
+            )
+
+        if apagar_clicado:
             st.session_state[
                 chave_confirmacao
             ] = projeto_selecionado
@@ -236,7 +239,8 @@ def renderizar_gerenciador_projetos():
 
             with col_confirmar:
                 confirmar = st.button(
-                    "✅ Sim, apagar",
+                    "Sim, apagar",
+                    icon=":material/check:",
                     type="primary",
                     use_container_width=True,
                     key=(
@@ -247,7 +251,8 @@ def renderizar_gerenciador_projetos():
 
             with col_cancelar:
                 cancelar = st.button(
-                    "❌ Cancelar",
+                    "Cancelar",
+                    icon=":material/close:",
                     use_container_width=True,
                     key=(
                         "cancelar_apagar_"

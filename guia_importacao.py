@@ -40,7 +40,7 @@ def renderizar_guia_preparacao_planta():
         st.markdown("#### 5. Salve/exporte em DXF")
         st.write("Confira a escala, mantenha os elementos nas layers obrigatórias e salve a planta em **DXF**.")
         st.markdown("#### 6. Cadastre e importe")
-        st.write("Informe o nome do projeto na barra lateral, clique em **Cadastrar Projeto**, selecione-o e envie o DXF na etapa **⚙️ Parâmetros**.")
+        st.write("Informe o nome do projeto na barra lateral, clique em **Cadastrar projeto**, selecione-o e envie o DXF na etapa **⚙️ Parâmetros**.")
         st.markdown("#### ✅ Checklist antes de importar")
         st.markdown("""- [ ] `IA_AMBIENTES` contém polilinhas fechadas.
 - [ ] `IA_TEXTOS` contém um nome dentro de cada ambiente.

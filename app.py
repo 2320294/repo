@@ -101,7 +101,6 @@ with st.sidebar:
         if st.button(
             "Sair / Logout",
             icon=":material/logout:",
-            help="Sair / Logout",
             use_container_width=True,
         ):
             fazer_logout()
