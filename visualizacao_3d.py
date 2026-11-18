@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.352)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.354)."""
 import os
 import tempfile
 

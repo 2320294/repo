@@ -22,6 +22,7 @@ from tema_sistema import (
     titulo_secao,
     reservar_container_navegacao,
     container_rodape_sair,
+    renderizar_alternador_tema,
 )
 from versao import VERSAO_SISTEMA
 from admin_normativos import usuario_e_admin, renderizar_admin_normativos
@@ -85,6 +86,7 @@ with st.sidebar:
         )
 
     titulo_secao("Conta")
+    renderizar_alternador_tema()
     with container_rodape_sair():
         if st.button(
             "🚪 Sair / Logout",

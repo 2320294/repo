@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.352).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.354).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -24,21 +24,61 @@ def _iniciais(nome):
     return (partes[0][0] + partes[-1][0]).upper()
 
 
-def aplicar_tema_sistema():
-    """CSS do sistema logado (menu lateral escuro, itens de navegação)."""
-    st.markdown(
-        """
-        <style>
-        :root {
+CHAVE_TEMA_CLARO = "ae_tema_claro"
+
+_VARS_ESCURO = """
             --ae-bg: #151b28;
             --ae-surface: #1f2738;
             --ae-surface-2: #283148;
             --ae-line: rgba(255,255,255,.09);
+            --ae-border-right: transparent;
             --ae-text: #e8ecf4;
             --ae-muted: #8d97ab;
+            --ae-active-text: #ffffff;
             --ae-blue: #2e63e6;
             --ae-blue-dark: #2050cc;
             --ae-danger: #f0817f;
+            --ae-danger-bg: rgba(240,129,127,.12);
+            --ae-form-bg: rgba(255,255,255,.02);
+            --ae-alert-bg: rgba(255,255,255,.07);
+"""
+
+_VARS_CLARO = """
+            --ae-bg: #f6f8fc;
+            --ae-surface: #e9edf6;
+            --ae-surface-2: #dde4f3;
+            --ae-line: rgba(27,40,64,.12);
+            --ae-border-right: rgba(27,40,64,.10);
+            --ae-text: #1b2840;
+            --ae-muted: #667389;
+            --ae-active-text: #1b2840;
+            --ae-blue: #2e63e6;
+            --ae-blue-dark: #2050cc;
+            --ae-danger: #d64545;
+            --ae-danger-bg: rgba(214,69,69,.10);
+            --ae-form-bg: #ffffff;
+            --ae-alert-bg: #e9edf6;
+"""
+
+
+def tema_claro_ativo():
+    return bool(st.session_state.get(CHAVE_TEMA_CLARO, False))
+
+
+def aplicar_tema_sistema():
+    """CSS do sistema logado (menu lateral, itens de navegação)."""
+    variaveis = _VARS_CLARO if tema_claro_ativo() else _VARS_ESCURO
+    st.markdown(
+        _CSS_SISTEMA.replace("__VARS__", variaveis),
+        unsafe_allow_html=True,
+    )
+
+
+_CSS_SISTEMA = (
+        """
+        <style>
+        :root {
+__VARS__
         }
 
         /* ---------- container do menu ---------- */
@@ -47,6 +87,9 @@ def aplicar_tema_sistema():
         section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
             background: var(--ae-bg) !important;
             border-right: 0 !important;
+        }
+        section[data-testid="stSidebar"] {
+            border-right: 1px solid var(--ae-border-right) !important;
         }
         section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
             padding-top: .5rem;
@@ -133,42 +176,41 @@ def aplicar_tema_sistema():
             font-weight: 600;
         }
 
-        /* ---------- navegação por etapas (st.radio vertical) ---------- */
-        section[data-testid="stSidebar"] [data-testid="stRadio"] [role="radiogroup"] {
-            flex-direction: column !important;
-            flex-wrap: nowrap !important;
+        /* ---------- navegação por etapas (botões) ---------- */
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stVerticalBlock"] {
             gap: 4px !important;
         }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label {
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button {
             width: 100% !important;
-            margin: 0 !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
             padding: 10px 14px !important;
             border-radius: 10px !important;
-            cursor: pointer;
-            transition: background .15s ease;
-        }
-        /* esconde a bolinha do radio */
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label > div:first-of-type {
-            display: none !important;
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label p {
-            font-size: .95rem !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
             font-weight: 500 !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button * {
             color: var(--ae-muted) !important;
         }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button:hover {
             background: var(--ae-surface) !important;
         }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label:hover p {
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button:hover * {
             color: var(--ae-text) !important;
         }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+        /* item ativo = botão primary */
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[kind="primary"],
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[data-testid="stBaseButton-primary"] {
             background: var(--ae-surface-2) !important;
-            box-shadow: inset 3px 0 0 var(--ae-blue);
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) p {
-            color: #ffffff !important;
+            box-shadow: inset 3px 0 0 var(--ae-blue) !important;
             font-weight: 600 !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[kind="primary"] *,
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[data-testid="stBaseButton-primary"] * {
+            color: var(--ae-active-text) !important;
         }
 
         /* ---------- campos e botões ---------- */
@@ -190,7 +232,7 @@ def aplicar_tema_sistema():
         section[data-testid="stSidebar"] [data-testid="stForm"] {
             border: 1px solid var(--ae-line) !important;
             border-radius: 12px !important;
-            background: rgba(255,255,255,.02);
+            background: var(--ae-form-bg);
         }
         section[data-testid="stSidebar"] [data-testid="stButton"] button,
         section[data-testid="stSidebar"] [data-testid="stFormSubmitButton"] button {
@@ -201,7 +243,7 @@ def aplicar_tema_sistema():
             font-weight: 600;
         }
         section[data-testid="stSidebar"] [data-testid="stAlert"] {
-            background: rgba(255,255,255,.07) !important;
+            background: var(--ae-alert-bg) !important;
             border: 1px solid var(--ae-line) !important;
             border-radius: 10px !important;
         }
@@ -222,15 +264,23 @@ def aplicar_tema_sistema():
             color: var(--ae-danger) !important;
         }
         section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button:hover {
-            background: rgba(240,129,127,.12) !important;
+            background: var(--ae-danger-bg) !important;
         }
 
         [data-testid="stAppViewContainer"] {
             background: #ffffff !important;
         }
         </style>
-        """,
-        unsafe_allow_html=True,
+        """
+)
+
+
+def renderizar_alternador_tema():
+    """Alternador entre menu escuro (padrão) e claro."""
+    st.toggle(
+        "☀️ Tema claro",
+        key=CHAVE_TEMA_CLARO,
+        help="Alterna o menu lateral entre o visual escuro e o claro.",
     )
 
 
@@ -266,6 +316,14 @@ def reservar_container_navegacao():
     container (ver painel._navegacao_etapas).
     """
     st.session_state[CHAVE_CONTAINER_NAVEGACAO] = st.container()
+
+
+def container_botoes_navegacao():
+    """Container com chave própria para estilizar os botões de etapa."""
+    try:
+        return st.container(key="ae_nav")
+    except TypeError:
+        return st.container()
 
 
 def container_rodape_sair():
