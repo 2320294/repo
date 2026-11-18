@@ -1,5 +1,6 @@
-"""Visualização 3D inicial da arquitetura a partir do DXF (AutoElétrica 13.6.350)."""
-from io import StringIO
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.351)."""
+import os
+import tempfile
 
 import streamlit as st
 
@@ -36,15 +37,45 @@ def _normalizar_dxf_bytes(dxf_data):
 
 
 def _carregar_documento(dxf_data):
+    """Carrega DXF ASCII ou binário sem modificar o arquivo de origem.
+
+    O parser oficial do ezdxf detecta a codificação e o formato binário
+    quando recebe um caminho de arquivo. Em caso de estrutura danificada,
+    tenta a rotina de recuperação, sempre trabalhando sobre uma cópia
+    temporária dos bytes recebidos.
+    """
     import ezdxf
+    from ezdxf import recover
+
     raw = _normalizar_dxf_bytes(dxf_data)
-    # ezdxf.read espera um stream de texto (não BytesIO). O DXF é um formato
-    # textual; decodificamos o conteúdo antes de entregá-lo ao parser.
+    caminho_temporario = None
     try:
-        texto = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        texto = raw.decode("cp1252", errors="replace")
-    return ezdxf.read(StringIO(texto))
+        with tempfile.NamedTemporaryFile(
+            prefix="autoeletrica_3d_",
+            suffix=".dxf",
+            delete=False
+        ) as arquivo:
+            arquivo.write(raw)
+            caminho_temporario = arquivo.name
+
+        try:
+            return ezdxf.readfile(caminho_temporario)
+        except Exception as erro_leitura:
+            try:
+                documento, auditoria = recover.readfile(caminho_temporario)
+                return documento
+            except Exception as erro_recuperacao:
+                raise ValueError(
+                    "Não foi possível interpretar o DXF como arquivo ASCII "
+                    "ou binário, nem recuperar sua estrutura. "
+                    f"Leitura: {erro_leitura}. Recuperação: {erro_recuperacao}"
+                ) from erro_recuperacao
+    finally:
+        if caminho_temporario and os.path.exists(caminho_temporario):
+            try:
+                os.remove(caminho_temporario)
+            except OSError:
+                pass
 
 
 def _extrair_segmentos(modelspace):
@@ -77,7 +108,7 @@ def _extrair_segmentos(modelspace):
 
 
 def renderizar_visualizacao_3d(dxf_data, pe_direito):
-    st.subheader("🏗️ Visualização 3D da planta")
+    st.subheader("🧊 Visualização 3D da planta")
     st.caption(
         "Prévia tridimensional da arquitetura extraída do DXF. "
         "O pé-direito é o configurado em Parâmetros (Etapa 1); "

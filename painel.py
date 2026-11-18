@@ -186,8 +186,20 @@ def _navegacao_etapas():
         "🔌 Tomadas Altas",
         "📦 Materiais",
         "📐 Gerar Projeto",
-        "🏗️ Visualização 3D"
     ]
+
+    # A Etapa 8 só existe na navegação depois da geração efetiva
+    # do CAD desta versão e para o projeto atualmente selecionado.
+    cad_3d_disponivel = bool(
+        st.session_state.get("cad_gerado_bytes")
+        and st.session_state.get("cad_gerado_projeto")
+            == st.session_state.get("projeto_ativo")
+        and st.session_state.get("cad_gerado_versao")
+            == VERSAO_SISTEMA
+        and st.session_state.get("cad_gerado_assinatura")
+    )
+    if cad_3d_disponivel:
+        etapas.append("🧊 Visualização 3D")
 
     chave = _chave_projeto(
         "etapa_ativa"
@@ -1642,11 +1654,28 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.350)
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.351)
+    # Liberada somente com o DXF efetivamente gerado nesta versão.
     # --------------------------------------------------------
-    if etapa == "🏗️ Visualização 3D":
+    if etapa == "🧊 Visualização 3D":
+        cad_3d = st.session_state.get("cad_gerado_bytes")
+        cad_3d_valido = bool(
+            cad_3d
+            and st.session_state.get("cad_gerado_projeto")
+                == st.session_state.get("projeto_ativo")
+            and st.session_state.get("cad_gerado_versao")
+                == VERSAO_SISTEMA
+            and st.session_state.get("cad_gerado_assinatura")
+        )
+        if not cad_3d_valido:
+            st.info(
+                "Gere o Projeto CAD na etapa anterior para liberar "
+                "a visualização 3D."
+            )
+            return
+
         renderizar_visualizacao_3d(
-            dxf_data=dxf_bytes,
+            dxf_data=bytes(cad_3d),
             pe_direito=parametros_projeto["pe_direito"]
         )
         return
