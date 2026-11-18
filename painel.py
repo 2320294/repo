@@ -177,7 +177,12 @@ def _inicializar_cache_etapas(
     )
 
 
-from tema_sistema import container_botoes_navegacao
+from tema_sistema import (
+    container_botoes_navegacao,
+    icone_etapa,
+    menu_recolhido,
+    rotulo_etapa,
+)
 
 
 def _navegacao_etapas():
@@ -214,7 +219,7 @@ def _navegacao_etapas():
     ):
         st.session_state[chave] = etapas[0]
 
-    # 13.6.354 — a navegação por etapas fica no menu lateral
+    # 13.6.355 — a navegação por etapas fica no menu lateral
     # (container reservado em app.py), com um botão por etapa. A etapa
     # ativa continua guardada na mesma chave de estado. Sem o container,
     # mantém o comportamento anterior (radio horizontal na página).
@@ -226,16 +231,21 @@ def _navegacao_etapas():
 
         etapa = st.session_state[chave]
 
+        recolhido = menu_recolhido()
+
         with destino:
-            st.markdown(
-                '<div class="ae-secao">Etapas do projeto</div>',
-                unsafe_allow_html=True
-            )
+            if not recolhido:
+                st.markdown(
+                    '<div class="ae-secao">Etapas do projeto</div>',
+                    unsafe_allow_html=True
+                )
             with container_botoes_navegacao():
                 for i, nome_etapa in enumerate(etapas):
                     st.button(
-                        nome_etapa,
+                        rotulo_etapa(nome_etapa),
+                        icon=icone_etapa(nome_etapa),
                         key=f"ae_nav_btn_{i}",
+                        help=rotulo_etapa(nome_etapa),
                         use_container_width=True,
                         type=(
                             "primary"
@@ -245,9 +255,10 @@ def _navegacao_etapas():
                         on_click=_selecionar_etapa,
                         args=(nome_etapa,)
                     )
-            st.caption(
-                f"Etapa {etapas.index(etapa) + 1} de {len(etapas)}"
-            )
+            if not recolhido:
+                st.caption(
+                    f"Etapa {etapas.index(etapa) + 1} de {len(etapas)}"
+                )
         return etapa
 
     etapa = st.radio(
@@ -1693,7 +1704,7 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.354)
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.355)
     # Liberada somente com o DXF efetivamente gerado nesta versão.
     # --------------------------------------------------------
     if etapa == "🧊 Visualização 3D":

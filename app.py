@@ -22,7 +22,11 @@ from tema_sistema import (
     titulo_secao,
     reservar_container_navegacao,
     container_rodape_sair,
-    renderizar_alternador_tema,
+    renderizar_botao_recolher,
+    renderizar_botao_obras_recolhido,
+    renderizar_botao_tema,
+    container_obras,
+    container_admin,
 )
 from versao import VERSAO_SISTEMA
 from admin_normativos import usuario_e_admin, renderizar_admin_normativos
@@ -70,26 +74,34 @@ with st.sidebar:
         st.session_state.user_email,
         VERSAO_SISTEMA,
     )
+    renderizar_botao_recolher()
 
     # Navegação por etapas: o painel principal preenche este espaço.
     reservar_container_navegacao()
 
-    titulo_secao("Obras")
-    renderizar_gerenciador_projetos()
+    # Com o menu recolhido, o Gerenciador de Obras fica oculto por CSS
+    # (continua sendo renderizado) e um ícone de pasta reabre o menu.
+    renderizar_botao_obras_recolhido()
+    with container_obras():
+        titulo_secao("Obras")
+        renderizar_gerenciador_projetos()
 
     if usuario_e_admin(st.session_state.user_email):
-        titulo_secao("Administração")
-        st.session_state["admin_normativos_aberto"] = st.toggle(
-            "⚙️ Administração",
-            value=bool(st.session_state.get("admin_normativos_aberto", False)),
-            help="Cadastro e liberação de perfis normativos.",
-        )
+        with container_admin():
+            titulo_secao("Administração")
+            st.session_state["admin_normativos_aberto"] = st.toggle(
+                "⚙️ Administração",
+                value=bool(st.session_state.get("admin_normativos_aberto", False)),
+                help="Cadastro e liberação de perfis normativos.",
+            )
 
     titulo_secao("Conta")
-    renderizar_alternador_tema()
+    renderizar_botao_tema()
     with container_rodape_sair():
         if st.button(
-            "🚪 Sair / Logout",
+            "Sair / Logout",
+            icon=":material/logout:",
+            help="Sair / Logout",
             use_container_width=True,
         ):
             fazer_logout()

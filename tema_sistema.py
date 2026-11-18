@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.354).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.355).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -8,6 +8,7 @@ Somente apresentação: nenhuma lógica de cálculo, DXF ou QDC é tocada.
 """
 
 import html
+import re
 
 import streamlit as st
 
@@ -61,17 +62,177 @@ _VARS_CLARO = """
 """
 
 
+CHAVE_MENU_RECOLHIDO = "ae_menu_recolhido"
+
+# Containers (chaves) cujos botões seguem o visual de item de navegação.
+_CONTAINERS_NAV = ("ae_nav", "ae_tema", "ae_recolher", "ae_obras_ic")
+
+_ICONES_ETAPAS = (
+    ("parâmetro", "settings"),
+    ("parametro", "settings"),
+    ("carga", "table_chart"),
+    ("qdc", "bolt"),
+    ("interruptor", "lightbulb"),
+    ("tomada", "electrical_services"),
+    ("materia", "inventory_2"),
+    ("gerar", "architecture"),
+    ("3d", "view_in_ar"),
+    ("visualiza", "view_in_ar"),
+)
+
+
 def tema_claro_ativo():
     return bool(st.session_state.get(CHAVE_TEMA_CLARO, False))
+
+
+def menu_recolhido():
+    return bool(st.session_state.get(CHAVE_MENU_RECOLHIDO, False))
+
+
+def rotulo_etapa(nome):
+    """Nome da etapa sem o emoji inicial (o valor da etapa não muda)."""
+    return re.sub(r"^[^\w]+", "", str(nome or "")).strip() or str(nome)
+
+
+def icone_etapa(nome):
+    """Ícone Material (uma cor só) para a etapa."""
+    baixo = rotulo_etapa(nome).lower()
+    for trecho, icone in _ICONES_ETAPAS:
+        if trecho in baixo:
+            return f":material/{icone}:"
+    return ":material/chevron_right:"
+
+
+def _regras_navegacao():
+    css = []
+    for c in _CONTAINERS_NAV:
+        base = f'section[data-testid="stSidebar"] .st-key-{c} [data-testid="stButton"] button'
+        css.append(f"""
+        section[data-testid="stSidebar"] .st-key-{c} [data-testid="stVerticalBlock"] {{
+            gap: 4px !important;
+        }}
+        {base} {{
+            width: 100% !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
+            padding: 10px 14px !important;
+            border-radius: 10px !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            font-weight: 500 !important;
+        }}
+        {base}, {base} * {{
+            color: var(--ae-muted) !important;
+        }}
+        {base}:hover {{
+            background: var(--ae-surface) !important;
+        }}
+        {base}:hover * {{
+            color: var(--ae-text) !important;
+        }}
+        {base}[kind="primary"],
+        {base}[data-testid="stBaseButton-primary"] {{
+            background: var(--ae-surface-2) !important;
+            box-shadow: inset 3px 0 0 var(--ae-blue) !important;
+            font-weight: 600 !important;
+        }}
+        {base}[kind="primary"] *,
+        {base}[data-testid="stBaseButton-primary"] * {{
+            color: var(--ae-active-text) !important;
+        }}""")
+    return "\n".join(css)
+
+
+_CSS_SAIR = """
+        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button {
+            background: transparent !important;
+            border: 0 !important;
+            justify-content: flex-start !important;
+            padding: 10px 14px !important;
+            box-shadow: none !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button * {
+            color: var(--ae-danger) !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button:hover {
+            background: var(--ae-danger-bg) !important;
+        }
+"""
+
+# Ícones sólidos, de uma cor só (herdam a cor do texto do botão).
+_CSS_ICONES = """
+        section[data-testid="stSidebar"] [data-testid="stIconMaterial"] {
+            font-variation-settings: 'FILL' 1, 'wght' 500 !important;
+            font-size: 1.4rem !important;
+            color: inherit !important;
+        }
+"""
+
+# Menu recolhido: somente ícones.
+_CSS_RECOLHIDO = """
+        section[data-testid="stSidebar"] {
+            width: 84px !important;
+            min-width: 84px !important;
+            max-width: 84px !important;
+        }
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+        section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+        }
+        section[data-testid="stSidebar"] .ae-secao,
+        section[data-testid="stSidebar"] .st-key-ae_obras,
+        section[data-testid="stSidebar"] .st-key-ae_admin,
+        section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+            display: none !important;
+        }
+        section[data-testid="stSidebar"] .ae-user {
+            justify-content: center;
+            padding-left: 0;
+            padding-right: 0;
+        }
+        section[data-testid="stSidebar"] .ae-user-info {
+            display: none;
+        }
+        section[data-testid="stSidebar"] .ae-versao-mini {
+            display: block !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_tema [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_recolher [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_obras_ic [data-testid="stButton"] button,
+        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button {
+            justify-content: center !important;
+            padding: 12px 0 !important;
+        }
+        section[data-testid="stSidebar"] .st-key-ae_nav button [data-testid="stMarkdownContainer"],
+        section[data-testid="stSidebar"] .st-key-ae_tema button [data-testid="stMarkdownContainer"],
+        section[data-testid="stSidebar"] .st-key-ae_recolher button [data-testid="stMarkdownContainer"],
+        section[data-testid="stSidebar"] .st-key-ae_obras_ic button [data-testid="stMarkdownContainer"],
+        section[data-testid="stSidebar"] .st-key-ae_logout button [data-testid="stMarkdownContainer"] {
+            display: none !important;
+        }
+"""
 
 
 def aplicar_tema_sistema():
     """CSS do sistema logado (menu lateral, itens de navegação)."""
     variaveis = _VARS_CLARO if tema_claro_ativo() else _VARS_ESCURO
-    st.markdown(
-        _CSS_SISTEMA.replace("__VARS__", variaveis),
-        unsafe_allow_html=True,
+    css = (
+        _CSS_SISTEMA
+        .replace("__VARS__", variaveis)
+        .replace("__NAVCSS__", _regras_navegacao())
+        .replace("__SAIRCSS__", _CSS_SAIR)
+        .replace("__ICONCSS__", _CSS_ICONES)
     )
+    if menu_recolhido():
+        css = css.replace("</style>", _CSS_RECOLHIDO + "\n        </style>")
+    st.markdown(css, unsafe_allow_html=True)
 
 
 _CSS_SISTEMA = (
@@ -176,42 +337,7 @@ __VARS__
             font-weight: 600;
         }
 
-        /* ---------- navegação por etapas (botões) ---------- */
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stVerticalBlock"] {
-            gap: 4px !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button {
-            width: 100% !important;
-            justify-content: flex-start !important;
-            text-align: left !important;
-            padding: 10px 14px !important;
-            border-radius: 10px !important;
-            border: 0 !important;
-            box-shadow: none !important;
-            background: transparent !important;
-            font-weight: 500 !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button,
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button * {
-            color: var(--ae-muted) !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button:hover {
-            background: var(--ae-surface) !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button:hover * {
-            color: var(--ae-text) !important;
-        }
-        /* item ativo = botão primary */
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[kind="primary"],
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[data-testid="stBaseButton-primary"] {
-            background: var(--ae-surface-2) !important;
-            box-shadow: inset 3px 0 0 var(--ae-blue) !important;
-            font-weight: 600 !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[kind="primary"] *,
-        section[data-testid="stSidebar"] .st-key-ae_nav [data-testid="stButton"] button[data-testid="stBaseButton-primary"] * {
-            color: var(--ae-active-text) !important;
-        }
+        __NAVCSS__
 
         /* ---------- campos e botões ---------- */
         section[data-testid="stSidebar"] input,
@@ -251,21 +377,9 @@ __VARS__
             color: var(--ae-text) !important;
         }
 
-        /* ---------- rodapé: sair ---------- */
-        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button {
-            background: transparent !important;
-            border: 0 !important;
-            justify-content: flex-start !important;
-            padding: 10px 14px !important;
-            box-shadow: none !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button,
-        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button * {
-            color: var(--ae-danger) !important;
-        }
-        section[data-testid="stSidebar"] .st-key-ae_logout [data-testid="stButton"] button:hover {
-            background: var(--ae-danger-bg) !important;
-        }
+        __SAIRCSS__
+
+        __ICONCSS__
 
         [data-testid="stAppViewContainer"] {
             background: #ffffff !important;
@@ -273,15 +387,6 @@ __VARS__
         </style>
         """
 )
-
-
-def renderizar_alternador_tema():
-    """Alternador entre menu escuro (padrão) e claro."""
-    st.toggle(
-        "☀️ Tema claro",
-        key=CHAVE_TEMA_CLARO,
-        help="Alterna o menu lateral entre o visual escuro e o claro.",
-    )
 
 
 def renderizar_cartao_usuario(nome, email, versao):
@@ -299,7 +404,83 @@ def renderizar_cartao_usuario(nome, email, versao):
         """,
         unsafe_allow_html=True,
     )
-    st.caption(f"Versão: {versao}")
+    if menu_recolhido():
+        # Menu estreito: a versão continua visível, em formato curto.
+        st.markdown(
+            f'<div class="ae-versao-mini" style="text-align:center;'
+            f'font-size:.62rem;color:var(--ae-muted)">{html.escape(str(versao))}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption(f"Versão: {versao}")
+
+
+def _alternar_menu():
+    st.session_state[CHAVE_MENU_RECOLHIDO] = not menu_recolhido()
+
+
+def _expandir_menu():
+    st.session_state[CHAVE_MENU_RECOLHIDO] = False
+
+
+def _alternar_tema():
+    st.session_state[CHAVE_TEMA_CLARO] = not tema_claro_ativo()
+
+
+def _container(chave):
+    try:
+        return st.container(key=chave)
+    except TypeError:
+        return st.container()
+
+
+def renderizar_botao_recolher():
+    recolhido = menu_recolhido()
+    with _container("ae_recolher"):
+        st.button(
+            "Recolher menu" if not recolhido else "Expandir menu",
+            icon=":material/chevron_right:" if recolhido else ":material/chevron_left:",
+            key="ae_btn_recolher",
+            help="Expandir menu" if recolhido else "Recolher menu",
+            use_container_width=True,
+            on_click=_alternar_menu,
+        )
+
+
+def renderizar_botao_obras_recolhido():
+    """Com o menu estreito: ícone de pasta que reabre o menu (Obras)."""
+    if not menu_recolhido():
+        return
+    with _container("ae_obras_ic"):
+        st.button(
+            "Obras",
+            icon=":material/folder_open:",
+            key="ae_btn_obras_ic",
+            help="Obras (expandir menu)",
+            use_container_width=True,
+            on_click=_expandir_menu,
+        )
+
+
+def renderizar_botao_tema():
+    claro = tema_claro_ativo()
+    with _container("ae_tema"):
+        st.button(
+            "Tema escuro" if claro else "Tema claro",
+            icon=":material/dark_mode:" if claro else ":material/light_mode:",
+            key="ae_btn_tema",
+            help="Alternar entre o menu claro e o escuro",
+            use_container_width=True,
+            on_click=_alternar_tema,
+        )
+
+
+def container_obras():
+    return _container("ae_obras")
+
+
+def container_admin():
+    return _container("ae_admin")
 
 
 def titulo_secao(texto):
