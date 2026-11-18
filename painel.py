@@ -211,6 +211,30 @@ def _navegacao_etapas():
     ):
         st.session_state[chave] = etapas[0]
 
+    # 13.6.352 — a navegação por etapas fica no menu lateral
+    # (container reservado em app.py). Sem o container, mantém o
+    # comportamento anterior (radio horizontal na página).
+    destino = st.session_state.get("_ae_nav_container")
+
+    if destino is not None:
+        with destino:
+            st.markdown(
+                '<div class="ae-secao">Etapas do projeto</div>',
+                unsafe_allow_html=True
+            )
+            etapa = st.radio(
+                "Etapas do projeto",
+                etapas,
+                horizontal=False,
+                key=chave,
+                label_visibility="collapsed"
+            )
+            indice = etapas.index(etapa) + 1
+            st.caption(
+                f"Etapa {indice} de {len(etapas)}"
+            )
+        return etapa
+
     etapa = st.radio(
         "Etapas do projeto",
         etapas,
@@ -1654,7 +1678,7 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.351)
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.352)
     # Liberada somente com o DXF efetivamente gerado nesta versão.
     # --------------------------------------------------------
     if etapa == "🧊 Visualização 3D":
