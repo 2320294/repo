@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.359).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.360).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -281,6 +281,171 @@ _CSS_RECOLHIDO = """
 """
 
 
+# Área principal: mesmo padrão visual do menu, sempre no tema claro
+# (independe do alternador de tema do menu). Somente apresentação.
+_CSS_PRINCIPAL = """
+        :root {
+            --ae-m-card: #ffffff;
+            --ae-m-line: rgba(27,40,64,.12);
+            --ae-m-line-strong: rgba(27,40,64,.22);
+            --ae-m-ink: #1b2840;
+            --ae-m-muted: #667389;
+            --ae-m-surface: #eef2fa;
+            --ae-m-blue: #2e63e6;
+            --ae-m-blue-dark: #2050cc;
+        }
+
+        /* ---------- títulos e textos ---------- */
+        [data-testid="stMain"] h1,
+        [data-testid="stMain"] h2,
+        [data-testid="stMain"] h3,
+        [data-testid="stMain"] h4 {
+            color: var(--ae-m-ink) !important;
+            letter-spacing: -0.01em;
+        }
+        [data-testid="stMain"] h1 { font-weight: 800 !important; }
+        [data-testid="stMain"] h2,
+        [data-testid="stMain"] h3 { font-weight: 700 !important; }
+        [data-testid="stMain"] [data-testid="stCaptionContainer"],
+        [data-testid="stMain"] [data-testid="stCaptionContainer"] * {
+            color: var(--ae-m-muted) !important;
+        }
+        [data-testid="stMain"] [data-testid="stWidgetLabel"] p {
+            color: var(--ae-m-ink) !important;
+            font-weight: 500 !important;
+            font-size: .9rem !important;
+        }
+        [data-testid="stMain"] hr {
+            border-color: var(--ae-m-line) !important;
+        }
+
+        /* ---------- campos: caixa única, branca, cantos arredondados ---------- */
+        [data-testid="stMain"] [data-testid="stTextInputRootElement"],
+        [data-testid="stMain"] [data-testid="stNumberInputContainer"],
+        [data-testid="stMain"] [data-testid="stSelectbox"] [data-baseweb="select"],
+        [data-testid="stMain"] [data-baseweb="textarea"] {
+            background: var(--ae-m-card) !important;
+            border: 1px solid var(--ae-m-line) !important;
+            border-radius: 10px !important;
+            box-shadow: none !important;
+            color: var(--ae-m-ink) !important;
+        }
+        [data-testid="stMain"] [data-testid="stTextInputRootElement"] *,
+        [data-testid="stMain"] [data-testid="stNumberInputContainer"] *,
+        [data-testid="stMain"] [data-testid="stSelectbox"] [data-baseweb="select"] *,
+        [data-testid="stMain"] [data-baseweb="textarea"] * {
+            background: transparent !important;
+            border-color: transparent !important;
+            box-shadow: none !important;
+            color: var(--ae-m-ink) !important;
+        }
+        [data-testid="stMain"] [data-testid="stTextInputRootElement"]:focus-within,
+        [data-testid="stMain"] [data-testid="stNumberInputContainer"]:focus-within,
+        [data-testid="stMain"] [data-testid="stSelectbox"] [data-baseweb="select"]:focus-within,
+        [data-testid="stMain"] [data-baseweb="textarea"]:focus-within {
+            border-color: var(--ae-m-blue) !important;
+            box-shadow: 0 0 0 3px rgba(46,99,230,.15) !important;
+        }
+        [data-testid="stMain"] [data-testid="stSelectbox"] [data-baseweb="select"] svg {
+            fill: var(--ae-m-muted) !important;
+        }
+
+        /* ---------- botões ---------- */
+        [data-testid="stMain"] [data-testid="stButton"] button,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] button,
+        [data-testid="stMain"] [data-testid="stDownloadButton"] button {
+            border-radius: 10px !important;
+            font-weight: 600 !important;
+            box-shadow: none !important;
+            background: var(--ae-m-card) !important;
+            border: 1px solid var(--ae-m-line) !important;
+        }
+        [data-testid="stMain"] [data-testid="stButton"] button,
+        [data-testid="stMain"] [data-testid="stButton"] button *,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] button,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] button *,
+        [data-testid="stMain"] [data-testid="stDownloadButton"] button,
+        [data-testid="stMain"] [data-testid="stDownloadButton"] button * {
+            color: var(--ae-m-ink) !important;
+        }
+        [data-testid="stMain"] [data-testid="stButton"] button:hover,
+        [data-testid="stMain"] [data-testid="stFormSubmitButton"] button:hover,
+        [data-testid="stMain"] [data-testid="stDownloadButton"] button:hover {
+            background: var(--ae-m-surface) !important;
+            border-color: var(--ae-m-line-strong) !important;
+        }
+        /* botões principais (primary): azul do sistema */
+        [data-testid="stMain"] button[kind="primary"],
+        [data-testid="stMain"] button[data-testid="stBaseButton-primary"],
+        [data-testid="stMain"] button[data-testid="stBaseButton-primaryFormSubmit"] {
+            background: linear-gradient(90deg, var(--ae-m-blue), var(--ae-m-blue-dark)) !important;
+            border: 0 !important;
+        }
+        [data-testid="stMain"] button[kind="primary"],
+        [data-testid="stMain"] button[kind="primary"] *,
+        [data-testid="stMain"] button[data-testid="stBaseButton-primary"],
+        [data-testid="stMain"] button[data-testid="stBaseButton-primary"] *,
+        [data-testid="stMain"] button[data-testid="stBaseButton-primaryFormSubmit"],
+        [data-testid="stMain"] button[data-testid="stBaseButton-primaryFormSubmit"] * {
+            color: #ffffff !important;
+        }
+        [data-testid="stMain"] button[kind="primary"]:hover,
+        [data-testid="stMain"] button[data-testid="stBaseButton-primary"]:hover,
+        [data-testid="stMain"] button[data-testid="stBaseButton-primaryFormSubmit"]:hover {
+            background: linear-gradient(90deg, var(--ae-m-blue-dark), var(--ae-m-blue-dark)) !important;
+        }
+
+        /* ---------- cartões: expanders, formulários, tabelas, upload ---------- */
+        [data-testid="stMain"] [data-testid="stExpander"] {
+            background: var(--ae-m-card) !important;
+            border: 1px solid var(--ae-m-line) !important;
+            border-radius: 14px !important;
+            overflow: hidden;
+        }
+        [data-testid="stMain"] [data-testid="stExpander"] details {
+            border: 0 !important;
+        }
+        [data-testid="stMain"] [data-testid="stExpander"] summary,
+        [data-testid="stMain"] [data-testid="stExpander"] summary * {
+            color: var(--ae-m-ink) !important;
+            font-weight: 600;
+        }
+        [data-testid="stMain"] [data-testid="stForm"] {
+            background: var(--ae-m-card) !important;
+            border: 1px solid var(--ae-m-line) !important;
+            border-radius: 14px !important;
+        }
+        [data-testid="stMain"] [data-testid="stVerticalBlockBorderWrapper"] {
+            border-radius: 14px !important;
+            border-color: var(--ae-m-line) !important;
+        }
+        [data-testid="stMain"] [data-testid="stDataFrame"] {
+            border: 1px solid var(--ae-m-line);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        [data-testid="stMain"] [data-testid="stFileUploaderDropzone"] {
+            background: var(--ae-m-card) !important;
+            border: 1px dashed var(--ae-m-line-strong) !important;
+            border-radius: 14px !important;
+        }
+        [data-testid="stMain"] [data-testid="stAlert"] {
+            border-radius: 12px !important;
+        }
+
+        /* ---------- abas ---------- */
+        [data-testid="stMain"] [data-baseweb="tab-list"] {
+            gap: 6px;
+            border-bottom: 1px solid var(--ae-m-line);
+        }
+        [data-testid="stMain"] [data-baseweb="tab"] {
+            font-weight: 600 !important;
+        }
+        [data-testid="stMain"] [data-baseweb="tab-highlight"] {
+            background-color: var(--ae-m-blue) !important;
+        }
+"""
+
 def aplicar_tema_sistema():
     """CSS do sistema logado (menu lateral, itens de navegação)."""
     variaveis = _VARS_CLARO if tema_claro_ativo() else _VARS_ESCURO
@@ -291,6 +456,7 @@ def aplicar_tema_sistema():
         .replace("__SAIRCSS__", _CSS_SAIR)
         .replace("__ICONCSS__", _CSS_ICONES + _CSS_OBRAS + _CSS_CONFIRMAR)
     )
+    css = css.replace("</style>", _CSS_PRINCIPAL + "\n        </style>")
     if menu_recolhido():
         css = css.replace("</style>", _CSS_RECOLHIDO + "\n        </style>")
     st.markdown(css, unsafe_allow_html=True)
@@ -479,8 +645,12 @@ __VARS__
 
         __ICONCSS__
 
-        [data-testid="stAppViewContainer"] {
-            background: #ffffff !important;
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"] {
+            background: #f6f8fc !important;
+        }
+        [data-testid="stHeader"] {
+            background: transparent !important;
         }
         </style>
         """
