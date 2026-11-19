@@ -132,7 +132,7 @@ def renderizar_upload_dxf(
     # --------------------------------------------------------
     if not tem_dxf_salvo:
         st.subheader(
-            "📁 Enviar Planta Base (Formato DXF)"
+            ":material/folder_open: Enviar Planta Base (Formato DXF)"
         )
 
         nonce_inicial = st.session_state.get(
@@ -199,7 +199,7 @@ def renderizar_upload_dxf(
                 st.session_state[
                     "mensagem_upload_dxf"
                 ] = (
-                    "✅ Planta baixa processada e "
+                    ":material/check_circle: Planta baixa processada e "
                     "salva no Supabase!"
                 )
 
@@ -207,7 +207,7 @@ def renderizar_upload_dxf(
 
             except Exception as e:
                 st.error(
-                    f"❌ Erro ao processar/salvar "
+                    f":material/error: Erro ao processar/salvar "
                     f"o DXF: {e}"
                 )
 
@@ -217,7 +217,7 @@ def renderizar_upload_dxf(
     # SUBSTITUIÇÃO / REENVIO
     # --------------------------------------------------------
     with st.expander(
-        "🔄 Reenviar / Substituir Planta Baixa (DXF)"
+        ":material/autorenew: Reenviar / Substituir Planta Baixa (DXF)"
     ):
         st.markdown(
             "Envie um novo DXF caso a geometria "
@@ -294,7 +294,7 @@ def renderizar_upload_dxf(
                 st.session_state[
                     "mensagem_upload_dxf"
                 ] = (
-                    "✅ Nova planta baixa substituída "
+                    ":material/check_circle: Nova planta baixa substituída "
                     "no Supabase!"
                 )
 
@@ -302,7 +302,7 @@ def renderizar_upload_dxf(
 
             except Exception as e:
                 st.error(
-                    f"❌ Erro ao substituir "
+                    f":material/error: Erro ao substituir "
                     f"o DXF: {e}"
                 )
 
@@ -319,7 +319,7 @@ def renderizar_salvar_e_gerar_cad(
 ):
 
     st.subheader(
-        "💾 Finalização do Projeto"
+        ":material/save: Finalização do Projeto"
     )
 
     # Rev.241: confirmação visual temporária após o salvamento.
@@ -347,14 +347,14 @@ def renderizar_salvar_e_gerar_cad(
             }
             </style>
             <div class="autoeletrica-salvar-sucesso">
-                ✅ Alterações do projeto salvas com sucesso!
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-3px;margin-right:6px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>Alterações do projeto salvas com sucesso!
             </div>
             """,
             unsafe_allow_html=True,
         )
 
     if st.button(
-        "💾 Salvar Alterações do Projeto",
+        ":material/save: Salvar Alterações do Projeto",
         use_container_width=True
     ):
         try:
@@ -373,7 +373,7 @@ def renderizar_salvar_e_gerar_cad(
             st.rerun()
         except Exception as e:
             st.error(
-                f"❌ Erro ao salvar alterações: {e}"
+                f":material/error: Erro ao salvar alterações: {e}"
             )
 
     st.markdown(
@@ -424,7 +424,7 @@ def renderizar_salvar_e_gerar_cad(
         cad_gerado_neste_ciclo = False
 
     if st.button(
-        "🚀 Gerar CAD (Atualizado)",
+        ":material/rocket_launch: Gerar CAD (Atualizado)",
         type="primary",
         use_container_width=True,
         key="btn_gerar_cad_atualizado",
@@ -574,7 +574,7 @@ def renderizar_salvar_e_gerar_cad(
 
     if erro_cad_neste_ciclo:
         st.error(
-            f"❌ Erro ao gerar o arquivo CAD 13.6.360: "
+            f":material/error: Erro ao gerar o arquivo CAD 13.6.361: "
             f"{erro_cad_neste_ciclo}"
         )
 
@@ -598,15 +598,15 @@ def renderizar_salvar_e_gerar_cad(
         # em Gerar CAD. O arquivo continua guardado para download.
         if cad_gerado_neste_ciclo:
             st.success(
-                f"✅ Projeto CAD gerado com sucesso! "
+                f":material/check_circle: Projeto CAD gerado com sucesso! "
                 f"Arquivo preparado ({tamanho / 1024:.1f} KB)."
             )
 
         st.download_button(
-            label="📥 Baixar Projeto DXF Atualizado",
+            label=":material/download: Baixar Projeto DXF Atualizado",
             data=bytes(cad_salvo),
             file_name=(
-                f"{nome_seguro}_Projeto_Eletrico_13_6_360.dxf"
+                f"{nome_seguro}_Projeto_Eletrico_13_6_361.dxf"
             ),
             # application/octet-stream força o navegador a tratar o DXF
             # como arquivo para download, sem tentar interpretá-lo.
@@ -720,10 +720,10 @@ def renderizar_salvar_e_gerar_cad(
                     "etiquetas_disponiveis": etiquetas_disponiveis,
                 }
 
-        st.markdown("### 📄 Memorial Descritivo (PDF)")
+        st.markdown("### :material/description: Memorial Descritivo (PDF)")
         if pdf_bytes is not None:
             st.download_button(
-                label="📄 Baixar Memorial Descritivo (PDF)",
+                label=":material/description: Baixar Memorial Descritivo (PDF)",
                 data=pdf_bytes,
                 file_name=f"{nome_seguro}_Memorial_Descritivo.pdf",
                 mime="application/pdf",
@@ -738,14 +738,14 @@ def renderizar_salvar_e_gerar_cad(
         col_plotagem, col_qdc = st.columns(2, gap="large")
 
         with col_plotagem:
-            st.markdown("### 🖨️ Plotagem do Projeto (PDF)")
+            st.markdown("### :material/print: Plotagem do Projeto (PDF)")
             st.caption(
                 "Gera pranchas A3 separadas por conteúdo (planta, QDC e legendas), "
                 "com enquadramento independente a partir do DXF final, sem alterar o arquivo CAD."
             )
             if pdf_projeto is not None:
                 st.download_button(
-                    label="📄 Gerar / Baixar PDF do Projeto",
+                    label=":material/description: Gerar / Baixar PDF do Projeto",
                     data=pdf_projeto,
                     file_name=f"{nome_seguro}_Projeto_Eletrico.pdf",
                     mime="application/pdf",
@@ -760,14 +760,14 @@ def renderizar_salvar_e_gerar_cad(
                 )
 
         with col_qdc:
-            st.markdown("### 🏷️ Etiquetas de Identificação do QDC")
+            st.markdown("### :material/sell: Etiquetas de Identificação do QDC")
             st.caption(
                 "Gera etiquetas em folha A4 para facilitar identificação dos disjuntores "
                 "e tabela para a porta do QDC."
             )
             if etiquetas_disponiveis and pdf_etiquetas is not None:
                 st.download_button(
-                    label="🏷️ Gerar / Baixar Etiquetas do QDC",
+                    label=":material/sell: Gerar / Baixar Etiquetas do QDC",
                     data=pdf_etiquetas,
                     file_name=f"{st.session_state.projeto_ativo}_Etiquetas_QDC.pdf",
                     mime="application/pdf",
@@ -777,10 +777,10 @@ def renderizar_salvar_e_gerar_cad(
                 )
             else:
                 st.info(
-                    f"⌛ {erro_etiquetas or 'Preparando a identificação do QDC.'}"
+                    f":material/hourglass_empty: {erro_etiquetas or 'Preparando a identificação do QDC.'}"
                 )
     else:
         st.info(
-            "⌛ Gere o projeto DXF com os dados atuais para liberar os downloads do projeto, "
+            ":material/hourglass_empty: Gere o projeto DXF com os dados atuais para liberar os downloads do projeto, "
             "Memorial Descritivo, Plotagem PDF e Etiquetas do QDC."
         )

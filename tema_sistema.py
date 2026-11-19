@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.360).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.361).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação
@@ -293,6 +293,12 @@ _CSS_PRINCIPAL = """
             --ae-m-surface: #eef2fa;
             --ae-m-blue: #2e63e6;
             --ae-m-blue-dark: #2050cc;
+        }
+
+        /* ---------- ícones Material (uma cor só, herdam a cor do texto) ---------- */
+        [data-testid="stMain"] [data-testid="stIconMaterial"] {
+            font-variation-settings: 'FILL' 1, 'wght' 500 !important;
+            color: inherit !important;
         }
 
         /* ---------- títulos e textos ---------- */
@@ -664,7 +670,7 @@ def renderizar_cartao_usuario(nome, email, versao):
         <div class="ae-user">
             <div class="ae-avatar">{html.escape(_iniciais(nome))}</div>
             <div class="ae-user-info">
-                <div class="ae-user-role">⚡ AutoElétrica Profissional</div>
+                <div class="ae-user-role"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px;margin-right:4px"><path d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"/></svg>AutoElétrica Profissional</div>
                 <div class="ae-user-name">{html.escape(str(nome or ''))}</div>
                 <div class="ae-user-mail">{html.escape(str(email or ''))}</div>
             </div>

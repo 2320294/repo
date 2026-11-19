@@ -1441,7 +1441,7 @@ def renderizar_interruptores(
             selecionadas = list(st.session_state[chave_estado])
     
             with st.expander(
-                f"🚪 {amb} — {len(portas)} portas",
+                f":material/door_front: {amb} — {len(portas)} portas",
                 expanded=True
             ):
                 st.caption(

@@ -32,7 +32,7 @@ def validar_camadas(msp, contexto="DXF"):
 
     if camadas_vazias:
         raise ValueError(
-            f"❌ Erro de {contexto}: "
+            f":material/error: Erro de {contexto}: "
             f"A(s) seguinte(s) camada(s) obrigatória(s) "
             f"está(ão) vazia(s) ou ausente(s): "
             f"{', '.join(camadas_vazias)}."

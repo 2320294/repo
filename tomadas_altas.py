@@ -672,7 +672,7 @@ def renderizar_tomadas_altas(
 
         with coluna:
             with st.expander(
-                f"🔌 {ambiente} — {equipamento}",
+                f":material/electrical_services: {ambiente} — {equipamento}",
                 expanded=True
             ):
                 if potencia:

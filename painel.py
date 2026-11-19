@@ -219,7 +219,7 @@ def _navegacao_etapas():
     ):
         st.session_state[chave] = etapas[0]
 
-    # 13.6.360 — a navegação por etapas fica no menu lateral
+    # 13.6.361 — a navegação por etapas fica no menu lateral
     # (container reservado em app.py), com um botão por etapa. A etapa
     # ativa continua guardada na mesma chave de estado. Sem o container,
     # mantém o comportamento anterior (radio horizontal na página).
@@ -397,7 +397,7 @@ def _garantir_dimensionamento_fisico(
 def renderizar_painel_principal():
 
     st.title(
-        "⚡ Painel de Projetos Elétricos"
+        ":material/bolt: Painel de Projetos Elétricos"
     )
 
     if (
@@ -405,14 +405,14 @@ def renderizar_painel_principal():
         == "Selecione um projeto..."
     ):
         st.info(
-            "👈 Selecione um projeto na barra lateral "
+            ":material/arrow_back: Selecione um projeto na barra lateral "
             "ou cadastre um novo."
         )
         renderizar_guia_preparacao_planta()
         st.stop()
 
     st.info(
-        f"📁 **Projeto Ativo:** "
+        f":material/folder_open: **Projeto Ativo:** "
         f"{st.session_state.projeto_ativo}"
     )
 
@@ -424,14 +424,14 @@ def renderizar_painel_principal():
 
     except Exception as e:
         st.error(
-            f"❌ Erro ao carregar o projeto "
+            f":material/error: Erro ao carregar o projeto "
             f"do Supabase: {e}"
         )
         st.stop()
 
     if not projeto_obj:
         st.error(
-            "❌ O projeto selecionado não foi "
+            ":material/error: O projeto selecionado não foi "
             "encontrado no Supabase."
         )
         st.stop()
@@ -452,7 +452,7 @@ def renderizar_painel_principal():
 
         except Exception as e:
             st.error(
-                f"❌ Não foi possível criar "
+                f":material/error: Não foi possível criar "
                 f"os dados do projeto: {e}"
             )
             st.stop()
@@ -515,7 +515,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "⚙️ Parâmetros":
         st.subheader(
-            "⚙️ Parâmetros e Planta do Projeto"
+            ":material/settings: Parâmetros e Planta do Projeto"
         )
         st.caption(
             "Configure os dados básicos do projeto, a localização, o perfil normativo de fornecimento "
@@ -586,7 +586,7 @@ def renderizar_painel_principal():
     # Da etapa 2 em diante é necessária uma planta processada.
     if not dados_ambientes:
         st.warning(
-            "⚠️ Primeiro envie e processe uma planta DXF "
+            ":material/warning: Primeiro envie e processe uma planta DXF "
             "na etapa **Parâmetros**."
         )
         return
@@ -596,7 +596,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "📊 Cargas":
         st.subheader(
-            "📊 Quadro de Previsão de Cargas"
+            ":material/table_chart: Quadro de Previsão de Cargas"
         )
         st.caption(
             "Confira e, se necessário, ajuste as cargas previstas de cada ambiente "
@@ -903,7 +903,7 @@ def renderizar_painel_principal():
                     st.error(f"Não foi possível consultar a prévia Elektro: {e}")
 
         st.markdown(
-            "#### 📥 Exportação do Quadro de Cargas"
+            "#### :material/download: Exportação do Quadro de Cargas"
         )
 
         try:
@@ -936,7 +936,7 @@ def renderizar_painel_principal():
             )
 
             st.download_button(
-                label="📊 Exportar Cargas para Excel",
+                label=":material/table_chart: Exportar Cargas para Excel",
                 data=excel_bytes,
                 file_name=(
                     f"{st.session_state.projeto_ativo}"
@@ -951,7 +951,7 @@ def renderizar_painel_principal():
 
         except Exception as e:
             st.error(
-                f"❌ Erro ao preparar Excel: {e}"
+                f":material/error: Erro ao preparar Excel: {e}"
             )
 
         return
@@ -988,7 +988,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "⚡ QDC":
         st.subheader(
-            "⚡ Posicionamento do QDC"
+            ":material/bolt: Posicionamento do QDC"
         )
         st.caption(
             "Defina a posição do quadro de distribuição na planta. Esta etapa é importante para o quantitativo."
@@ -1016,7 +1016,7 @@ def renderizar_painel_principal():
         renderizar_alturas(config_atual.get(CHAVE_ALTURAS), parametros_projeto["pe_direito"],
                           _chave_projeto, salvar_alturas)
 
-        st.markdown("#### ⚙️ Demanda e proteção geral")
+        st.markdown("#### :material/settings: Demanda e proteção geral")
 
         resultado_demanda = calcular_demanda_qdc(
             tabela_editada,
@@ -1071,7 +1071,7 @@ def renderizar_painel_principal():
             aviso_fornecimento = str(resultado_demanda.get("aviso_alteracao_fornecimento") or "").strip()
             if aviso_fornecimento:
                 st.warning(
-                    "⚠️ **Modalidade de fornecimento alterada automaticamente**\n\n"
+                    ":material/warning: **Modalidade de fornecimento alterada automaticamente**\n\n"
                     + aviso_fornecimento
                 )
 
@@ -1186,12 +1186,12 @@ def renderizar_painel_principal():
                 "Nenhum fator de demanda é inventado pelo sistema."
             )
         elif status == "conferencia_tecnica":
-            st.warning("⚠️ " + str(resultado_demanda.get("observacao") or
+            st.warning(":material/warning: " + str(resultado_demanda.get("observacao") or
                                    "Enquadramento sujeito a conferência técnica da distribuidora."))
         elif status == "cargas_sem_regra":
             parcial = resultado_demanda.get("potencia_demanda_parcial_w")
             st.warning(
-                "⚠️ O perfil normativo ATIVO foi aplicado às cargas reconhecidas, "
+                ":material/warning: O perfil normativo ATIVO foi aplicado às cargas reconhecidas, "
                 "mas existem TUEs sem categoria/regra automática. Por segurança, "
                 "o AutoElétrica não fecha a demanda total enquanto houver pendências."
             )
@@ -1205,18 +1205,18 @@ def renderizar_painel_principal():
             pass
         elif status == "fornecimento_incompleto":
             st.warning(
-                "⚠️ Informe tipo e tensão de fornecimento em Parâmetros "
+                ":material/warning: Informe tipo e tensão de fornecimento em Parâmetros "
                 "para calcular corrente de demanda e DG."
             )
         elif status == "acima_da_faixa":
             st.warning(
-                "⚠️ A corrente calculada ultrapassa a faixa preliminar "
+                ":material/warning: A corrente calculada ultrapassa a faixa preliminar "
                 "de disjuntores cadastrada. Reavalie o fornecimento."
             )
         detalhes_demanda = resultado_demanda.get("detalhes_demanda") or []
         # Memória dos resultados existentes; Elektro possui memória própria em kVA.
         if False and detalhes_demanda:  # Memória preservada no motor e oculta na interface.
-            with st.expander("📋 Memória do cálculo de demanda", expanded=False):
+            with st.expander(":material/assignment: Memória do cálculo de demanda", expanded=False):
                 metodo_aplicado = resultado_demanda.get("metodo")
                 if metodo_aplicado:
                     st.caption(f"Método aplicado: {metodo_aplicado}")
@@ -1238,7 +1238,7 @@ def renderizar_painel_principal():
         memoria_entrada = resultado_demanda.get("memoria_dimensionamento_entrada") or {}
         # REV.218 — memória de entrada mantida no motor, ocultada da interface.
         if False and memoria_entrada and resultado_demanda.get("corrente_demanda_a") is not None:
-            with st.expander("⚡ Memória do dimensionamento de entrada", expanded=True):
+            with st.expander(":material/bolt: Memória do dimensionamento de entrada", expanded=True):
                 p_kw = float(memoria_entrada.get("potencia_demanda_w", 0) or 0) / 1000.0
                 st.write(f"**Fornecimento:** {memoria_entrada.get('tipo_fornecimento','')} — {memoria_entrada.get('tensao_fornecimento','')}")
                 if memoria_entrada.get("descricao"):
@@ -1410,7 +1410,7 @@ def renderizar_painel_principal():
                     dados_obj["config_interruptores"] = dict(config_atual)
                 except Exception as e:
                     st.warning(
-                        "⚠️ O cálculo foi concluído, mas não foi possível persistir "
+                        ":material/warning: O cálculo foi concluído, mas não foi possível persistir "
                         f"o fechamento do alimentador no projeto: {e}"
                     )
 
@@ -1430,7 +1430,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "💡 Interruptores":
         st.subheader(
-            "💡 Posicionamento dos Interruptores"
+            ":material/lightbulb: Posicionamento dos Interruptores"
         )
         st.caption(
             "Nos ambientes abaixo, organizados em **duas colunas**, escolha **diretamente na mini planta** "
@@ -1478,7 +1478,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "🔌 Tomadas Altas":
         st.subheader(
-            "🔌 Posicionamento das Tomadas Altas"
+            ":material/electrical_services: Posicionamento das Tomadas Altas"
         )
         st.caption(
             "Escolha na mini planta onde cada tomada alta será instalada. "
@@ -1509,11 +1509,11 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "⚙️ Dimensionamento":
         st.subheader(
-            "⚙️ Dimensionamento dos Circuitos"
+            ":material/settings: Dimensionamento dos Circuitos"
         )
 
         st.markdown(
-            "#### 🧱 Método de instalação e temperatura"
+            "#### :material/layers: Método de instalação e temperatura"
         )
 
         metodo_opcoes = [
@@ -1632,7 +1632,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "🧵 Eletrodutos":
         st.subheader(
-            "🧵 Eletrodutos e Rotas Físicas"
+            ":material/cable: Eletrodutos e Rotas Físicas"
         )
 
         if not local_qdc:
@@ -1673,7 +1673,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "📦 Materiais":
         st.subheader(
-            "📦 Quantitativo de Materiais"
+            ":material/inventory_2: Quantitativo de Materiais"
         )
         st.caption(
             "Quantidades obtidas diretamente do projeto, com base no roteamento "
@@ -1709,7 +1709,7 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.360)
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.361)
     # Liberada somente com o DXF efetivamente gerado nesta versão.
     # --------------------------------------------------------
     if etapa == "🧊 Visualização 3D":
@@ -1740,7 +1740,7 @@ def renderizar_painel_principal():
     # --------------------------------------------------------
     if etapa == "📐 Gerar Projeto":
         st.subheader(
-            "📐 Salvar e Gerar Projeto"
+            ":material/architecture: Salvar e Gerar Projeto"
         )
 
         st.caption(

@@ -59,7 +59,7 @@ def renderizar_parametros_projeto(
     """
 
     st.markdown(
-        "#### 🏠 Dados gerais"
+        "#### :material/home: Dados gerais"
     )
 
     try:
@@ -85,7 +85,7 @@ def renderizar_parametros_projeto(
     )
 
     st.markdown(
-        "#### 🌎 Localização e concessionária"
+        "#### :material/public: Localização e concessionária"
     )
 
     rede = normalizar_parametros_rede(
@@ -211,7 +211,7 @@ def renderizar_parametros_projeto(
     concessionaria_manual = ""
 
     st.markdown(
-        "#### ⚡ Perfil de fornecimento"
+        "#### :material/bolt: Perfil de fornecimento"
     )
 
     col_tipo, col_tensao_rede = (
@@ -553,7 +553,7 @@ def renderizar_parametros_projeto(
 
     if metodo_demanda.startswith("Automático") and not perfil_normativo_disponivel(parametros_rede):
         st.warning(
-            "⚠️ Perfil normativo da concessionária não disponível para esta região. "
+            ":material/warning: Perfil normativo da concessionária não disponível para esta região. "
             "O AutoElétrica não aplicará regras da CPFL nem de qualquer outra concessionária "
             "como padrão. Os cálculos que dependem da concessionária permanecerão indisponíveis "
             "até a seleção de um perfil normativo ATIVO compatível com a UF/município."
@@ -562,7 +562,7 @@ def renderizar_parametros_projeto(
         _forn = (perfil_selecionado.get("regras") or {}).get("fornecimento") or {}
         if not (_forn.get("faixas_modalidade_kw") or []):
             st.warning(
-                "⚠️ Este perfil permite selecionar modalidades de fornecimento, mas o registro "
+                ":material/warning: Este perfil permite selecionar modalidades de fornecimento, mas o registro "
                 "ATIVO não contém as faixas em kW necessárias para escolhê-las automaticamente. "
                 "A modalidade informada foi preservada. Confira as faixas no cadastro "
                 "administrativo deste perfil."

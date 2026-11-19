@@ -49,7 +49,7 @@ sincronizar_login_google()
 try:
     obter_supabase()
 except Exception as e:
-    st.error(f"❌ Não foi possível conectar ao Supabase: {e}")
+    st.error(f":material/error: Não foi possível conectar ao Supabase: {e}")
     st.stop()
 
 
@@ -91,7 +91,7 @@ with st.sidebar:
         with container_admin():
             titulo_secao("Administração")
             st.session_state["admin_normativos_aberto"] = st.toggle(
-                "⚙️ Administração",
+                ":material/settings: Administração",
                 value=bool(st.session_state.get("admin_normativos_aberto", False)),
                 help="Cadastro e liberação de perfis normativos.",
             )

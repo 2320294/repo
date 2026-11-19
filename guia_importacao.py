@@ -9,9 +9,9 @@ def _card(titulo, subtitulo, svg, ok=True):
 <svg viewBox="0 0 520 165" width="100%" height="165" style="background:#f8fafc;border-radius:8px">{svg}</svg></div>""",unsafe_allow_html=True)
 
 def renderizar_guia_preparacao_planta():
-    st.markdown("### 📐 Como preparar sua planta para o AutoElétrica")
+    st.markdown("### :material/architecture: Como preparar sua planta para o AutoElétrica")
     st.caption("Prepare o DXF conforme estas regras para que ambientes, portas e soleiras sejam reconhecidos corretamente.")
-    with st.expander("📘 Ver passo a passo para preparar o DXF",expanded=False):
+    with st.expander(":material/menu_book: Ver passo a passo para preparar o DXF",expanded=False):
         st.markdown("#### 1. Crie as layers obrigatórias")
         st.markdown("""| Layer | Conteúdo |
 |---|---|
@@ -40,8 +40,8 @@ def renderizar_guia_preparacao_planta():
         st.markdown("#### 5. Salve/exporte em DXF")
         st.write("Confira a escala, mantenha os elementos nas layers obrigatórias e salve a planta em **DXF**.")
         st.markdown("#### 6. Cadastre e importe")
-        st.write("Informe o nome do projeto na barra lateral, clique em **Cadastrar projeto**, selecione-o e envie o DXF na etapa **⚙️ Parâmetros**.")
-        st.markdown("#### ✅ Checklist antes de importar")
+        st.write("Informe o nome do projeto na barra lateral, clique em **Cadastrar projeto**, selecione-o e envie o DXF na etapa **Parâmetros**.")
+        st.markdown("#### :material/check_circle: Checklist antes de importar")
         st.markdown("""- [ ] `IA_AMBIENTES` contém polilinhas fechadas.
 - [ ] `IA_TEXTOS` contém um nome dentro de cada ambiente.
 - [ ] `IA_PORTAS` contém as portas.

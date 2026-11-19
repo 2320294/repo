@@ -139,7 +139,7 @@ def renderizar_gerenciador_projetos():
 
             except Exception as e:
                 st.error(
-                    f"❌ Erro ao criar projeto "
+                    f":material/error: Erro ao criar projeto "
                     f"no Supabase: {e}"
                 )
 
@@ -149,7 +149,7 @@ def renderizar_gerenciador_projetos():
         )
     except Exception as e:
         st.error(
-            f"❌ Erro ao listar projetos: {e}"
+            f":material/error: Erro ao listar projetos: {e}"
         )
         projetos_usuario = []
 
@@ -228,7 +228,7 @@ def renderizar_gerenciador_projetos():
             == projeto_selecionado
         ):
             st.warning(
-                f"⚠️ Tem certeza que deseja apagar o projeto "
+                f":material/warning: Tem certeza que deseja apagar o projeto "
                 f"**'{projeto_selecionado}'**? "
                 "Esta ação não poderá ser desfeita."
             )
@@ -302,5 +302,5 @@ def renderizar_gerenciador_projetos():
 
                 except Exception as e:
                     st.error(
-                        f"❌ Erro ao apagar projeto: {e}"
+                        f":material/error: Erro ao apagar projeto: {e}"
                     )

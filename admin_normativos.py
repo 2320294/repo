@@ -383,7 +383,7 @@ def _editor_regras(prefixo, regras=None):
 
 def _renderizar_validador_ged13(regras, prefixo, classe_380=False):
     passou, resultados = _validar_perfil_ged13(regras, classe_380=classe_380)
-    with st.expander("🧪 Validador do Perfil Normativo", expanded=True):
+    with st.expander(":material/science: Validador do Perfil Normativo", expanded=True):
         st.caption("Verificação administrativa independente do cálculo dos projetos. Nenhuma demanda de projeto é alterada nesta etapa.")
         total = len(resultados)
         aprovados = sum(1 for x in resultados if x["Status"] == "PASSOU")
@@ -398,7 +398,7 @@ def _renderizar_validador_ged13(regras, prefixo, classe_380=False):
 
 def _renderizar_resumo_auditoria(regras, classe_380=False):
     passou, resultados, tabelas_ok, tabelas_total, aprovados, total, pendencias = _resumo_auditoria_ged13(regras, classe_380=classe_380)
-    st.markdown("### 📋 Resumo da validação")
+    st.markdown("### :material/assignment: Resumo da validação")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Tabelas verificadas", f"{tabelas_ok}/{tabelas_total}")
     c2.metric("Testes matemáticos", f"{aprovados}/{total}")
@@ -412,7 +412,7 @@ def _renderizar_resumo_auditoria(regras, classe_380=False):
 
 
 def renderizar_admin_normativos(email):
-    st.title("⚙️ Administração — Perfis Normativos")
+    st.title(":material/settings: Administração — Perfis Normativos")
     st.caption("Somente perfis ATIVOS são disponibilizados aos usuários. O cadastro não altera automaticamente os cálculos da versão estável.")
     try:
         perfis = listar_perfis(False, administrativo=True)
@@ -421,7 +421,7 @@ def renderizar_admin_normativos(email):
         st.code(str(e))
         return
 
-    with st.expander("➕ Novo perfil normativo", expanded=not bool(perfis)):
+    with st.expander(":material/add: Novo perfil normativo", expanded=not bool(perfis)):
         st.markdown("#### Bloco Neoenergia — quatro distribuidoras")
         st.caption("Coelba/BA, Pernambuco/PE, Cosern/RN e Brasília/DF. Cadastro documental em RASCUNHO; municípios e regras elétricas regionais pendentes. Perfis existentes serão preservados.")
         plano_neoenergia = planejar_bloco_neoenergia(perfis, email)

@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.360)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.361)."""
 import os
 import tempfile
 
@@ -108,7 +108,7 @@ def _extrair_segmentos(modelspace):
 
 
 def renderizar_visualizacao_3d(dxf_data, pe_direito):
-    st.subheader("🧊 Visualização 3D da planta")
+    st.subheader(":material/view_in_ar: Visualização 3D da planta")
     st.caption(
         "Prévia tridimensional da arquitetura extraída do DXF. "
         "O pé-direito é o configurado em Parâmetros (Etapa 1); "

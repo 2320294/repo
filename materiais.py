@@ -3314,7 +3314,7 @@ def renderizar_materiais(
                 st.info("Gere o dimensionamento do projeto para disponibilizar os dados dos trechos.")
 
     if pagina == "qdc":
-        st.markdown("#### 🧰 QDC executivo")
+        st.markdown("#### :material/handyman: QDC executivo")
 
         if resumo_qdc_executivo:
             q1, q2, q3, q4 = st.columns(4)
@@ -3335,7 +3335,7 @@ def renderizar_materiais(
                 resumo_qdc_executivo.get("quantidade_dps", 0)
             )
 
-        st.markdown("#### ⚖️ Balanceamento de fases")
+        st.markdown("#### :material/balance: Balanceamento de fases")
         if resumo_balanceamento.get("status") == "ok":
             fases_resumo = resumo_balanceamento.get("fases", {}) or {}
             cols = st.columns(max(1, len(fases_resumo)))
@@ -3354,7 +3354,7 @@ def renderizar_materiais(
                 "o balanceamento automático."
             )
 
-        st.markdown("#### 🔧 Proteção geral e alimentador")
+        st.markdown("#### :material/build: Proteção geral e alimentador")
         if resumo_protecao.get("status") == "pre_dimensionado":
             c1, c2, c3 = st.columns(3)
             dg = resumo_protecao.get("dg_a")
@@ -3378,7 +3378,7 @@ def renderizar_materiais(
                 "A proteção geral aguarda os parâmetros necessários."
             )
 
-        st.markdown("#### 🛡️ Agrupamento dos IDRs")
+        st.markdown("#### :material/shield: Agrupamento dos IDRs")
         if resumo_drs:
             linhas_dr = []
             for dr in resumo_drs:
@@ -3449,7 +3449,7 @@ def renderizar_materiais(
         trechos_diag = diag.get("trechos", []) or []
         if trechos_diag:
             with st.expander(
-                "🔎 Agrupamento e ocupação trecho a trecho",
+                ":material/search: Agrupamento e ocupação trecho a trecho",
                 expanded=True
             ):
                 linhas = []
@@ -3478,7 +3478,7 @@ def renderizar_materiais(
         return
 
     if pagina == "dimensionamento":
-        st.markdown("#### ⚡ Resultado do dimensionamento")
+        st.markdown("#### :material/bolt: Resultado do dimensionamento")
 
         if not isinstance(resumo_rotas, dict):
             st.info(
@@ -3534,7 +3534,7 @@ def renderizar_materiais(
                     })
 
                 st.markdown(
-                    "#### 🔁 Histórico de convergência do dimensionamento"
+                    "#### :material/repeat: Histórico de convergência do dimensionamento"
                 )
 
                 st.caption(
@@ -3584,7 +3584,7 @@ def renderizar_materiais(
                 })
 
             st.markdown(
-                "#### 📉 Verificação da queda de tensão por circuito"
+                "#### :material/trending_down: Verificação da queda de tensão por circuito"
             )
 
             st.caption(
@@ -3651,7 +3651,7 @@ def renderizar_materiais(
                 })
 
             st.markdown(
-                "#### 🌡️ Verificação da capacidade de condução"
+                "#### :material/thermostat: Verificação da capacidade de condução"
             )
 
             st.caption(
@@ -3675,7 +3675,7 @@ def renderizar_materiais(
     # --------------------------------------------------------
     # MATERIAIS — somente o que pertence ao quantitativo
     # --------------------------------------------------------
-    st.markdown("#### 📋 Lista de materiais")
+    st.markdown("#### :material/assignment: Lista de materiais")
 
     if not materiais_df.empty:
         st.dataframe(
@@ -4077,7 +4077,7 @@ def renderizar_materiais(
 
     with col_excel:
         st.download_button(
-            "📊 Exportar para Excel",
+            ":material/table_chart: Exportar para Excel",
             data=excel_bytes,
             file_name=f"{nome_arquivo}_ListaMateriais.xls",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -4086,7 +4086,7 @@ def renderizar_materiais(
 
     with col_pdf:
         st.download_button(
-            "📄 Gerar PDF",
+            ":material/description: Gerar PDF",
             data=pdf_bytes,
             file_name=f"{nome_arquivo}_ListaMateriais.pdf",
             mime="application/pdf",

@@ -1747,7 +1747,7 @@ def renderizar_qdc(
     )
 
     st.caption(
-        "📍 Clique no trecho da parede onde o QDC será instalado. "
+        ":material/location_on: Clique no trecho da parede onde o QDC será instalado. "
         "Se uma porta dividir a parede, os lados ficam independentes. "
         "🔵 disponível | 🟢 selecionado"
     )
