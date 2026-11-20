@@ -574,7 +574,7 @@ def renderizar_salvar_e_gerar_cad(
 
     if erro_cad_neste_ciclo:
         st.error(
-            f":material/error: Erro ao gerar o arquivo CAD 13.6.362: "
+            f":material/error: Erro ao gerar o arquivo CAD 13.6.363: "
             f"{erro_cad_neste_ciclo}"
         )
 
@@ -606,7 +606,7 @@ def renderizar_salvar_e_gerar_cad(
             label=":material/download: Baixar Projeto DXF Atualizado",
             data=bytes(cad_salvo),
             file_name=(
-                f"{nome_seguro}_Projeto_Eletrico_13_6_362.dxf"
+                f"{nome_seguro}_Projeto_Eletrico_13_6_363.dxf"
             ),
             # application/octet-stream força o navegador a tratar o DXF
             # como arquivo para download, sem tentar interpretá-lo.

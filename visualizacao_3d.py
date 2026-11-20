@@ -1,4 +1,5 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.362)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.363)."""
+import math
 import os
 import tempfile
 
@@ -80,6 +81,9 @@ def _carregar_documento(dxf_data):
 
 PREFIXO_LAYER_ELETRICO = "PROJ_ELETRICA"
 LAYER_LUZ = "PROJ_ELETRICA_LUZ"
+LAYER_ROTEAMENTO = "PROJ_ELETRICA_ROTEAMENTO"  # percurso real dos eletrodutos (ARC/LWPOLYLINE)
+LAYER_ELETRODUTO = "PROJ_ELETRICA_ELETRODUTO"    # traçado antigo em LINE (reserva)
+LAYER_COMANDO = "PROJ_ELETRICA_COMANDO"          # interruptor -> luz
 TIPOS_ILUMINACAO = ("ILUMINACAO", "ILUMINAÇÃO")
 
 # Caixa 4x2 (retangular): nominal 4" x 2" = 101,6 x 50,8 mm. A profundidade é
@@ -93,6 +97,7 @@ COR_LUZ = "#f2a900"
 COR_INTERRUPTOR = "#1f9d55"
 COR_TOMADA = "#e0562b"
 COR_QDC = "#1b2840"
+COR_COMANDO = "#8a5cf6"
 
 
 def _fmt_m(valor):
@@ -100,15 +105,52 @@ def _fmt_m(valor):
     return f"{float(valor):.2f}".replace(".", ",")
 
 
+def _pontos_entidade(ent):
+    """Pontos XY (em ordem) do percurso desenhado por uma entidade do CAD."""
+    kind = ent.dxftype()
+    if kind == "LINE":
+        a, b = ent.dxf.start, ent.dxf.end
+        return [(float(a.x), float(a.y)), (float(b.x), float(b.y))]
+    if kind == "LWPOLYLINE":
+        pts = [(float(p[0]), float(p[1])) for p in ent.get_points("xy")]
+        if ent.closed and len(pts) >= 2:
+            pts.append(pts[0])
+        return pts
+    if kind == "POLYLINE":
+        pts = [(float(v.dxf.location.x), float(v.dxf.location.y)) for v in ent.vertices]
+        if ent.is_closed and len(pts) >= 2:
+            pts.append(pts[0])
+        return pts
+    if kind == "ARC":
+        c = ent.dxf.center
+        r = float(ent.dxf.radius)
+        ini = float(ent.dxf.start_angle)
+        fim = float(ent.dxf.end_angle)
+        while fim <= ini:
+            fim += 360.0
+        passos = max(8, int(math.ceil((fim - ini) / 4.0)))
+        return [
+            (float(c.x) + r * math.cos(math.radians(ini + (fim - ini) * k / passos)),
+             float(c.y) + r * math.sin(math.radians(ini + (fim - ini) * k / passos)))
+            for k in range(passos + 1)
+        ]
+    return []
+
+
 def _extrair_geometria(modelspace):
-    """Separa a arquitetura (segmentos) dos pontos de luz do DXF gerado.
+    """Separa do DXF gerado: arquitetura, pontos de luz e o percurso real.
 
     - Segmentos: LINE/LWPOLYLINE/POLYLINE fora das camadas PROJ_ELETRICA*.
     - Pontos de luz: centro do traço horizontal da cruz da camada
       PROJ_ELETRICA_LUZ (coordenada exata do ponto, em metros).
+    - Eletrodutos: as MESMAS entidades desenhadas no projeto, na camada
+      PROJ_ELETRICA_ROTEAMENTO (arcos e polilinhas que correm pelo eixo das
+      paredes), com todos os vértices; reserva: LINEs de PROJ_ELETRICA_ELETRODUTO.
+    - Comandos: linhas interruptor -> luz (PROJ_ELETRICA_COMANDO).
     """
     segmentos = []
     luzes = {}
+    condutos, condutos_reserva, comandos = [], [], []
     for ent in modelspace:
         kind = ent.dxftype()
         layer = str(getattr(ent.dxf, "layer", "") or "").upper()
@@ -119,28 +161,27 @@ def _extrair_geometria(modelspace):
                     if abs(float(a.y) - float(b.y)) < 1e-9 and abs(float(a.x) - float(b.x)) > 1e-9:
                         cx = (float(a.x) + float(b.x)) / 2.0
                         luzes[(round(cx, 4), round(float(a.y), 4))] = (cx, float(a.y))
+                elif layer == LAYER_ROTEAMENTO:
+                    pts = _pontos_entidade(ent)
+                    if len(pts) >= 2:
+                        condutos.append({"tipo": kind, "pontos": pts})
+                elif layer == LAYER_ELETRODUTO and kind == "LINE":
+                    pts = _pontos_entidade(ent)
+                    if len(pts) >= 2:
+                        condutos_reserva.append({"tipo": kind, "pontos": pts})
+                elif layer == LAYER_COMANDO and kind == "LINE":
+                    pts = _pontos_entidade(ent)
+                    if len(pts) >= 2:
+                        comandos.append(pts)
                 continue
-            if kind == "LINE":
-                a, b = ent.dxf.start, ent.dxf.end
-                segmentos.append(((float(a.x), float(a.y)), (float(b.x), float(b.y))))
-            elif kind == "LWPOLYLINE":
-                pts = [(float(p[0]), float(p[1])) for p in ent.get_points("xy")]
-                if len(pts) >= 2:
-                    for i in range(len(pts) - 1):
-                        segmentos.append((pts[i], pts[i + 1]))
-                    if ent.closed:
-                        segmentos.append((pts[-1], pts[0]))
-            elif kind == "POLYLINE":
-                pts = [(float(v.dxf.location.x), float(v.dxf.location.y)) for v in ent.vertices]
-                if len(pts) >= 2:
-                    for i in range(len(pts) - 1):
-                        segmentos.append((pts[i], pts[i + 1]))
-                    if ent.is_closed:
-                        segmentos.append((pts[-1], pts[0]))
+            if kind in ("LINE", "LWPOLYLINE", "POLYLINE"):
+                pts = _pontos_entidade(ent)
+                for i in range(len(pts) - 1):
+                    segmentos.append((pts[i], pts[i + 1]))
         except (AttributeError, TypeError, ValueError):
             # Ignora entidades com coordenadas incompatíveis, sem abortar o desenho inteiro.
             continue
-    return segmentos, list(luzes.values())
+    return segmentos, list(luzes.values()), (condutos or condutos_reserva), comandos
 
 
 def _xy(ponto):
@@ -150,6 +191,52 @@ def _xy(ponto):
 def _chave_circuito(valor):
     texto = str(valor)
     return (0, int(texto), texto) if texto.isdigit() else (1, 0, texto)
+
+
+def comprimento_percurso(pontos):
+    return sum(math.hypot(pontos[i + 1][0] - pontos[i][0], pontos[i + 1][1] - pontos[i][1])
+               for i in range(len(pontos) - 1))
+
+
+def ponto_no_meio(pontos):
+    """Ponto situado na metade do comprimento do percurso (para a cota)."""
+    total = comprimento_percurso(pontos)
+    alvo, acum = total / 2.0, 0.0
+    for i in range(len(pontos) - 1):
+        seg = math.hypot(pontos[i + 1][0] - pontos[i][0], pontos[i + 1][1] - pontos[i][1])
+        if seg > 0 and acum + seg >= alvo:
+            t = (alvo - acum) / seg
+            return (pontos[i][0] + t * (pontos[i + 1][0] - pontos[i][0]),
+                    pontos[i][1] + t * (pontos[i + 1][1] - pontos[i][1]))
+        acum += seg
+    return pontos[0]
+
+
+def _casar_condutos_rotas(condutos, rotas, tolerancia_m=0.8):
+    """Associa cada eletroduto desenhado à rota do quantitativo (1 para 1).
+
+    O critério é a soma das distâncias entre as extremidades do desenho e o
+    início/fim da rota (nos dois sentidos), aceita até a tolerância.
+    """
+    candidatos = []
+    for i, c in enumerate(condutos):
+        a, b = c["pontos"][0], c["pontos"][-1]
+        for j, r in enumerate(rotas):
+            if not r.get("inicio") or not r.get("fim"):
+                continue
+            p, q = _xy(r["inicio"]), _xy(r["fim"])
+            d1 = math.hypot(a[0] - p[0], a[1] - p[1]) + math.hypot(b[0] - q[0], b[1] - q[1])
+            d2 = math.hypot(a[0] - q[0], a[1] - q[1]) + math.hypot(b[0] - p[0], b[1] - p[1])
+            custo = min(d1, d2)
+            if custo <= tolerancia_m:
+                candidatos.append((custo, i, j))
+    candidatos.sort()
+    usados_c, usados_r, par = set(), set(), {}
+    for custo, i, j in candidatos:
+        if i in usados_c or j in usados_r:
+            continue
+        usados_c.add(i); usados_r.add(j); par[i] = j
+    return par
 
 
 def _orientacao_parede(x, y, segmentos):
@@ -169,7 +256,7 @@ def _orientacao_parede(x, y, segmentos):
     return u, (-u[1], u[0])
 
 
-def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None):
+def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=None, comandos=None):
     """Monta, sem depender de Streamlit/Plotly, tudo o que a Etapa 8 exibe.
 
     Todas as medidas vêm do roteamento físico gerado com o CAD (mesma fonte do
@@ -185,22 +272,43 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None):
     pe = float(pe_direito)
     nivel = 0.0 if percurso == "Piso" else pe
 
+    rotas = resumo.get("rotas") or []
     horizontais = []
-    for i, rota in enumerate(resumo.get("rotas") or [], 1):
-        p1, p2 = rota.get("inicio"), rota.get("fim")
-        if not p1 or not p2:
-            continue
-        a, b = _xy(p1), _xy(p2)
-        geo = ((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5
+
+    def _dados_rota(rota, i):
         quant = rota.get("comprimento_m")
-        horizontais.append({
-            "id": rota.get("trecho_id", i), "p1": a, "p2": b, "z": nivel,
-            "geometrico_m": geo,
+        return {
+            "id": rota.get("trecho_id", i),
             "quantitativo_m": None if quant is None else float(quant),
             "diametro_mm": rota.get("diametro_eletroduto_mm"),
             "circuitos": sorted([str(c) for c in (rota.get("circuitos") or [])], key=_chave_circuito),
             "de": rota.get("origem_ambiente"), "para": rota.get("destino_ambiente"),
-        })
+        }
+
+    if condutos:
+        # Percurso EXATO desenhado no projeto (arcos e polilinhas pelas paredes).
+        par = _casar_condutos_rotas(condutos, rotas)
+        for i, c in enumerate(condutos):
+            item = {"id": "—", "quantitativo_m": None, "diametro_mm": None,
+                    "circuitos": [], "de": None, "para": None}
+            if i in par:
+                item.update(_dados_rota(rotas[par[i]], par[i] + 1))
+            item.update({
+                "pontos": c["pontos"], "z": nivel, "desenho": c["tipo"],
+                "geometrico_m": comprimento_percurso(c["pontos"]),
+            })
+            horizontais.append(item)
+    else:
+        # Sem o desenho do projeto: usa as rotas do quantitativo (retas entre caixas).
+        for i, rota in enumerate(rotas, 1):
+            p1, p2 = rota.get("inicio"), rota.get("fim")
+            if not p1 or not p2:
+                continue
+            pts = [_xy(p1), _xy(p2)]
+            item = _dados_rota(rota, i)
+            item.update({"pontos": pts, "z": nivel, "desenho": "RETA",
+                         "geometrico_m": comprimento_percurso(pts)})
+            horizontais.append(item)
 
     verticais, caixas, qdc = [], [], None
     vistos = set()
@@ -234,14 +342,20 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None):
         x, y = cx["ponto"]
         cx["u"], cx["n"] = _orientacao_parede(x, y, segmentos)
 
-    total_h = sum((h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"])
-                  for h in horizontais)
+    total_desenhado = sum(h["geometrico_m"] for h in horizontais)
+    if rotas:
+        # Mesma soma do Quantitativo de Materiais.
+        total_h = sum(float(r.get("comprimento_m") or 0.0) for r in rotas)
+    else:
+        total_h = total_desenhado
     total_v = sum(v["comprimento_m"] for v in verticais)
     return {
         "pe_direito": pe, "nivel": nivel, "percurso": percurso, "alturas_ok": alturas_ok,
         "caixa_mm": caixa, "horizontais": horizontais, "verticais": verticais,
         "caixas": caixas, "luzes": [(float(x), float(y)) for x, y in luzes],
-        "qdc": qdc, "total_horizontal_m": total_h, "total_vertical_m": total_v,
+        "qdc": qdc, "total_horizontal_m": total_h, "total_desenhado_m": total_desenhado,
+        "total_vertical_m": total_v,
+        "comandos": [list(c) for c in (comandos or [])],
     }
 
 
@@ -269,6 +383,11 @@ def malha_caixas(caixas, caixa_mm):
     return X, Y, Z, I, J, K
 
 
+def _rotulo_desenho(tipo):
+    return {"LWPOLYLINE": "pela parede", "ARC": "arco", "LINE": "reta", "RETA": "reta",
+            "POLYLINE": "pela parede"}.get(str(tipo).upper(), str(tipo).lower())
+
+
 def _rotulo_tipo(tipo):
     t = str(tipo).upper()
     return {"INTERRUPTOR": "Interruptor", "TUG": "Tomada TUG", "TUE": "Tomada TUE"}.get(t, t.title())
@@ -287,7 +406,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             raise ValueError("O pé-direito configurado em Parâmetros deve ser maior que zero.")
 
         doc = _carregar_documento(dxf_data)
-        segmentos, luzes = _extrair_geometria(doc.modelspace())
+        segmentos, luzes, condutos, comandos = _extrair_geometria(doc.modelspace())
 
         with st.expander("Dimensões da caixa 4x2 (mm)"):
             c1, c2, c3 = st.columns(3)
@@ -306,9 +425,10 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         modelo = montar_modelo(
             segmentos, luzes, resumo_rotas, z_height,
             {"altura": alt_cx, "largura": larg_cx, "profundidade": prof_cx},
+            condutos=condutos, comandos=comandos,
         )
 
-        if not resumo_rotas or not modelo["horizontais"]:
+        if not modelo["horizontais"]:
             st.warning("Os dados de roteamento deste projeto não estão disponíveis. Gere o Projeto CAD "
                        "novamente na última etapa para exibir os eletrodutos.")
         elif not modelo["alturas_ok"]:
@@ -316,7 +436,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                        "teto, mas as descidas verticais e as caixas 4x2 só são exibidas após confirmar "
                        "as alturas na etapa QDC (\"Alturas e percurso da instalação\") e gerar o CAD de novo.")
 
-        cols = st.columns(6)
+        cols = st.columns(7)
         with cols[0]:
             m_paredes = st.checkbox("Paredes", value=True, key="ae362_3d_paredes")
         with cols[1]:
@@ -328,6 +448,8 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         with cols[4]:
             m_caixas = st.checkbox("Caixas 4x2", value=True, key="ae362_3d_caixas")
         with cols[5]:
+            m_comando = st.checkbox("Comandos", value=True, key="ae362_3d_comando")
+        with cols[6]:
             m_cotas = st.checkbox("Cotas (m)", value=True, key="ae362_3d_cotas")
 
         import plotly.graph_objects as go
@@ -351,14 +473,17 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             xs, ys, zs = [], [], []
             mx, my, mz, textos, hovers = [], [], [], [], []
             for h in modelo["horizontais"]:
-                (x1, y1), (x2, y2) = h["p1"], h["p2"]
-                xs.extend([x1, x2, None]); ys.extend([y1, y2, None]); zs.extend([h["z"], h["z"], None])
+                for (px, py) in h["pontos"]:
+                    xs.append(px); ys.append(py); zs.append(h["z"])
+                xs.append(None); ys.append(None); zs.append(None)
                 comp = h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"]
                 diam = f' Ø{int(h["diametro_mm"])} mm' if h["diametro_mm"] else ""
-                mx.append((x1 + x2) / 2); my.append((y1 + y2) / 2); mz.append(h["z"])
+                meio = ponto_no_meio(h["pontos"])
+                mx.append(meio[0]); my.append(meio[1]); mz.append(h["z"])
                 textos.append(f"{_fmt_m(comp)} m{diam}" if m_cotas else "")
                 hovers.append(
-                    f"Trecho {h['id']}<br>Comprimento: {_fmt_m(comp)} m"
+                    f"Trecho {h['id']} ({_rotulo_desenho(h['desenho'])})"
+                    f"<br>Comprimento: {_fmt_m(comp)} m (desenhado: {_fmt_m(h['geometrico_m'])} m)"
                     f"<br>Eletroduto:{diam or ' —'}<br>Circuitos: {', '.join(h['circuitos']) or '—'}"
                     f"<br>{h['de'] or '—'} → {h['para'] or '—'}"
                 )
@@ -368,6 +493,15 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                                        textposition="top center", textfont=dict(size=10, color=COR_ELETRODUTO),
                                        marker=dict(size=3, color=COR_ELETRODUTO), hovertext=hovers,
                                        hoverinfo="text", name="Trechos", showlegend=False))
+
+        if m_comando and modelo["comandos"]:
+            xs, ys, zs = [], [], []
+            for pts in modelo["comandos"]:
+                for (px, py) in pts:
+                    xs.append(px); ys.append(py); zs.append(modelo["nivel"])
+                xs.append(None); ys.append(None); zs.append(None)
+            fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="lines", name="Comandos (interruptor → luz)",
+                                       line=dict(width=3, color=COR_COMANDO, dash="dash"), hoverinfo="skip"))
 
         if m_vert and modelo["verticais"]:
             xs, ys, zs = [], [], []
@@ -431,7 +565,8 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         )
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Eletroduto horizontal", f"{_fmt_m(modelo['total_horizontal_m'])} m")
+        m1.metric("Eletroduto horizontal", f"{_fmt_m(modelo['total_horizontal_m'])} m",
+                   help=f"Soma do Quantitativo de Materiais. Percurso desenhado no CAD: {_fmt_m(modelo['total_desenhado_m'])} m.")
         m2.metric("Descidas verticais", f"{_fmt_m(modelo['total_vertical_m'])} m")
         m3.metric("Caixas 4x2", len(modelo["caixas"]))
         m4.metric("Pontos de iluminação", len(modelo["luzes"]))
@@ -439,10 +574,11 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         aba_h, aba_v, aba_c = st.tabs(["Trechos horizontais", "Descidas verticais", "Caixas 4x2"])
         with aba_h:
             st.dataframe([
-                {"Trecho": h["id"], "De": h["de"], "Para": h["para"],
+                {"Trecho": h["id"], "Percurso": _rotulo_desenho(h["desenho"]),
+                 "De": h["de"], "Para": h["para"],
                  "Ø (mm)": h["diametro_mm"], "Circuitos": ", ".join(h["circuitos"]),
                  "Comprimento (m)": round(h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"], 2),
-                 "Geométrico (m)": round(h["geometrico_m"], 3)}
+                 "Desenhado (m)": round(h["geometrico_m"], 3)}
                 for h in modelo["horizontais"]], use_container_width=True, hide_index=True)
         with aba_v:
             st.dataframe([
