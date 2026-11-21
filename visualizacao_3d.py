@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.363)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.364)."""
 import math
 import os
 import tempfile
@@ -99,6 +99,13 @@ COR_TOMADA = "#e0562b"
 COR_QDC = "#1b2840"
 COR_COMANDO = "#8a5cf6"
 
+# Tolerâncias para casar extremidades do desenho com pontos (m).
+TOL_PONTO_M = 0.45   # tomada/interruptor
+TOL_LUZ_M = 0.45     # ponto de luz (o desenho para na borda do símbolo)
+
+COR_DIAMETRO = {16: "#5a93ff", 20: "#2e63e6", 25: "#1f45b8", 32: "#122d80"}
+LARG_DIAMETRO = {16: 4, 20: 5, 25: 6, 32: 7}
+
 
 def _fmt_m(valor):
     """Metros com duas casas e vírgula decimal (padrão do projeto)."""
@@ -191,6 +198,45 @@ def _xy(ponto):
 def _chave_circuito(valor):
     texto = str(valor)
     return (0, int(texto), texto) if texto.isdigit() else (1, 0, texto)
+
+
+def _no_mais_proximo(ponto, nos, tolerancia_m):
+    """Nó (x, y, ...) mais próximo do ponto dentro da tolerância, ou None."""
+    melhor, dmin = None, None
+    for no in nos:
+        d = math.hypot(no[0] - ponto[0], no[1] - ponto[1])
+        if d <= tolerancia_m and (dmin is None or d < dmin):
+            melhor, dmin = no, d
+    return melhor
+
+
+def malha_paredes(segmentos, altura, comprimento_min=0.10, limite=8000):
+    """Painéis verticais (Mesh3d) das paredes; segmentos duplicados são unidos."""
+    unicos = {}
+    for (x1, y1), (x2, y2) in segmentos:
+        comp = math.hypot(x2 - x1, y2 - y1)
+        if comp < comprimento_min:
+            continue
+        a, b = (round(x1, 3), round(y1, 3)), (round(x2, 3), round(y2, 3))
+        unicos[(min(a, b), max(a, b))] = comp
+    chaves = sorted(unicos, key=lambda k: -unicos[k])[:limite]
+    X, Y, Z, I, J, K = [], [], [], [], [], []
+    for (a, b) in chaves:
+        base = len(X)
+        X += [a[0], b[0], b[0], a[0]]
+        Y += [a[1], b[1], b[1], a[1]]
+        Z += [0.0, 0.0, altura, altura]
+        I += [base, base]; J += [base + 1, base + 2]; K += [base + 2, base + 3]
+    return X, Y, Z, I, J, K
+
+
+def retangulo_piso(segmentos, folga=0.3):
+    """Retângulo (x0, y0, x1, y1) que envolve a arquitetura, ou None."""
+    if not segmentos:
+        return None
+    xs = [p[0] for seg in segmentos for p in seg]
+    ys = [p[1] for seg in segmentos for p in seg]
+    return (min(xs) - folga, min(ys) - folga, max(xs) + folga, max(ys) + folga)
 
 
 def comprimento_percurso(pontos):
@@ -342,6 +388,38 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
         x, y = cx["ponto"]
         cx["u"], cx["n"] = _orientacao_parede(x, y, segmentos)
 
+    # Altura de cada trecho e ligação aos pontos de luz --------------------
+    # - Trechos que correm pelas paredes ficam na altura da(s) tomada(s) a que
+    #   pertencem (extremidades casadas com os pontos de tomada/interruptor).
+    # - Trechos no teto chegam até o centro do ponto de iluminação (o desenho
+    #   do CAD termina na borda do símbolo).
+    nos_altura = [(c["ponto"][0], c["ponto"][1], c["altura_m"]) for c in caixas]
+    luzes_xy = [(float(x), float(y)) for x, y in luzes]
+    for h in horizontais:
+        pts = list(h["pontos"])
+        z_h, z_fim = nivel, None
+        if alturas_ok and str(h["desenho"]).upper() in ("LWPOLYLINE", "POLYLINE"):
+            no_a = _no_mais_proximo(pts[0], nos_altura, TOL_PONTO_M)
+            no_b = _no_mais_proximo(pts[-1], nos_altura, TOL_PONTO_M)
+            if no_a is not None or no_b is not None:
+                z_h = no_a[2] if no_a is not None else no_b[2]
+                if no_a is not None and no_b is not None:
+                    z_fim = no_b[2]
+        p3 = [(px, py, z_h) for px, py in pts]
+        if z_fim is not None and abs(z_fim - z_h) > 1e-6:
+            p3.append((pts[-1][0], pts[-1][1], z_fim))
+        else:
+            z_fim = None
+        if abs(z_h - pe) < 1e-6:
+            luz_a = _no_mais_proximo(pts[0], luzes_xy, TOL_LUZ_M)
+            if luz_a is not None and math.hypot(luz_a[0] - pts[0][0], luz_a[1] - pts[0][1]) > 1e-6:
+                p3.insert(0, (luz_a[0], luz_a[1], pe))
+            if z_fim is None:
+                luz_b = _no_mais_proximo(pts[-1], luzes_xy, TOL_LUZ_M)
+                if luz_b is not None and math.hypot(luz_b[0] - pts[-1][0], luz_b[1] - pts[-1][1]) > 1e-6:
+                    p3.append((luz_b[0], luz_b[1], pe))
+        h["pontos3d"], h["z"], h["altura_fim_m"] = p3, z_h, z_fim
+
     total_desenhado = sum(h["geometrico_m"] for h in horizontais)
     if rotas:
         # Mesma soma do Quantitativo de Materiais.
@@ -451,47 +529,70 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             m_comando = st.checkbox("Comandos", value=True, key="ae362_3d_comando")
         with cols[6]:
             m_cotas = st.checkbox("Cotas (m)", value=True, key="ae362_3d_cotas")
+        opac = st.slider("Opacidade das paredes", min_value=0.04, max_value=0.60, value=0.14,
+                         step=0.02, key="ae364_3d_opac",
+                         help="Quanto menor, mais transparentes ficam as paredes e melhor se vê a instalação.")
 
         import plotly.graph_objects as go
         fig = go.Figure()
 
         if m_paredes and segmentos:
-            xs, ys, zs_b, zs_t, vx, vy, vz = [], [], [], [], [], [], []
+            X, Y, Z, I, J, K = malha_paredes(segmentos, z_height)
+            if X:
+                fig.add_trace(go.Mesh3d(x=X, y=Y, z=Z, i=I, j=J, k=K, color="#8ea4c7", opacity=opac,
+                                        flatshading=True, name="Paredes", showlegend=True, hoverinfo="skip",
+                                        lighting=dict(ambient=0.85, diffuse=0.35, specular=0.05)))
+            piso = retangulo_piso(segmentos)
+            if piso:
+                x0, y0, x1, y1 = piso
+                fig.add_trace(go.Mesh3d(x=[x0, x1, x1, x0], y=[y0, y0, y1, y1], z=[0, 0, 0, 0],
+                                        i=[0, 0], j=[1, 2], k=[2, 3], color="#dbe3f1", opacity=0.35,
+                                        name="Piso", showlegend=True, hoverinfo="skip"))
+            bx, by, tz, bz = [], [], [], []
             for p1, p2 in segmentos:
-                xs.extend([p1[0], p2[0], None]); ys.extend([p1[1], p2[1], None])
-                zs_b.extend([0, 0, None]); zs_t.extend([z_height, z_height, None])
-                for p in (p1, p2):
-                    vx.extend([p[0], p[0], None]); vy.extend([p[1], p[1], None]); vz.extend([0, z_height, None])
-            for z_lista, nome in ((zs_b, "Paredes — piso"), (zs_t, "Paredes — topo")):
-                fig.add_trace(go.Scatter3d(x=xs, y=ys, z=z_lista, mode="lines", name=nome,
-                                           line=dict(width=2, color=COR_PAREDE), hoverinfo="skip"))
-            fig.add_trace(go.Scatter3d(x=vx, y=vy, z=vz, mode="lines", name="Altura das paredes",
-                                       line=dict(width=1, color=COR_PAREDE), hoverinfo="skip",
-                                       showlegend=False))
+                if math.hypot(p2[0] - p1[0], p2[1] - p1[1]) < 0.10:
+                    continue
+                bx.extend([p1[0], p2[0], None]); by.extend([p1[1], p2[1], None])
+            if bx:
+                for zc in (0.0, z_height):
+                    fig.add_trace(go.Scatter3d(x=bx, y=by, z=[None if v is None else zc for v in bx],
+                                               mode="lines", line=dict(width=1.5, color="#6f84a6"),
+                                               hoverinfo="skip", showlegend=False))
 
         if m_horiz and modelo["horizontais"]:
-            xs, ys, zs = [], [], []
-            mx, my, mz, textos, hovers = [], [], [], [], []
+            grupos = {}
             for h in modelo["horizontais"]:
-                for (px, py) in h["pontos"]:
-                    xs.append(px); ys.append(py); zs.append(h["z"])
-                xs.append(None); ys.append(None); zs.append(None)
-                comp = h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"]
-                diam = f' Ø{int(h["diametro_mm"])} mm' if h["diametro_mm"] else ""
-                meio = ponto_no_meio(h["pontos"])
-                mx.append(meio[0]); my.append(meio[1]); mz.append(h["z"])
-                textos.append(f"{_fmt_m(comp)} m{diam}" if m_cotas else "")
-                hovers.append(
-                    f"Trecho {h['id']} ({_rotulo_desenho(h['desenho'])})"
-                    f"<br>Comprimento: {_fmt_m(comp)} m (desenhado: {_fmt_m(h['geometrico_m'])} m)"
-                    f"<br>Eletroduto:{diam or ' —'}<br>Circuitos: {', '.join(h['circuitos']) or '—'}"
-                    f"<br>{h['de'] or '—'} → {h['para'] or '—'}"
-                )
-            fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="lines", name="Eletrodutos (horizontal)",
-                                       line=dict(width=6, color=COR_ELETRODUTO), hoverinfo="skip"))
+                grupos.setdefault(h["diametro_mm"], []).append(h)
+            mx, my, mz, textos, hovers = [], [], [], [], []
+            for diam in sorted(grupos, key=lambda d: (d is None, d or 0)):
+                xs, ys, zs = [], [], []
+                for h in grupos[diam]:
+                    for (px, py, pz) in h["pontos3d"]:
+                        xs.append(px); ys.append(py); zs.append(pz)
+                    xs.append(None); ys.append(None); zs.append(None)
+                    comp = h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"]
+                    d_txt = f' Ø{int(h["diametro_mm"])} mm' if h["diametro_mm"] else ""
+                    meio = ponto_no_meio(h["pontos"])
+                    mx.append(meio[0]); my.append(meio[1]); mz.append(h["z"])
+                    textos.append(f"{_fmt_m(comp)} m{d_txt}" if m_cotas else "")
+                    alt_txt = (f"<br>Altura do traçado: {_fmt_m(h['z'])} m"
+                               if abs(h["z"] - modelo["nivel"]) > 1e-6 else "")
+                    hovers.append(
+                        f"Trecho {h['id']} ({_rotulo_desenho(h['desenho'])})"
+                        f"<br>Comprimento: {_fmt_m(comp)} m (desenhado: {_fmt_m(h['geometrico_m'])} m)"
+                        f"<br>Eletroduto:{d_txt or ' —'}{alt_txt}"
+                        f"<br>Circuitos: {', '.join(h['circuitos']) or '—'}"
+                        f"<br>{h['de'] or '—'} → {h['para'] or '—'}"
+                    )
+                d_int = int(diam) if diam else None
+                fig.add_trace(go.Scatter3d(
+                    x=xs, y=ys, z=zs, mode="lines",
+                    name=f"Eletroduto Ø{d_int} mm" if d_int else "Eletroduto",
+                    line=dict(width=LARG_DIAMETRO.get(d_int, 5), color=COR_DIAMETRO.get(d_int, COR_ELETRODUTO)),
+                    hoverinfo="skip"))
             fig.add_trace(go.Scatter3d(x=mx, y=my, z=mz, mode="markers+text", text=textos,
-                                       textposition="top center", textfont=dict(size=10, color=COR_ELETRODUTO),
-                                       marker=dict(size=3, color=COR_ELETRODUTO), hovertext=hovers,
+                                       textposition="top center", textfont=dict(size=10, color="#1f45b8"),
+                                       marker=dict(size=3, color="#1f45b8"), hovertext=hovers,
                                        hoverinfo="text", name="Trechos", showlegend=False))
 
         if m_comando and modelo["comandos"]:
@@ -515,7 +616,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                 hovers.append(f"{_rotulo_tipo(v['tipo'])}<br>Altura do ponto: {_fmt_m(v['altura_m'])} m"
                               f"<br>Descida: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
             fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="lines", name="Descidas verticais",
-                                       line=dict(width=5, color=COR_DESCIDA), hoverinfo="skip"))
+                                       line=dict(width=4, color=COR_DESCIDA), hoverinfo="skip"))
             fig.add_trace(go.Scatter3d(x=mx, y=my, z=mz, mode="markers+text", text=textos,
                                        textposition="middle right", textfont=dict(size=10, color=COR_DESCIDA),
                                        marker=dict(size=3, color=COR_DESCIDA), hovertext=hovers,
@@ -525,7 +626,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             fig.add_trace(go.Scatter3d(
                 x=[p[0] for p in modelo["luzes"]], y=[p[1] for p in modelo["luzes"]],
                 z=[z_height] * len(modelo["luzes"]), mode="markers", name="Pontos de iluminação",
-                marker=dict(size=6, color=COR_LUZ, symbol="circle", line=dict(width=1, color="#7a5600")),
+                marker=dict(size=8, color=COR_LUZ, symbol="circle", line=dict(width=2, color="#ffffff")),
                 hovertext=[f"Ponto de iluminação<br>Altura: {_fmt_m(z_height)} m<br>X {p[0]:.3f} · Y {p[1]:.3f}"
                            for p in modelo["luzes"]], hoverinfo="text"))
 
@@ -537,7 +638,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             fig.add_trace(go.Scatter3d(
                 x=[c["ponto"][0] for c in modelo["caixas"]], y=[c["ponto"][1] for c in modelo["caixas"]],
                 z=[c["altura_m"] for c in modelo["caixas"]], mode="markers", name="Caixas 4x2",
-                marker=dict(size=5, symbol="diamond",
+                marker=dict(size=5, symbol="diamond", line=dict(width=1, color="#ffffff"),
                             color=[COR_INTERRUPTOR if c["tipo"] == "INTERRUPTOR" else COR_TOMADA
                                    for c in modelo["caixas"]]),
                 hovertext=[f"Caixa 4x2 — {_rotulo_tipo(c['tipo'])}<br>Altura (centro): {_fmt_m(c['altura_m'])} m"
@@ -548,20 +649,31 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             q = modelo["qdc"]
             fig.add_trace(go.Scatter3d(x=[q["ponto"][0]], y=[q["ponto"][1]], z=[q["altura_m"]], mode="markers",
                                        name="QDC (entrada dos eletrodutos)",
-                                       marker=dict(size=8, color=COR_QDC, symbol="square"),
+                                       marker=dict(size=9, color=COR_QDC, symbol="square",
+                                                   line=dict(width=1, color="#ffffff")),
                                        hovertext=[f"QDC<br>Entrada dos eletrodutos: {_fmt_m(q['altura_m'])} m"],
                                        hoverinfo="text"))
 
+        eixo = dict(showbackground=False, showgrid=True, gridcolor="#dde4f0", zeroline=False,
+                    showspikes=False, color="#667389", tickfont=dict(size=10))
         fig.update_layout(
-            height=680, margin=dict(l=0, r=0, t=30, b=0),
-            scene=dict(aspectmode="data", xaxis_title="X (m)", yaxis_title="Y (m)", zaxis_title="Z (m)"),
-            legend=dict(orientation="h"),
+            height=720, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, Segoe UI, Roboto, sans-serif", color="#1b2840"),
+            hoverlabel=dict(bgcolor="#1b2840", font=dict(color="#ffffff", size=12)),
+            legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0,
+                        bgcolor="rgba(255,255,255,.75)", font=dict(size=11)),
+            scene=dict(aspectmode="data", bgcolor="#f4f7fc",
+                       xaxis=dict(title="X (m)", **eixo), yaxis=dict(title="Y (m)", **eixo),
+                       zaxis=dict(title="Z (m)", **eixo),
+                       camera=dict(eye=dict(x=1.45, y=-1.65, z=0.95))),
         )
         st.plotly_chart(fig, use_container_width=True)
         st.caption(
             f"Pé-direito: {_fmt_m(z_height)} m | Percurso horizontal: "
             f"{'teto' if modelo['percurso'] != 'Piso' else 'piso'} ({_fmt_m(modelo['nivel'])} m). "
-            "A espessura das linhas é ilustrativa; as caixas 4x2 estão na escala real."
+            "A espessura das linhas é ilustrativa; as caixas 4x2 estão na escala real. "
+            "Trechos que correm pelas paredes ficam na altura das tomadas a que pertencem."
         )
 
         m1, m2, m3, m4 = st.columns(4)
@@ -577,6 +689,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                 {"Trecho": h["id"], "Percurso": _rotulo_desenho(h["desenho"]),
                  "De": h["de"], "Para": h["para"],
                  "Ø (mm)": h["diametro_mm"], "Circuitos": ", ".join(h["circuitos"]),
+                 "Altura (m)": round(h["z"], 2),
                  "Comprimento (m)": round(h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"], 2),
                  "Desenhado (m)": round(h["geometrico_m"], 3)}
                 for h in modelo["horizontais"]], use_container_width=True, hide_index=True)
