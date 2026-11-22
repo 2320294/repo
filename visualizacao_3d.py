@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.365)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.366)."""
 import math
 import os
 import tempfile
@@ -102,6 +102,8 @@ COR_COMANDO = "#8a5cf6"
 # Tolerâncias para casar extremidades do desenho com pontos (m).
 TOL_PONTO_M = 0.45   # tomada/interruptor
 TOL_LUZ_M = 0.45     # ponto de luz (o desenho para na borda do símbolo)
+TOL_QDC_M = 0.60     # eletrodutos que saem do QDC
+TOL_INT_TOMADA_M = 0.60  # tomada vizinha a um interruptor (alimentada por ele)
 
 # Parâmetro fixo do sistema: altura livre do vão de porta (sem parede abaixo dela).
 ALTURA_VAO_PORTA_M = 2.10
@@ -533,28 +535,82 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                     p3.append((luz_b[0], luz_b[1], pe))
         h["pontos3d"], h["z"], h["altura_fim_m"] = p3, z_h, z_fim
 
-    # Tomadas sem ligação direta com ponto de luz não têm descida: são
-    # alimentadas pelo eletroduto que chega na horizontal. Mantêm a descida
-    # as tomadas ligadas a um ponto de luz, os interruptores e o QDC.
+    # Descidas verticais -----------------------------------------------------
+    # - Tomada ligada a ponto de luz: descida a partir do teto/percurso.
+    # - Tomada vizinha a um interruptor (ou ligada a ele pelo desenho): é
+    #   alimentada por ele, com um eletroduto vertical próprio entre a altura do
+    #   interruptor e a da tomada (o do teto vai só até o interruptor).
+    # - Demais tomadas: sem descida (alimentadas pelo eletroduto horizontal).
+    # - Cada eletroduto que sai do QDC tem a sua vertical, da entrada do QDC
+    #   até a altura em que o trecho corre na horizontal.
     trechos_pts = [c["pontos"] for c in condutos] if condutos else [h["pontos"] for h in horizontais]
-    nos_tomada = [(c["ponto"][0], c["ponto"][1]) for c in caixas if c["tipo"] != "INTERRUPTOR"]
-    ligadas = set()
+    nos_pt = [(c["ponto"][0], c["ponto"][1], c["altura_m"], c["tipo"] == "INTERRUPTOR") for c in caixas]
+
+    def _chave(no):
+        return (round(no[0], 4), round(no[1], 4))
+
+    ligadas, via_int = set(), {}
     for pts in trechos_pts:
         for ext, outra in ((pts[0], pts[-1]), (pts[-1], pts[0])):
-            if _no_mais_proximo(ext, luzes_xy, TOL_LUZ_M) is not None:
-                tom = _no_mais_proximo(outra, nos_tomada, TOL_PONTO_M)
-                if tom is not None:
-                    ligadas.add((round(tom[0], 4), round(tom[1], 4)))
+            n_ext = _no_mais_proximo(ext, nos_pt, TOL_PONTO_M)      # nó mais próximo de verdade
+            n_out = _no_mais_proximo(outra, nos_pt, TOL_PONTO_M)
+            if _no_mais_proximo(ext, luzes_xy, TOL_LUZ_M) is not None and n_out is not None and not n_out[3]:
+                ligadas.add(_chave(n_out))
+            if n_ext is not None and n_out is not None and n_ext[3] and not n_out[3]:
+                via_int.setdefault(_chave(n_out), n_ext)
+    interruptores_pt = [n for n in nos_pt if n[3]]
+    for n in nos_pt:
+        if n[3] or _chave(n) in ligadas or _chave(n) in via_int:
+            continue
+        it = _no_mais_proximo((n[0], n[1]), interruptores_pt, TOL_INT_TOMADA_M)
+        if it is not None:
+            via_int[_chave(n)] = it
+
     sem_descida = 0
     if alturas_ok:
-        mantidas = []
+        novas = []
         for v in verticais:
-            eh_tomada = v["tipo"] not in TIPOS_ILUMINACAO and v["tipo"] not in ("QDC", "INTERRUPTOR")
-            if eh_tomada and (round(v["ponto"][0], 4), round(v["ponto"][1], 4)) not in ligadas:
-                sem_descida += 1
+            if v["tipo"] == "QDC":
                 continue
-            mantidas.append(v)
-        verticais = mantidas
+            eh_tomada = v["tipo"] not in TIPOS_ILUMINACAO and v["tipo"] != "INTERRUPTOR"
+            if not eh_tomada:
+                novas.append(v)
+                continue
+            k = (round(v["ponto"][0], 4), round(v["ponto"][1], 4))
+            if k in ligadas:
+                novas.append(v)
+            elif k in via_int:
+                z_int = via_int[k][2]
+                delta = abs(z_int - v["altura_m"])
+                if delta > 1e-6:
+                    novas.append({**v, "nivel_m": z_int, "comprimento_m": delta, "origem": "INTERRUPTOR"})
+            else:
+                sem_descida += 1
+
+        qdc_verticais, usados = [], {}
+        if qdc is not None:
+            qx, qy = qdc["ponto"]
+            for h in horizontais:
+                pts = h["pontos"]
+                for fim_do_trecho in (False, True):
+                    pt = pts[-1] if fim_do_trecho else pts[0]
+                    if math.hypot(pt[0] - qx, pt[1] - qy) > TOL_QDC_M:
+                        continue
+                    z_ext = (h["altura_fim_m"] if (fim_do_trecho and h["altura_fim_m"] is not None) else h["z"])
+                    delta = abs(qdc["altura_m"] - z_ext)
+                    if delta > 1e-6:
+                        chave_xy = (round(pt[0], 3), round(pt[1], 3))
+                        usados[chave_xy] = usados.get(chave_xy, 0) + 1
+                        qdc_verticais.append({
+                            "ponto": (pt[0] + 0.03 * (usados[chave_xy] - 1), pt[1]), "tipo": "QDC",
+                            "altura_m": z_ext, "nivel_m": qdc["altura_m"], "comprimento_m": delta,
+                            "diametro_mm": h["diametro_mm"], "origem": "QDC", "circuitos": h["circuitos"],
+                            "trecho": h["id"],
+                        })
+                    break
+            if not qdc_verticais:
+                qdc_verticais = [v for v in verticais if v["tipo"] == "QDC"]
+        verticais = novas + qdc_verticais
 
     total_desenhado = sum(h["geometrico_m"] for h in horizontais)
     if rotas:
@@ -734,8 +790,18 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                 diam = f' Ø{int(v["diametro_mm"])} mm' if v["diametro_mm"] else ""
                 mx.append(x); my.append(y); mz.append((v["nivel_m"] + v["altura_m"]) / 2)
                 textos.append(f"{_fmt_m(v['comprimento_m'])} m" if m_cotas else "")
-                hovers.append(f"{_rotulo_tipo(v['tipo'])}<br>Altura do ponto: {_fmt_m(v['altura_m'])} m"
-                              f"<br>Descida: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
+                if v.get("origem") == "QDC":
+                    hovers.append(f"Saída do QDC (trecho {v.get('trecho', '—')})"
+                                  f"<br>Do QDC ({_fmt_m(v['nivel_m'])} m) até {_fmt_m(v['altura_m'])} m"
+                                  f"<br>Vertical: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}"
+                                  f"<br>Circuitos: {', '.join(v.get('circuitos') or []) or '—'}")
+                elif v.get("origem") == "INTERRUPTOR":
+                    hovers.append(f"{_rotulo_tipo(v['tipo'])} alimentada pelo interruptor"
+                                  f"<br>Do interruptor ({_fmt_m(v['nivel_m'])} m) até {_fmt_m(v['altura_m'])} m"
+                                  f"<br>Vertical: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
+                else:
+                    hovers.append(f"{_rotulo_tipo(v['tipo'])}<br>Altura do ponto: {_fmt_m(v['altura_m'])} m"
+                                  f"<br>Descida: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
             fig.add_trace(go.Scatter3d(x=xs, y=ys, z=zs, mode="lines", name="Descidas verticais",
                                        line=dict(width=4, color=COR_DESCIDA), hoverinfo="skip"))
             fig.add_trace(go.Scatter3d(x=mx, y=my, z=mz, mode="markers+text", text=textos,
@@ -802,7 +868,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         m1.metric("Eletroduto horizontal", f"{_fmt_m(modelo['total_horizontal_m'])} m",
                    help=f"Soma do Quantitativo de Materiais. Percurso desenhado no CAD: {_fmt_m(modelo['total_desenhado_m'])} m.")
         m2.metric("Descidas verticais", f"{_fmt_m(modelo['total_vertical_m'])} m",
-                   help=f"{modelo['tomadas_sem_descida']} tomada(s) sem ligação direta com ponto de luz não têm descida: são alimentadas pelo eletroduto horizontal.")
+                   help=f"{modelo['tomadas_sem_descida']} tomada(s) sem ligação com luz ou interruptor não têm descida: são alimentadas pelo eletroduto horizontal.")
         m3.metric("Caixas 4x2", len(modelo["caixas"]))
         m4.metric("Pontos de iluminação", len(modelo["luzes"]))
 
@@ -818,9 +884,11 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                 for h in modelo["horizontais"]], use_container_width=True, hide_index=True)
         with aba_v:
             st.dataframe([
-                {"Ponto": _rotulo_tipo(v["tipo"]), "X (m)": round(v["ponto"][0], 3), "Y (m)": round(v["ponto"][1], 3),
-                 "Altura (m)": round(v["altura_m"], 2), "Descida (m)": round(v["comprimento_m"], 2),
-                 "Ø (mm)": v["diametro_mm"]}
+                {"Ponto": _rotulo_tipo(v["tipo"]),
+                 "Parte de": {"QDC": "QDC", "INTERRUPTOR": "Interruptor"}.get(v.get("origem"), "Percurso (teto/piso)"),
+                 "X (m)": round(v["ponto"][0], 3), "Y (m)": round(v["ponto"][1], 3),
+                 "De (m)": round(v["nivel_m"], 2), "Até (m)": round(v["altura_m"], 2),
+                 "Vertical (m)": round(v["comprimento_m"], 2), "Ø (mm)": v["diametro_mm"]}
                 for v in modelo["verticais"]], use_container_width=True, hide_index=True)
         with aba_c:
             cm = modelo["caixa_mm"]
