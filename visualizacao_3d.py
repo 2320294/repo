@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.364)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.365)."""
 import math
 import os
 import tempfile
@@ -103,6 +103,11 @@ COR_COMANDO = "#8a5cf6"
 TOL_PONTO_M = 0.45   # tomada/interruptor
 TOL_LUZ_M = 0.45     # ponto de luz (o desenho para na borda do símbolo)
 
+# Parâmetro fixo do sistema: altura livre do vão de porta (sem parede abaixo dela).
+ALTURA_VAO_PORTA_M = 2.10
+LAYER_PORTAS = "IA_PORTAS"      # folha/giro da porta: não é parede
+LAYER_SOLEIRAS = "IA_SOLEIRAS"  # vão de porta (soleira)
+
 COR_DIAMETRO = {16: "#5a93ff", 20: "#2e63e6", 25: "#1f45b8", 32: "#122d80"}
 LARG_DIAMETRO = {16: 4, 20: 5, 25: 6, 32: 7}
 
@@ -154,10 +159,12 @@ def _extrair_geometria(modelspace):
       PROJ_ELETRICA_ROTEAMENTO (arcos e polilinhas que correm pelo eixo das
       paredes), com todos os vértices; reserva: LINEs de PROJ_ELETRICA_ELETRODUTO.
     - Comandos: linhas interruptor -> luz (PROJ_ELETRICA_COMANDO).
+    - Soleiras (vãos de porta, IA_SOLEIRAS) ficam à parte; a camada IA_PORTAS
+      (folha da porta) não entra como parede.
     """
     segmentos = []
     luzes = {}
-    condutos, condutos_reserva, comandos = [], [], []
+    condutos, condutos_reserva, comandos, soleiras = [], [], [], []
     for ent in modelspace:
         kind = ent.dxftype()
         layer = str(getattr(ent.dxf, "layer", "") or "").upper()
@@ -181,6 +188,13 @@ def _extrair_geometria(modelspace):
                     if len(pts) >= 2:
                         comandos.append(pts)
                 continue
+            if layer == LAYER_PORTAS:
+                continue
+            if layer == LAYER_SOLEIRAS:
+                pts = _pontos_entidade(ent)
+                if len(pts) >= 2:
+                    soleiras.append(pts)
+                continue
             if kind in ("LINE", "LWPOLYLINE", "POLYLINE"):
                 pts = _pontos_entidade(ent)
                 for i in range(len(pts) - 1):
@@ -188,7 +202,7 @@ def _extrair_geometria(modelspace):
         except (AttributeError, TypeError, ValueError):
             # Ignora entidades com coordenadas incompatíveis, sem abortar o desenho inteiro.
             continue
-    return segmentos, list(luzes.values()), (condutos or condutos_reserva), comandos
+    return segmentos, list(luzes.values()), (condutos or condutos_reserva), comandos, soleiras
 
 
 def _xy(ponto):
@@ -210,22 +224,121 @@ def _no_mais_proximo(ponto, nos, tolerancia_m):
     return melhor
 
 
-def malha_paredes(segmentos, altura, comprimento_min=0.10, limite=8000):
-    """Painéis verticais (Mesh3d) das paredes; segmentos duplicados são unidos."""
-    unicos = {}
-    for (x1, y1), (x2, y2) in segmentos:
-        comp = math.hypot(x2 - x1, y2 - y1)
+def _retangulo_vao(pontos):
+    """Retângulo orientado (4 cantos, anti-horário) que cobre o vão da soleira.
+
+    Cobre o comprimento do vão e a espessura da parede (a soleira pode ser uma
+    simples linha); serve para recortar a parede abaixo da altura do vão.
+    """
+    pts = []
+    for x, y in pontos:
+        q = (float(x), float(y))
+        if not pts or math.hypot(q[0] - pts[-1][0], q[1] - pts[-1][1]) > 1e-6:
+            pts.append(q)
+    if len(pts) < 2:
+        return None
+    # Direção do vão: a maior aresta do desenho da soleira.
+    arestas = [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
+    if len(pts) >= 3:
+        arestas.append((pts[-1], pts[0]))
+    p0, p1 = max(arestas, key=lambda e: math.hypot(e[1][0] - e[0][0], e[1][1] - e[0][1]))
+    comp = math.hypot(p1[0] - p0[0], p1[1] - p0[1])
+    if comp < 1e-6:
+        return None
+    ux, uy = (p1[0] - p0[0]) / comp, (p1[1] - p0[1]) / comp
+    nx, ny = -uy, ux
+    pu = [(q[0] - p0[0]) * ux + (q[1] - p0[1]) * uy for q in pts]
+    pn = [(q[0] - p0[0]) * nx + (q[1] - p0[1]) * ny for q in pts]
+    t0, t1 = min(pu), max(pu)  # o vão tem exatamente a largura da soleira
+    espessura = max(pn) - min(pn)
+    meio = (max(pn) + min(pn)) / 2.0
+    meia = max(espessura / 2.0 + 0.03, 0.22)
+
+    def canto(t, n):
+        return (p0[0] + ux * t + nx * n, p0[1] + uy * t + ny * n)
+
+    return [canto(t0, meio - meia), canto(t1, meio - meia),
+            canto(t1, meio + meia), canto(t0, meio + meia)]
+
+
+def _intervalo_no_retangulo(p, q, ret):
+    """Parte (t0, t1) do segmento p->q dentro do retângulo convexo, ou None."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    for i in range(4):
+        ax, ay = ret[i]
+        bx, by = ret[(i + 1) % 4]
+        ex, ey = bx - ax, by - ay
+        # meio-plano à esquerda da aresta (interior, pois o retângulo é anti-horário)
+        num = ex * (p[1] - ay) - ey * (p[0] - ax)
+        den = ex * dy - ey * dx
+        if abs(den) < 1e-12:
+            if num < 0:
+                return None
+            continue
+        t = -num / den
+        if den > 0:
+            t0 = max(t0, t)
+        else:
+            t1 = min(t1, t)
+        if t0 > t1:
+            return None
+    return (t0, t1) if t1 - t0 > 1e-9 else None
+
+
+def malha_paredes(segmentos, altura, soleiras=None, altura_vao=ALTURA_VAO_PORTA_M,
+                  comprimento_min=0.10, limite=12000):
+    """Painéis verticais (Mesh3d) das paredes, com os vãos de porta livres.
+
+    Nos vãos (soleiras) não há parede até `altura_vao`; acima dela a parede
+    continua (verga). Segmentos duplicados são unidos.
+    """
+    soleiras = soleiras or []
+    vaos = [r for r in (_retangulo_vao(pts) for pts in soleiras) if r]
+    pecas = {}
+
+    def _add(a, b, z0, z1):
+        if z1 - z0 < 1e-6 or math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-3:
+            return
+        ka, kb = (round(a[0], 3), round(a[1], 3)), (round(b[0], 3), round(b[1], 3))
+        pecas[(min(ka, kb), max(ka, kb), round(z0, 3))] = (a, b, z0, z1)
+
+    for p, q in segmentos:
+        comp = math.hypot(q[0] - p[0], q[1] - p[1])
         if comp < comprimento_min:
             continue
-        a, b = (round(x1, 3), round(y1, 3)), (round(x2, 3), round(y2, 3))
-        unicos[(min(a, b), max(a, b))] = comp
-    chaves = sorted(unicos, key=lambda k: -unicos[k])[:limite]
+        dentro = sorted(iv for iv in (_intervalo_no_retangulo(p, q, r) for r in vaos) if iv)
+        fundidos = []
+        for t0, t1 in dentro:
+            if fundidos and t0 <= fundidos[-1][1] + 1e-9:
+                fundidos[-1] = (fundidos[-1][0], max(fundidos[-1][1], t1))
+            else:
+                fundidos.append((t0, t1))
+
+        def ponto(t):
+            return (p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1]))
+
+        cursor = 0.0
+        for t0, t1 in fundidos:
+            if t0 > cursor:
+                _add(ponto(cursor), ponto(t0), 0.0, altura)       # parede inteira
+            _add(ponto(t0), ponto(t1), altura_vao, altura)         # verga sobre o vão
+            cursor = t1
+        if cursor < 1.0:
+            _add(ponto(cursor), ponto(1.0), 0.0, altura)
+
+    # A própria soleira: somente a verga (acima do vão).
+    for pts in soleiras:
+        for i in range(len(pts) - 1):
+            _add(pts[i], pts[i + 1], altura_vao, altura)
+
+    itens = sorted(pecas.values(), key=lambda it: -math.hypot(it[1][0] - it[0][0], it[1][1] - it[0][1]))[:limite]
     X, Y, Z, I, J, K = [], [], [], [], [], []
-    for (a, b) in chaves:
+    for a, b, z0, z1 in itens:
         base = len(X)
         X += [a[0], b[0], b[0], a[0]]
         Y += [a[1], b[1], b[1], a[1]]
-        Z += [0.0, 0.0, altura, altura]
+        Z += [z0, z0, z1, z1]
         I += [base, base]; J += [base + 1, base + 2]; K += [base + 2, base + 3]
     return X, Y, Z, I, J, K
 
@@ -420,6 +533,29 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                     p3.append((luz_b[0], luz_b[1], pe))
         h["pontos3d"], h["z"], h["altura_fim_m"] = p3, z_h, z_fim
 
+    # Tomadas sem ligação direta com ponto de luz não têm descida: são
+    # alimentadas pelo eletroduto que chega na horizontal. Mantêm a descida
+    # as tomadas ligadas a um ponto de luz, os interruptores e o QDC.
+    trechos_pts = [c["pontos"] for c in condutos] if condutos else [h["pontos"] for h in horizontais]
+    nos_tomada = [(c["ponto"][0], c["ponto"][1]) for c in caixas if c["tipo"] != "INTERRUPTOR"]
+    ligadas = set()
+    for pts in trechos_pts:
+        for ext, outra in ((pts[0], pts[-1]), (pts[-1], pts[0])):
+            if _no_mais_proximo(ext, luzes_xy, TOL_LUZ_M) is not None:
+                tom = _no_mais_proximo(outra, nos_tomada, TOL_PONTO_M)
+                if tom is not None:
+                    ligadas.add((round(tom[0], 4), round(tom[1], 4)))
+    sem_descida = 0
+    if alturas_ok:
+        mantidas = []
+        for v in verticais:
+            eh_tomada = v["tipo"] not in TIPOS_ILUMINACAO and v["tipo"] not in ("QDC", "INTERRUPTOR")
+            if eh_tomada and (round(v["ponto"][0], 4), round(v["ponto"][1], 4)) not in ligadas:
+                sem_descida += 1
+                continue
+            mantidas.append(v)
+        verticais = mantidas
+
     total_desenhado = sum(h["geometrico_m"] for h in horizontais)
     if rotas:
         # Mesma soma do Quantitativo de Materiais.
@@ -430,7 +566,7 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     return {
         "pe_direito": pe, "nivel": nivel, "percurso": percurso, "alturas_ok": alturas_ok,
         "caixa_mm": caixa, "horizontais": horizontais, "verticais": verticais,
-        "caixas": caixas, "luzes": [(float(x), float(y)) for x, y in luzes],
+        "caixas": caixas, "tomadas_sem_descida": sem_descida, "luzes": [(float(x), float(y)) for x, y in luzes],
         "qdc": qdc, "total_horizontal_m": total_h, "total_desenhado_m": total_desenhado,
         "total_vertical_m": total_v,
         "comandos": [list(c) for c in (comandos or [])],
@@ -484,25 +620,10 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             raise ValueError("O pé-direito configurado em Parâmetros deve ser maior que zero.")
 
         doc = _carregar_documento(dxf_data)
-        segmentos, luzes, condutos, comandos = _extrair_geometria(doc.modelspace())
-
-        with st.expander("Dimensões da caixa 4x2 (mm)"):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                alt_cx = st.number_input("Altura", min_value=10.0, value=CAIXA_4X2_PADRAO_MM["altura"],
-                                         step=1.0, key="ae362_cx_altura")
-            with c2:
-                larg_cx = st.number_input("Largura", min_value=10.0, value=CAIXA_4X2_PADRAO_MM["largura"],
-                                          step=1.0, key="ae362_cx_largura")
-            with c3:
-                prof_cx = st.number_input("Profundidade", min_value=10.0, value=CAIXA_4X2_PADRAO_MM["profundidade"],
-                                          step=1.0, key="ae362_cx_prof")
-            st.caption("Nominal 4″ × 2″ (101,6 × 50,8 mm), instalada em pé. A profundidade depende do "
-                       "fabricante: confirme o valor antes de usar estas medidas em obra.")
+        segmentos, luzes, condutos, comandos, soleiras = _extrair_geometria(doc.modelspace())
 
         modelo = montar_modelo(
-            segmentos, luzes, resumo_rotas, z_height,
-            {"altura": alt_cx, "largura": larg_cx, "profundidade": prof_cx},
+            segmentos, luzes, resumo_rotas, z_height, None,
             condutos=condutos, comandos=comandos,
         )
 
@@ -537,7 +658,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         fig = go.Figure()
 
         if m_paredes and segmentos:
-            X, Y, Z, I, J, K = malha_paredes(segmentos, z_height)
+            X, Y, Z, I, J, K = malha_paredes(segmentos, z_height, soleiras)
             if X:
                 fig.add_trace(go.Mesh3d(x=X, y=Y, z=Z, i=I, j=J, k=K, color="#8ea4c7", opacity=opac,
                                         flatshading=True, name="Paredes", showlegend=True, hoverinfo="skip",
@@ -673,13 +794,15 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             f"Pé-direito: {_fmt_m(z_height)} m | Percurso horizontal: "
             f"{'teto' if modelo['percurso'] != 'Piso' else 'piso'} ({_fmt_m(modelo['nivel'])} m). "
             "A espessura das linhas é ilustrativa; as caixas 4x2 estão na escala real. "
-            "Trechos que correm pelas paredes ficam na altura das tomadas a que pertencem."
+            "Trechos que correm pelas paredes ficam na altura das tomadas a que pertencem; vãos de "
+            f"porta ficam livres até {_fmt_m(ALTURA_VAO_PORTA_M)} m."
         )
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Eletroduto horizontal", f"{_fmt_m(modelo['total_horizontal_m'])} m",
                    help=f"Soma do Quantitativo de Materiais. Percurso desenhado no CAD: {_fmt_m(modelo['total_desenhado_m'])} m.")
-        m2.metric("Descidas verticais", f"{_fmt_m(modelo['total_vertical_m'])} m")
+        m2.metric("Descidas verticais", f"{_fmt_m(modelo['total_vertical_m'])} m",
+                   help=f"{modelo['tomadas_sem_descida']} tomada(s) sem ligação direta com ponto de luz não têm descida: são alimentadas pelo eletroduto horizontal.")
         m3.metric("Caixas 4x2", len(modelo["caixas"]))
         m4.metric("Pontos de iluminação", len(modelo["luzes"]))
 
