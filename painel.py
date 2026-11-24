@@ -219,7 +219,7 @@ def _navegacao_etapas():
     ):
         st.session_state[chave] = etapas[0]
 
-    # 13.6.368 — a navegação por etapas fica no menu lateral
+    # 13.6.369 — a navegação por etapas fica no menu lateral
     # (container reservado em app.py), com um botão por etapa. A etapa
     # ativa continua guardada na mesma chave de estado. Sem o container,
     # mantém o comportamento anterior (radio horizontal na página).
@@ -1709,7 +1709,7 @@ def renderizar_painel_principal():
         return
 
     # --------------------------------------------------------
-    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.368)
+    # ETAPA 8 — VISUALIZAÇÃO 3D (13.6.369)
     # Liberada somente com o DXF efetivamente gerado nesta versão.
     # --------------------------------------------------------
     if etapa == "🧊 Visualização 3D":

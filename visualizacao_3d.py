@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.368)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.369)."""
 import math
 import os
 import tempfile
@@ -427,6 +427,16 @@ def emendar_trecho_na_vertical(pontos3d, no_fim, corner, z_j, s, comprimento_ver
     return list(reversed(fil)) + pts[1:], r
 
 
+def extremos_vertical(v):
+    """Alturas (z_inicial, z_final) com que a vertical é desenhada.
+
+    O desenho encurta a ponta que emenda com o trecho horizontal (cotovelo):
+    `z0_desenho` ajusta o início (nível do percurso) e `z1_desenho` o fim
+    (altura do ponto ou do trecho, como nas saídas do QDC).
+    """
+    return v.get("z0_desenho", v["nivel_m"]), v.get("z1_desenho", v["altura_m"])
+
+
 def comprimento_3d(pontos):
     return sum(math.dist(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1))
 
@@ -727,7 +737,7 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                     "ponto": (sx, sy), "tipo": "QDC", "altura_m": z_ext, "nivel_m": qz,
                     "comprimento_m": abs(qz - z_ext), "diametro_mm": h["diametro_mm"],
                     "origem": "QDC", "circuitos": h["circuitos"], "trecho": h["id"],
-                    "z0_desenho": z_ext + sentido * r_uso,
+                    "z1_desenho": z_ext + sentido * r_uso,   # ponta que emenda com o trecho
                 })
             qdc = {**qdc, "u": u_q, "n": n_q, "prof_m": QDC_PROF_M, "altura_caixa_m": QDC_ALTURA_CAIXA_M,
                    "largura_m": max(QDC_LARGURA_MIN_M, (total_saidas + 1) * QDC_ESPACAMENTO_M),
@@ -942,11 +952,12 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                     cm_ = v["curva"][len(v["curva"]) // 2]
                     mx.append(cm_[0]); my.append(cm_[1]); mz.append(cm_[2])
                 else:
+                    z_a, z_b = extremos_vertical(v)
                     xs.extend([x, x, None]); ys.extend([y, y, None])
-                    zs.extend([v.get("z0_desenho", v["nivel_m"]), v["altura_m"], None])
+                    zs.extend([z_a, z_b, None])
                     mx.append(x); my.append(y); mz.append((v["nivel_m"] + v["altura_m"]) / 2)
                 diam = f' Ø{int(v["diametro_mm"])} mm' if v["diametro_mm"] else ""
-                textos.append(f"{_fmt_m(v['comprimento_m'])} m" if m_cotas else "")
+                textos.append(f"{_fmt_m(v['comprimento_m'])} m" if (m_cotas and v.get("origem") != "QDC") else "")
                 if v.get("origem") == "QDC":
                     hovers.append(f"Saída do QDC (trecho {v.get('trecho', '—')})"
                                   f"<br>Do QDC ({_fmt_m(v['nivel_m'])} m) até {_fmt_m(v['altura_m'])} m"
