@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.367)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.368)."""
 import math
 import os
 import tempfile
@@ -107,6 +107,11 @@ TOL_INT_TOMADA_M = 0.60  # tomada vizinha a um interruptor (alimentada por ele)
 
 # QDC desenhado como caixa: cresce conforme o número de eletrodutos, para que
 # cada um tenha sua própria saída (sem sobreposição). Parâmetros fixos do sistema.
+# Acabamento das emendas horizontal -> vertical (cotovelo arredondado, sem pontas soltas).
+R_COTOVELO_M = 0.06
+TOL_JUNCAO_M = 0.35        # ponta do trecho horizontal que "pertence" a uma vertical
+COMPRIMENTO_ARCO_CURTO_M = 1.0   # arco interruptor-tomada do CAD (apenas simbólico)
+
 QDC_LARGURA_MIN_M = 0.40
 QDC_ALTURA_CAIXA_M = 0.50
 QDC_PROF_M = 0.12
@@ -381,6 +386,47 @@ def curva_ligacao(p0, p1, passos=24):
     return pts
 
 
+def cotovelo(corner, z_j, d, s, r, passos=8):
+    """Quarto de círculo que leva o trecho horizontal (direção d, em XY) à vertical.
+
+    `corner` é o ponto (x, y) da vertical, `z_j` a altura da emenda e `s` o sentido
+    da vertical (+1 sobe, -1 desce). Vai do trecho horizontal (z_j) até a vertical.
+    """
+    cx0, cy0 = corner[0] - d[0] * r, corner[1] - d[1] * r
+    pts = []
+    for i in range(passos + 1):
+        th = (math.pi / 2.0) * i / passos
+        pts.append((cx0 + d[0] * r * math.sin(th), cy0 + d[1] * r * math.sin(th),
+                    z_j + s * r * (1.0 - math.cos(th))))
+    return pts
+
+
+def emendar_trecho_na_vertical(pontos3d, no_fim, corner, z_j, s, comprimento_vertical):
+    """Faz a ponta do trecho terminar exatamente no topo da vertical, com cotovelo.
+
+    Retorna (novos_pontos, raio_usado). A ponta (primeira ou última) é levada ao
+    ponto da vertical; o cotovelo só é arredondado se houver espaço.
+    """
+    pts = list(pontos3d)
+    if len(pts) < 2:
+        return pts, 0.0
+    idx = -1 if no_fim else 0
+    viz = pts[-2] if no_fim else pts[1]
+    dx, dy = corner[0] - viz[0], corner[1] - viz[1]
+    seg = math.hypot(dx, dy)
+    pts[idx] = (corner[0], corner[1], z_j)
+    if seg < 1e-6:
+        return pts, 0.0
+    d = (dx / seg, dy / seg)
+    r = min(R_COTOVELO_M, 0.45 * seg, 0.45 * comprimento_vertical)
+    if r < 0.01:
+        return pts, 0.0
+    fil = cotovelo(corner, z_j, d, s, r)
+    if no_fim:
+        return pts[:-1] + fil, r
+    return list(reversed(fil)) + pts[1:], r
+
+
 def comprimento_3d(pontos):
     return sum(math.dist(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1))
 
@@ -598,8 +644,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     def _chave(no):
         return (round(no[0], 4), round(no[1], 4))
 
-    ligadas, via_int = set(), {}
-    for pts in trechos_pts:
+    ligadas, via_int, curtos = set(), {}, set()
+    for idx_trecho, pts in enumerate(trechos_pts):
         for ext, outra in ((pts[0], pts[-1]), (pts[-1], pts[0])):
             n_ext = _no_mais_proximo(ext, nos_pt, TOL_PONTO_M)      # nó mais próximo de verdade
             n_out = _no_mais_proximo(outra, nos_pt, TOL_PONTO_M)
@@ -607,6 +653,13 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                 ligadas.add(_chave(n_out))
             if n_ext is not None and n_out is not None and n_ext[3] and not n_out[3]:
                 via_int.setdefault(_chave(n_out), n_ext)
+                # Arco curto do CAD que só simboliza interruptor -> tomada.
+                if comprimento_percurso(pts) <= COMPRIMENTO_ARCO_CURTO_M:
+                    curtos.add(idx_trecho)
+    arcos_curtos_removidos = 0
+    if curtos and len(trechos_pts) == len(horizontais):
+        arcos_curtos_removidos = len(curtos)
+        horizontais = [h for i, h in enumerate(horizontais) if i not in curtos]
     interruptores_pt = [n for n in nos_pt if n[3]]
     for n in nos_pt:
         if n[3] or _chave(n) in ligadas or _chave(n) in via_int:
@@ -662,15 +715,19 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                 desloc = (k - (total_saidas - 1) / 2.0) * QDC_ESPACAMENTO_M
                 sx, sy = qx + u_q[0] * desloc, qy + u_q[1] * desloc
                 h = horizontais[hi]
-                # o trecho passa a nascer na saída própria dele no QDC
+                # o trecho passa a nascer na saída própria dele no QDC, com cotovelo
                 if fim_do_trecho:
                     h["pontos3d"].append((sx, sy, z_ext))
                 else:
                     h["pontos3d"].insert(0, (sx, sy, z_ext))
+                sentido = 1.0 if qz > z_ext else -1.0
+                h["pontos3d"], r_uso = emendar_trecho_na_vertical(
+                    h["pontos3d"], fim_do_trecho, (sx, sy), z_ext, sentido, abs(qz - z_ext))
                 qdc_verticais.append({
                     "ponto": (sx, sy), "tipo": "QDC", "altura_m": z_ext, "nivel_m": qz,
                     "comprimento_m": abs(qz - z_ext), "diametro_mm": h["diametro_mm"],
                     "origem": "QDC", "circuitos": h["circuitos"], "trecho": h["id"],
+                    "z0_desenho": z_ext + sentido * r_uso,
                 })
             qdc = {**qdc, "u": u_q, "n": n_q, "prof_m": QDC_PROF_M, "altura_caixa_m": QDC_ALTURA_CAIXA_M,
                    "largura_m": max(QDC_LARGURA_MIN_M, (total_saidas + 1) * QDC_ESPACAMENTO_M),
@@ -678,6 +735,30 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
             if not qdc_verticais:
                 qdc_verticais = [v for v in verticais if v["tipo"] == "QDC"]
         verticais = novas + qdc_verticais
+
+        # Emendas do percurso (teto/piso) com as descidas: a ponta do trecho
+        # horizontal termina exatamente no topo da vertical, em cotovelo.
+        for v in verticais:
+            if v.get("origem") or v.get("curva") or v["tipo"] == "QDC":
+                continue
+            vx, vy = v["ponto"]
+            z_j, z_far = v["nivel_m"], v["altura_m"]
+            if abs(z_far - z_j) < 1e-6:
+                continue
+            sentido = 1.0 if z_far > z_j else -1.0
+            for h in horizontais:
+                if abs(h["z"] - z_j) > 1e-6:
+                    continue
+                for no_fim in (False, True):
+                    ponta = h["pontos3d"][-1] if no_fim else h["pontos3d"][0]
+                    if abs(ponta[2] - z_j) > 1e-6 or math.hypot(ponta[0] - vx, ponta[1] - vy) > TOL_JUNCAO_M:
+                        continue
+                    h["pontos3d"], r_uso = emendar_trecho_na_vertical(
+                        h["pontos3d"], no_fim, (vx, vy), z_j, sentido, abs(z_far - z_j))
+                    if r_uso >= 0.01:
+                        z0 = z_j + sentido * r_uso
+                        v["z0_desenho"] = z0 if "z0_desenho" not in v else (
+                            min(v["z0_desenho"], z0) if sentido > 0 else max(v["z0_desenho"], z0))
 
     total_desenhado = sum(h["geometrico_m"] for h in horizontais)
     if rotas:
@@ -689,7 +770,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     return {
         "pe_direito": pe, "nivel": nivel, "percurso": percurso, "alturas_ok": alturas_ok,
         "caixa_mm": caixa, "horizontais": horizontais, "verticais": verticais,
-        "caixas": caixas, "tomadas_sem_descida": sem_descida, "luzes": [(float(x), float(y)) for x, y in luzes],
+        "caixas": caixas, "tomadas_sem_descida": sem_descida,
+        "arcos_curtos_removidos": arcos_curtos_removidos, "luzes": [(float(x), float(y)) for x, y in luzes],
         "qdc": qdc, "total_horizontal_m": total_h, "total_desenhado_m": total_desenhado,
         "total_vertical_m": total_v,
         "comandos": [list(c) for c in (comandos or [])],
@@ -860,7 +942,8 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                     cm_ = v["curva"][len(v["curva"]) // 2]
                     mx.append(cm_[0]); my.append(cm_[1]); mz.append(cm_[2])
                 else:
-                    xs.extend([x, x, None]); ys.extend([y, y, None]); zs.extend([v["nivel_m"], v["altura_m"], None])
+                    xs.extend([x, x, None]); ys.extend([y, y, None])
+                    zs.extend([v.get("z0_desenho", v["nivel_m"]), v["altura_m"], None])
                     mx.append(x); my.append(y); mz.append((v["nivel_m"] + v["altura_m"]) / 2)
                 diam = f' Ø{int(v["diametro_mm"])} mm' if v["diametro_mm"] else ""
                 textos.append(f"{_fmt_m(v['comprimento_m'])} m" if m_cotas else "")
@@ -943,6 +1026,9 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             "A espessura das linhas é ilustrativa; as caixas 4x2 estão na escala real. "
             "Trechos que correm pelas paredes ficam na altura das tomadas a que pertencem; vãos de "
             f"porta ficam livres até {_fmt_m(ALTURA_VAO_PORTA_M)} m."
+            + (f" {modelo['arcos_curtos_removidos']} arco(s) curto(s) interruptor–tomada do CAD (apenas simbólicos) "
+               "foram substituídos pela ligação direta do eletroduto horizontal com a vertical."
+               if modelo.get("arcos_curtos_removidos") else "")
         )
 
         m1, m2, m3, m4 = st.columns(4)
