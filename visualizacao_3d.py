@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.370)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.371)."""
 import math
 import os
 import tempfile
@@ -116,6 +116,9 @@ COMPRIMENTO_ARCO_CURTO_M = 1.0   # arco interruptor-tomada do CAD (apenas simbó
 # lado da parede divisória): são afastados para ficarem distintos na 3D.
 DESLOC_PARALELOS_M = 0.04
 SOBREPOSICAO_TOL_M = 0.10
+# Parede divisória com tomadas nos dois ambientes: um eletroduto por circuito/ambiente.
+DIST_TOMADA_PAREDE_M = 0.45   # tomada considerada "da parede" (distância ao eixo do trecho)
+MARGEM_DIVISORIA_M = 0.30     # folga antes/depois da primeira/última tomada
 
 QDC_LARGURA_MIN_M = 0.40
 QDC_ALTURA_CAIXA_M = 0.50
@@ -571,6 +574,163 @@ def separar_trechos_paralelos(horizontais, nos_pt, desloc=DESLOC_PARALELOS_M):
     return separados
 
 
+def _acumulado(pts):
+    cum = [0.0]
+    for i in range(len(pts) - 1):
+        cum.append(cum[-1] + math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]))
+    return cum
+
+
+def _projetar_no_percurso(pt, pts, cum):
+    """(distância, posição ao longo do percurso, lado) do ponto em relação ao percurso.
+
+    O lado é o deslocamento assinado: positivo à esquerda do sentido do percurso.
+    """
+    melhor = None
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        l2 = dx * dx + dy * dy
+        if l2 <= 1e-12:
+            continue
+        t = max(0.0, min(1.0, ((pt[0] - a[0]) * dx + (pt[1] - a[1]) * dy) / l2))
+        d = math.hypot(pt[0] - (a[0] + t * dx), pt[1] - (a[1] + t * dy))
+        if melhor is None or d < melhor[0]:
+            comp = math.sqrt(l2)
+            melhor = (d, cum[i] + t * comp, (-dy * (pt[0] - a[0]) + dx * (pt[1] - a[1])) / comp)
+    return melhor
+
+
+def _ponto_em(pts, cum, s):
+    s = max(0.0, min(cum[-1], s))
+    for i in range(len(pts) - 1):
+        if s <= cum[i + 1] + 1e-12:
+            seg = cum[i + 1] - cum[i]
+            t = 0.0 if seg <= 1e-12 else (s - cum[i]) / seg
+            return (pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1]))
+    return pts[-1]
+
+
+def _subpercurso(pts, cum, s0, s1):
+    saida = [_ponto_em(pts, cum, s0)]
+    for i, c in enumerate(cum):
+        if s0 + 1e-9 < c < s1 - 1e-9:
+            saida.append(pts[i])
+    saida.append(_ponto_em(pts, cum, s1))
+    return saida
+
+
+def _normais_esquerda(pts):
+    ns = []
+    for i in range(len(pts)):
+        vx = vy = 0.0
+        for a, b in ((i - 1, i), (i, i + 1)):
+            if 0 <= a and b < len(pts):
+                dx, dy = pts[b][0] - pts[a][0], pts[b][1] - pts[a][1]
+                comp = math.hypot(dx, dy)
+                if comp > 1e-9:
+                    vx += -dy / comp
+                    vy += dx / comp
+        tam = math.hypot(vx, vy) or 1.0
+        ns.append((vx / tam, vy / tam))
+    return ns
+
+
+def dividir_trechos_em_parede_divisoria(horizontais, nos_pt, nivel=None, desloc=DESLOC_PARALELOS_M,
+                                        margem=MARGEM_DIVISORIA_M, dist_no=DIST_TOMADA_PAREDE_M):
+    """Parede divisória com tomadas nos dois ambientes: dois eletrodutos por dentro dela.
+
+    Num trecho de parede com tomadas em lados opostos e circuitos diferentes, o
+    trecho entre a primeira e a última tomada (com folga) vira dois eletrodutos
+    paralelos, afastados `desloc` do eixo, um para cada lado/circuito, cada um na
+    altura das tomadas do seu lado. Antes e depois dessa zona o trecho continua único.
+    Retorna (novos_trechos, quantidade_de_divisoes).
+    """
+    paredes = [i for i, h in enumerate(horizontais) if str(h["desenho"]).upper() in ("LWPOLYLINE", "POLYLINE")]
+    tomadas = [n for n in nos_pt if not n[3]]
+    saida, divisoes = [], 0
+    for k, h in enumerate(horizontais):
+        if k not in paredes or len(h["pontos"]) < 2 or not tomadas:
+            saida.append(h)
+            continue
+        pts = h["pontos"]
+        cum = _acumulado(pts)
+        if cum[-1] < 0.2:
+            saida.append(h)
+            continue
+        candidatos = []
+        for n in tomadas:
+            proj = _projetar_no_percurso((n[0], n[1]), pts, cum)
+            if proj is None or proj[0] > dist_no or abs(proj[2]) < 0.01 or not n[4]:
+                continue
+            # tomada já atendida por outro trecho de parede mais próximo e compatível: não é deste
+            atendida_por_outro = False
+            for j in paredes:
+                if j == k or not _compativel(n[4], horizontais[j]["circuitos"]) or not horizontais[j]["circuitos"]:
+                    continue
+                dj = _dist_ponto_percurso((n[0], n[1]), horizontais[j]["pontos"])
+                if dj <= proj[0] + 0.05:
+                    atendida_por_outro = True
+                    break
+            if not atendida_por_outro:
+                candidatos.append((n, proj))
+        esq = [(n, pr) for n, pr in candidatos if pr[2] > 0]
+        dir_ = [(n, pr) for n, pr in candidatos if pr[2] < 0]
+        c_esq = set().union(*[set(map(str, n[4])) for n, _ in esq]) if esq else set()
+        c_dir = set().union(*[set(map(str, n[4])) for n, _ in dir_]) if dir_ else set()
+        if not esq or not dir_ or not (c_esq - c_dir) or not (c_dir - c_esq):
+            saida.append(h)
+            continue
+
+        todos_s = [pr[1] for _, pr in candidatos]
+        s0 = max(0.0, min(todos_s) - margem)
+        s1 = min(cum[-1], max(todos_s) + margem)
+        z_fim = h.get("altura_fim_m")
+
+        def _item(base_pts, pts3d, circuitos, rotulo, z, extra=None):
+            novo = {**h, "pontos": base_pts, "pontos3d": pts3d, "z": z, "altura_fim_m": None,
+                    "circuitos": circuitos, "id": rotulo, "quantitativo_m": None,
+                    "geometrico_m": comprimento_percurso(base_pts), "dividido": True}
+            novo.pop("deslocado_m", None)
+            novo.pop("deslocamento_xy", None)
+            if extra:
+                novo.update(extra)
+            return novo
+
+        z_orig = h["z"]
+        # Trecho sem altura própria (nenhuma ponta casou com tomada): segue a das tomadas da parede.
+        ordenados = sorted(candidatos, key=lambda np_: np_[1][1])
+        z_antes = z_depois = z_orig
+        if nivel is not None and abs(z_orig - nivel) < 1e-6:
+            z_antes, z_depois = ordenados[0][0][2], ordenados[-1][0][2]
+        if s0 > 0.02:
+            ant = _subpercurso(pts, cum, 0.0, s0)
+            saida.append(_item(ant, [(x, y, z_antes) for x, y in ant], list(h["circuitos"]), f"{h['id']}·a", z_antes))
+        sub = _subpercurso(pts, cum, s0, s1)
+        normais = _normais_esquerda(sub)
+        eixo0, eixo1 = sub[0], sub[-1]
+        meio_idx = len(sub) // 2
+        for lado, grupo, circs in ((1, esq, c_esq), (-1, dir_, c_dir)):
+            grupo_ord = sorted(grupo, key=lambda np_: np_[1][1])
+            z_lado = grupo_ord[0][0][2]
+            deslocados = [(x + nx * lado * desloc, y + ny * lado * desloc) for (x, y), (nx, ny) in zip(sub, normais)]
+            base = [eixo0] + deslocados + [eixo1]
+            rotulo = f"{h['id']}·C" + "+".join(sorted(circs, key=_chave_circuito))
+            nx, ny = normais[meio_idx]
+            saida.append(_item(base, [(x, y, z_lado) for x, y in base], sorted(circs, key=_chave_circuito), rotulo,
+                               z_lado, {"deslocado_m": lado * desloc,
+                                        "deslocamento_xy": (nx * lado * desloc, ny * lado * desloc)}))
+        if cum[-1] - s1 > 0.02:
+            dep = _subpercurso(pts, cum, s1, cum[-1])
+            p3 = [(x, y, z_depois) for x, y in dep]
+            if z_fim is not None:
+                p3.append((dep[-1][0], dep[-1][1], z_fim))
+            saida.append(_item(dep, p3, list(h["circuitos"]), f"{h['id']}·b", z_depois,
+                               {"altura_fim_m": z_fim}))
+        divisoes += 1
+    return saida, divisoes
+
+
 def comprimento_3d(pontos):
     return sum(math.dist(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1))
 
@@ -824,6 +984,7 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
             via_int[_chave(n)] = it
 
     trechos_paralelos = separar_trechos_paralelos(horizontais, nos_pt)
+    horizontais, trechos_divididos = dividir_trechos_em_parede_divisoria(horizontais, nos_pt, nivel)
 
     sem_descida = 0
     if alturas_ok:
@@ -929,7 +1090,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
         "caixa_mm": caixa, "horizontais": horizontais, "verticais": verticais,
         "caixas": caixas, "tomadas_sem_descida": sem_descida,
         "arcos_curtos_removidos": arcos_curtos_removidos,
-        "trechos_paralelos": trechos_paralelos, "luzes": [(float(x), float(y)) for x, y in luzes],
+        "trechos_paralelos": trechos_paralelos,
+        "trechos_divididos": trechos_divididos, "luzes": [(float(x), float(y)) for x, y in luzes],
         "qdc": qdc, "total_horizontal_m": total_h, "total_desenhado_m": total_desenhado,
         "total_vertical_m": total_v,
         "comandos": [list(c) for c in (comandos or [])],
@@ -1188,6 +1350,9 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             "A espessura das linhas é ilustrativa; as caixas 4x2 estão na escala real. "
             "Trechos que correm pelas paredes ficam na altura das tomadas a que pertencem; vãos de "
             f"porta ficam livres até {_fmt_m(ALTURA_VAO_PORTA_M)} m."
+            + (f" {modelo['trechos_divididos']} trecho(s) de parede divisória com tomadas nos dois ambientes "
+               "foram divididos em dois eletrodutos (um para cada circuito/ambiente)."
+               if modelo.get("trechos_divididos") else "")
             + (f" {modelo['trechos_paralelos']} grupo(s) de trechos de ambientes vizinhos que correm sobre a mesma "
                "parede foram afastados para ficarem distintos (um de cada lado)."
                if modelo.get("trechos_paralelos") else "")
