@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.369)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.370)."""
 import math
 import os
 import tempfile
@@ -111,6 +111,11 @@ TOL_INT_TOMADA_M = 0.60  # tomada vizinha a um interruptor (alimentada por ele)
 R_COTOVELO_M = 0.06
 TOL_JUNCAO_M = 0.35        # ponta do trecho horizontal que "pertence" a uma vertical
 COMPRIMENTO_ARCO_CURTO_M = 1.0   # arco interruptor-tomada do CAD (apenas simbólico)
+
+# Trechos de parede de ambientes vizinhos que correm sobre o mesmo eixo (um de cada
+# lado da parede divisória): são afastados para ficarem distintos na 3D.
+DESLOC_PARALELOS_M = 0.04
+SOBREPOSICAO_TOL_M = 0.10
 
 QDC_LARGURA_MIN_M = 0.40
 QDC_ALTURA_CAIXA_M = 0.50
@@ -437,6 +442,135 @@ def extremos_vertical(v):
     return v.get("z0_desenho", v["nivel_m"]), v.get("z1_desenho", v["altura_m"])
 
 
+def _compativel(circ_no, circ_trecho, eh_interruptor=False):
+    """Tomada só se associa a trecho que leva um dos circuitos dela.
+
+    Evita misturar, na parede divisória, as tomadas de um ambiente com os
+    eletrodutos do ambiente vizinho. Interruptores e dados ausentes não filtram.
+    """
+    if eh_interruptor or not circ_no or not circ_trecho:
+        return True
+    return bool(set(map(str, circ_no)) & set(map(str, circ_trecho)))
+
+
+def _dist_ponto_percurso(pt, pts):
+    melhor = None
+    for i in range(len(pts) - 1):
+        (x1, y1), (x2, y2) = pts[i], pts[i + 1]
+        dx, dy = x2 - x1, y2 - y1
+        tam2 = dx * dx + dy * dy
+        t = 0.0 if tam2 <= 1e-12 else max(0.0, min(1.0, ((pt[0] - x1) * dx + (pt[1] - y1) * dy) / tam2))
+        d = math.hypot(pt[0] - (x1 + t * dx), pt[1] - (y1 + t * dy))
+        if melhor is None or d < melhor:
+            melhor = d
+    return melhor if melhor is not None else float("inf")
+
+
+def _amostrar_percurso(pts, passo=0.1):
+    saida = [pts[0]]
+    for i in range(len(pts) - 1):
+        (x1, y1), (x2, y2) = pts[i], pts[i + 1]
+        comp = math.hypot(x2 - x1, y2 - y1)
+        n = max(1, int(comp / passo))
+        for k in range(1, n + 1):
+            t = k / n
+            saida.append((x1 + t * (x2 - x1), y1 + t * (y2 - y1)))
+    return saida
+
+
+def percursos_sobrepostos(pa, pb, tol=SOBREPOSICAO_TOL_M, fracao=0.5, comprimento_min=0.3, passo=0.1):
+    """True se dois percursos correm praticamente sobre o mesmo eixo."""
+    for x, y in ((pa, pb), (pb, pa)):
+        amostras = _amostrar_percurso(x, passo)
+        dentro = sum(1 for a in amostras if _dist_ponto_percurso(a, y) <= tol)
+        if dentro * passo >= comprimento_min and dentro / len(amostras) >= fracao:
+            return True
+    return False
+
+
+def _cruza(p1, p2, q1, q2):
+    def o(a, b, c):
+        return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+    d1, d2, d3, d4 = o(q1, q2, p1), o(q1, q2, p2), o(p1, p2, q1), o(p1, p2, q2)
+    return d1 * d2 < 0 and d3 * d4 < 0
+
+
+def separados_por_parede(p, q, segmentos, corte=0.03):
+    """True se há parede entre os dois pontos (ambientes diferentes)."""
+    d = math.hypot(q[0] - p[0], q[1] - p[1])
+    if d < 1e-9:
+        return False
+    k = min(corte / d, 0.4)
+    a = (p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k)
+    b = (q[0] - (q[0] - p[0]) * k, q[1] - (q[1] - p[1]) * k)
+    return any(_cruza(a, b, s1, s2) for s1, s2 in segmentos)
+
+
+def separar_trechos_paralelos(horizontais, nos_pt, desloc=DESLOC_PARALELOS_M):
+    """Afasta trechos de parede sobrepostos, cada um para o lado das suas tomadas.
+
+    Devolve o número de grupos separados. O lado vem das tomadas do próprio
+    circuito do trecho; sem essa informação, alterna os lados.
+    """
+    idx = [i for i, h in enumerate(horizontais) if str(h["desenho"]).upper() in ("LWPOLYLINE", "POLYLINE")]
+    pai = {i: i for i in idx}
+
+    def raiz(i):
+        while pai[i] != i:
+            pai[i] = pai[pai[i]]
+            i = pai[i]
+        return i
+
+    for pos, a in enumerate(idx):
+        for b in idx[pos + 1:]:
+            if abs(horizontais[a]["z"] - horizontais[b]["z"]) > 0.05:
+                continue   # alturas diferentes: já ficam distintos
+            if percursos_sobrepostos(horizontais[a]["pontos"], horizontais[b]["pontos"]):
+                pai[raiz(a)] = raiz(b)
+    grupos = {}
+    for i in idx:
+        grupos.setdefault(raiz(i), []).append(i)
+
+    separados = 0
+    for membros in grupos.values():
+        if len(membros) < 2:
+            continue
+        membros.sort()
+        pts0 = horizontais[membros[0]]["pontos"]
+        p_ref = pts0[0]
+        dx, dy = pts0[-1][0] - p_ref[0], pts0[-1][1] - p_ref[1]
+        if math.hypot(dx, dy) < 1e-6:
+            dx, dy = pts0[1][0] - pts0[0][0], pts0[1][1] - pts0[0][1]
+        tam = math.hypot(dx, dy) or 1.0
+        n_ref = (-dy / tam, dx / tam)
+        lados = []
+        for i in membros:
+            h = horizontais[i]
+            vals = [(no[0] - p_ref[0]) * n_ref[0] + (no[1] - p_ref[1]) * n_ref[1]
+                    for no in nos_pt
+                    if not no[3] and _compativel(no[4], h["circuitos"])
+                    and _dist_ponto_percurso((no[0], no[1]), h["pontos"]) <= 0.8]
+            m = sum(vals) / len(vals) if vals else 0.0
+            lados.append(1 if m > 0.01 else (-1 if m < -0.01 else 0))
+        distintos = {l for l in lados if l}
+        alternado = len(distintos) < 2 and not (len(membros) == 2 and len(distintos) == 1)
+        if alternado:
+            lados = [1 if k % 2 == 0 else -1 for k in range(len(membros))]
+        else:
+            ref = next(l for l in lados if l)
+            lados = [l if l else -ref for l in lados]
+        for k, i in enumerate(membros):
+            h = horizontais[i]
+            mag = desloc * (1 + (k // 2 if alternado else 0))
+            off = lados[k] * mag
+            ox, oy = n_ref[0] * off, n_ref[1] * off
+            h["pontos3d"] = [(x + ox, y + oy, z) for x, y, z in h["pontos3d"]]
+            h["deslocamento_xy"] = (ox, oy)
+            h["deslocado_m"] = off
+        separados += 1
+    return separados
+
+
 def comprimento_3d(pontos):
     return sum(math.dist(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1))
 
@@ -594,7 +728,9 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                 qdc = {"ponto": (x, y), "altura_m": altura}
             elif tipo not in TIPOS_ILUMINACAO:
                 vistos.add((round(x, 4), round(y, 4)))
-                caixas.append({"tipo": tipo, "ponto": (x, y), "altura_m": altura})
+                caixas.append({"tipo": tipo, "ponto": (x, y), "altura_m": altura,
+                               "circuitos": {str(c.get("circuito")) for c in (t.get("condutores") or [])
+                                             if c.get("circuito") is not None}})
         # Interruptores gerados que não apareceram nas descidas (ex.: sem cabos).
         altura_int = params.get("interruptor_m")
         for it in resumo.get("interruptores_gerados") or []:
@@ -602,7 +738,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                 continue
             x, y = _xy(it["ponto"])
             if (round(x, 4), round(y, 4)) not in vistos:
-                caixas.append({"tipo": "INTERRUPTOR", "ponto": (x, y), "altura_m": float(altura_int)})
+                caixas.append({"tipo": "INTERRUPTOR", "ponto": (x, y), "altura_m": float(altura_int),
+                               "circuitos": set()})
 
     for cx in caixas:
         x, y = cx["ponto"]
@@ -613,14 +750,16 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     #   pertencem (extremidades casadas com os pontos de tomada/interruptor).
     # - Trechos no teto chegam até o centro do ponto de iluminação (o desenho
     #   do CAD termina na borda do símbolo).
-    nos_altura = [(c["ponto"][0], c["ponto"][1], c["altura_m"]) for c in caixas]
+    nos_altura = [(c["ponto"][0], c["ponto"][1], c["altura_m"], c.get("circuitos") or set(),
+                   c["tipo"] == "INTERRUPTOR") for c in caixas]
     luzes_xy = [(float(x), float(y)) for x, y in luzes]
     for h in horizontais:
         pts = list(h["pontos"])
         z_h, z_fim = nivel, None
         if alturas_ok and str(h["desenho"]).upper() in ("LWPOLYLINE", "POLYLINE"):
-            no_a = _no_mais_proximo(pts[0], nos_altura, TOL_PONTO_M)
-            no_b = _no_mais_proximo(pts[-1], nos_altura, TOL_PONTO_M)
+            nos_c = [n for n in nos_altura if _compativel(n[3], h["circuitos"], n[4])]
+            no_a = _no_mais_proximo(pts[0], nos_c, TOL_PONTO_M)
+            no_b = _no_mais_proximo(pts[-1], nos_c, TOL_PONTO_M)
             if no_a is not None or no_b is not None:
                 z_h = no_a[2] if no_a is not None else no_b[2]
                 if no_a is not None and no_b is not None:
@@ -649,7 +788,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     # - Cada eletroduto que sai do QDC tem a sua vertical, da entrada do QDC
     #   até a altura em que o trecho corre na horizontal.
     trechos_pts = [c["pontos"] for c in condutos] if condutos else [h["pontos"] for h in horizontais]
-    nos_pt = [(c["ponto"][0], c["ponto"][1], c["altura_m"], c["tipo"] == "INTERRUPTOR") for c in caixas]
+    nos_pt = [(c["ponto"][0], c["ponto"][1], c["altura_m"], c["tipo"] == "INTERRUPTOR",
+               c.get("circuitos") or set()) for c in caixas]
 
     def _chave(no):
         return (round(no[0], 4), round(no[1], 4))
@@ -657,8 +797,10 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     ligadas, via_int, curtos = set(), {}, set()
     for idx_trecho, pts in enumerate(trechos_pts):
         for ext, outra in ((pts[0], pts[-1]), (pts[-1], pts[0])):
-            n_ext = _no_mais_proximo(ext, nos_pt, TOL_PONTO_M)      # nó mais próximo de verdade
-            n_out = _no_mais_proximo(outra, nos_pt, TOL_PONTO_M)
+            circ_t = horizontais[idx_trecho]["circuitos"] if idx_trecho < len(horizontais) else []
+            nos_c = [n for n in nos_pt if _compativel(n[4], circ_t, n[3])]
+            n_ext = _no_mais_proximo(ext, nos_c, TOL_PONTO_M)      # nó mais próximo de verdade
+            n_out = _no_mais_proximo(outra, nos_c, TOL_PONTO_M)
             if _no_mais_proximo(ext, luzes_xy, TOL_LUZ_M) is not None and n_out is not None and not n_out[3]:
                 ligadas.add(_chave(n_out))
             if n_ext is not None and n_out is not None and n_ext[3] and not n_out[3]:
@@ -674,9 +816,14 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     for n in nos_pt:
         if n[3] or _chave(n) in ligadas or _chave(n) in via_int:
             continue
-        it = _no_mais_proximo((n[0], n[1]), interruptores_pt, TOL_INT_TOMADA_M)
+        # vizinho de verdade: sem parede entre o interruptor e a tomada
+        livres = [i for i in interruptores_pt
+                  if not separados_por_parede((n[0], n[1]), (i[0], i[1]), segmentos)]
+        it = _no_mais_proximo((n[0], n[1]), livres, TOL_INT_TOMADA_M)
         if it is not None:
             via_int[_chave(n)] = it
+
+    trechos_paralelos = separar_trechos_paralelos(horizontais, nos_pt)
 
     sem_descida = 0
     if alturas_ok:
@@ -781,7 +928,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
         "pe_direito": pe, "nivel": nivel, "percurso": percurso, "alturas_ok": alturas_ok,
         "caixa_mm": caixa, "horizontais": horizontais, "verticais": verticais,
         "caixas": caixas, "tomadas_sem_descida": sem_descida,
-        "arcos_curtos_removidos": arcos_curtos_removidos, "luzes": [(float(x), float(y)) for x, y in luzes],
+        "arcos_curtos_removidos": arcos_curtos_removidos,
+        "trechos_paralelos": trechos_paralelos, "luzes": [(float(x), float(y)) for x, y in luzes],
         "qdc": qdc, "total_horizontal_m": total_h, "total_desenhado_m": total_desenhado,
         "total_vertical_m": total_v,
         "comandos": [list(c) for c in (comandos or [])],
@@ -909,7 +1057,8 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                     comp = h["quantitativo_m"] if h["quantitativo_m"] is not None else h["geometrico_m"]
                     d_txt = f' Ø{int(h["diametro_mm"])} mm' if h["diametro_mm"] else ""
                     meio = ponto_no_meio(h["pontos"])
-                    mx.append(meio[0]); my.append(meio[1]); mz.append(h["z"])
+                    off_xy = h.get("deslocamento_xy", (0.0, 0.0))
+                    mx.append(meio[0] + off_xy[0]); my.append(meio[1] + off_xy[1]); mz.append(h["z"])
                     textos.append(f"{_fmt_m(comp)} m{d_txt}" if m_cotas else "")
                     alt_txt = (f"<br>Altura do traçado: {_fmt_m(h['z'])} m"
                                if abs(h["z"] - modelo["nivel"]) > 1e-6 else "")
@@ -919,6 +1068,8 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                         f"<br>Eletroduto:{d_txt or ' —'}{alt_txt}"
                         f"<br>Circuitos: {', '.join(h['circuitos']) or '—'}"
                         f"<br>{h['de'] or '—'} → {h['para'] or '—'}"
+                        + (f"<br>Paralelo a outro trecho na mesma parede (afastado {abs(h['deslocado_m']) * 100:.0f} cm do eixo)"
+                           if h.get("deslocado_m") else "")
                     )
                 d_int = int(diam) if diam else None
                 fig.add_trace(go.Scatter3d(
@@ -1037,6 +1188,9 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             "A espessura das linhas é ilustrativa; as caixas 4x2 estão na escala real. "
             "Trechos que correm pelas paredes ficam na altura das tomadas a que pertencem; vãos de "
             f"porta ficam livres até {_fmt_m(ALTURA_VAO_PORTA_M)} m."
+            + (f" {modelo['trechos_paralelos']} grupo(s) de trechos de ambientes vizinhos que correm sobre a mesma "
+               "parede foram afastados para ficarem distintos (um de cada lado)."
+               if modelo.get("trechos_paralelos") else "")
             + (f" {modelo['arcos_curtos_removidos']} arco(s) curto(s) interruptor–tomada do CAD (apenas simbólicos) "
                "foram substituídos pela ligação direta do eletroduto horizontal com a vertical."
                if modelo.get("arcos_curtos_removidos") else "")
