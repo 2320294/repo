@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.366)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.367)."""
 import math
 import os
 import tempfile
@@ -104,6 +104,13 @@ TOL_PONTO_M = 0.45   # tomada/interruptor
 TOL_LUZ_M = 0.45     # ponto de luz (o desenho para na borda do símbolo)
 TOL_QDC_M = 0.60     # eletrodutos que saem do QDC
 TOL_INT_TOMADA_M = 0.60  # tomada vizinha a um interruptor (alimentada por ele)
+
+# QDC desenhado como caixa: cresce conforme o número de eletrodutos, para que
+# cada um tenha sua própria saída (sem sobreposição). Parâmetros fixos do sistema.
+QDC_LARGURA_MIN_M = 0.40
+QDC_ALTURA_CAIXA_M = 0.50
+QDC_PROF_M = 0.12
+QDC_ESPACAMENTO_M = 0.06   # distância entre eletrodutos vizinhos na saída do QDC
 
 # Parâmetro fixo do sistema: altura livre do vão de porta (sem parede abaixo dela).
 ALTURA_VAO_PORTA_M = 2.10
@@ -354,6 +361,48 @@ def retangulo_piso(segmentos, folga=0.3):
     return (min(xs) - folga, min(ys) - folga, max(xs) + folga, max(ys) + folga)
 
 
+def curva_ligacao(p0, p1, passos=24):
+    """Arco suave (Bézier cúbica) entre duas caixas, saindo e chegando na vertical.
+
+    p0 e p1 são (x, y, z). Sem diferença de altura, vira uma reta.
+    """
+    dz = p1[2] - p0[2]
+    if abs(dz) < 1e-9:
+        return [p0, p1]
+    k = abs(dz) * 0.5
+    sinal = 1.0 if dz > 0 else -1.0
+    c1 = (p0[0], p0[1], p0[2] + sinal * k)
+    c2 = (p1[0], p1[1], p1[2] - sinal * k)
+    pts = []
+    for i in range(passos + 1):
+        t = i / passos
+        a, b, c, d = (1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t ** 2, t ** 3
+        pts.append(tuple(a * p0[j] + b * c1[j] + c * c2[j] + d * p1[j] for j in range(3)))
+    return pts
+
+
+def comprimento_3d(pontos):
+    return sum(math.dist(pontos[i], pontos[i + 1]) for i in range(len(pontos) - 1))
+
+
+def malha_qdc(qdc):
+    """Vértices/triângulos do QDC (caixa centrada na altura de entrada)."""
+    cx, cy = qdc["ponto"]
+    cz = qdc["altura_m"]
+    u, n = qdc["u"], qdc["n"]
+    hl, hp, hh = qdc["largura_m"] / 2, qdc["prof_m"] / 2, qdc["altura_caixa_m"] / 2
+    X, Y, Z = [], [], []
+    for sz in (-1, 1):
+        for sn in (-1, 1):
+            for su in (-1, 1):
+                X.append(cx + su * hl * u[0] + sn * hp * n[0])
+                Y.append(cy + su * hl * u[1] + sn * hp * n[1])
+                Z.append(cz + sz * hh)
+    faces = ((0, 1, 3), (0, 3, 2), (4, 5, 7), (4, 7, 6), (0, 1, 5), (0, 5, 4),
+             (2, 3, 7), (2, 7, 6), (0, 2, 6), (0, 6, 4), (1, 3, 7), (1, 7, 5))
+    return X, Y, Z, [f[0] for f in faces], [f[1] for f in faces], [f[2] for f in faces]
+
+
 def comprimento_percurso(pontos):
     return sum(math.hypot(pontos[i + 1][0] - pontos[i][0], pontos[i + 1][1] - pontos[i][1])
                for i in range(len(pontos) - 1))
@@ -580,34 +629,52 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
             if k in ligadas:
                 novas.append(v)
             elif k in via_int:
-                z_int = via_int[k][2]
-                delta = abs(z_int - v["altura_m"])
-                if delta > 1e-6:
-                    novas.append({**v, "nivel_m": z_int, "comprimento_m": delta, "origem": "INTERRUPTOR"})
+                it = via_int[k]
+                curva = curva_ligacao((it[0], it[1], it[2]),
+                                      (v["ponto"][0], v["ponto"][1], v["altura_m"]))
+                comp = comprimento_3d(curva)
+                if comp > 1e-6:
+                    novas.append({**v, "nivel_m": it[2], "comprimento_m": comp, "origem": "INTERRUPTOR",
+                                  "curva": curva, "ponto_origem": (it[0], it[1])})
             else:
                 sem_descida += 1
 
-        qdc_verticais, usados = [], {}
+        qdc_verticais = []
         if qdc is not None:
             qx, qy = qdc["ponto"]
-            for h in horizontais:
+            qz = qdc["altura_m"]
+            u_q, n_q = _orientacao_parede(qx, qy, segmentos)
+            cand = []
+            for hi, h in enumerate(horizontais):
                 pts = h["pontos"]
                 for fim_do_trecho in (False, True):
                     pt = pts[-1] if fim_do_trecho else pts[0]
                     if math.hypot(pt[0] - qx, pt[1] - qy) > TOL_QDC_M:
                         continue
                     z_ext = (h["altura_fim_m"] if (fim_do_trecho and h["altura_fim_m"] is not None) else h["z"])
-                    delta = abs(qdc["altura_m"] - z_ext)
-                    if delta > 1e-6:
-                        chave_xy = (round(pt[0], 3), round(pt[1], 3))
-                        usados[chave_xy] = usados.get(chave_xy, 0) + 1
-                        qdc_verticais.append({
-                            "ponto": (pt[0] + 0.03 * (usados[chave_xy] - 1), pt[1]), "tipo": "QDC",
-                            "altura_m": z_ext, "nivel_m": qdc["altura_m"], "comprimento_m": delta,
-                            "diametro_mm": h["diametro_mm"], "origem": "QDC", "circuitos": h["circuitos"],
-                            "trecho": h["id"],
-                        })
+                    if abs(qz - z_ext) > 1e-6:
+                        proj = (pt[0] - qx) * u_q[0] + (pt[1] - qy) * u_q[1]
+                        cand.append((proj, hi, fim_do_trecho, z_ext))
                     break
+            cand.sort(key=lambda c: c[0])   # ordem ao longo do QDC: evita cruzamentos
+            total_saidas = len(cand)
+            for k, (proj, hi, fim_do_trecho, z_ext) in enumerate(cand):
+                desloc = (k - (total_saidas - 1) / 2.0) * QDC_ESPACAMENTO_M
+                sx, sy = qx + u_q[0] * desloc, qy + u_q[1] * desloc
+                h = horizontais[hi]
+                # o trecho passa a nascer na saída própria dele no QDC
+                if fim_do_trecho:
+                    h["pontos3d"].append((sx, sy, z_ext))
+                else:
+                    h["pontos3d"].insert(0, (sx, sy, z_ext))
+                qdc_verticais.append({
+                    "ponto": (sx, sy), "tipo": "QDC", "altura_m": z_ext, "nivel_m": qz,
+                    "comprimento_m": abs(qz - z_ext), "diametro_mm": h["diametro_mm"],
+                    "origem": "QDC", "circuitos": h["circuitos"], "trecho": h["id"],
+                })
+            qdc = {**qdc, "u": u_q, "n": n_q, "prof_m": QDC_PROF_M, "altura_caixa_m": QDC_ALTURA_CAIXA_M,
+                   "largura_m": max(QDC_LARGURA_MIN_M, (total_saidas + 1) * QDC_ESPACAMENTO_M),
+                   "saidas": total_saidas}
             if not qdc_verticais:
                 qdc_verticais = [v for v in verticais if v["tipo"] == "QDC"]
         verticais = novas + qdc_verticais
@@ -786,9 +853,16 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             mx, my, mz, textos, hovers = [], [], [], [], []
             for v in modelo["verticais"]:
                 x, y = v["ponto"]
-                xs.extend([x, x, None]); ys.extend([y, y, None]); zs.extend([v["nivel_m"], v["altura_m"], None])
+                if v.get("curva"):
+                    for (cx_, cy_, cz_) in v["curva"]:
+                        xs.append(cx_); ys.append(cy_); zs.append(cz_)
+                    xs.append(None); ys.append(None); zs.append(None)
+                    cm_ = v["curva"][len(v["curva"]) // 2]
+                    mx.append(cm_[0]); my.append(cm_[1]); mz.append(cm_[2])
+                else:
+                    xs.extend([x, x, None]); ys.extend([y, y, None]); zs.extend([v["nivel_m"], v["altura_m"], None])
+                    mx.append(x); my.append(y); mz.append((v["nivel_m"] + v["altura_m"]) / 2)
                 diam = f' Ø{int(v["diametro_mm"])} mm' if v["diametro_mm"] else ""
-                mx.append(x); my.append(y); mz.append((v["nivel_m"] + v["altura_m"]) / 2)
                 textos.append(f"{_fmt_m(v['comprimento_m'])} m" if m_cotas else "")
                 if v.get("origem") == "QDC":
                     hovers.append(f"Saída do QDC (trecho {v.get('trecho', '—')})"
@@ -796,9 +870,9 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                                   f"<br>Vertical: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}"
                                   f"<br>Circuitos: {', '.join(v.get('circuitos') or []) or '—'}")
                 elif v.get("origem") == "INTERRUPTOR":
-                    hovers.append(f"{_rotulo_tipo(v['tipo'])} alimentada pelo interruptor"
+                    hovers.append(f"Ligação interruptor → {_rotulo_tipo(v['tipo']).lower()} (arco)"
                                   f"<br>Do interruptor ({_fmt_m(v['nivel_m'])} m) até {_fmt_m(v['altura_m'])} m"
-                                  f"<br>Vertical: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
+                                  f"<br>Comprimento do arco: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
                 else:
                     hovers.append(f"{_rotulo_tipo(v['tipo'])}<br>Altura do ponto: {_fmt_m(v['altura_m'])} m"
                                   f"<br>Descida: {_fmt_m(v['comprimento_m'])} m<br>Eletroduto:{diam or ' —'}")
@@ -834,12 +908,19 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
 
         if modelo["qdc"]:
             q = modelo["qdc"]
-            fig.add_trace(go.Scatter3d(x=[q["ponto"][0]], y=[q["ponto"][1]], z=[q["altura_m"]], mode="markers",
-                                       name="QDC (entrada dos eletrodutos)",
-                                       marker=dict(size=9, color=COR_QDC, symbol="square",
-                                                   line=dict(width=1, color="#ffffff")),
-                                       hovertext=[f"QDC<br>Entrada dos eletrodutos: {_fmt_m(q['altura_m'])} m"],
-                                       hoverinfo="text"))
+            if "largura_m" in q:
+                X, Y, Z, I, J, K = malha_qdc(q)
+                fig.add_trace(go.Mesh3d(
+                    x=X, y=Y, z=Z, i=I, j=J, k=K, color=COR_QDC, opacity=0.45, flatshading=True,
+                    name="QDC", showlegend=True, hoverinfo="text",
+                    hovertext=(f"QDC — {q['largura_m'] * 100:.0f} × {q['altura_caixa_m'] * 100:.0f} × "
+                               f"{q['prof_m'] * 100:.0f} cm<br>Entrada dos eletrodutos: {_fmt_m(q['altura_m'])} m"
+                               f"<br>{q['saidas']} saída(s) com {QDC_ESPACAMENTO_M * 100:.0f} cm entre elas")))
+            else:
+                fig.add_trace(go.Scatter3d(x=[q["ponto"][0]], y=[q["ponto"][1]], z=[q["altura_m"]], mode="markers",
+                                           name="QDC", marker=dict(size=9, color=COR_QDC, symbol="square"),
+                                           hovertext=[f"QDC<br>Entrada dos eletrodutos: {_fmt_m(q['altura_m'])} m"],
+                                           hoverinfo="text"))
 
         eixo = dict(showbackground=False, showgrid=True, gridcolor="#dde4f0", zeroline=False,
                     showspikes=False, color="#667389", tickfont=dict(size=10))
@@ -872,7 +953,7 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         m3.metric("Caixas 4x2", len(modelo["caixas"]))
         m4.metric("Pontos de iluminação", len(modelo["luzes"]))
 
-        aba_h, aba_v, aba_c = st.tabs(["Trechos horizontais", "Descidas verticais", "Caixas 4x2"])
+        aba_h, aba_v, aba_c = st.tabs(["Trechos horizontais", "Descidas e ligações", "Caixas 4x2"])
         with aba_h:
             st.dataframe([
                 {"Trecho": h["id"], "Percurso": _rotulo_desenho(h["desenho"]),
@@ -885,10 +966,10 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
         with aba_v:
             st.dataframe([
                 {"Ponto": _rotulo_tipo(v["tipo"]),
-                 "Parte de": {"QDC": "QDC", "INTERRUPTOR": "Interruptor"}.get(v.get("origem"), "Percurso (teto/piso)"),
+                 "Parte de": {"QDC": "QDC", "INTERRUPTOR": "Interruptor (arco)"}.get(v.get("origem"), "Percurso (teto/piso)"),
                  "X (m)": round(v["ponto"][0], 3), "Y (m)": round(v["ponto"][1], 3),
                  "De (m)": round(v["nivel_m"], 2), "Até (m)": round(v["altura_m"], 2),
-                 "Vertical (m)": round(v["comprimento_m"], 2), "Ø (mm)": v["diametro_mm"]}
+                 "Comprimento (m)": round(v["comprimento_m"], 2), "Ø (mm)": v["diametro_mm"]}
                 for v in modelo["verticais"]], use_container_width=True, hide_index=True)
         with aba_c:
             cm = modelo["caixa_mm"]
