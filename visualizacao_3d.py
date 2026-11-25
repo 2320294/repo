@@ -1,6 +1,7 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.372)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.373)."""
 import math
 import os
+import re
 import tempfile
 
 import streamlit as st
@@ -80,6 +81,9 @@ def _carregar_documento(dxf_data):
 
 
 PREFIXO_LAYER_ELETRICO = "PROJ_ELETRICA"
+# Rótulo de circuito escrito ao lado de cada tomada no desenho (ex.: "-3-").
+_RE_ROTULO_CIRCUITO = re.compile(r"^\s*-\s*(\d+)\s*-\s*$")
+DIST_ROTULO_TOMADA_M = 0.70
 LAYER_LUZ = "PROJ_ELETRICA_LUZ"
 LAYER_ROTEAMENTO = "PROJ_ELETRICA_ROTEAMENTO"  # percurso real dos eletrodutos (ARC/LWPOLYLINE)
 LAYER_ELETRODUTO = "PROJ_ELETRICA_ELETRODUTO"    # traçado antigo em LINE (reserva)
@@ -171,6 +175,23 @@ def _pontos_entidade(ent):
     return []
 
 
+def _rotulo_circuito(ent):
+    """(x, y, circuito) se a entidade é um texto "-N-"; senão None."""
+    kind = ent.dxftype()
+    if kind not in ("TEXT", "MTEXT"):
+        return None
+    try:
+        texto = ent.dxf.text if kind == "TEXT" else ent.plain_text()
+        pos = ent.dxf.insert
+    except (AttributeError, TypeError, ValueError):
+        return None
+    for linha in str(texto or "").replace("\\P", "\n").splitlines():
+        m = _RE_ROTULO_CIRCUITO.match(linha)
+        if m:
+            return float(pos.x), float(pos.y), m.group(1)
+    return None
+
+
 def _extrair_geometria(modelspace):
     """Separa do DXF gerado: arquitetura, pontos de luz e o percurso real.
 
@@ -181,15 +202,22 @@ def _extrair_geometria(modelspace):
       PROJ_ELETRICA_ROTEAMENTO (arcos e polilinhas que correm pelo eixo das
       paredes), com todos os vértices; reserva: LINEs de PROJ_ELETRICA_ELETRODUTO.
     - Comandos: linhas interruptor -> luz (PROJ_ELETRICA_COMANDO).
+    - Rótulos de circuito "-N-" (TEXT/MTEXT) ao lado das tomadas: dizem de qual
+      circuito/ambiente é cada tomada (os condutores do nó não servem, pois o
+      nó final de um eletroduto compartilhado recebe os circuitos dos dois lados).
     - Soleiras (vãos de porta, IA_SOLEIRAS) ficam à parte; a camada IA_PORTAS
       (folha da porta) não entra como parede.
     """
     segmentos = []
     luzes = {}
-    condutos, condutos_reserva, comandos, soleiras = [], [], [], []
+    condutos, condutos_reserva, comandos, soleiras, rotulos = [], [], [], [], []
     for ent in modelspace:
         kind = ent.dxftype()
         layer = str(getattr(ent.dxf, "layer", "") or "").upper()
+        rot = _rotulo_circuito(ent)
+        if rot is not None:
+            rotulos.append(rot)
+            continue
         try:
             if layer.startswith(PREFIXO_LAYER_ELETRICO):
                 if layer == LAYER_LUZ and kind == "LINE":
@@ -224,7 +252,7 @@ def _extrair_geometria(modelspace):
         except (AttributeError, TypeError, ValueError):
             # Ignora entidades com coordenadas incompatíveis, sem abortar o desenho inteiro.
             continue
-    return segmentos, list(luzes.values()), (condutos or condutos_reserva), comandos, soleiras
+    return segmentos, list(luzes.values()), (condutos or condutos_reserva), comandos, soleiras, rotulos
 
 
 def _xy(ponto):
@@ -507,6 +535,140 @@ def separados_por_parede(p, q, segmentos, corte=0.03):
     a = (p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k)
     b = (q[0] - (q[0] - p[0]) * k, q[1] - (q[1] - p[1]) * k)
     return any(_cruza(a, b, s1, s2) for s1, s2 in segmentos)
+
+
+def afastar_trechos_sobrepostos(horizontais, nos_pt, tol=SOBREPOSICAO_TOL_M, comprimento_min=0.25,
+                                passo_amostra=0.1, passo_off=2 * DESLOC_PARALELOS_M, dz_max=0.05):
+    """Facilita a leitura quando circuitos diferentes se sobrepõem no projeto elétrico.
+
+    Nos trechos em que dois ou mais eletrodutos de circuitos diferentes correm sobre a
+    mesma linha (inclusive sobreposição parcial, onde se "juntam"), a 3D os separa em
+    paralelo SOMENTE nesse trecho, com rampa de entrada e saída. Cada eletroduto vai
+    para o lado das tomadas do seu próprio circuito; sem essa informação, a ordem é
+    determinística. Sobreposições menores que `comprimento_min` (cruzamentos e
+    encontros em pontos) são ignoradas. Devolve o número de grupos afastados.
+    """
+    n = len(horizontais)
+    if n < 2:
+        return 0
+    amostras = []
+    for h in horizontais:
+        p3 = h["pontos3d"]
+        am = [tuple(p3[0])]
+        for a, b in zip(p3, p3[1:]):
+            k = max(1, int(math.ceil(math.hypot(b[0] - a[0], b[1] - a[1]) / passo_amostra)))
+            for t in range(1, k + 1):
+                u = t / k
+                am.append(tuple(a[c] + u * (b[c] - a[c]) for c in range(3)))
+        amostras.append(am)
+
+    celula = 0.25
+    grade = {}
+    for i, am in enumerate(amostras):
+        for k, (x, y, z) in enumerate(am):
+            grade.setdefault((int(math.floor(x / celula)), int(math.floor(y / celula))), []).append((i, k))
+
+    def _diferentes(i, j):
+        ci, cj = set(map(str, horizontais[i]["circuitos"])), set(map(str, horizontais[j]["circuitos"]))
+        return not (ci and cj and ci == cj)
+
+    # grupo de conduítes sobrepostos em cada amostra: (i, k) -> {j: índice da amostra mais próxima em j}
+    grupo = {}
+    for i, am in enumerate(amostras):
+        for k, (x, y, z) in enumerate(am):
+            cx, cy = int(math.floor(x / celula)), int(math.floor(y / celula))
+            achados = {}
+            for gx in (cx - 1, cx, cx + 1):
+                for gy in (cy - 1, cy, cy + 1):
+                    for (j, m) in grade.get((gx, gy), ()):
+                        if j == i or not _diferentes(i, j):
+                            continue
+                        xj, yj, zj = amostras[j][m]
+                        d = math.hypot(xj - x, yj - y)
+                        if d <= tol and abs(zj - z) <= dz_max and (j not in achados or d < achados[j][0]):
+                            achados[j] = (d, m)
+            if achados:
+                grupo[(i, k)] = {j: m for j, (d, m) in achados.items()}
+
+    # descarta sobreposições curtas (por conduíte, em trechos contínuos de amostras)
+    for i, am in enumerate(amostras):
+        k = 0
+        while k < len(am):
+            if (i, k) not in grupo:
+                k += 1
+                continue
+            fim = k
+            while fim + 1 < len(am) and (i, fim + 1) in grupo:
+                fim += 1
+            if (fim - k + 1) * passo_amostra < comprimento_min:
+                for q in range(k, fim + 1):
+                    grupo.pop((i, q), None)
+            k = fim + 1
+
+    if not grupo:
+        return 0
+
+    tomadas = [nn for nn in nos_pt if not nn[3]]
+
+    def _direcao(i, m):
+        am = amostras[i]
+        a, b = am[max(0, m - 1)], am[min(len(am) - 1, m + 1)]
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        tam = math.hypot(dx, dy)
+        return (dx / tam, dy / tam) if tam > 1e-9 else (1.0, 0.0)
+
+    desloc_vec = {i: [(0.0, 0.0)] * len(am) for i, am in enumerate(amostras)}
+    envolvidos = set()
+    for (i, k), outros in grupo.items():
+        membros = {i: k, **outros}
+        ordem_ref = min(membros)
+        nx, ny = _direcao(ordem_ref, membros[ordem_ref])
+        n_ref = (-ny, nx)
+        x, y, _ = amostras[i][k]
+
+        def _escore(c):
+            # lado da tomada compatível (do circuito do trecho) mais próxima: consistente ao
+            # longo de todo o trecho, mesmo onde não há tomada por perto
+            melhor = None
+            for nn in tomadas:
+                if not _compativel(nn[4], horizontais[c]["circuitos"]):
+                    continue
+                d = math.hypot(nn[0] - x, nn[1] - y)
+                if d <= 3.0 and (melhor is None or d < melhor[0]):
+                    melhor = (d, (nn[0] - x) * n_ref[0] + (nn[1] - y) * n_ref[1])
+            return melhor[1] if melhor else 0.0
+
+        ordenados = sorted(membros, key=lambda c: (round(_escore(c), 3), c))
+        pos = ordenados.index(i)
+        off = (pos - (len(ordenados) - 1) / 2.0) * passo_off
+        desloc_vec[i][k] = (n_ref[0] * off, n_ref[1] * off)
+        envolvidos.update(membros)
+
+    # suaviza (rampa) e aplica
+    for i in sorted({i for i, _ in grupo}):
+        am, vec = amostras[i], desloc_vec[i]
+        suave = []
+        for k in range(len(am)):
+            ja, jb = vec[max(0, k - 1)], vec[min(len(am) - 1, k + 1)]
+            suave.append(((ja[0] + vec[k][0] + jb[0]) / 3.0, (ja[1] + vec[k][1] + jb[1]) / 3.0))
+        horizontais[i]["pontos3d"] = [(x + dx, y + dy, z) for (x, y, z), (dx, dy) in zip(am, suave)]
+        maior = max(range(len(am)), key=lambda q: math.hypot(*suave[q]))
+        horizontais[i]["deslocamento_xy"] = suave[maior]
+        horizontais[i]["deslocado_m"] = math.hypot(*suave[maior]) or None
+
+    # número de grupos (componentes conexos) separados
+    pai = {c: c for c in envolvidos}
+
+    def raiz(c):
+        while pai[c] != c:
+            pai[c] = pai[pai[c]]
+            c = pai[c]
+        return c
+
+    for (i, _), outros in grupo.items():
+        for j in outros:
+            pai[raiz(i)] = raiz(j)
+    return len({raiz(c) for c in envolvidos})
 
 
 def separar_trechos_paralelos(horizontais, nos_pt, desloc=DESLOC_PARALELOS_M):
@@ -838,7 +1000,8 @@ def _orientacao_parede(x, y, segmentos):
     return u, (-u[1], u[0])
 
 
-def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=None, comandos=None):
+def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=None, comandos=None,
+                  rotulos_circuito=None):
     """Monta, sem depender de Streamlit/Plotly, tudo o que a Etapa 8 exibe.
 
     Todas as medidas vêm do roteamento físico gerado com o CAD (mesma fonte do
@@ -927,6 +1090,20 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
         x, y = cx["ponto"]
         cx["u"], cx["n"] = _orientacao_parede(x, y, segmentos)
 
+    # Circuito PRÓPRIO de cada tomada, lido do rótulo "-N-" do desenho (mais próximo,
+    # até 0,70 m). Substitui os circuitos dos condutores do nó, que incluem os que só
+    # passam por ele. Sem rótulo, mantém os circuitos dos condutores.
+    rotulos_usados = 0
+    if rotulos_circuito:
+        for cx in caixas:
+            if cx["tipo"] == "INTERRUPTOR":
+                continue
+            melhor = _no_mais_proximo(cx["ponto"], rotulos_circuito, DIST_ROTULO_TOMADA_M)
+            if melhor is not None:
+                cx["circuitos"] = {str(melhor[2])}
+                cx["circuito_proprio"] = str(melhor[2])
+                rotulos_usados += 1
+
     # Altura de cada trecho e ligação aos pontos de luz --------------------
     # - Trechos que correm pelas paredes ficam na altura da(s) tomada(s) a que
     #   pertencem (extremidades casadas com os pontos de tomada/interruptor).
@@ -1005,7 +1182,7 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
         if it is not None:
             via_int[_chave(n)] = it
 
-    trechos_paralelos = separar_trechos_paralelos(horizontais, nos_pt)
+    trechos_paralelos = afastar_trechos_sobrepostos(horizontais, nos_pt)
     horizontais, trechos_divididos = dividir_trechos_em_parede_divisoria(horizontais, nos_pt, nivel)
 
     sem_descida = 0
@@ -1110,7 +1287,7 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
     return {
         "pe_direito": pe, "nivel": nivel, "percurso": percurso, "alturas_ok": alturas_ok,
         "caixa_mm": caixa, "horizontais": horizontais, "verticais": verticais,
-        "caixas": caixas, "tomadas_sem_descida": sem_descida,
+        "caixas": caixas, "tomadas_sem_descida": sem_descida, "rotulos_circuito_usados": rotulos_usados,
         "arcos_curtos_removidos": arcos_curtos_removidos,
         "trechos_paralelos": trechos_paralelos,
         "trechos_divididos": trechos_divididos, "luzes": [(float(x), float(y)) for x, y in luzes],
@@ -1167,11 +1344,11 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
             raise ValueError("O pé-direito configurado em Parâmetros deve ser maior que zero.")
 
         doc = _carregar_documento(dxf_data)
-        segmentos, luzes, condutos, comandos, soleiras = _extrair_geometria(doc.modelspace())
+        segmentos, luzes, condutos, comandos, soleiras, rotulos = _extrair_geometria(doc.modelspace())
 
         modelo = montar_modelo(
             segmentos, luzes, resumo_rotas, z_height, None,
-            condutos=condutos, comandos=comandos,
+            condutos=condutos, comandos=comandos, rotulos_circuito=rotulos,
         )
 
         if not modelo["horizontais"]:
@@ -1376,8 +1553,8 @@ def renderizar_visualizacao_3d(dxf_data, pe_direito, resumo_rotas=None):
                "onde os eletrodutos dos dois ambientes se juntam foram separados em dois eletrodutos paralelos "
                "(um para cada circuito/ambiente)."
                if modelo.get("trechos_divididos") else "")
-            + (f" {modelo['trechos_paralelos']} grupo(s) de trechos de ambientes vizinhos que correm sobre a mesma "
-               "parede foram afastados para ficarem distintos (um de cada lado)."
+            + (f" {modelo['trechos_paralelos']} grupo(s) de eletrodutos de circuitos diferentes que se sobrepõem no projeto "
+               "foram afastados em paralelo, só no trecho em que se sobrepõem, para facilitar a leitura."
                if modelo.get("trechos_paralelos") else "")
             + (f" {modelo['arcos_curtos_removidos']} arco(s) curto(s) interruptor–tomada do CAD (apenas simbólicos) "
                "foram substituídos pela ligação direta do eletroduto horizontal com a vertical."
