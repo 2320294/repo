@@ -1,4 +1,4 @@
-"""Tema visual do sistema logado e componentes do menu lateral (13.6.374).
+"""Tema visual do sistema logado e componentes do menu lateral (13.6.375).
 
 Inspirado no layout "Sidebar Dashboard" (Figma Community): cartão de
 usuário no topo, seções com títulos em caixa alta, itens de navegação

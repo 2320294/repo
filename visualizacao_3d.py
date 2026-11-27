@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.374)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.375)."""
 import math
 import os
 import re
@@ -1173,14 +1173,17 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
         horizontais = [h for i, h in enumerate(horizontais) if i not in curtos]
     interruptores_pt = [n for n in nos_pt if n[3]]
     for n in nos_pt:
-        if n[3] or _chave(n) in ligadas or _chave(n) in via_int:
+        if n[3] or _chave(n) in via_int:
             continue
         # vizinho de verdade: sem parede entre o interruptor e a tomada
         livres = [i for i in interruptores_pt
                   if not separados_por_parede((n[0], n[1]), (i[0], i[1]), segmentos)]
         it = _no_mais_proximo((n[0], n[1]), livres, TOL_INT_TOMADA_M)
         if it is not None:
+            # A tomada vizinha ao interruptor é alimentada por ele, mesmo que o eletroduto que
+            # vem da luz termine junto aos dois (a luz alimenta o interruptor, não a tomada).
             via_int[_chave(n)] = it
+            ligadas.discard(_chave(n))
 
     trechos_paralelos = afastar_trechos_sobrepostos(horizontais, nos_pt)
     horizontais, trechos_divididos = dividir_trechos_em_parede_divisoria(horizontais, nos_pt, nivel)
@@ -1196,9 +1199,7 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                 novas.append(v)
                 continue
             k = (round(v["ponto"][0], 4), round(v["ponto"][1], 4))
-            if k in ligadas:
-                novas.append(v)
-            elif k in via_int:
+            if k in via_int:
                 it = via_int[k]
                 curva = curva_ligacao((it[0], it[1], it[2]),
                                       (v["ponto"][0], v["ponto"][1], v["altura_m"]))
@@ -1206,6 +1207,8 @@ def montar_modelo(segmentos, luzes, resumo, pe_direito, caixa_mm=None, condutos=
                 if comp > 1e-6:
                     novas.append({**v, "nivel_m": it[2], "comprimento_m": comp, "origem": "INTERRUPTOR",
                                   "curva": curva, "ponto_origem": (it[0], it[1])})
+            elif k in ligadas:
+                novas.append(v)
             else:
                 sem_descida += 1
 
