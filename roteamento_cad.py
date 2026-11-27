@@ -1832,14 +1832,97 @@ def _intersecao_retas(a1, a2, b1, b2):
     return (px,py)
 
 
-def _segmentos_eixo_parede(segmentos_crus, centro, afastamento=0.05):
-    """Cria linhas paralelas ao perímetro no meio físico da parede."""
+def _segmentos_eixo_parede(segmentos_crus, centro, afastamento=0.05, afastamentos=None):
+    """Cria linhas paralelas ao perímetro no meio físico da parede.
+
+    `afastamentos` (opcional) dá um afastamento próprio para cada segmento;
+    sem ele, todos usam `afastamento`.
+    """
     out=[]
-    for a,b,L in segmentos_crus or []:
+    for i,(a,b,L) in enumerate(segmentos_crus or []):
+        af = afastamento
+        if afastamentos is not None and i < len(afastamentos):
+            af = afastamentos[i]
         nx,ny=_normal_externa_segmento(a,b,centro)
-        aa=(float(a[0])+nx*afastamento,float(a[1])+ny*afastamento)
-        bb=(float(b[0])+nx*afastamento,float(b[1])+ny*afastamento)
+        aa=(float(a[0])+nx*af,float(a[1])+ny*af)
+        bb=(float(b[0])+nx*af,float(b[1])+ny*af)
         out.append((aa,bb,float(L)))
+    return out
+
+
+# Fase 13.6.374 — paredes finas entre ambientes.
+# Cada ambiente leva o seu eletroduto de parede a AFASTAMENTO (5 cm) da própria
+# face, para dentro da parede. Com parede de 15 cm os dois caminhos ficam 5 cm
+# um do outro; com parede de 10 cm os dois caíam EXATAMENTE na mesma linha (meio
+# da parede) e pareciam um único eletroduto. Nas paredes finas, cada caminho é
+# aproximado da face do próprio ambiente para que fiquem separados por, pelo
+# menos, SEPARACAO_MIN_CAMINHOS_PAREDE. Paredes sem ambiente vizinho e paredes
+# com espessura suficiente não mudam.
+SEPARACAO_MIN_CAMINHOS_PAREDE = 0.04
+ESPESSURA_MIN_PAREDE_VIZINHA = 0.02
+ESPESSURA_MAX_PAREDE_VIZINHA = 0.40
+SOBREPOSICAO_MIN_PAREDE = 0.10
+
+
+def _espessura_parede_vizinha(a, b, centro, outros_segmentos):
+    """Espessura da parede entre este segmento e o ambiente vizinho (ou None).
+
+    É a menor distância, para fora do ambiente, até um segmento paralelo de outro
+    ambiente que o acompanhe por pelo menos SOBREPOSICAO_MIN_PAREDE.
+    """
+    if not outros_segmentos:
+        return None
+    ax, ay = float(a[0]), float(a[1])
+    bx, by = float(b[0]), float(b[1])
+    L = math.hypot(bx - ax, by - ay)
+    if L < 1e-9:
+        return None
+    ux, uy = (bx - ax) / L, (by - ay) / L
+    nx, ny = _normal_externa_segmento(a, b, centro)
+    melhor = None
+    for seg in outros_segmentos:
+        c, d = seg[0], seg[1]
+        cx, cy = float(c[0]), float(c[1])
+        dx, dy = float(d[0]), float(d[1])
+        L2 = math.hypot(dx - cx, dy - cy)
+        if L2 < 1e-9:
+            continue
+        u2x, u2y = (dx - cx) / L2, (dy - cy) / L2
+        if abs(ux * u2y - uy * u2x) > 0.03:        # não é paralelo
+            continue
+        t = (((cx - ax) * nx + (cy - ay) * ny) + ((dx - ax) * nx + (dy - ay) * ny)) / 2.0
+        if not (ESPESSURA_MIN_PAREDE_VIZINHA <= t <= ESPESSURA_MAX_PAREDE_VIZINHA):
+            continue
+        sc = (cx - ax) * ux + (cy - ay) * uy
+        sd = (dx - ax) * ux + (dy - ay) * uy
+        sobreposicao = min(L, max(sc, sd)) - max(0.0, min(sc, sd))
+        if sobreposicao < SOBREPOSICAO_MIN_PAREDE:
+            continue
+        if melhor is None or t < melhor:
+            melhor = t
+    return melhor
+
+
+def _afastamentos_por_parede(segmentos_crus, centro, afast_base, outros_segmentos,
+                             separacao=SEPARACAO_MIN_CAMINHOS_PAREDE):
+    """Afastamento do caminho em cada segmento, respeitando a parede vizinha fina."""
+    afs = []
+    for a, b, _L in segmentos_crus or []:
+        af = afast_base
+        esp = _espessura_parede_vizinha(a, b, centro, outros_segmentos)
+        if esp is not None:
+            af = max(0.01, min(afast_base, (esp - separacao) / 2.0))
+        afs.append(af)
+    return afs
+
+
+def _segmentos_outros_ambientes(geometria_ambiente, chave_atual):
+    """Segmentos de perímetro de todos os ambientes, exceto o atual."""
+    out = []
+    for chave, geo in (geometria_ambiente or {}).items():
+        if chave == chave_atual:
+            continue
+        out.extend((geo or {}).get("segmentos_crus") or [])
     return out
 
 
@@ -1980,7 +2063,8 @@ def _pontos_linha_parede_entre_tugs(
     tug_destino,
     segmentos_crus=None,
     comp_total=0.0,
-    centro_ambiente=None
+    centro_ambiente=None,
+    outros_segmentos=None
 ):
     """
     Calcula os pontos do conduíte TUG -> TUG sem desenhar.
@@ -2020,10 +2104,19 @@ def _pontos_linha_parede_entre_tugs(
         )
     )
 
+    # 13.6.374: parede fina com ambiente vizinho -> caminhos separados.
+    afs = _afastamentos_por_parede(
+        segs,
+        centro_ambiente,
+        afast,
+        outros_segmentos
+    )
+
     eixos = _segmentos_eixo_parede(
         segs,
         centro_ambiente,
-        afast
+        afast,
+        afs
     )
 
     d1 = float(
@@ -2100,6 +2193,27 @@ def _pontos_linha_parede_entre_tugs(
             tuple(p2)
         )
 
+    # 13.6.374: quando o caminho foi aproximado da face do ambiente, cada ponta
+    # continua ligada ao fim do traço da tomada por um pequeno trecho de ligação
+    # perpendicular à parede (alguns centímetros).
+    if any(af < afast - 1e-9 for af in afs):
+        if afs[i1] < afast - 1e-9:
+            nx, ny = _normal_externa_segmento(
+                segs[i1][0], segs[i1][1], centro_ambiente
+            )
+            pts.insert(1, (
+                pts[0][0] + nx * (afs[i1] - afast),
+                pts[0][1] + ny * (afs[i1] - afast),
+            ))
+        if afs[i2] < afast - 1e-9:
+            nx, ny = _normal_externa_segmento(
+                segs[i2][0], segs[i2][1], centro_ambiente
+            )
+            pts.insert(len(pts) - 1, (
+                pts[-1][0] + nx * (afs[i2] - afast),
+                pts[-1][1] + ny * (afs[i2] - afast),
+            ))
+
     limpos = []
 
     for pt in pts:
@@ -2122,7 +2236,8 @@ def _linha_parede_entre_tugs(
     segmentos_crus=None,
     comp_total=0.0,
     centro_ambiente=None,
-    layer=LAYER_ROTA
+    layer=LAYER_ROTA,
+    outros_segmentos=None
 ):
     """
     Fase 13.6 Rev.124:
@@ -2133,6 +2248,7 @@ def _linha_parede_entre_tugs(
         tug_destino,
         segmentos_crus=segmentos_crus,
         comp_total=comp_total,
+        outros_segmentos=outros_segmentos,
         centro_ambiente=centro_ambiente
     )
 
@@ -3285,6 +3401,12 @@ def desenhar_rotas_qdc_iluminacao(
                     ),
                     centro_ambiente=geo.get(
                         "centro"
+                    ),
+                    outros_segmentos=_segmentos_outros_ambientes(
+                        geometria_ambiente,
+                        _normalizar_nome(
+                            trecho.get("destino_ambiente")
+                        )
                     )
                 )
             )
@@ -3381,7 +3503,13 @@ def desenhar_rotas_qdc_iluminacao(
                     centro_ambiente=geo.get(
                         "centro"
                     ),
-                    layer=LAYER_ROTA
+                    layer=LAYER_ROTA,
+                    outros_segmentos=_segmentos_outros_ambientes(
+                        geometria_ambiente,
+                        _normalizar_nome(
+                            trecho.get("destino_ambiente")
+                        )
+                    )
                 )
                 tipo_entidade = "LWPOLYLINE"
         else:

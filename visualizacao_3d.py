@@ -1,4 +1,4 @@
-"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.373)."""
+"""Visualização 3D da arquitetura a partir do DXF (AutoElétrica 13.6.374)."""
 import math
 import os
 import re
@@ -119,7 +119,7 @@ COMPRIMENTO_ARCO_CURTO_M = 1.0   # arco interruptor-tomada do CAD (apenas simbó
 # Trechos de parede de ambientes vizinhos que correm sobre o mesmo eixo (um de cada
 # lado da parede divisória): são afastados para ficarem distintos na 3D.
 DESLOC_PARALELOS_M = 0.04
-SOBREPOSICAO_TOL_M = 0.10
+SOBREPOSICAO_TOL_M = 0.03   # o gerador já separa caminhos de paredes finas em 4 cm: só trata como sobrepostos o que está praticamente no mesmo lugar
 # Parede divisória com tomadas nos dois ambientes: um eletroduto por circuito/ambiente.
 DIST_TOMADA_PAREDE_M = 0.45   # tomada considerada "da parede" (distância ao eixo do trecho)
 EXTENSAO_TOMADA_M = 0.15      # folga do eletroduto de cada ambiente além da primeira/última tomada dele
